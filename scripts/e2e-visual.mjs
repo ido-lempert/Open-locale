@@ -467,7 +467,7 @@ try {
   const mergeBtn = await page.waitForFunction(() => (document.body.textContent || '').includes('Merge feature-x into main'), { timeout: 5000 }).then(() => true).catch(() => false);
   check('merge button visible on non-main branch', mergeBtn);
   await shot('editor-21-branch-empty.png');
-  // Add a branch-only key, then merge into main
+  // Add a branch-only key AND a conflicting same-named key, then merge into main
   await page.type('input[name=newKey]', 'branch.only');
   await page.click('.inline button');
   check('branch-only key added on feature-x', await waitText('branch.only'));
@@ -478,22 +478,63 @@ try {
     () => [...document.querySelectorAll('.grid tbody tr:first-child .cell-status')].some((e) => /saved/i.test(e.textContent)),
     { timeout: 10000 },
   );
-  let dialogText = '';
-  page.once('dialog', (d) => { dialogText = d.message(); d.accept(); });
-  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Merge feature-x into main')).click());
-  await new Promise((r) => setTimeout(r, 500));
-  check('merge dialog shows preview diff and snapshot note', dialogText.includes('new key(s) added to main') && dialogText.includes('automatic snapshot'), dialogText.slice(0, 120));
+  const keyInputB = await page.$('input[name=newKey]');
+  await keyInputB.evaluate((el) => { el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.type('input[name=newKey]', 'cart.checkout');
+  await page.click('.inline button');
+  check('conflicting same-named key added on feature-x', await waitText('cart.checkout'));
+  const hCells = await page.$$('.grid tbody tr:nth-child(2) textarea');
+  await hCells[0].type('Checkout from the branch');
+  await hCells[0].evaluate((el) => el.blur());
+  await page.waitForFunction(
+    () => [...document.querySelectorAll('.grid tbody tr:nth-child(2) .cell-status')].some((e) => /saved/i.test(e.textContent)),
+    { timeout: 10000 },
+  );
+  // Merge: preview modal shows the diff with an explicit overwrite warning.
+  const mergeHandle = await page.evaluateHandle(() => [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Merge feature-x into main')));
+  await mergeHandle.asElement().click();
+  let modalUp = await page.waitForSelector('.modal .merge-diff', { timeout: 10000 }).then(() => true).catch(() => false);
+  if (!modalUp) {
+    const diag = await page.evaluate(() => ({
+      error: document.querySelector('.error')?.textContent ?? null,
+      notice: document.querySelector('.notice')?.textContent ?? null,
+      buttons: [...document.querySelectorAll('button')].map((b) => b.textContent.trim()).slice(0, 14),
+      modal: !!document.querySelector('.modal'),
+    }));
+    diag.previewProbe = await page.evaluate(async () => {
+      const token = localStorage.getItem('ol_token');
+      const pid = location.pathname.split('/').pop();
+      const brs = await fetch(`/api/projects/${pid}/branches`, { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json());
+      const fx = brs.find((b) => b.name === 'feature-x');
+      const res = await fetch(`/api/projects/${pid}/branches/${fx.id}/merge/preview`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ into: 'main' }),
+      });
+      return { status: res.status, body: JSON.stringify(await res.json().catch(() => null)).slice(0, 200) };
+    });
+    console.log('DIAG modal:', JSON.stringify(diag));
+  }
+  check('merge preview modal opens', modalUp);
+  const modalText = await page.$eval('.modal', (el) => el.textContent);
+  check('modal shows overwrite warning, kept-count and snapshot note',
+    modalText.includes('WARNING') && modalText.includes('OVERWRITTEN') && modalText.includes('kept untouched') && modalText.includes('automatic snapshot'),
+    modalText.slice(0, 200));
+  await shot('editor-23-merge-preview.png');
+  const confirmHandle = await page.evaluateHandle(() => [...document.querySelectorAll('.modal button')].find((b) => b.textContent === 'Merge now'));
+  await confirmHandle.asElement().click();
   const mergeNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('Merged feature-x'), { timeout: 10000 }).then(() => true).catch(() => false);
   check('merge completes with summary notice', mergeNotice);
   await page.select('select[aria-label="Branch"]', 'main');
   await page.waitForFunction(
-    () => (document.body.textContent || '').includes('home.title') && (document.body.textContent || '').includes('branch.only'),
+    // app.subtitle exists on main only, so this cannot match the stale feature-x grid
+    () => (document.body.textContent || '').includes('app.subtitle') && (document.body.textContent || '').includes('branch.only'),
     { timeout: 10000 },
   );
   const mainRowsAfter = await page.$$eval('.grid tbody tr:not(.history-row)', (els) => els.length);
   check('merged key visible on main, existing keys kept', mainRowsAfter === mainBranchRows + 1, `${mainRowsAfter} rows (was ${mainBranchRows})`);
+  const homeTitleVal = await page.$$eval('.grid tbody tr:not(.history-row) textarea', (els) => els.map((e) => e.value));
+  check('conflicting key overwritten on main by merge', homeTitleVal.includes('Checkout from the branch'));
   await shot('editor-22-branch-merged.png');
-
+  
   // Mobile viewport evidence (390px)
   await page.goto(`${WEB}/projects/${projId}`, { waitUntil: 'networkidle0' });
   await page.setViewport({ width: 390, height: 844 });

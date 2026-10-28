@@ -17,8 +17,15 @@
   rule as imports), writes a translation-history row with the previous value and the merging user
   for every overwrite, and - when the client passes `previewedAt` back - skips (and reports as
   `keysSkipped`/`translationsSkipped`) any target key or translation written after the preview.
-  The skip check compares each row's own pre-write updatedAt, never the upsert's own bump. An
-  unguarded merge (no previewedAt) overwrites, but the overwritten value stays in history.
+  Every target write is atomic check-and-write: translations go through INSERT ... ON CONFLICT
+  DO UPDATE ... WHERE updatedAt <= cutoff and key metadata through a conditional UPDATE, so the
+  freshness condition is enforced inside the same statement that writes (no read-then-write gap;
+  a concurrent commit makes that statement a no-op, reported as skipped). Key metadata staleness
+  is judged on the pre-write row, never the upsert's own bump. Conservative: a post-preview write
+  that round-trips back to the old value still skips (updatedAt bumped). Tested interleavings:
+  post-preview edit skipped; ABA detour skipped; unguarded overwrite recorded in history. The
+  recorded previousValue is the value read at merge time. An unguarded merge (no previewedAt)
+  overwrites, but the overwritten value stays in history.
 - Branch management endpoints (`/branches*`) require a session principal: JwtAuthGuard plus
   SessionOnlyGuard, so API tokens - including read+write tokens - get 403 on list/create/delete/
   preview/merge. The `?branch=` parameter on keys/import/export stays token-usable for CI.
@@ -43,4 +50,6 @@
   main row verified unchanged.
 - Restore can leave an extra empty branch behind if a branch was created after the snapshot and is
   absent from it; branches are cheap and admin-deletable.
-- No branch rename, no cross-project branches, no merge conflict UI beyond the confirm dialog.
+- No branch rename, no cross-project branches. Branch delete and key delete run under the same
+  project lock as merges, so a branch/key cannot vanish mid-merge; a concurrent key CREATE on the
+  target with the same name is caught via the unique constraint and skipped as a conflict.

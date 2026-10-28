@@ -59,14 +59,14 @@ export class BranchesService {
     const branch = await this.prisma.branch.findFirst({ where: { id: branchId, projectId }, include: { _count: { select: { keys: true } } } });
     if (!branch) throw new NotFoundException('Branch not found');
     if (branch.name === DEFAULT_BRANCH) throw new BadRequestException("The default branch 'main' cannot be deleted");
-    return this.prisma.$transaction(async (tx) => {
+    return this.locks.withProjectLock(projectId, () => this.prisma.$transaction(async (tx) => {
       await tx.branch.delete({ where: { id: branch.id } }); // cascades its keys
       await this.activity.record(tx, {
         projectId, actorId: userId, action: 'branch.deleted',
         detail: { branch: branch.name, keysRemoved: branch._count.keys },
       });
       return { removed: branch.name, keysRemoved: branch._count.keys };
-    });
+    }));
   }
 
   // Merge source into target: upsert keys by name and copy their translations
@@ -135,48 +135,80 @@ export class BranchesService {
         // ABA round-trip - updatedAt bumps on every write) is skipped and
         // reported instead of silently overwritten. Conservative: a row that
         // changed and changed back is still skipped.
-        const cutoff = previewedAt ? new Date(previewedAt + 'Z') : null;
+        const cutoff = previewedAt ?? null;
         let keysMerged = 0, keysSkipped = 0, translationsMerged = 0, translationsSkipped = 0;
         for (const sk of sourceKeys) {
-          // Read the target key BEFORE writing: an upsert's own update bumps
-          // updatedAt, so staleness must be judged on the pre-merge row.
+          // Atomic check-and-write, never read-then-write: every target write
+          // carries its freshness condition in the same statement, so a
+          // concurrent commit between our reads and writes is either applied
+          // over (unguarded merge) or makes that statement a no-op (guarded
+          // merge). updatedAt columns are timestamp-without-tz holding UTC
+          // wall time, so the cutoff compares as a naive UTC literal.
+          let tkId: string;
           const prior = await tx.key.findUnique({ where: { branchId_name: { branchId: target.id, name: sk.name } } });
-          const keyStale = cutoff !== null && prior !== null && prior.updatedAt > cutoff;
-          if (keyStale) keysSkipped++;
-          const tk = prior
-            ? (keyStale
-                ? prior
-                : await tx.key.update({
-                    where: { id: prior.id },
-                    data: { description: sk.description, isPlural: sk.isPlural, maxLength: sk.maxLength, tags: sk.tags },
-                  }))
-            : await tx.key.create({
+          if (prior) {
+            if (cutoff !== null) {
+              const wrote = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`
+                UPDATE "keys" SET "description" = ${sk.description}, "isPlural" = ${sk.isPlural},
+                  "maxLength" = ${sk.maxLength}, "tags" = ${sk.tags}, "updatedAt" = now() AT TIME ZONE 'UTC'
+                WHERE "id" = ${prior.id}::uuid AND "updatedAt" <= ${cutoff}::timestamp RETURNING "id"`);
+              if (wrote.length === 0) keysSkipped++;
+            } else {
+              await tx.key.update({
+                where: { id: prior.id },
+                data: { description: sk.description, isPlural: sk.isPlural, maxLength: sk.maxLength, tags: sk.tags },
+              });
+            }
+            tkId = prior.id;
+          } else {
+            try {
+              const created = await tx.key.create({
                 data: {
                   projectId, branchId: target.id, name: sk.name,
                   description: sk.description, isPlural: sk.isPlural, maxLength: sk.maxLength, tags: sk.tags,
                 },
               });
-          if (tk.id !== sk.id) keysMerged++;
-          for (const tr of sk.translations) {
-            const existing = await tx.translation.findUnique({ where: { keyId_localeCode: { keyId: tk.id, localeCode: tr.localeCode } } });
-            if (existing && existing.value === tr.value && existing.status === tr.status) continue;
-            if (cutoff !== null && existing && existing.updatedAt > cutoff) {
-              translationsSkipped++;
+              tkId = created.id;
+            } catch (err) {
+              // A concurrent commit created the same-named key on the target
+              // between our read and this insert: treat as a conflict, keep
+              // the concurrent row, and skip it rather than fail the merge.
+              if ((err as { code?: string }).code !== 'P2002') throw err;
+              keysSkipped++;
+              tkId = (await tx.key.findUniqueOrThrow({ where: { branchId_name: { branchId: target.id, name: sk.name } } })).id;
               continue;
             }
-            await tx.translation.upsert({
-              where: { keyId_localeCode: { keyId: tk.id, localeCode: tr.localeCode } },
-              create: {
-                keyId: tk.id, projectId, localeCode: tr.localeCode, value: tr.value, status: tr.status,
-              },
-              update: { value: tr.value, status: tr.status },
-            });
+          }
+          if (tkId !== sk.id) keysMerged++;
+          for (const tr of sk.translations) {
+            const existing = await tx.translation.findUnique({ where: { keyId_localeCode: { keyId: tkId, localeCode: tr.localeCode } } });
+            if (existing && existing.value === tr.value && existing.status === tr.status) continue;
+            // INSERT ... ON CONFLICT ... DO UPDATE ... WHERE is one atomic
+            // statement: the conflict target row is locked while the freshness
+            // WHERE is evaluated, so a concurrent post-preview edit makes THIS
+            // statement skip the row instead of being overwritten silently.
+            const wrote = cutoff !== null
+              ? await tx.$queryRaw<{ keyId: string }[]>(Prisma.sql`
+                  INSERT INTO "translations" ("keyId", "projectId", "localeCode", "value", "status", "updatedAt")
+                  VALUES (${tkId}::uuid, ${projectId}::uuid, ${tr.localeCode}, ${tr.value}, ${tr.status}, now() AT TIME ZONE 'UTC')
+                  ON CONFLICT ("keyId", "localeCode") DO UPDATE
+                  SET "value" = EXCLUDED."value", "status" = EXCLUDED."status", "updatedAt" = now() AT TIME ZONE 'UTC'
+                  WHERE "translations"."updatedAt" <= ${cutoff}::timestamp
+                  RETURNING "keyId"`)
+              : await tx.$queryRaw<{ keyId: string }[]>(Prisma.sql`
+                  INSERT INTO "translations" ("keyId", "projectId", "localeCode", "value", "status", "updatedAt")
+                  VALUES (${tkId}::uuid, ${projectId}::uuid, ${tr.localeCode}, ${tr.value}, ${tr.status}, now() AT TIME ZONE 'UTC')
+                  ON CONFLICT ("keyId", "localeCode") DO UPDATE
+                  SET "value" = EXCLUDED."value", "status" = EXCLUDED."status", "updatedAt" = now() AT TIME ZONE 'UTC'
+                  RETURNING "keyId"`);
+            if (wrote.length === 0) { translationsSkipped++; continue; }
             // Attribution: every overwrite or merge-created translation gets a
-            // history row with the previous value and the merging user, so the
-            // merge is visible (and the old value recoverable) in key history.
+            // history row with the previous value (as read at merge time) and
+            // the merging user, so the merge is visible and the old value
+            // recoverable in key history.
             await tx.translationHistory.create({
               data: {
-                keyId: tk.id, localeCode: tr.localeCode, value: tr.value,
+                keyId: tkId, localeCode: tr.localeCode, value: tr.value,
                 previousValue: existing ? existing.value : null,
                 status: tr.status, changedById: userId,
               },

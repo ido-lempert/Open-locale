@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
 import { BranchesService } from '../branches/branches.service';
+import { LocksService } from '../locks/locks.service';
 import { ActivityService, truncate } from '../activity/activity.service';
 
 @Injectable()
@@ -11,6 +12,7 @@ export class KeysService {
     private readonly projects: ProjectsService,
     private readonly activity: ActivityService,
     private readonly branches: BranchesService,
+    private readonly locks: LocksService,
   ) {}
 
   async list(userId: string, projectId: string, filters: {
@@ -90,12 +92,14 @@ export class KeysService {
     await this.projects.assertLocaleWrite(userId, projectId, project.locales.map((l) => l.code));
     const existing = await this.prisma.key.findFirst({ where: { id: keyId, projectId } });
     if (!existing) throw new NotFoundException('Key not found');
-    await this.prisma.$transaction(async (tx) => {
+    // Serialized with merges/restores/imports: a key (and its translations)
+    // cannot vanish mid-merge.
+    await this.locks.withProjectLock(projectId, () => this.prisma.$transaction(async (tx) => {
       await tx.key.delete({ where: { id: keyId } });
       await this.activity.record(tx, {
         projectId, actorId: userId, action: 'key.deleted', keyName: existing.name,
       });
-    });
+    }));
     return { removed: existing.name };
   }
 

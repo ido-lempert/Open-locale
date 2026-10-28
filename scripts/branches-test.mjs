@@ -209,6 +209,19 @@ try {
   check('overwritten value preserved in history with merging actor',
     !!mergeRow && mergeRow.value === 'feat text' && !!mergeRow.changedBy?.displayName,
     JSON.stringify(mergeRow).slice(0, 200));
+
+  // ABA: value changed after preview then changed BACK still bumps updatedAt,
+  // so a guarded merge conservatively skips it (tested interleaving, not a
+  // race-proof guarantee).
+  const prev3 = (await call(`/projects/${pid2}/branches/${f2.id}/merge/preview`, { jwt, method: 'POST', body: { into: 'main' } })).json;
+  const mSharedId = (await call(`/projects/${pid2}/keys`, { jwt })).json.find((k) => k.name === 'shared').id;
+  // Round-trip main's he value away from the source and back to a value that
+  // still DIFFERS from the source: without the updatedAt guard the merge
+  // would silently overwrite it.
+  await call(`/projects/${pid2}/keys/${mSharedId}/translations`, { jwt, method: 'PUT', body: { locale: 'he', value: 'ABA detour' } });
+  await call(`/projects/${pid2}/keys/${mSharedId}/translations`, { jwt, method: 'PUT', body: { locale: 'he', value: 'back to a main-only wording' } });
+  const abaMerge = (await call(`/projects/${pid2}/branches/${f2.id}/merge`, { jwt, method: 'POST', body: { into: 'main', previewedAt: prev3.previewAt } })).json;
+  check('ABA post-preview write is conservatively skipped', abaMerge.translationsSkipped >= 1, JSON.stringify(abaMerge));
   const mOnlyAfter = (await call(`/projects/${pid2}/keys`, { jwt })).json.find((k) => k.name === 'keeponly');
   check('target-only key untouched by merge', trOf(mOnlyAfter, 'he')?.value === 'stay' && trOf(mOnlyAfter, 'he')?.status === 'REVIEWED');
 

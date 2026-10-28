@@ -221,6 +221,24 @@ interface CellState {
         </table>
       }
     </main>
+    @if (mergePreview(); as mp) {
+      <div class="modal-backdrop">
+        <div class="modal" role="dialog" aria-label="Merge preview">
+          <h3>Merge {{ mp.from }} into main</h3>
+          <p class="muted">Copy-forward: {{ mp.from }} itself stays as it is.</p>
+          <ul class="merge-diff">
+            @for (line of mp.lines; track line) {
+              <li [class.warn]="line.startsWith('WARNING')">{{ line }}</li>
+            }
+          </ul>
+          <p class="muted">An automatic snapshot of the current state is taken first, and every overwritten translation keeps its previous value in history. Anything changed on main after this preview is skipped, not overwritten.</p>
+          <div class="modal-actions">
+            <button class="primary" (click)="confirmMerge()">Merge now</button>
+            <button (click)="mergePreview.set(null)">Cancel</button>
+          </div>
+        </div>
+      </div>
+    }
   `,
 })
 export class EditorComponent implements OnInit {
@@ -228,7 +246,8 @@ export class EditorComponent implements OnInit {
   keys = signal<Key[]>([]);
   cells = new Map<string, WritableSignal<CellState>>();
   search = signal(''); newKey = signal(''); newLocale = signal(''); ioLocale = signal('en'); bulkStatus = signal('REVIEWED');
-  branch = signal('main'); branches = signal<BranchInfo[]>([]); newBranch = signal(''); ioFormat = signal<'json' | 'csv' | 'android' | 'ios'>('json');
+  branch = signal('main'); branches = signal<BranchInfo[]>([]); newBranch = signal('');
+  mergePreview = signal<{ branchId: string; from: string; lines: string[]; previewAt: string } | null>(null); ioFormat = signal<'json' | 'csv' | 'android' | 'ios'>('json');
   glossary = signal<GlossaryTermItem[]>([]);
   filterTag = signal(''); filterStatus = signal<'' | TranslationStatus>('');
   tagEditFor = signal<string | null>(null);
@@ -507,19 +526,27 @@ export class EditorComponent implements OnInit {
     try {
       const p = await this.api.previewMergeBranch(this.projectId, b.id, 'main');
       const lines = [
-        `Merge ${from} into main (copy-forward; ${from} itself stays as it is):`,
-        `- ${p.keysCreated} new key(s) added to main`,
-        `- ${p.keysExisting} key(s) exist on both; main gets ${from}'s description, plural and tag settings`,
-        `- ${p.translationsAdded} translation(s) added`,
-        `- ${p.translationsIdentical} identical, skipped`,
+        `${p.keysCreated} new key(s) added to main`,
+        `${p.keysExisting} key(s) exist on both; main gets ${from}'s description, plural and tag settings`,
+        `${p.translationsAdded} translation(s) added`,
+        `${p.translationsIdentical} identical, skipped`,
       ];
       if (p.translationsOverwritten > 0) {
-        lines.push(`- WARNING: ${p.translationsOverwritten} existing main translation(s) will be OVERWRITTEN by ${from}'s version`);
+        lines.push(`WARNING: ${p.translationsOverwritten} existing main translation(s) will be OVERWRITTEN by ${from}'s version`);
+      } else {
+        lines.push('No existing main translation is overwritten.');
       }
-      lines.push(`- ${p.targetOnlyKeys} key(s) only on main are kept untouched`);
-      lines.push('An automatic snapshot of the current state is taken first, and every overwritten translation keeps its previous value in history.');
-      if (!confirm(lines.join('\n'))) return;
-      const res = await this.api.mergeBranch(this.projectId, b.id, 'main', p.previewAt);
+      lines.push(`${p.targetOnlyKeys} key(s) only on main are kept untouched`);
+      this.mergePreview.set({ branchId: b.id, from, lines, previewAt: p.previewAt });
+    } catch (err) { this.error.set(err instanceof Error ? err.message : 'Merge preview failed'); }
+  }
+  async confirmMerge() {
+    const mp = this.mergePreview();
+    if (!mp) return;
+    this.error.set('');
+    try {
+      const res = await this.api.mergeBranch(this.projectId, mp.branchId, 'main', mp.previewAt);
+      this.mergePreview.set(null);
       const skipped = res.translationsSkipped > 0 || res.keysSkipped > 0
         ? ` ${res.keysSkipped} key(s) and ${res.translationsSkipped} translation(s) changed on main after the preview were skipped - preview again to re-check them.`
         : '';
