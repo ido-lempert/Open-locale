@@ -20,6 +20,9 @@ export const ACTIVITY_ACTIONS = [
   'task.created',
   'task.updated',
   'task.deleted',
+  'glossary.created',
+  'glossary.updated',
+  'glossary.deleted',
 ] as const;
 
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];

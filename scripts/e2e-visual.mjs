@@ -283,6 +283,27 @@ try {
   await page.waitForSelector('.grid tbody tr', { timeout: 10000 });
 
   const projId = page.url().split('/').pop();
+  // --- Glossary: create term via UI, hint appears in editor ---
+  await page.click('.glossary-link');
+  await page.waitForSelector('.task-form', { timeout: 10000 });
+  await page.type('input[name=gTerm]', 'Welcome');
+  await page.evaluate(() => { document.querySelector('.panel form').requestSubmit(); });
+  const welcomeHe = await page.waitForSelector('input[aria-label="Welcome in he"]', { timeout: 10000 }).catch(() => null);
+  check('glossary term created via UI with per-locale translation fields', !!welcomeHe);
+  if (welcomeHe) {
+    await page.type('input[aria-label="Welcome in he"]', 'ברוכים');
+    await page.evaluate(() => { document.querySelector('input[aria-label="Welcome in he"]').blur(); });
+    await new Promise((r) => setTimeout(r, 800));
+    await page.click('.back');
+    await page.waitForSelector('.grid tbody tr', { timeout: 10000 });
+    const hintShown = await page.waitForFunction(() => {
+      const t = document.body.textContent || '';
+      return t.includes('Welcome') && document.querySelectorAll('.glossary-hint').length > 0;
+    }, { timeout: 10000 }).then(() => true).catch(() => false);
+    check('editor shows glossary hint under matching base cell', hintShown);
+    await shot('editor-18-glossary.png');
+  }
+
   // Settings screen: rename, add locale, verify grid column appears
   await page.click('.settings-link');
   await page.waitForSelector('.panel', { timeout: 10000 });

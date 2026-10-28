@@ -1,0 +1,4 @@
+.glossary-hints { margin-top: 0.3rem; }
+.glossary-hint { font-size: 0.72rem; color: #5b21b6; background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 999px; padding: 0.1rem 0.45rem; display: inline-block; margin: 0.15rem 0.2rem 0 0; }
+.dnt { display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; }
+.dnt-badge { margin-left: 0.5rem; font-size: 0.7rem; background: #fef3c7; color: #92400e; border-radius: 999px; padding: 0.1rem 0.45rem; }

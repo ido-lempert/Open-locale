@@ -34,6 +34,11 @@ export interface ActivityEntry {
 
 export interface TmSuggestion { sourceText: string; targetText: string; score: number; }
 
+export interface GlossaryTermItem {
+  id: string; term: string; notes: string; doNotTranslate: boolean;
+  translations: Record<string, string>; createdAt: string;
+}
+
 export interface TaskItem {
   id: string; title: string; description: string; status: 'OPEN' | 'IN_PROGRESS' | 'DONE';
   dueDate: string | null; createdAt: string;
@@ -142,6 +147,18 @@ export class ApiService {
   suggestTm(projectId: string, locale: string, source: string) {
     return this.request<{ suggestions: TmSuggestion[] }>(
       `/projects/${projectId}/tm/suggest?locale=${encodeURIComponent(locale)}&source=${encodeURIComponent(source)}`);
+  }
+  listGlossary(projectId: string) {
+    return this.request<GlossaryTermItem[]>(`/projects/${projectId}/glossary`);
+  }
+  createGlossaryTerm(projectId: string, input: { term: string; notes?: string; doNotTranslate?: boolean; translations?: Record<string, string> }) {
+    return this.request<GlossaryTermItem>(`/projects/${projectId}/glossary`, { method: 'POST', body: JSON.stringify(input) });
+  }
+  updateGlossaryTerm(projectId: string, termId: string, input: Record<string, unknown>) {
+    return this.request<GlossaryTermItem>(`/projects/${projectId}/glossary/${termId}`, { method: 'PATCH', body: JSON.stringify(input) });
+  }
+  deleteGlossaryTerm(projectId: string, termId: string) {
+    return this.request<{ removed: string }>(`/projects/${projectId}/glossary/${termId}`, { method: 'DELETE' });
   }
   listMembers(projectId: string) {
     return this.request<MemberInfo[]>(`/projects/${projectId}/members`);

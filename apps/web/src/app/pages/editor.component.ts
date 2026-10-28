@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, OnInit, signal, WritableSignal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { ApiService, ScreenshotMeta, TmSuggestion, CommentEntry, HistoryEntry, Key, Project, TranslationStatus } from '../api.service';
+import { ApiService, ScreenshotMeta, TmSuggestion, GlossaryTermItem, CommentEntry, HistoryEntry, Key, Project, TranslationStatus } from '../api.service';
 
 interface CellState {
   value: string; saved: string;
@@ -17,6 +17,7 @@ interface CellState {
     <header class="bar">
       <a routerLink="/projects" class="back">&larr; Projects</a>
       <h1>{{ project()?.name ?? 'Loading…' }}</h1>
+      <a [routerLink]="['/projects', projectId, 'glossary']" class="glossary-link">Glossary</a>
       <a [routerLink]="['/projects', projectId, 'tasks']" class="tasks-link">Tasks</a>
       <a [routerLink]="['/projects', projectId, 'activity']" class="activity-link">Activity</a>
       <a [routerLink]="['/projects', projectId, 'settings']" class="settings-link">Settings</a>
@@ -104,6 +105,13 @@ interface CellState {
                         <span class="cell-status">{{ statusText(k.id, l.code) }}</span>
                       }
                     </div>
+                    @if (l.code === p.baseLocale && glossaryHints(k).length) {
+                      <div class="glossary-hints">
+                        @for (h of glossaryHints(k); track h.term) {
+                          <div class="glossary-hint" [title]="h.notes">glossary: <code>{{ h.term }}</code> &rarr; <strong>{{ h.value }}</strong></div>
+                        }
+                      </div>
+                    }
                   </td>
                 }
                 <td><button class="danger" [attr.aria-label]="'Delete key ' + k.name" title="Delete key" (click)="removeKey(k)">&times;</button></td>
@@ -186,6 +194,7 @@ export class EditorComponent implements OnInit {
   keys = signal<Key[]>([]);
   cells = new Map<string, WritableSignal<CellState>>();
   search = signal(''); newKey = signal(''); newLocale = signal(''); ioLocale = signal('en');
+  glossary = signal<GlossaryTermItem[]>([]);
   filterTag = signal(''); filterStatus = signal<'' | TranslationStatus>('');
   tagEditFor = signal<string | null>(null);
   tagDraft = signal('');
@@ -215,6 +224,7 @@ export class EditorComponent implements OnInit {
     try {
       const p = await this.api.getProject(this.projectId);
       this.project.set(p); this.ioLocale.set(p.baseLocale);
+      this.api.listGlossary(this.projectId).then((g) => this.glossary.set(g)).catch(() => this.glossary.set([]));
       await this.reload();
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load project'); }
   }
@@ -280,6 +290,28 @@ export class EditorComponent implements OnInit {
     return s === 'saving' ? 'saving…' : s === 'saved' ? 'saved' : s === 'error' ? 'save failed' : '';
   }
   isRtl(code: string) { return ['he', 'ar', 'fa', 'ur'].some((r) => code.startsWith(r)); }
+  glossaryHints(k: Key): { term: string; value: string; notes: string }[] {
+    const p = this.project();
+    if (!p || !this.glossary().length) return [];
+    const source = this.cell(k.id, p.baseLocale)().value;
+    if (!source) return [];
+    const target = this.ioLocale() === p.baseLocale
+      ? (p.locales.find((l) => l.code !== p.baseLocale)?.code ?? null)
+      : this.ioLocale();
+    const out: { term: string; value: string; notes: string }[] = [];
+    for (const g of this.glossary()) {
+      const escaped = g.term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (new RegExp(`(^|[^\\w])${escaped}([^\\w]|$)`, 'i').test(source)) {
+        out.push({
+          term: g.term,
+          value: g.doNotTranslate ? 'keep as-is' : (target ? (g.translations[target] ?? '(no translation)') : '(no translation)'),
+          notes: g.notes,
+        });
+      }
+    }
+    return out;
+  }
+
   async setReview(k: Key, locale: string, status: TranslationStatus) {
     const sig = this.cell(k.id, locale);
     try {
