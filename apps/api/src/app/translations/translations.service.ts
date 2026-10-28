@@ -169,7 +169,7 @@ export class TranslationsService {
     }
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.$queryRaw<{ keyId: string; value: string }[]>(
-        Prisma.sql`UPDATE "translations" t SET "status" = ${status} WHERE ${where} RETURNING t."keyId" AS "keyId", t."value" AS "value"`);
+        Prisma.sql`UPDATE "translations" t SET "status" = ${status}, "version" = t."version" + 1 WHERE ${where} RETURNING t."keyId" AS "keyId", t."value" AS "value"`);
       if (updated.length) {
         await tx.translationHistory.createMany({
           data: updated.map((t) => ({ keyId: t.keyId, localeCode: locale, value: t.value, previousValue: t.value, status, changedById: userId })),
@@ -197,7 +197,10 @@ export class TranslationsService {
     return this.prisma.$transaction(async (tx) => {
       const translation = await tx.translation.update({
         where: { keyId_localeCode: { keyId, localeCode: locale } },
-        data: { status },
+        // Status changes bump the value-conflict token too: an in-context
+        // frame holding the old version must conflict instead of silently
+        // resetting a newer review decision by saving text over it.
+        data: { status, version: { increment: 1 } },
       });
       if (existing.status !== status) {
         await tx.translationHistory.create({
@@ -389,8 +392,8 @@ export class TranslationsService {
           // Imported wording replaces the old one and has not been reviewed.
           await tx.translation.upsert({
             where: { keyId_localeCode: { keyId: key.id, localeCode: locale } },
-            create: { keyId: key.id, projectId, localeCode: locale, value },
-            update: { value, status: 'UNVERIFIED' },
+            create: { keyId: key.id, projectId, localeCode: locale, value, version: 1 },
+            update: { value, status: 'UNVERIFIED', version: { increment: 1 } },
           });
           await tx.translationHistory.create({
             data: {

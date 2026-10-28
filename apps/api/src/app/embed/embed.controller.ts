@@ -81,11 +81,12 @@ const FRAME_JS = `(() => {
   const qs = new URLSearchParams(location.search);
   const state = {
     token: localStorage.getItem(TOKEN_KEY) || null,
-    origins: [], keys: [], versions: {}, project: null,
+    origins: [], keys: [], versions: {}, drafts: {}, project: null, withdrawn: null,
     branch: qs.get('branch') || 'main',
     editLocale: qs.get('locale') || null,
   };
   const esc = (s) => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
+  const hostOrigin = () => { try { return document.referrer ? new URL(document.referrer).origin : null; } catch { return null; } };
   const api = async (path, opts = {}) => {
     const res = await fetch('/api' + path, {
       method: opts.method || 'GET',
@@ -95,6 +96,14 @@ const FRAME_JS = `(() => {
     const body = await res.json().catch(() => null);
     if (!res.ok) { const e = new Error(String(res.status)); e.status = res.status; e.body = body; throw e; }
     return body;
+  };
+  // Drafts survive trust changes: any text the user typed is kept in memory
+  // and restored whenever the editing UI re-renders.
+  const captureDrafts = () => {
+    for (const li of root.querySelectorAll('li[data-key-id] input')) {
+      const keyId = li.closest('li').getAttribute('data-key-id');
+      if (li.value) state.drafts[keyId] = li.value;
+    }
   };
   const renderLogin = (msg) => {
     root.innerHTML = '<header class="bar"><strong>Open-locale</strong><span class="muted">in-context</span></header>' +
@@ -109,33 +118,66 @@ const FRAME_JS = `(() => {
         const r = await api('/auth/login', { method: 'POST', body: { email: document.getElementById('e').value, password: document.getElementById('p').value } });
         state.token = r.accessToken;
         localStorage.setItem(TOKEN_KEY, state.token);
+        state.withdrawn = null;
         await load();
       } catch { renderLogin('Sign-in failed.'); }
     });
+  };
+  const withdrawEditing = (reason) => {
+    captureDrafts();
+    state.withdrawn = reason;
+    render();
+  };
+  // Revalidate trust from the server right now: fresh allowlist + membership.
+  // Returns true when editing/host-answering is currently legitimate.
+  const revalidate = async () => {
+    let fresh;
+    try {
+      fresh = await api('/projects/' + projectId);
+    } catch {
+      withdrawEditing('Your access changed. Editing is paused; your drafts are kept. Sign in again to check your access.');
+      return false;
+    }
+    state.origins = fresh.embedOrigins || [];
+    const ho = hostOrigin();
+    if (ho && !state.origins.includes(ho)) {
+      withdrawEditing('This host page is no longer allowlisted. Editing is paused; your drafts are kept.');
+      return false;
+    }
+    return true;
   };
   const tFor = (k) => (k.translations || []).find((t) => t.localeCode === state.editLocale);
   const render = () => {
     root.innerHTML = '<header class="bar"><strong>Open-locale</strong><span class="muted">in-context - ' + esc(state.project.name) +
       ' (' + esc(state.branch) + ', editing <code>' + esc(state.editLocale) + '</code>)</span></header>' +
+      (state.withdrawn ? '<p class="error" id="withdrawn">' + esc(state.withdrawn) + '</p>' : '') +
       '<p class="muted" id="conn">Waiting for the host page. This frame answers only allowlisted origins; saves happen only here, never from host messages.</p>' +
       '<ul>' + state.keys.map((k) => {
         const t = tFor(k);
+        const draft = state.drafts[k.id];
+        const shown = draft !== undefined ? draft : (t ? t.value : '');
         return '<li data-key-id="' + esc(k.id) + '"><code>' + esc(k.name) + '</code>' +
-          '<input aria-label="Translation" value="' + esc(t ? t.value : '') + '">' +
-          '<button type="button" class="save">Save</button><span class="muted st"></span></li>';
+          '<input aria-label="Translation" value="' + esc(shown) + '"' + (state.withdrawn ? ' disabled' : '') + '>' +
+          '<button type="button" class="save"' + (state.withdrawn ? ' disabled' : '') + '>Save</button><span class="muted st"></span></li>';
       }).join('') + '</ul>' +
       (state.keys.length ? '' : '<p class="muted">No keys on this branch.</p>');
     for (const li of root.querySelectorAll('li[data-key-id]')) {
+      const keyId = li.getAttribute('data-key-id');
+      li.querySelector('input').addEventListener('input', (ev) => { state.drafts[keyId] = ev.target.value; });
       li.querySelector('.save').addEventListener('click', () => saveRow(li));
     }
   };
   const saveRow = async (li, forceVersion) => {
+    if (state.withdrawn) return;
     const keyId = li.getAttribute('data-key-id');
     const key = state.keys.find((k) => k.id === keyId);
     const value = li.querySelector('input').value;
     const st = li.querySelector('.st');
     const old = li.querySelector('.conflict');
     if (old) old.remove();
+    // Writes revalidate trust at save time too, not only on host messages:
+    // a withdrawn origin or lost membership must not accept ongoing writes.
+    if (!(await revalidate())) return;
     st.textContent = 'Saving...'; st.className = 'muted st';
     try {
       const saved = await api('/projects/' + projectId + '/keys/' + keyId + '/translations', {
@@ -143,6 +185,7 @@ const FRAME_JS = `(() => {
         body: { locale: state.editLocale, value, expectedVersion: forceVersion !== undefined ? forceVersion : (state.versions[keyId] || 0) },
       });
       state.versions[keyId] = saved.version;
+      delete state.drafts[keyId];
       const t = tFor(key);
       if (t) { t.value = saved.value; t.version = saved.version; } else { key.translations = (key.translations || []).concat([{ localeCode: state.editLocale, value: saved.value, version: saved.version }]); }
       st.textContent = 'Saved'; st.className = 'ok st';
@@ -166,9 +209,12 @@ const FRAME_JS = `(() => {
         box.querySelector('.use-latest').addEventListener('click', () => {
           li.querySelector('input').value = current || '';
           state.versions[keyId] = currentVersion || 0;
+          delete state.drafts[keyId];
           box.remove();
           st.textContent = 'Loaded latest'; st.className = 'muted st';
         });
+        // Overwrite re-runs saveRow, which revalidates trust and permissions
+        // again before any write is attempted.
         box.querySelector('.overwrite').addEventListener('click', () => { saveRow(li, currentVersion || 0); });
         li.appendChild(box);
       } else if (e.status === 403) {
@@ -204,18 +250,21 @@ const FRAME_JS = `(() => {
     if (!state.project) return; // unauthenticated frames expose nothing
     if (event.source !== window.parent) return; // the direct embedder only
     if (!isHostMessage(event.data)) return;
-    // Live revalidation: re-read the project's allowlist from the server on
-    // every inbound message. A removed origin stops getting answers on the
-    // open frame, and lost membership wipes the frame to the sign-in state.
+    // Live revalidation on every inbound message: a removed origin silences
+    // the open frame AND pauses its editing UI; lost membership pauses too.
+    let fresh;
     try {
-      const fresh = await api('/projects/' + projectId);
+      fresh = await api('/projects/' + projectId);
       state.origins = fresh.embedOrigins || [];
     } catch {
-      state.project = null; state.keys = [];
-      renderLogin('Access changed. Sign in again to continue.');
+      withdrawEditing('Your access changed. Editing is paused; your drafts are kept. Sign in again to check your access.');
       return;
     }
-    if (!state.origins.includes(event.origin)) return;
+    if (!state.origins.includes(event.origin)) {
+      if (!state.withdrawn) withdrawEditing('This host page is no longer allowlisted. Editing is paused; your drafts are kept.');
+      return;
+    }
+    if (state.withdrawn) { state.withdrawn = null; render(); } // trust restored: re-enable with drafts intact
     const reply = (msg) => event.source.postMessage(Object.assign({ source: 'open-locale-embed' }, msg), event.origin);
     const conn = document.getElementById('conn');
     if (conn) conn.textContent = 'Connected to host ' + event.origin;
@@ -231,4 +280,5 @@ const FRAME_JS = `(() => {
   if (state.token) load(); else renderLogin();
 })();
 `;
+
 

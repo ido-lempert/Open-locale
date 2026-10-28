@@ -196,17 +196,17 @@ export class BranchesService {
             // statement skip the row instead of being overwritten silently.
             const wrote = cutoff !== null
               ? await tx.$queryRaw<{ keyId: string }[]>(Prisma.sql`
-                  INSERT INTO "translations" ("keyId", "projectId", "localeCode", "value", "status", "updatedAt")
-                  VALUES (${tkId}::uuid, ${projectId}::uuid, ${tr.localeCode}, ${tr.value}, ${tr.status}, now() AT TIME ZONE 'UTC')
+                  INSERT INTO "translations" ("keyId", "projectId", "localeCode", "value", "status", "version", "updatedAt")
+                  VALUES (${tkId}::uuid, ${projectId}::uuid, ${tr.localeCode}, ${tr.value}, ${tr.status}, 1, now() AT TIME ZONE 'UTC')
                   ON CONFLICT ("keyId", "localeCode") DO UPDATE
-                  SET "value" = EXCLUDED."value", "status" = EXCLUDED."status", "updatedAt" = now() AT TIME ZONE 'UTC'
+                  SET "value" = EXCLUDED."value", "status" = EXCLUDED."status", "version" = "translations"."version" + 1, "updatedAt" = now() AT TIME ZONE 'UTC'
                   WHERE "translations"."updatedAt" <= ${cutoff}::timestamp
                   RETURNING "keyId"`)
               : await tx.$queryRaw<{ keyId: string }[]>(Prisma.sql`
-                  INSERT INTO "translations" ("keyId", "projectId", "localeCode", "value", "status", "updatedAt")
-                  VALUES (${tkId}::uuid, ${projectId}::uuid, ${tr.localeCode}, ${tr.value}, ${tr.status}, now() AT TIME ZONE 'UTC')
+                  INSERT INTO "translations" ("keyId", "projectId", "localeCode", "value", "status", "version", "updatedAt")
+                  VALUES (${tkId}::uuid, ${projectId}::uuid, ${tr.localeCode}, ${tr.value}, ${tr.status}, 1, now() AT TIME ZONE 'UTC')
                   ON CONFLICT ("keyId", "localeCode") DO UPDATE
-                  SET "value" = EXCLUDED."value", "status" = EXCLUDED."status", "updatedAt" = now() AT TIME ZONE 'UTC'
+                  SET "value" = EXCLUDED."value", "status" = EXCLUDED."status", "version" = "translations"."version" + 1, "updatedAt" = now() AT TIME ZONE 'UTC'
                   RETURNING "keyId"`);
             if (wrote.length === 0) { translationsSkipped++; continue; }
             // Attribution: every overwrite or merge-created translation gets a

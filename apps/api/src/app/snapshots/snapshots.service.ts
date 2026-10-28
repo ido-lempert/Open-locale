@@ -181,8 +181,8 @@ export class SnapshotsService {
         if (before && before.value === st.value && before.status === st.status) continue;
         await tx.translation.upsert({
           where: { keyId_localeCode: { keyId, localeCode: st.localeCode } },
-          create: { keyId, projectId, localeCode: st.localeCode, value: st.value, status: st.status as never },
-          update: { value: st.value, status: st.status as never },
+          create: { keyId, projectId, localeCode: st.localeCode, value: st.value, status: st.status as never, version: 1 },
+          update: { value: st.value, status: st.status as never, version: { increment: 1 } },
         });
         await tx.translationHistory.create({
           data: {

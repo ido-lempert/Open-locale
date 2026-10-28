@@ -83,6 +83,60 @@ try {
   const hist = (await call(`/projects/${pid}/keys/${k1.id}/translations/en/history`, { jwt })).json;
   check('every committed write has a history row with actor attribution', hist.length === 3 && hist.every((h) => h.changedBy), JSON.stringify(hist.length));
 
+  // ---- Part A2: version advances on EVERY mutating path ----
+  const vOf = async (keyId, locale) => {
+    const k = (await call(`/projects/${pid}/keys?branch=main`, { jwt })).json.find((x) => x.id === keyId);
+    const t = k && k.translations.find((t) => t.localeCode === locale);
+    return t ? { version: t.version, value: t.value, status: t.status } : null;
+  };
+  let v = (await vOf(k1.id, 'en')).version;
+  await call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { entries: { 'hero.title': 'Imported value' } } });
+  let nv = await vOf(k1.id, 'en');
+  check('import write bumps the version token', nv.version === v + 1 && nv.value === 'Imported value', `${v} -> ${nv.version}`);
+  v = nv.version;
+  await call(`/projects/${pid}/keys/${k1.id}/translations/en/status`, { jwt, method: 'PATCH', body: { status: 'TRANSLATED' } });
+  nv = await vOf(k1.id, 'en');
+  check('setStatus bumps the version token', nv.version === v + 1 && nv.status === 'TRANSLATED', `${v} -> ${nv.version}`);
+  v = nv.version;
+  await call(`/projects/${pid}/review/bulk-status`, { jwt, method: 'POST', body: { locale: 'en', status: 'REVIEWED', from: 'TRANSLATED' } });
+  nv = await vOf(k1.id, 'en');
+  check('bulk status bump: version advances AND status is REVIEWED', nv.version === v + 1 && nv.status === 'REVIEWED', `${v} -> ${nv.version}`);
+  v = nv.version;
+  // A stale value save must now conflict instead of silently resetting the
+  // newer REVIEWED decision - and the conflict leaves the status alone.
+  const clob = await call(`/projects/${pid}/keys/${k1.id}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value: 'stale text', expectedVersion: v - 1 } });
+  nv = await vOf(k1.id, 'en');
+  check('stale save after status change 409s and does NOT clobber the status', clob.status === 409 && nv.status === 'REVIEWED' && nv.value === 'Imported value' && nv.version === v);
+  // Snapshot restore path.
+  const snap = (await call(`/projects/${pid}/snapshots`, { jwt, method: 'POST', body: { label: 'pre-test' } })).json;
+  await call(`/projects/${pid}/keys/${k1.id}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value: 'post-snapshot', expectedVersion: v } });
+  v = (await vOf(k1.id, 'en')).version;
+  await call(`/projects/${pid}/snapshots/${snap.id}/restore`, { jwt, method: 'POST', body: {} });
+  nv = await vOf(k1.id, 'en');
+  check('snapshot restore bumps the version token while restoring content', nv.version === v + 1 && nv.value === 'Imported value' && nv.status === 'REVIEWED', `${v} -> ${nv.version} ${nv.value}`);
+  v = nv.version;
+  // Merge path: feat branch overwrites main's hero.title.
+  const br = (await call(`/projects/${pid}/branches`, { jwt, method: 'POST', body: { name: 'feat-v' } })).json;
+  const fb = (await call(`/projects/${pid}/branches`, { jwt })).json.find((b) => b.name === 'feat-v');
+  const fk = (await call(`/projects/${pid}/keys`, { jwt, method: 'POST', body: { name: 'hero.title', branch: 'feat-v' } })).json;
+  await call(`/projects/${pid}/keys/${fk.id}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value: 'Merged value' } });
+  await call(`/projects/${pid}/branches/${fb.id}/merge`, { jwt, method: 'POST', body: { into: 'main' } });
+  nv = await vOf(k1.id, 'en');
+  check('merge overwrite bumps the version token', nv.version === v + 1 && nv.value === 'Merged value', `${v} -> ${nv.version} ${nv.value}`);
+  v = nv.version;
+  // Delete/recreate ABA: the recreated key has a NEW id, so a frame holding
+  // the old keyId gets 404; a recreated locale row restarts at version 0/1,
+  // so an old expectedVersion conflicts.
+  await call(`/projects/${pid}/keys/${k2.id}`, { jwt, method: 'DELETE' });
+  const k2b = (await call(`/projects/${pid}/keys`, { jwt, method: 'POST', body: { name: 'hero.subtitle' } })).json;
+  const abaOld = await call(`/projects/${pid}/keys/${k2.id}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value: 'aba', expectedVersion: 1 } });
+  check('delete/recreate: writes to the OLD key id are 404 (new identity)', abaOld.status === 404 && k2b.id !== k2.id, `got ${abaOld.status}`);
+  const heBefore = await vOf(k1.id, 'he');
+  await call(`/projects/${pid}/locales/he`, { jwt, method: 'DELETE' });
+  await call(`/projects/${pid}/locales`, { jwt, method: 'POST', body: { code: 'he' } });
+  const abaLocale = await call(`/projects/${pid}/keys/${k1.id}/translations`, { jwt, method: 'PUT', body: { locale: 'he', value: 'aba', expectedVersion: heBefore ? heBefore.version : 1 } });
+  check('locale remove/re-add: old expectedVersion conflicts (row restarted)', abaLocale.status === 409, `got ${abaLocale.status}`);
+
   // ---- Part B: the frame UI in real Chrome ----
   host1 = createServer((req, res) => { res.setHeader('Content-Type', 'text/html'); res.end(hostPage(pid)); });
   await new Promise((r) => host1.listen(HOST_PORT, r));
@@ -114,13 +168,14 @@ try {
   await frame.evaluate((sel) => document.querySelector(sel + ' .save').click(), rowSel(k1.id));
   await frame.waitForFunction((sel) => document.querySelector(sel + ' .st')?.textContent === 'Saved', { timeout: 8000 }, rowSel(k1.id));
   const savedApi = (await call(`/projects/${pid}/keys?branch=main`, { jwt })).json.find((k) => k.id === k1.id);
-  check('frame save lands via API with version bump', savedApi.translations.find((t) => t.localeCode === 'en').value === 'Frame hello'
-    && savedApi.translations.find((t) => t.localeCode === 'en').version === 4);
+  const savedT = savedApi.translations.find((t) => t.localeCode === 'en');
+  const preFrameV = savedT.version - 1; // the frame loaded the version before its own save
+  check('frame save lands via API with version bump', savedT.value === 'Frame hello' && savedT.version === preFrameV + 1);
   await page.screenshot({ path: join(SHOTS, 'frame-02-saved.png') });
 
   // Conflict: server moves on after the frame loaded (frame holds version 4;
   // write v5 directly via API), then the frame saves -> conflict UI.
-  await call(`/projects/${pid}/keys/${k1.id}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value: 'Server moved', expectedVersion: 4 } });
+  await call(`/projects/${pid}/keys/${k1.id}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value: 'Server moved', expectedVersion: savedT.version } });
   await frame.evaluate((sel) => {
     const input = document.querySelector(sel + ' input');
     input.value = 'My conflicting text';
@@ -154,14 +209,39 @@ try {
   const pong1 = await page.evaluate(() => { const b = window.__received.length; window.__send({ source: 'open-locale-host', type: 'ol:ping' }); return b; });
   const got1 = await page.waitForFunction((b) => window.__received.slice(b).some((r) => r.data && r.data.type === 'ol:pong'), { timeout: 4000 }, pong1).then(() => true).catch(() => false);
   check('open frame answers while allowlisted', got1);
+  // Type an unsaved draft first: trust withdrawal must pause editing but keep the text.
+  await frame.evaluate((sel) => {
+    const input = document.querySelector(sel + ' input');
+    input.value = 'unsaved draft text';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }, rowSel(k1.id));
   await call(`/projects/${pid}`, { jwt, method: 'PATCH', body: { embedOrigins: [] } });
   const b2 = await page.evaluate(() => { const b = window.__received.length; window.__send({ source: 'open-locale-host', type: 'ol:ping' }); return b; });
   const got2 = await page.waitForFunction((b) => window.__received.slice(b).some((r) => r.data && r.data.type === 'ol:pong'), { timeout: 3000 }, b2).then(() => true).catch(() => false);
   check('after origin removal the OPEN frame stops answering (live revalidation)', !got2);
+  await frame.waitForFunction(() => !!document.getElementById('withdrawn'), { timeout: 5000 });
+  const withdrawn = await frame.evaluate((sel) => ({
+    banner: document.getElementById('withdrawn').textContent,
+    disabled: [...document.querySelectorAll('li input, li .save')].every((el) => el.disabled),
+    draftKept: document.querySelector(sel + ' input').value,
+  }), rowSel(k1.id));
+  check('withdrawal visibly disables editing and keeps the unsaved draft', withdrawn.disabled && withdrawn.draftKept === 'unsaved draft text' && withdrawn.banner.length > 10, JSON.stringify(withdrawn).slice(0, 140));
+  await page.screenshot({ path: join(SHOTS, 'frame-04-withdrawn.png') });
+  // A save attempt while withdrawn must not write anything.
+  const beforeWithdrawnSave = (await vOf(k1.id, 'en')).value;
+  await frame.evaluate((sel) => document.querySelector(sel + ' .save').click(), rowSel(k1.id));
+  await new Promise((r) => setTimeout(r, 1000));
+  check('save while withdrawn writes nothing', (await vOf(k1.id, 'en')).value === beforeWithdrawnSave);
   await call(`/projects/${pid}`, { jwt, method: 'PATCH', body: { embedOrigins: [HOST1] } });
   const b3 = await page.evaluate(() => { const b = window.__received.length; window.__send({ source: 'open-locale-host', type: 'ol:ping' }); return b; });
   const got3 = await page.waitForFunction((b) => window.__received.slice(b).some((r) => r.data && r.data.type === 'ol:pong'), { timeout: 4000 }, b3).then(() => true).catch(() => false);
   check('re-allowlisting restores answers without reload', got3);
+  const reenabled = await frame.evaluate((sel) => ({
+    bannerGone: !document.getElementById('withdrawn'),
+    enabled: [...document.querySelectorAll('li input, li .save')].every((el) => !el.disabled),
+    draftKept: document.querySelector(sel + ' input').value,
+  }), rowSel(k1.id));
+  check('re-allowlisting re-enables editing with the draft still intact', reenabled.bannerGone && reenabled.enabled && reenabled.draftKept === 'unsaved draft text', JSON.stringify(reenabled).slice(0, 140));
 } finally {
   if (browser) await browser.close().catch(() => {});
   if (host1) host1.close();

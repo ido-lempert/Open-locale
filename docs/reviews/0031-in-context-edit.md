@@ -40,10 +40,8 @@
 ## Explicit limits
 - expectedVersion is optional: clients that omit it keep last-writer-wins.
   Only the embed frame (and future clients that send it) get conflict safety.
-- Status-only writes (setStatus/bulk) do not bump the value version; they do
-  not conflict with value edits by design.
-- Merge/restore/import replace rows through their own serialized paths; a
-  frame holding a stale version across those gets a 409 on next save (safe
-  direction).
+- See 0032: every value/status-mutating path (upsert, setStatus, bulk
+  status, import, merge, snapshot restore) now bumps the version token, and
+  status changes are protected from silent clobbering by stale value saves.
 - Live revalidation adds one project read per inbound host message - fine at
   ping/highlight rates; a busier protocol would need caching with a short TTL.
