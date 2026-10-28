@@ -31,18 +31,22 @@ panel (list, add with locale scope, delete), count badge on the toggle.
 ## Pass 4 - Security researcher
 - Cross-team comment read and delete return 404, not 403 - no existence leak
   (proven in comments-test).
-- Delete is author-only at the service layer. Honest gap: the 403 path for "member
-  of the same team but not the author" is code-reviewed but not executable yet -
-  team invitations do not exist, so no second user can share a project. Recorded;
-  the negative test lands with the team-members feature.
+- Delete is author-only at the service layer, proven end to end: a same-team
+  member (joined via test fixture, since invitations UI is not shipped) can read
+  and comment but gets 403 deleting another author's comment, and the comment is
+  unchanged afterwards; the same member deletes their own comment fine.
+- Read-only API tokens (X-Api-Key) read comments (200) but mutations are denied
+  (403), proven against the comments endpoints.
 - Bodies are length-capped and stored as plain text; rendering escapes HTML via the
   framework's interpolation (no innerHTML anywhere in the panel).
 
 ## Pass 5 - QA / integration
-- comments-test.mjs (real PostgreSQL + HTTP): 11/11 - global and locale-scoped
+- comments-test.mjs (real PostgreSQL + HTTP): 18/18 - global and locale-scoped
   creation, unfiltered/locale-filtered lists, he-only excluded from en filter,
   author delete, deleted comment gone, 400 over 2000 chars, 404 unknown locale,
-  cross-team read/delete denied.
+  cross-team read/delete denied, same-team different-author delete denied 403 +
+  comment unchanged, same-team author delete allowed, read-only token read 200 /
+  write 403.
 - e2e-visual.mjs 24/24: comment posted through the UI, listed with author and scope,
   count badge updates to (1). Screenshot editor-13 inspected and secret-scanned.
 - Web unit 5/5; api unit 5/5; tags 9/9; status/history 14/14; authz 28/28;

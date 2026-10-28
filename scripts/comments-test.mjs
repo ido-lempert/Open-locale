@@ -1,6 +1,7 @@
 // Comments: real PostgreSQL + real HTTP API. Run: node scripts/comments-test.mjs
 import { execFileSync, spawn } from 'node:child_process';
 import EmbeddedPostgres from 'embedded-postgres';
+import { PrismaClient } from '@prisma/client';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,9 +11,10 @@ const API = `http://127.0.0.1:${API_PORT}/api`;
 const root = process.cwd();
 let failures = 0;
 const check = (n, c, x = '') => { console.log(`${c ? 'PASS' : (failures++, 'FAIL')} ${n} ${x}`); };
-async function call(path, { token, method = 'GET', body } = {}) {
+async function call(path, { token, apiKey, method = 'GET', body } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
+  if (apiKey) headers['X-Api-Key'] = apiKey;
   const res = await fetch(`${API}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined });
   return { status: res.status, json: await res.json().catch(() => null) };
 }
@@ -59,12 +61,34 @@ try {
   check('body over 2000 chars rejected (400)', tooLong.status === 400, `got ${tooLong.status}`);
 
   // Same-team member can read and comment; cannot delete another's comment
-  const joinTeam = await call(`/projects/${proj.id}`, { token: at });
   // B is in a different team; test cross-team denial first
   const bRead = await call(base, { token: bt });
   check('cross-team comment read denied (404)', bRead.status === 404, `got ${bRead.status}`);
   const bDel = await call(`${base}/${c1.id}`, { token: bt, method: 'DELETE' });
   check('cross-team comment delete denied (404)', bDel.status === 404, `got ${bDel.status}`);
+
+  // Test fixture: add B to A's team directly (invitations UI not shipped yet)
+  const full = (await call(`/projects/${proj.id}`, { token: at })).json;
+  const prisma = new PrismaClient({ datasources: { db: { url } } });
+  await prisma.teamMember.create({ data: { teamId: full.teamId, userId: b.user.id, role: 'MEMBER' } });
+  await prisma.$disconnect();
+  const bReadSame = await call(base, { token: bt });
+  check('same-team member reads comments', bReadSame.status === 200 && bReadSame.json.length === 2, `got ${bReadSame.status}`);
+  const bComment = await call(base, { token: bt, method: 'POST', body: { body: 'Bob weighs in', locale: 'en' } });
+  check('same-team member comments', bComment.status === 201 && bComment.json.author?.displayName === 'Bob B', `got ${bComment.status}`);
+  const bDelA = await call(`${base}/${c2.id}`, { token: bt, method: 'DELETE' });
+  check('same-team delete of another author denied (403)', bDelA.status === 403, `got ${bDelA.status}`);
+  const afterB = (await call(base, { token: at })).json;
+  check('comment unchanged after denied delete', afterB.length === 3 && afterB.some((c) => c.id === c2.id));
+  const bDelOwn = await call(`${base}/${bComment.json.id}`, { token: bt, method: 'DELETE' });
+  check('same-team author deletes own comment', bDelOwn.status === 200, `got ${bDelOwn.status}`);
+
+  // Read-only API token: reads pass, mutations denied
+  const roToken = (await call('/auth/tokens', { token: at, method: 'POST', body: { name: 'ro', scopes: ['read'] } })).json;
+  const roRead = await call(base, { apiKey: roToken.token });
+  check('read-only token reads comments (200)', roRead.status === 200, `got ${roRead.status}`);
+  const roWrite = await call(base, { apiKey: roToken.token, method: 'POST', body: { body: 'should fail' } });
+  check('read-only token comment mutation denied (403)', roWrite.status === 403, `got ${roWrite.status}`);
 
   // A deletes own comment
   const del = await call(`${base}/${c1.id}`, { token: at, method: 'DELETE' });
