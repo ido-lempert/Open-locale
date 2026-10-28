@@ -17,6 +17,7 @@ interface CellState {
     <header class="bar">
       <a routerLink="/projects" class="back">&larr; Projects</a>
       <h1>{{ project()?.name ?? 'Loading…' }}</h1>
+      <a [routerLink]="['/projects', projectId, 'tasks']" class="tasks-link">Tasks</a>
       <a [routerLink]="['/projects', projectId, 'activity']" class="activity-link">Activity</a>
       <a [routerLink]="['/projects', projectId, 'settings']" class="settings-link">Settings</a>
       <span class="muted">{{ keys().length }} keys</span>

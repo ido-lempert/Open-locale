@@ -32,6 +32,14 @@ export interface ActivityEntry {
   actor: { displayName: string; email: string } | null;
 }
 
+export interface TaskItem {
+  id: string; title: string; description: string; status: 'OPEN' | 'IN_PROGRESS' | 'DONE';
+  dueDate: string | null; createdAt: string;
+  assignee: { id: string; displayName: string; email: string } | null;
+  creator: { id: string; displayName: string; email: string } | null;
+}
+export interface MemberInfo { id: string; displayName: string; email: string; role: string; }
+
 export interface ScreenshotMeta {
   id: string; filename: string; mimeType: string; byteSize: number; createdAt: string;
   uploader: { displayName: string; email: string } | null;
@@ -128,6 +136,21 @@ export class ApiService {
     const q = params.toString();
     return this.request<{ items: ActivityEntry[]; nextCursor: string | null }>(
       `/projects/${projectId}/activity${q ? `?${q}` : ''}`);
+  }
+  listMembers(projectId: string) {
+    return this.request<MemberInfo[]>(`/projects/${projectId}/members`);
+  }
+  listTasks(projectId: string, status?: string) {
+    return this.request<TaskItem[]>(`/projects/${projectId}/tasks${status ? `?status=${status}` : ''}`);
+  }
+  createTask(projectId: string, input: { title: string; description?: string; dueDate?: string; assigneeId?: string }) {
+    return this.request<TaskItem>(`/projects/${projectId}/tasks`, { method: 'POST', body: JSON.stringify(input) });
+  }
+  updateTask(projectId: string, taskId: string, input: Record<string, unknown>) {
+    return this.request<TaskItem>(`/projects/${projectId}/tasks/${taskId}`, { method: 'PATCH', body: JSON.stringify(input) });
+  }
+  deleteTask(projectId: string, taskId: string) {
+    return this.request<{ removed: string }>(`/projects/${projectId}/tasks/${taskId}`, { method: 'DELETE' });
   }
   listScreenshots(projectId: string, keyId: string) {
     return this.request<ScreenshotMeta[]>(`/projects/${projectId}/keys/${keyId}/screenshots`);

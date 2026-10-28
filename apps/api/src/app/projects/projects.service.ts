@@ -80,6 +80,16 @@ export class ProjectsService {
     return { removed: projectId };
   }
 
+  async listMembers(userId: string, projectId: string) {
+    const project = await this.getFor(userId, projectId);
+    const members = await this.prisma.teamMember.findMany({
+      where: { teamId: project.teamId },
+      include: { user: { select: { id: true, displayName: true, email: true } } },
+      orderBy: { user: { displayName: 'asc' } },
+    });
+    return members.map((m) => ({ id: m.user.id, displayName: m.user.displayName, email: m.user.email, role: m.role }));
+  }
+
   async addLocale(userId: string, projectId: string, code: string) {
     await this.getFor(userId, projectId);
     const existing = await this.prisma.projectLocale.findUnique({

@@ -9,7 +9,8 @@
     "test:comments": "node scripts/comments-test.mjs",
     "test:activity": "node scripts/activity-test.mjs",
     "test:imports": "node scripts/import-runs-test.mjs",
-    "test:screenshots": "node scripts/screenshots-test.mjs"
+    "test:screenshots": "node scripts/screenshots-test.mjs",
+    "test:tasks": "node scripts/tasks-test.mjs"
   },
   "private": true,
   "dependencies": {

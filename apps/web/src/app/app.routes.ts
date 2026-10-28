@@ -5,6 +5,7 @@ import { ProjectsComponent } from './pages/projects.component';
 import { EditorComponent } from './pages/editor.component';
 import { SettingsComponent } from './pages/settings.component';
 import { ActivityComponent } from './pages/activity.component';
+import { TasksComponent } from './pages/tasks.component';
 
 export const appRoutes: Routes = [
   { path: 'login', component: LoginComponent },
@@ -12,6 +13,7 @@ export const appRoutes: Routes = [
   { path: 'projects/:id', component: EditorComponent, canActivate: [authGuard] },
   { path: 'projects/:id/settings', component: SettingsComponent, canActivate: [authGuard] },
   { path: 'projects/:id/activity', component: ActivityComponent, canActivate: [authGuard] },
+  { path: 'projects/:id/tasks', component: TasksComponent, canActivate: [authGuard] },
   { path: '', pathMatch: 'full', redirectTo: 'projects' },
   { path: '**', redirectTo: 'projects' },
 ];

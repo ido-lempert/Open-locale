@@ -231,6 +231,31 @@ try {
   await page.click('.grid tbody tr:first-child .shots-toggle');
   await page.waitForSelector('.grid tbody tr', { timeout: 10000 });
 
+  // Tasks page
+  await page.click('.tasks-link');
+  await page.waitForSelector('.task-form', { timeout: 10000 });
+  await page.type('input[name=taskTitle]', 'Translate checkout to Hebrew');
+  await page.type('input[name=taskDescription]', 'All cart.* keys, ready for review');
+  await page.evaluate(() => {
+    const form = document.querySelector('.task-form');
+    form.requestSubmit();
+  });
+  await page.waitForFunction(
+    () => document.body.textContent.includes('Translate checkout to Hebrew'),
+    { timeout: 10000 },
+  );
+  await page.waitForSelector('.task-row', { timeout: 5000 });
+  check('task created and listed', true);
+  await page.select('.task-row select[aria-label^="Status for"]', 'IN_PROGRESS');
+  await page.waitForFunction(
+    () => document.querySelector('.task-row .task-status')?.textContent.trim() === 'in progress',
+    { timeout: 10000 },
+  );
+  check('task status change reflected in UI', true);
+  await shot('editor-16-tasks.png');
+  await page.click('.back');
+  await page.waitForSelector('.grid tbody tr', { timeout: 10000 });
+
   const projId = page.url().split('/').pop();
   // Settings screen: rename, add locale, verify grid column appears
   await page.click('.settings-link');

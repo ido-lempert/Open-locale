@@ -20,6 +20,11 @@ export class ProjectsController {
     return this.projects.createFor(user.userId, dto);
   }
 
+  @Get(':id/members')
+  listMembers(@CurrentUser() user: AuthPrincipal, @Param('id') id: string) {
+    return this.projects.listMembers(user.userId, id);
+  }
+
   @Get(':id')
   get(@CurrentUser() user: AuthPrincipal, @Param('id') id: string) {
     return this.projects.getFor(user.userId, id);

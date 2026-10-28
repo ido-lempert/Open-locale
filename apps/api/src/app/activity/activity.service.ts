@@ -17,6 +17,9 @@ export const ACTIVITY_ACTIONS = [
   'locale.removed',
   'screenshot.added',
   'screenshot.deleted',
+  'task.created',
+  'task.updated',
+  'task.deleted',
 ] as const;
 
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];

@@ -171,3 +171,17 @@ span.review { font-size: 0.72rem; padding: 0.05rem 0.4rem; border: 1px solid var
 .shots-list img { border: 1px solid #e5e7eb; border-radius: 6px; max-width: 160px; height: auto; background: #fff; }
 .shot-upload { display: inline-block; margin-top: 0.7rem; font-size: 0.85rem; }
 .shot-upload input { display: block; margin-top: 0.3rem; font-size: 0.82rem; }
+
+/* Tasks */
+.bar select { width: auto; }
+.task-form { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.task-form input, .task-form select { width: auto; }
+.task-form input[name=taskTitle] { flex: 2 1 16rem; }
+.task-form input[name=taskDescription] { flex: 3 1 20rem; }
+.task-row select { width: auto; }
+.task-list { list-style: none; margin: 1rem 0 0; padding: 0; max-width: 70rem; }
+.task-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; padding: 0.6rem 0.25rem; border-bottom: 1px solid #e5e7eb; }
+.task-body { display: flex; flex-direction: column; flex: 1 1 16rem; }
+.task-status { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.1rem 0.5rem; border-radius: 999px; background: #e5e7eb; color: #374151; }
+.task-in-progress { background: #dbeafe; color: #1d4ed8; }
+.task-done { background: #dcfce7; color: #15803d; }
