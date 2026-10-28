@@ -45,3 +45,14 @@ filter; linked from the editor header.
   structure validation yet.
 - No per-cell inline indicators in the editor grid; findings live on the QA page.
 - maxLength is enforced as a check, not at write time.
+
+## Correction (same day)
+External visual review caught that the QA badge rendered as plain text. Root cause:
+this session's style blocks (glossary hints, do-not-translate badge, QA badges) were
+appended to apps/web/src/styles.css, but the app's global stylesheet is styles.scss -
+styles.css was never loaded. Side effect: glossary hint chips in editor-18 previously
+showed only the generic <code> background, not the claimed lavender pill; the earlier
+'lavender pill' description in review 0015's designer pass was wrong about what the
+pixels showed. Styles moved into styles.scss, styles.css deleted, e2e rerun 37/37,
+both screenshots re-inspected: QA badge renders as red pill, glossary chips render as
+lavender pills. Lesson recorded: verify stylesheet identity before claiming styling.
