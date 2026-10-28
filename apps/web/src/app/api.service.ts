@@ -6,7 +6,7 @@ export interface Project {
   locales: ProjectLocale[]; customStatuses?: string[]; embedOrigins?: string[]; _count?: { keys: number };
 }
 export type TranslationStatus = string; // base UNVERIFIED/TRANSLATED/REVIEWED + project custom statuses
-export interface Translation { keyId: string; localeCode: string; value: string; status: TranslationStatus; }
+export interface Translation { keyId: string; localeCode: string; value: string; status: TranslationStatus; version?: number; }
 export interface HistoryEntry {
   id: string; keyId: string; localeCode: string; value: string;
   status: TranslationStatus; createdAt: string;

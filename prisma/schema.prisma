@@ -145,6 +145,8 @@ model Translation {
   value        String            @default("")
   // Base statuses UNVERIFIED/TRANSLATED/REVIEWED plus project.customStatuses.
   status       String   @default("UNVERIFIED")
+  // Optimistic concurrency token, incremented on every value/status write.
+  version      Int      @default(0)
   updatedAt    DateTime          @updatedAt
 
   key     Key                  @relation(fields: [keyId], references: [id], onDelete: Cascade)

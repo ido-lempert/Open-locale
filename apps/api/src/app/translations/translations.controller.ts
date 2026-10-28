@@ -12,7 +12,7 @@ export class TranslationsController {
 
   @Put('keys/:keyId/translations')
   upsert(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('keyId') keyId: string, @Body() dto: UpsertTranslationDto) {
-    return this.translations.upsert(user.userId, projectId, keyId, dto.locale, dto.value);
+    return this.translations.upsert(user.userId, projectId, keyId, dto.locale, dto.value, dto.expectedVersion);
   }
 
   @Post('review/bulk-status')

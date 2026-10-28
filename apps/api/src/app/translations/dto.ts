@@ -1,4 +1,4 @@
-import { IsBoolean, IsNotEmpty, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsInt, IsNotEmpty, IsObject, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 export class UpsertTranslationDto {
   @IsString()
@@ -6,6 +6,11 @@ export class UpsertTranslationDto {
 
   @IsString()
   value!: string;
+
+  // Optimistic concurrency: when present, the write commits only if the row's
+  // current version equals this value (0 = the client expects no row yet).
+  @IsOptional() @IsInt() @Min(0)
+  expectedVersion?: number;
 }
 
 export class ImportJsonDto {

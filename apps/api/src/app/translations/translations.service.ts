@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
@@ -35,7 +35,7 @@ export class TranslationsService {
     private readonly branches: BranchesService,
   ) {}
 
-  async upsert(userId: string, projectId: string, keyId: string, locale: string, value: string) {
+  async upsert(userId: string, projectId: string, keyId: string, locale: string, value: string, expectedVersion?: number) {
     await this.projects.assertLocaleWrite(userId, projectId, [locale]);
     const project = await this.projects.getFor(userId, projectId);
     if (!project.locales.some((l) => l.code === locale)) {
@@ -44,16 +44,50 @@ export class TranslationsService {
     const key = await this.prisma.key.findFirst({ where: { id: keyId, projectId } });
     if (!key) throw new NotFoundException('Key not found');
     return this.prisma.$transaction(async (tx) => {
-      const existing = await tx.translation.findUnique({
-        where: { keyId_localeCode: { keyId, localeCode: locale } },
-      });
+      let existing: { value: string; status: string; version: number } | null;
+      if (expectedVersion !== undefined) {
+        // Optimistic concurrency: lock the row first, then compare the locked
+        // version, so the value checked is exactly the value overwritten.
+        // A missing row is version 0 - an expectedVersion of 0 asserts
+        // "no translation yet" and races with a concurrent create.
+        const locked = await tx.$queryRaw<{ value: string; status: string; version: number }[]>`
+          SELECT "value", "status", "version" FROM "translations"
+          WHERE "keyId" = ${keyId}::uuid AND "localeCode" = ${locale} FOR UPDATE`;
+        existing = locked[0] ?? null;
+        const currentVersion = existing ? existing.version : 0;
+        if (currentVersion !== expectedVersion) {
+          throw new ConflictException({
+            message: 'This translation changed since it was loaded.',
+            currentValue: existing ? existing.value : null,
+            currentVersion,
+          });
+        }
+      } else {
+        existing = await tx.translation.findUnique({
+          where: { keyId_localeCode: { keyId, localeCode: locale } },
+        });
+      }
       // Editing the text resets review: new wording has not been reviewed.
       const status = existing && existing.value === value ? existing.status : 'UNVERIFIED';
-      const translation = await tx.translation.upsert({
-        where: { keyId_localeCode: { keyId, localeCode: locale } },
-        create: { keyId, projectId, localeCode: locale, value },
-        update: { value, status },
-      });
+      let translation;
+      if (!existing && expectedVersion !== undefined) {
+        // Create-only write: ON CONFLICT DO NOTHING turns a concurrent create
+        // into a conflict instead of a silent overwrite.
+        const created = await tx.$queryRaw<{ keyId: string }[]>`
+          INSERT INTO "translations" ("keyId", "projectId", "localeCode", "value", "status", "version", "updatedAt")
+          VALUES (${keyId}::uuid, ${projectId}::uuid, ${locale}, ${value}, ${status}, 1, now())
+          ON CONFLICT ("keyId", "localeCode") DO NOTHING RETURNING "keyId"`;
+        if (!created[0]) {
+          throw new ConflictException({ message: 'This translation was created concurrently.', currentValue: null, currentVersion: null });
+        }
+        translation = await tx.translation.findUniqueOrThrow({ where: { keyId_localeCode: { keyId, localeCode: locale } } });
+      } else {
+        translation = await tx.translation.upsert({
+          where: { keyId_localeCode: { keyId, localeCode: locale } },
+          create: { keyId, projectId, localeCode: locale, value, version: 1 },
+          update: { value, status, version: { increment: 1 } },
+        });
+      }
       if (value) await this.rememberTx(tx, projectId, project.baseLocale, keyId, locale, value);
       if (!existing || existing.value !== value || existing.status !== status) {
         await tx.translationHistory.create({

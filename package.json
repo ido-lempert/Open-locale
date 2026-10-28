@@ -29,7 +29,8 @@
     "test:merge-concurrency": "node scripts/merge-concurrency-test.mjs",
     "test:ota": "node scripts/ota-test.mjs",
     "test:reports": "node scripts/reports-test.mjs",
-    "test:incontext": "node scripts/incontext-test.mjs"
+    "test:incontext": "node scripts/incontext-test.mjs",
+    "test:incontext-edit": "node scripts/incontext-edit-test.mjs"
   },
   "private": true,
   "dependencies": {

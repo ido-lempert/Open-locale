@@ -51,37 +51,50 @@ export class EmbedController {
 const FRAME_CSS = `body{font-family:system-ui,sans-serif;margin:0;padding:.5rem;color:#111827}
 .muted{color:#6b7280;font-size:.85rem}
 .error{color:#b91c1c}
+.ok{color:#15803d}
 .bar{display:flex;gap:.5rem;align-items:baseline;border-bottom:1px solid #e5e7eb;padding-bottom:.35rem;margin-bottom:.5rem}
 ul{list-style:none;padding:0;margin:0}
-li{display:flex;gap:.6rem;padding:.3rem .4rem;border-radius:6px;align-items:baseline}
+li{display:flex;gap:.5rem;padding:.35rem .4rem;border-radius:6px;align-items:center;flex-wrap:wrap}
 li.hl{background:#fef3c7;outline:2px solid #f59e0b}
-li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-code{background:#f3f4f6;border-radius:4px;padding:0 .3rem}
+li code{background:#f3f4f6;border-radius:4px;padding:.1rem .3rem;min-width:9rem}
+li input{flex:1;min-width:10rem;padding:.3rem .45rem;font:inherit;border:1px solid #d1d5db;border-radius:6px}
+li button{padding:.3rem .6rem;font:inherit}
+.conflict{background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:.4rem .5rem;width:100%;font-size:.85rem}
+.conflict .cur{font-style:italic}
 form{display:flex;flex-direction:column;gap:.4rem;max-width:260px;margin-top:.5rem}
-input,button{padding:.4rem .5rem;font:inherit}
+input,button{font:inherit}
 `;
 
-// Protocol (mirrors docs/reviews/0030): the frame answers only the direct
-// parent window (event.source === window.parent), only when its origin is in
-// the project's allowlist, and only a strict message shape. Replies go to the
-// verified event.origin, never '*'. The token stays in this frame's
-// localStorage and never appears in a payload.
+// Protocol (mirrors docs/reviews/0030 and 0031): the frame answers only the
+// direct parent window (event.source === window.parent), only when its origin
+// is in the project's CURRENT allowlist - revalidated against the server on
+// every inbound message, so origin removal silences an already-open frame -
+// and only a strict message shape. Replies go to the verified event.origin,
+// never '*'. Writes are NEVER triggered by host messages: saves happen only
+// from the frame's own Save buttons, with the row's expected version, and the
+// server re-checks membership and locale permission on every write. The token
+// stays in this frame's localStorage and never appears in a payload.
 const FRAME_JS = `(() => {
   const root = document.getElementById('root');
   const projectId = document.currentScript.getAttribute('data-project-id');
   const TOKEN_KEY = 'ol_embed_token';
-  const state = { token: localStorage.getItem(TOKEN_KEY) || null, origins: [], keys: [], branch: 'main', project: null };
-  const branch = new URLSearchParams(location.search).get('branch') || 'main';
-  state.branch = branch;
-  const esc = (s) => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+  const qs = new URLSearchParams(location.search);
+  const state = {
+    token: localStorage.getItem(TOKEN_KEY) || null,
+    origins: [], keys: [], versions: {}, project: null,
+    branch: qs.get('branch') || 'main',
+    editLocale: qs.get('locale') || null,
+  };
+  const esc = (s) => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
   const api = async (path, opts = {}) => {
     const res = await fetch('/api' + path, {
       method: opts.method || 'GET',
       headers: { 'Content-Type': 'application/json', ...(state.token ? { Authorization: 'Bearer ' + state.token } : {}) },
       body: opts.body ? JSON.stringify(opts.body) : undefined,
     });
-    if (!res.ok) throw new Error(String(res.status));
-    return res.json();
+    const body = await res.json().catch(() => null);
+    if (!res.ok) { const e = new Error(String(res.status)); e.status = res.status; e.body = body; throw e; }
+    return body;
   };
   const renderLogin = (msg) => {
     root.innerHTML = '<header class="bar"><strong>Open-locale</strong><span class="muted">in-context</span></header>' +
@@ -100,18 +113,79 @@ const FRAME_JS = `(() => {
       } catch { renderLogin('Sign-in failed.'); }
     });
   };
-  const valueOf = (k) => { const t = (k.translations || []).find((t) => t.localeCode === (state.project && state.project.baseLocale)); return t ? t.value : ''; };
+  const tFor = (k) => (k.translations || []).find((t) => t.localeCode === state.editLocale);
   const render = () => {
-    root.innerHTML = '<header class="bar"><strong>Open-locale</strong><span class="muted">in-context - ' + esc(state.project.name) + ' (' + esc(state.branch) + ')</span></header>' +
-      '<p class="muted" id="conn">Waiting for the host page. This frame answers only allowlisted origins.</p>' +
-      '<ul>' + state.keys.map((k) => '<li data-key="' + esc(k.name) + '"><code>' + esc(k.name) + '</code><span>' + esc(valueOf(k)) + '</span></li>').join('') + '</ul>' +
+    root.innerHTML = '<header class="bar"><strong>Open-locale</strong><span class="muted">in-context - ' + esc(state.project.name) +
+      ' (' + esc(state.branch) + ', editing <code>' + esc(state.editLocale) + '</code>)</span></header>' +
+      '<p class="muted" id="conn">Waiting for the host page. This frame answers only allowlisted origins; saves happen only here, never from host messages.</p>' +
+      '<ul>' + state.keys.map((k) => {
+        const t = tFor(k);
+        return '<li data-key-id="' + esc(k.id) + '"><code>' + esc(k.name) + '</code>' +
+          '<input aria-label="Translation" value="' + esc(t ? t.value : '') + '">' +
+          '<button type="button" class="save">Save</button><span class="muted st"></span></li>';
+      }).join('') + '</ul>' +
       (state.keys.length ? '' : '<p class="muted">No keys on this branch.</p>');
+    for (const li of root.querySelectorAll('li[data-key-id]')) {
+      li.querySelector('.save').addEventListener('click', () => saveRow(li));
+    }
+  };
+  const saveRow = async (li, forceVersion) => {
+    const keyId = li.getAttribute('data-key-id');
+    const key = state.keys.find((k) => k.id === keyId);
+    const value = li.querySelector('input').value;
+    const st = li.querySelector('.st');
+    const old = li.querySelector('.conflict');
+    if (old) old.remove();
+    st.textContent = 'Saving...'; st.className = 'muted st';
+    try {
+      const saved = await api('/projects/' + projectId + '/keys/' + keyId + '/translations', {
+        method: 'PUT',
+        body: { locale: state.editLocale, value, expectedVersion: forceVersion !== undefined ? forceVersion : (state.versions[keyId] || 0) },
+      });
+      state.versions[keyId] = saved.version;
+      const t = tFor(key);
+      if (t) { t.value = saved.value; t.version = saved.version; } else { key.translations = (key.translations || []).concat([{ localeCode: state.editLocale, value: saved.value, version: saved.version }]); }
+      st.textContent = 'Saved'; st.className = 'ok st';
+    } catch (e) {
+      if (e.status === 409) {
+        // Re-read the current server value so the conflict UI shows truth,
+        // not the value from the error body alone.
+        let current = e.body && e.body.currentValue, currentVersion = e.body && e.body.currentVersion;
+        try {
+          const fresh = await api('/projects/' + projectId + '/keys?branch=' + encodeURIComponent(state.branch));
+          const fk = fresh.find((x) => x.id === keyId);
+          const ft = fk && (fk.translations || []).find((t) => t.localeCode === state.editLocale);
+          if (ft) { current = ft.value; currentVersion = ft.version; }
+        } catch { /* keep error-body values */ }
+        st.textContent = '';
+        const box = document.createElement('div');
+        box.className = 'conflict';
+        box.innerHTML = '<strong>Conflict:</strong> this translation changed on the server. Current value: <span class="cur"></span>' +
+          '<div><button type="button" class="use-latest">Use latest</button> <button type="button" class="overwrite">Overwrite with my text</button></div>';
+        box.querySelector('.cur').textContent = current == null ? '(empty)' : current;
+        box.querySelector('.use-latest').addEventListener('click', () => {
+          li.querySelector('input').value = current || '';
+          state.versions[keyId] = currentVersion || 0;
+          box.remove();
+          st.textContent = 'Loaded latest'; st.className = 'muted st';
+        });
+        box.querySelector('.overwrite').addEventListener('click', () => { saveRow(li, currentVersion || 0); });
+        li.appendChild(box);
+      } else if (e.status === 403) {
+        st.textContent = 'No write access for ' + state.editLocale; st.className = 'error st';
+      } else {
+        st.textContent = 'Save failed (' + e.message + ')'; st.className = 'error st';
+      }
+    }
   };
   const load = async () => {
     try {
       state.project = await api('/projects/' + projectId);
       state.origins = state.project.embedOrigins || [];
+      if (!state.editLocale) state.editLocale = state.project.baseLocale;
       state.keys = await api('/projects/' + projectId + '/keys?branch=' + encodeURIComponent(state.branch));
+      state.versions = {};
+      for (const k of state.keys) { const t = tFor(k); state.versions[k.id] = t ? (t.version || 0) : 0; }
       render();
     } catch (e) {
       state.token = null; localStorage.removeItem(TOKEN_KEY);
@@ -126,23 +200,35 @@ const FRAME_JS = `(() => {
     if (d.type === 'ol:highlight') return typeof d.key === 'string' && d.key.length > 0 && d.key.length <= 500 && keys.length === 3;
     return false;
   };
-  window.addEventListener('message', (event) => {
+  window.addEventListener('message', async (event) => {
     if (!state.project) return; // unauthenticated frames expose nothing
     if (event.source !== window.parent) return; // the direct embedder only
-    if (!state.origins.includes(event.origin)) return; // allowlist before payload
     if (!isHostMessage(event.data)) return;
+    // Live revalidation: re-read the project's allowlist from the server on
+    // every inbound message. A removed origin stops getting answers on the
+    // open frame, and lost membership wipes the frame to the sign-in state.
+    try {
+      const fresh = await api('/projects/' + projectId);
+      state.origins = fresh.embedOrigins || [];
+    } catch {
+      state.project = null; state.keys = [];
+      renderLogin('Access changed. Sign in again to continue.');
+      return;
+    }
+    if (!state.origins.includes(event.origin)) return;
     const reply = (msg) => event.source.postMessage(Object.assign({ source: 'open-locale-embed' }, msg), event.origin);
     const conn = document.getElementById('conn');
     if (conn) conn.textContent = 'Connected to host ' + event.origin;
     if (event.data.type === 'ol:ping') {
-      reply({ type: 'ol:pong', keys: state.keys.length, branch: state.branch });
+      reply({ type: 'ol:pong', keys: state.keys.length, branch: state.branch, locale: state.editLocale });
     } else if (event.data.type === 'ol:highlight') {
-      const found = state.keys.some((k) => k.name === event.data.key);
-      const li = document.querySelector('li[data-key="' + CSS.escape(event.data.key) + '"]');
-      if (li) li.classList.add('hl');
-      reply({ type: 'ol:highlighted', key: event.data.key, found });
+      const key = state.keys.find((k) => k.name === event.data.key);
+      const li = key && document.querySelector('li[data-key-id="' + CSS.escape(key.id) + '"]');
+      if (li) { li.classList.add('hl'); li.scrollIntoView({ block: 'nearest' }); }
+      reply({ type: 'ol:highlighted', key: event.data.key, found: !!key });
     }
   });
   if (state.token) load(); else renderLogin();
 })();
 `;
+
