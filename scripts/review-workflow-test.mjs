@@ -151,6 +151,29 @@ try {
   const restored = await call(`/projects/${pid}/keys?status=NEEDS_WORK&locale=he`, { jwt });
   check('restored translations keep the orphan custom status', restored.status === 200 && restored.json.some((k) => k.name === 'rev.one'));
 
+
+  // Optimistic preview: rows written after the preview are excluded, even when
+  // they still match the filter (same-status value edit, newly matching row,
+  // or an ABA status round-trip back to the filter status).
+  await call(`/projects/${pid}/keys/${k2}/translations/he/status`, { jwt, method: 'PATCH', body: { status: 'UNVERIFIED' } });
+  await call(`/projects/${pid}/keys/${k3}/translations/he/status`, { jwt, method: 'PATCH', body: { status: 'UNVERIFIED' } });
+  const pv = await call(`/projects/${pid}/review/bulk-status`, { jwt, method: 'POST', body: { locale: 'he', status: 'REVIEWED', from: 'UNVERIFIED', dryRun: true } });
+  check('preview returns a server timestamp', pv.status === 201 && typeof pv.json.previewAt === 'string');
+  // Same-status value edit after preview.
+  await call(`/projects/${pid}/keys/${k2}/translations`, { jwt, method: 'PUT', body: { locale: 'he', value: 'edited after preview' } });
+  await call(`/projects/${pid}/keys/${k2}/translations/he/status`, { jwt, method: 'PATCH', body: { status: 'UNVERIFIED' } });
+  // ABA round-trip on k3 after preview.
+  await call(`/projects/${pid}/keys/${k3}/translations/he/status`, { jwt, method: 'PATCH', body: { status: 'TRANSLATED' } });
+  await call(`/projects/${pid}/keys/${k3}/translations/he/status`, { jwt, method: 'PATCH', body: { status: 'UNVERIFIED' } });
+  const commitStale = await call(`/projects/${pid}/review/bulk-status`, { jwt, method: 'POST', body: { locale: 'he', status: 'REVIEWED', from: 'UNVERIFIED', notChangedSince: pv.json.previewAt } });
+  check('rows written after preview are excluded', commitStale.status === 201 && commitStale.json.updated === 0, JSON.stringify(commitStale.json));
+  // Without the preview token both rows are still marked (no regression).
+  const commitFresh = await call(`/projects/${pid}/review/bulk-status`, { jwt, method: 'POST', body: { locale: 'he', status: 'REVIEWED', from: 'UNVERIFIED' } });
+  check('commit without preview token still works', commitFresh.status === 201 && commitFresh.json.updated === 2, JSON.stringify(commitFresh.json));
+  // Garbage preview token rejected.
+  check('invalid notChangedSince rejected (400)',
+    (await call(`/projects/${pid}/review/bulk-status`, { jwt, method: 'POST', body: { locale: 'he', status: 'REVIEWED', notChangedSince: 'not-a-date' } })).status === 400);
+
 } finally {
   if (api) api.kill('SIGTERM');
   await pg.stop();

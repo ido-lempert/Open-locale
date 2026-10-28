@@ -65,4 +65,10 @@ export class BulkStatusDto {
   @IsOptional()
   @IsBoolean()
   dryRun?: boolean;
+
+  // From the dry-run response: exclude rows written after the preview.
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  notChangedSince?: string;
 }

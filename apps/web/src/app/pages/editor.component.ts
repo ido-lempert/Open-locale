@@ -483,8 +483,8 @@ export class EditorComponent implements OnInit {
       if (scope.search) bits.push(`keys matching "${scope.search}"`);
       if (scope.tag) bits.push(`tagged ${scope.tag}`);
       const scopeText = bits.length ? ` (${bits.join(', ')})` : '';
-      if (!confirm(`Mark ${preview.matched} translations in ${scope.locale}${scopeText} as ${scope.status.toLowerCase()}?\nEmpty translations and rows edited since this count are excluded.`)) return;
-      const res = await this.api.bulkSetStatus(this.projectId, scope);
+      if (!confirm(`Mark ${preview.matched} translations in ${scope.locale}${scopeText} as ${scope.status.toLowerCase()}?\nEmpty translations are skipped, and anything saved after this preview is excluded.`)) return;
+      const res = await this.api.bulkSetStatus(this.projectId, { ...scope, notChangedSince: preview.previewAt ?? undefined });
       this.notice.set(`Marked ${res.updated} translations in ${scope.locale} as ${scope.status.toLowerCase()}.`);
       await this.reload();
     } catch (err) { this.error.set(err instanceof Error ? err.message : 'Bulk update failed'); }

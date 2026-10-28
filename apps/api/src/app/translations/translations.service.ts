@@ -83,9 +83,9 @@ export class TranslationsService {
   // tag; empty values are never marked reviewed-or-anything (an empty string
   // is not a translation). dryRun returns the count without writing.
   async bulkSetStatus(userId: string, projectId: string, input: {
-    locale: string; status: string; from?: string; search?: string; tag?: string; keyIds?: string[]; dryRun?: boolean;
+    locale: string; status: string; from?: string; search?: string; tag?: string; keyIds?: string[]; dryRun?: boolean; notChangedSince?: string;
   }) {
-    const { locale, status, from, search, tag, keyIds, dryRun } = input;
+    const { locale, status, from, search, tag, keyIds, dryRun, notChangedSince } = input;
     await this.projects.assertLocaleWrite(userId, projectId, [locale]);
     const project = await this.projects.getFor(userId, projectId);
     this.assertKnownStatus(project, status);
@@ -104,11 +104,25 @@ export class TranslationsService {
       ...(from ? [Prisma.sql`t."status" = ${from}`] : []),
       Prisma.sql`t."keyId" IN (SELECT k."id" FROM "keys" k WHERE ${Prisma.join(keyConditions, ' AND ')})`,
     ];
+    // Optimistic preview: the client passes the preview's DB-server time back
+    // as notChangedSince, so any row written after the preview (value edit,
+    // status round-trip, newly matching row) is excluded from the commit.
+    // updatedAt bumps on every write; the timestamp comes from the DB server,
+    // not the client, so there is no clock-skew window.
+    // updatedAt columns are timestamp-without-tz holding UTC wall time, so
+    // the preview timestamp is produced and compared as a naive UTC literal:
+    // no session-timezone conversion can shift the window.
+    if (notChangedSince !== undefined) {
+      if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}$/.test(notChangedSince)) {
+        throw new BadRequestException('notChangedSince must be the previewAt value from a dry-run preview');
+      }
+      conditions.push(Prisma.sql`t."updatedAt" <= ${notChangedSince}::timestamp`);
+    }
     const where = Prisma.join(conditions, ' AND ');
     if (dryRun) {
-      const rows = await this.prisma.$queryRaw<{ count: bigint }[]>(
-        Prisma.sql`SELECT count(*) AS count FROM "translations" t WHERE ${where}`);
-      return { matched: Number(rows[0].count), updated: 0 };
+      const rows = await this.prisma.$queryRaw<{ count: bigint; now: string }[]>(
+        Prisma.sql`SELECT count(*) AS count, to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS') AS now FROM "translations" t WHERE ${where}`);
+      return { matched: Number(rows[0].count), updated: 0, previewAt: rows[0].now };
     }
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.$queryRaw<{ keyId: string; value: string }[]>(
@@ -122,7 +136,7 @@ export class TranslationsService {
           detail: { bulk: true, locale, to: status, from: from ?? null, count: updated.length },
         });
       }
-      return { matched: updated.length, updated: updated.length };
+      return { matched: updated.length, updated: updated.length, previewAt: null };
     });
   }
 
