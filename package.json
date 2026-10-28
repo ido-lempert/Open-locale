@@ -14,7 +14,9 @@
     "test:tm": "node scripts/tm-test.mjs",
     "test:glossary": "node scripts/glossary-test.mjs",
     "test:qa": "node scripts/qa-test.mjs",
-    "test:formats": "node scripts/formats-test.mjs"
+    "test:formats": "node scripts/formats-test.mjs",
+    "dev:api": "node scripts/dev-db.mjs",
+    "test:tags": "node scripts/tags-filters-test.mjs"
   },
   "private": true,
   "dependencies": {
@@ -88,5 +90,8 @@
   "overrides": {
     "multer": "^2.5.0",
     "deepmerge-ts": "^8.0.2"
+  },
+  "engines": {
+    "node": ">=22 <23"
   }
 }

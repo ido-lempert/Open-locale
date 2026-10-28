@@ -30,18 +30,40 @@ checks in CI run against a real PostgreSQL started by the test harness.
 
 ## Develop locally (no Docker)
 
+Prerequisites: Node.js 22 (see .nvmrc / package.json engines). PostgreSQL is started
+for you; no separate database install is needed.
+
 ```bash
 npm install
-npx nx serve api      # starts API on :3000 (uses embedded Postgres in dev by default)
-npx nx serve web      # starts web on :4200, proxies /api to :3000
+npm run dev:api    # boots a temporary PostgreSQL + migrations, serves API on :3000
+npx nx serve web   # starts web on :4200, proxies /api to :3000
 ```
 
-Tests that need a database start a real PostgreSQL automatically
-([embedded-postgres](https://www.npmjs.com/package/embedded-postgres)), no Docker required.
+`npm run dev:api` uses [embedded-postgres](https://www.npmjs.com/package/embedded-postgres);
+the database is temporary and deleted when the process stops. To run against your own
+PostgreSQL instead, set DATABASE_URL (and JWT_SECRET) and use `npx nx serve api`.
+
+## Tests
+
+Every database-backed suite starts its own real PostgreSQL automatically; no Docker
+required. Each suite exits non-zero if any check fails.
 
 ```bash
-npx nx test api
-npx nx build web
+npx nx test api && npx nx test web          # unit tests
+npm run test:integration                    # phase 0 foundation
+npm run test:authz                          # auth, tokens, authorization
+npm run test:statuses                       # review statuses + history
+npm run test:tags                           # tags + filters
+npm run test:comments                       # comments
+npm run test:activity                       # activity log
+npm run test:imports                        # JSON import + ImportRun recovery
+npm run test:screenshots                    # screenshot upload validation
+npm run test:tasks                          # tasks
+npm run test:tm                             # translation memory
+npm run test:glossary                       # glossary
+npm run test:qa                             # QA checks
+npm run test:formats                        # CSV import/export
+node scripts/e2e-visual.mjs                 # full UI pass in headless Chrome
 ```
 
 ## Development process
