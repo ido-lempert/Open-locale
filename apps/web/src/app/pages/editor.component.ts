@@ -2,6 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, OnInit, signal, WritableSignal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { hintsForTarget, GlossaryHint } from '../glossary-match';
 import { ApiService, ScreenshotMeta, TmSuggestion, GlossaryTermItem, CommentEntry, HistoryEntry, Key, Project, TranslationStatus } from '../api.service';
 
 interface CellState {
@@ -105,10 +106,10 @@ interface CellState {
                         <span class="cell-status">{{ statusText(k.id, l.code) }}</span>
                       }
                     </div>
-                    @if (l.code === p.baseLocale && glossaryHints(k).length) {
+                    @if (l.code !== p.baseLocale && glossaryHints(k, l.code).length) {
                       <div class="glossary-hints">
-                        @for (h of glossaryHints(k); track h.term) {
-                          <div class="glossary-hint" [title]="h.notes">glossary: <code>{{ h.term }}</code> &rarr; <strong>{{ h.value }}</strong></div>
+                        @for (h of glossaryHints(k, l.code); track h.term + '-' + h.locale) {
+                          <div class="glossary-hint" [title]="h.notes">glossary &middot; {{ h.locale }}: <code>{{ h.term }}</code> &rarr; <strong [attr.dir]="isRtl(h.locale) ? 'rtl' : 'ltr'">{{ h.value }}</strong></div>
                         }
                       </div>
                     }
@@ -290,26 +291,11 @@ export class EditorComponent implements OnInit {
     return s === 'saving' ? 'saving…' : s === 'saved' ? 'saved' : s === 'error' ? 'save failed' : '';
   }
   isRtl(code: string) { return ['he', 'ar', 'fa', 'ur'].some((r) => code.startsWith(r)); }
-  glossaryHints(k: Key): { term: string; value: string; notes: string }[] {
+  glossaryHints(k: Key, targetLocale: string): GlossaryHint[] {
     const p = this.project();
-    if (!p || !this.glossary().length) return [];
+    if (!p || targetLocale === p.baseLocale || !this.glossary().length) return [];
     const source = this.cell(k.id, p.baseLocale)().value;
-    if (!source) return [];
-    const target = this.ioLocale() === p.baseLocale
-      ? (p.locales.find((l) => l.code !== p.baseLocale)?.code ?? null)
-      : this.ioLocale();
-    const out: { term: string; value: string; notes: string }[] = [];
-    for (const g of this.glossary()) {
-      const escaped = g.term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      if (new RegExp(`(^|[^\\w])${escaped}([^\\w]|$)`, 'i').test(source)) {
-        out.push({
-          term: g.term,
-          value: g.doNotTranslate ? 'keep as-is' : (target ? (g.translations[target] ?? '(no translation)') : '(no translation)'),
-          notes: g.notes,
-        });
-      }
-    }
-    return out;
+    return hintsForTarget(source, targetLocale, this.glossary());
   }
 
   async setReview(k: Key, locale: string, status: TranslationStatus) {

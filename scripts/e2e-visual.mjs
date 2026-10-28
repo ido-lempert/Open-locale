@@ -297,10 +297,10 @@ try {
     await page.click('.back');
     await page.waitForSelector('.grid tbody tr', { timeout: 10000 });
     const hintShown = await page.waitForFunction(() => {
-      const t = document.body.textContent || '';
-      return t.includes('Welcome') && document.querySelectorAll('.glossary-hint').length > 0;
+      const chips = [...document.querySelectorAll('.glossary-hint')];
+      return chips.length >= 2 && chips.every((c) => c.textContent.includes('he:') && c.textContent.includes('Welcome') && c.textContent.includes('ברוכים'));
     }, { timeout: 10000 }).then(() => true).catch(() => false);
-    check('editor shows glossary hint under matching base cell', hintShown);
+    check('editor shows locale-labeled glossary hint under each target cell', hintShown);
     await shot('editor-18-glossary.png');
   }
 

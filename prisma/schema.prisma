@@ -294,6 +294,7 @@ model GlossaryTerm {
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  @@unique([projectId, term])
+  // Case-insensitive uniqueness enforced by functional unique index
+  // glossary_terms_project_lower_term_key on (projectId, lower(term)) - see migration 20261028202000.
   @@map("glossary_terms")
 }

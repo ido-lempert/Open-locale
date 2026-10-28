@@ -76,6 +76,20 @@ try {
   const after = (await call(base, { token: at })).json;
   check('deleted term gone', after.length === 1);
 
+  // DB-level case-insensitive uniqueness (functional unique index closes the service-check race)
+  const { PrismaClient } = await import('@prisma/client');
+  const prisma = new PrismaClient({ datasources: { db: { url: `postgresql://postgres:postgres@127.0.0.1:${PG_PORT}/openlocale_gl` } } });
+  try {
+    await prisma.glossaryTerm.create({ data: { projectId: proj.id, term: 'CHECKOUT' } });
+    check('DB rejects different-case duplicate term', false);
+  } catch (e) {
+    check('DB rejects different-case duplicate term', String(e.code ?? e).includes('P2002'), String(e.code ?? e));
+  }
+  const other = (await call('/projects', { token: at, method: 'POST', body: { name: 'GL2', slug: 'gl2', locales: ['en'] } })).json;
+  const crossTerm = await call(`/projects/${other.id}/glossary`, { token: at, method: 'POST', body: { term: 'Checkout' } });
+  check('same term allowed in another project', crossTerm.status === 201 || crossTerm.status === 200, String(crossTerm.status));
+  await prisma.$disconnect();
+
   const feed = (await call(`/projects/${proj.id}/activity`, { token: at })).json;
   const acts = feed.items.map((e) => e.action);
   check('activity has glossary.created/updated/deleted',

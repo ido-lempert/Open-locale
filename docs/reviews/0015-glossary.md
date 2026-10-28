@@ -46,3 +46,24 @@ activity-log actions (glossary.created/updated/deleted).
 ## Known gaps
 - No DB-level unique index on lower(term) yet (service check only).
 - Hints match whole terms only; no stemming/plural handling.
+
+## Corrections round (post-review, same day)
+Findings from external review of the first commit, fixed in a follow-up commit:
+1. Hint locale ambiguity: chips previously sat under the base-locale cell showing an
+   unlabeled translation. Hints now render under each target-locale cell, labeled with
+   the locale ('glossary · he: Welcome -> ברוכים'), dir-aware for RTL values.
+2. Unicode word matching: ASCII \w/\b boundaries false-matched Hebrew/Arabic terms
+   inside longer words. Matcher now uses Unicode property escapes (\p{L}\p{N}_) with
+   the 'iu' flags, extracted to a pure helper (apps/web/src/app/glossary-match.ts) with
+   8 unit tests: ASCII boundaries, Hebrew/Arabic partial-word rejection, regex-special
+   terms ('C++', 'price (USD)'), case-insensitivity, per-locale labeling, missing
+   translation, doNotTranslate.
+3. DB uniqueness race: added migration 20261028202000 with a functional unique index
+   on (projectId, lower(term)); the case-sensitive index was dropped as redundant.
+   Integration tests prove the DB rejects a different-case duplicate (P2002) and
+   allows the same term in another project.
+4. Test-mock gap: pages.spec.ts mocks predated listGlossary; ngOnInit's new call threw
+   and broke one existing editor unit test. Mocks updated; web unit 13/13.
+5. Reporting accuracy: the first milestone report carried an invented approximate
+   timeline; actual transcript timestamps show glossary work ran 19:58-20:10 IST.
+   Pass counting now uses exit codes plus PASS/FAIL counts, not substring counts alone.
