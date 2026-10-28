@@ -99,6 +99,12 @@ try {
   const after = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
   check('mixed valid+unsupported import rejected (400)', mixed.status === 400, String(mixed.status));
   check('rejected mixed import leaves all keys unchanged', JSON.stringify(before) === JSON.stringify(after) && after['mixed.new'] === undefined, JSON.stringify(after).slice(0, 120));
+  // Direct write evidence: activity feed count must not move across a rejected import.
+  const actCount = async () => (await call(`${P}/activity`, { token: at })).json.items.length;
+  const actBefore = await actCount();
+  await call(`${P}/import/he`, { token: at, method: 'POST', body: { xml: '<resources><string name="mixed.two">nope</string><string-array name="a"><item>x</item></string-array></resources>' } });
+  const actAfter = await actCount();
+  check('rejected mixed import writes no history/activity', typeof actBefore === 'number' && actAfter === actBefore, `${actBefore} -> ${actAfter}`);
 
   // iOS .strings round-trip + rejection
   const iosIn = '"app.title" = "האפליקציה";\n"msg.esc" = "line1\\nline2";\n';

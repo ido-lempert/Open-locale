@@ -38,10 +38,22 @@ Findings:
 2. Verified binding behavior live: dev default answers only on loopback (non-loopback
    connection refused); HOST=0.0.0.0 without a real secret refuses; with a real secret
    it binds and answers on the box's non-loopback IP.
-3. Webhook URLs are member-controlled (SSRF-shaped). Accepted scope for self-hosted
-   webhooks: project members already hold full API access to the project, so loopback
-   targeting grants no new privilege; http/https only enforced; 5s timeout; delivery
-   errors never fail the triggering write; signature lets receivers verify authenticity.
+3. Webhook URLs are member-controlled (SSRF-shaped). NOT treated as membership-covered:
+   project API access does not authorize the server's internal-network reach. Hardened
+   in egress.ts: URL layer rejects non-http(s), embedded credentials, and a blocklist of
+   internal-service ports; IP literals are denied without a lookup. Delivery re-validates
+   at the connection boundary: DNS is resolved and EVERY resolved address is checked
+   against the deny list (loopback/private/link-local/CGNAT/reserved/documentation,
+   IPv4 and IPv6 including v4-mapped hex and dotted forms, NAT64, 6to4, Teredo);
+   redirects are never followed (redirect: manual) so a 30x cannot bounce to an internal
+   target; 5s timeout; delivery errors never fail the triggering write. Known residual,
+   documented in egress.ts: the lookup-to-connect TOCTOU window (full address pinning
+   needs a custom connector, ticketed). Test fixture receiver opts in via
+   WEBHOOK_ALLOW_PRIVATE_TARGETS=true, fixture-only. Adversarial v4/v6 unit cases in
+   egress.spec.ts (26 unit tests green incl. the mapped-hex form the URL parser
+   normalizes to, which the first implementation missed and the test caught).
+4. Logging limits verified by inspection: delivery failure logs carry hook id and error
+   message only - never the URL (may embed internal names), payload, or secret.
 4. DTD/entity declarations in Android XML are rejected as unsupported (counted, import
    400s). Claim is "no entity expansion, tested" - not a universal parser guarantee.
 

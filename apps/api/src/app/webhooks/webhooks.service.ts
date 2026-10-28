@@ -1,8 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { createHmac, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
 import { CreateWebhookDto, UpdateWebhookDto } from './dto';
+import { assertResolvablePublic, validateWebhookUrlString } from './egress';
 
 @Injectable()
 export class WebhooksService {
@@ -26,6 +27,11 @@ export class WebhooksService {
 
   async create(userId: string, projectId: string, dto: CreateWebhookDto) {
     await this.projects.getFor(userId, projectId);
+    try {
+      validateWebhookUrlString(dto.url);
+    } catch (e) {
+      throw new BadRequestException(e instanceof Error ? e.message : 'Invalid webhook URL');
+    }
     const secret = dto.secret ?? randomBytes(24).toString('hex');
     const hook = await this.prisma.webhook.create({
       data: { projectId, url: dto.url, events: dto.events, secret },
@@ -38,6 +44,13 @@ export class WebhooksService {
     await this.projects.getFor(userId, projectId);
     const existing = await this.prisma.webhook.findFirst({ where: { id: hookId, projectId } });
     if (!existing) throw new NotFoundException('Webhook not found');
+    if (dto.url) {
+      try {
+        validateWebhookUrlString(dto.url);
+      } catch (e) {
+        throw new BadRequestException(e instanceof Error ? e.message : 'Invalid webhook URL');
+      }
+    }
     const hook = await this.prisma.webhook.update({
       where: { id: existing.id },
       data: { url: dto.url, events: dto.events, active: dto.active },
@@ -62,8 +75,12 @@ export class WebhooksService {
     const body = JSON.stringify({ event, ...payload, at: new Date().toISOString() });
     await Promise.allSettled(
       hooks.map(async (hook) => {
-        const signature = createHmac('sha256', hook.secret).update(body).digest('hex');
         try {
+          // Re-validate at the delivery boundary: URL rules plus live DNS check.
+          // Redirects are never followed - a 30x is a failed delivery.
+          const url = validateWebhookUrlString(hook.url);
+          await assertResolvablePublic(url);
+          const signature = createHmac('sha256', hook.secret).update(body).digest('hex');
           const res = await fetch(hook.url, {
             method: 'POST',
             headers: {
@@ -72,10 +89,12 @@ export class WebhooksService {
               'X-OpenLocale-Signature': `sha256=${signature}`,
             },
             body,
+            redirect: 'manual',
             signal: AbortSignal.timeout(5000),
           });
           if (!res.ok) this.logger.warn(`Webhook ${hook.id} -> ${res.status}`);
         } catch (err) {
+          // Never log the URL, payload or secret: URLs may embed internal names.
           this.logger.warn(`Webhook ${hook.id} delivery failed: ${err instanceof Error ? err.message : err}`);
         }
       }),

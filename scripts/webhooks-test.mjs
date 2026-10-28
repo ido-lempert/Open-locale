@@ -40,7 +40,7 @@ try {
   execFileSync(join(root, 'node_modules', '.bin', 'prisma'), ['migrate', 'deploy'], {
     env: { ...process.env, DATABASE_URL: url }, stdio: 'pipe' });
   api = spawn(process.execPath, [join(root, 'dist', 'apps', 'api', 'main.js')], {
-    env: { ...process.env, DATABASE_URL: url, JWT_SECRET: 'wh-secret', PORT: String(API_PORT) }, stdio: 'pipe' });
+    env: { ...process.env, DATABASE_URL: url, JWT_SECRET: 'wh-secret', PORT: String(API_PORT), WEBHOOK_ALLOW_PRIVATE_TARGETS: 'true' }, stdio: 'pipe' }); // fixture-only opt-in for the loopback receiver
   let up = false;
   for (let i = 0; i < 60 && !up; i++) {
     await new Promise((r) => setTimeout(r, 500));
