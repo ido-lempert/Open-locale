@@ -165,6 +165,17 @@ export class ApiService {
     return this.request<{ keysCreated: number; translationsUpserted: number }>(
       `/projects/${projectId}/import/${locale}`, { method: 'POST', body: JSON.stringify({ csv }) });
   }
+  async exportText(projectId: string, locale: string, kind: 'android' | 'ios') {
+    const res = await fetch(`${this.base}/projects/${projectId}/export/${locale}/${kind}`, {
+      headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
+    });
+    if (!res.ok) throw new Error(`Export failed (HTTP ${res.status})`);
+    return res.text();
+  }
+  importPayload(projectId: string, locale: string, payload: Record<string, unknown>) {
+    return this.request<{ keysCreated: number; translationsUpserted: number }>(
+      `/projects/${projectId}/import/${locale}`, { method: 'POST', body: JSON.stringify(payload) });
+  }
   runQa(projectId: string, locale?: string) {
     return this.request<{ issues: QaIssue[] }>(`/projects/${projectId}/qa${locale ? `?locale=${locale}` : ''}`);
   }

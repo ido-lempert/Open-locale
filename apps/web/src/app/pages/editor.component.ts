@@ -42,11 +42,17 @@ interface CellState {
             <input placeholder="locale (e.g. fr)" aria-label="New locale code" [ngModel]="newLocale()" (ngModelChange)="newLocale.set($event)" name="newLocale" required maxlength="10" />
             <button type="submit">Add locale</button>
           </form>
-          <button (click)="exportJson()">Export JSON</button>
-          <label class="import">Import JSON <input type="file" accept=".json" (change)="importJson($event)" hidden /></label>
-          <button (click)="exportCsv()">Export CSV (spreadsheet-safe)</button>
-          <label class="import">Import CSV <input type="file" accept=".csv" (change)="importCsv($event)" hidden /></label>
-          <div class="muted csv-note">CSV exports are spreadsheet-safe: values starting with formula characters get a protective prefix, so re-importing a safe export keeps those prefixes and changes stored values. For a lossless roundtrip use the API with <code>mode=raw</code>.</div>
+          <select [ngModel]="ioFormat()" (ngModelChange)="ioFormat.set($event)" name="ioFormat" aria-label="Import/export format">
+            <option value="json">JSON</option>
+            <option value="csv">CSV (spreadsheet-safe)</option>
+            <option value="android">Android XML</option>
+            <option value="ios">iOS strings</option>
+          </select>
+          <button (click)="exportFile()">Export {{ formatLabel() }}</button>
+          <label class="import">Import {{ formatLabel() }} <input type="file" name="importFile" accept=".json,.csv,.xml,.strings" (change)="importFile($event)" hidden /></label>
+          @if (ioFormat() === 'csv') {
+            <div class="muted csv-note">CSV exports are spreadsheet-safe: values starting with formula characters get a protective prefix, so re-importing a safe export keeps those prefixes and changes stored values. For a lossless roundtrip use the API with <code>mode=raw</code>.</div>
+          }
           <select [ngModel]="ioLocale()" (ngModelChange)="ioLocale.set($event)" name="ioLocale" aria-label="Import/export locale">
             @for (l of p.locales; track l.code) { <option [value]="l.code">{{ l.code }}</option> }
           </select>
@@ -198,7 +204,7 @@ export class EditorComponent implements OnInit {
   project = signal<Project | null>(null);
   keys = signal<Key[]>([]);
   cells = new Map<string, WritableSignal<CellState>>();
-  search = signal(''); newKey = signal(''); newLocale = signal(''); ioLocale = signal('en');
+  search = signal(''); newKey = signal(''); newLocale = signal(''); ioLocale = signal('en'); ioFormat = signal<'json' | 'csv' | 'android' | 'ios'>('json');
   glossary = signal<GlossaryTermItem[]>([]);
   filterTag = signal(''); filterStatus = signal<'' | TranslationStatus>('');
   tagEditFor = signal<string | null>(null);
@@ -449,35 +455,47 @@ export class EditorComponent implements OnInit {
       a.click(); URL.revokeObjectURL(a.href);
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Export failed'); }
   }
-  async exportCsv() {
+  async exportFile() {
+    const fmt = this.ioFormat();
+    const locale = this.ioLocale();
     try {
-      const csv = await this.api.exportCsv(this.projectId, this.ioLocale());
-      const blob = new Blob([csv], { type: 'text/csv' });
+      let content: string, type: string, ext: string;
+      if (fmt === 'json') {
+        content = JSON.stringify(await this.api.exportJson(this.projectId, locale), null, 2);
+        type = 'application/json'; ext = 'json';
+      } else if (fmt === 'csv') {
+        content = await this.api.exportCsv(this.projectId, locale);
+        type = 'text/csv'; ext = 'csv';
+      } else {
+        content = await this.api.exportText(this.projectId, locale, fmt);
+        type = fmt === 'android' ? 'text/xml' : 'text/plain';
+        ext = fmt === 'android' ? 'xml' : 'strings';
+      }
+      const blob = new Blob([content], { type });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `${this.project()?.slug ?? 'export'}.${this.ioLocale()}.csv`;
+      a.download = `${this.project()?.slug ?? 'export'}.${locale}.${ext}`;
       a.click(); URL.revokeObjectURL(a.href);
-      this.notice.set('CSV exported (spreadsheet-safe). For a lossless roundtrip export use the API with mode=raw.');
+      if (fmt === 'csv') this.notice.set('CSV exported (spreadsheet-safe). For a lossless roundtrip export use the API with mode=raw.');
     } catch (err) { this.error.set(err instanceof Error ? err.message : 'Export failed'); }
   }
-  async importCsv(event: Event) {
-    const file = (event.target as HTMLInputElement).files?.[0];
-    if (!file) return;
-    try {
-      const csv = await file.text();
-      const res = await this.api.importCsv(this.projectId, this.ioLocale(), csv);
-      this.notice.set(`Imported ${res.keysCreated} keys, ${res.translationsUpserted} translations from CSV (${this.ioLocale()}).`);
-      await this.reload();
-    } catch (err) { this.error.set(err instanceof Error ? err.message : 'Import failed: invalid CSV'); }
+  formatLabel(): string {
+    return this.ioFormat() === 'json' ? 'JSON' : this.ioFormat() === 'csv' ? 'CSV' : this.ioFormat() === 'android' ? 'Android XML' : 'iOS strings';
   }
-  async importJson(event: Event) {
-    const file = (event.target as HTMLInputElement).files?.[0];
+  async importFile(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
     if (!file) return;
+    const fmt = this.ioFormat();
     try {
-      const entries = JSON.parse(await file.text()) as Record<string, unknown>;
-      const res = await this.api.importJson(this.projectId, this.ioLocale(), entries);
-      this.notice.set(`Imported ${res.keysCreated} keys, ${res.translationsUpserted} translations (${this.ioLocale()}).`);
+      const text = await file.text();
+      const payload = fmt === 'json' ? { entries: JSON.parse(text) }
+        : fmt === 'csv' ? { csv: text }
+        : fmt === 'android' ? { xml: text } : { strings: text };
+      const res = await this.api.importPayload(this.projectId, this.ioLocale(), payload);
+      this.notice.set(`Imported ${res.keysCreated} keys, ${res.translationsUpserted} translations (${this.formatLabel()}, ${this.ioLocale()}).`);
       await this.reload();
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Import failed: invalid JSON'); }
+    } catch (err) { this.error.set(err instanceof Error ? err.message : `Import failed: invalid ${this.formatLabel()}`); }
+    input.value = '';
   }
 }
