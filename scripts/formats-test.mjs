@@ -105,6 +105,17 @@ try {
   await call(`${P}/import/he`, { token: at, method: 'POST', body: { xml: '<resources><string name="mixed.two">nope</string><string-array name="a"><item>x</item></string-array></resources>' } });
   const actAfter = await actCount();
   check('rejected mixed import writes no history/activity', typeof actBefore === 'number' && actAfter === actBefore, `${actBefore} -> ${actAfter}`);
+  // Direct translation-history evidence on the seeded key: a rejected import must
+  // not append history rows (activity count alone would not prove this).
+  const histCount = async () => {
+    const keys = (await call(`${P}/keys`, { token: at })).json;
+    const k = keys.find((x) => x.name === 'app.title');
+    return (await call(`${P}/keys/${k.id}/translations/he/history`, { token: at })).json.length;
+  };
+  const histBefore = await histCount();
+  await call(`${P}/import/he`, { token: at, method: 'POST', body: { xml: '<resources><plurals name="cats"><item quantity="one">one</item></plurals></resources>' } });
+  const histAfter = await histCount();
+  check('rejected import writes no translation-history rows', typeof histBefore === 'number' && histAfter === histBefore, `${histBefore} -> ${histAfter}`);
 
   // iOS .strings round-trip + rejection
   const iosIn = '"app.title" = "האפליקציה";\n"msg.esc" = "line1\\nline2";\n';

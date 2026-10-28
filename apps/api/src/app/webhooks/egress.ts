@@ -119,28 +119,14 @@ export function validateWebhookUrlString(raw: string): URL {
   }
   const host = url.hostname.replace(/^\[|\]$/g, '');
   // The private-target escape hatch exists for the test fixture receiver only.
-  if (process.env.WEBHOOK_ALLOW_PRIVATE_TARGETS !== 'true' && isIP(host) && isDeniedIp(host)) {
+  if (!privateTargetsAllowed() && isIP(host) && isDeniedIp(host)) {
     throw new WebhookTargetError('Webhook host resolves to a denied address range');
   }
   return url;
 }
 
-// Delivery-time check: resolve the host and deny if ANY address is internal.
-export async function assertResolvablePublic(url: URL): Promise<void> {
-  if (process.env.WEBHOOK_ALLOW_PRIVATE_TARGETS === 'true') return;
-  const host = url.hostname.replace(/^\[|\]$/g, '');
-  if (isIP(host)) {
-    if (isDeniedIp(host)) throw new WebhookTargetError('Webhook target is a denied address range');
-    return;
-  }
-  let addresses: string[];
-  try {
-    addresses = (await lookup(host, { all: true })).map((a) => a.address);
-  } catch {
-    throw new WebhookTargetError('Webhook host does not resolve');
-  }
-  if (addresses.length === 0) throw new WebhookTargetError('Webhook host does not resolve');
-  if (addresses.some(isDeniedIp)) {
-    throw new WebhookTargetError('Webhook host resolves to a denied address range');
-  }
+export function privateTargetsAllowed(): boolean {
+  // Fixture-only escape hatch; never honored in a production boot.
+  return process.env.WEBHOOK_ALLOW_PRIVATE_TARGETS === 'true' && process.env.NODE_ENV !== 'production';
 }
+

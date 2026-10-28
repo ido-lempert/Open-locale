@@ -3,7 +3,9 @@ import { createHmac, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
 import { CreateWebhookDto, UpdateWebhookDto } from './dto';
-import { assertResolvablePublic, validateWebhookUrlString } from './egress';
+import { isDeniedIp, privateTargetsAllowed, validateWebhookUrlString, WebhookTargetError } from './egress';
+import { deliverPinned, type Resolver } from './transport';
+import { lookup } from 'node:dns/promises';
 
 @Injectable()
 export class WebhooksService {
@@ -66,6 +68,37 @@ export class WebhooksService {
     return { removed: hookId };
   }
 
+  // Injectable for tests (hostile-DNS simulation). Production path is dns.lookup.
+  resolver: Resolver = async (hostname) => lookup(hostname, { all: true });
+
+  private async resolveApproved(url: URL): Promise<{ address: string; family: number }> {
+    const host = url.hostname.replace(/^\[|\]$/g, '');
+    if (privateTargetsAllowed()) {
+      // Fixture mode: still pin the connection, but accept private targets.
+      if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) return { address: host, family: 4 };
+      const all = await this.resolver(host);
+      if (!all.length) throw new WebhookTargetError('Webhook host does not resolve');
+      return all[0];
+    }
+    // Single resolution, full validation, then the caller pins this address:
+    // there is no second lookup through which DNS could be rebound.
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(host) || host.includes(':')) {
+      if (isDeniedIp(host)) throw new WebhookTargetError('Webhook target is a denied address range');
+      return { address: host, family: host.includes(':') ? 6 : 4 };
+    }
+    let all: { address: string; family: number }[];
+    try {
+      all = await this.resolver(host);
+    } catch {
+      throw new WebhookTargetError('Webhook host does not resolve');
+    }
+    if (!all.length) throw new WebhookTargetError('Webhook host does not resolve');
+    if (all.some((a) => isDeniedIp(a.address))) {
+      throw new WebhookTargetError('Webhook host resolves to a denied address range');
+    }
+    return all[0];
+  }
+
   // Fire-and-forget delivery. Delivery failure must never fail the write that
   // triggered it, so callers invoke this without awaiting user-facing latency.
   async deliver(projectId: string, event: string, payload: Record<string, unknown>) {
@@ -76,23 +109,17 @@ export class WebhooksService {
     await Promise.allSettled(
       hooks.map(async (hook) => {
         try {
-          // Re-validate at the delivery boundary: URL rules plus live DNS check.
-          // Redirects are never followed - a 30x is a failed delivery.
+          // Re-validate at the delivery boundary: URL rules, DNS resolution with
+          // every address checked, then a connection PINNED to a validated
+          // address (hostname preserved for Host/SNI/cert validation).
           const url = validateWebhookUrlString(hook.url);
-          await assertResolvablePublic(url);
+          const pinned = await this.resolveApproved(url);
           const signature = createHmac('sha256', hook.secret).update(body).digest('hex');
-          const res = await fetch(hook.url, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-OpenLocale-Event': event,
-              'X-OpenLocale-Signature': `sha256=${signature}`,
-            },
-            body,
-            redirect: 'manual',
-            signal: AbortSignal.timeout(5000),
-          });
-          if (!res.ok) this.logger.warn(`Webhook ${hook.id} -> ${res.status}`);
+          const res = await deliverPinned(url, pinned, {
+            'X-OpenLocale-Event': event,
+            'X-OpenLocale-Signature': `sha256=${signature}`,
+          }, body);
+          if (!res.ok) this.logger.warn(`Webhook ${hook.id} -> ${res.status ?? res.error}`);
         } catch (err) {
           // Never log the URL, payload or secret: URLs may embed internal names.
           this.logger.warn(`Webhook ${hook.id} delivery failed: ${err instanceof Error ? err.message : err}`);

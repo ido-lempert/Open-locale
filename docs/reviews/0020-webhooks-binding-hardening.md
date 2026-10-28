@@ -64,3 +64,13 @@ Findings:
 - formats suite extended to 22 checks incl. mixed-import atomicity.
 - Regression: statuses 14 PASS, authz 28 PASS, api unit 21/21, web build green.
 - Full 13-suite sweep + e2e 40 PASS was run earlier this cycle after the binding fix.
+
+## Delivery-connector tests (transport.spec.ts)
+
+- **Pinned dial**: a request for an unresolvable hostname succeeds when the pinned address points at
+  a local server, proving the connector dialed the pinned IP; the server observes the original
+  hostname in the Host header.
+- **Redirect refusal**: a 302 target is reported as a failed delivery and the redirect target server
+  receives zero requests.
+
+Both run against real HTTP servers on loopback, exercising the real socket path rather than mocks.
