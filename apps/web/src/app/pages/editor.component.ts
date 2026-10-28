@@ -24,6 +24,11 @@ interface CellState {
       @if (project(); as p) {
         <section class="toolbar">
           <input class="search" placeholder="Search keys" aria-label="Search keys" [ngModel]="search()" (ngModelChange)="search.set($event); onSearch()" />
+          <input class="tag-filter" placeholder="tag" aria-label="Filter by tag" [ngModel]="filterTag()" (ngModelChange)="filterTag.set($event); onSearch()" />
+          <select aria-label="Filter by review status" [ngModel]="filterStatus()" (ngModelChange)="filterStatus.set($event); onSearch()">
+            <option value="">all statuses</option>
+            @for (st of statuses; track st) { <option [value]="st">{{ st.toLowerCase() }}</option> }
+          </select>
           <form class="inline" (ngSubmit)="addKey()">
             <input placeholder="new.key.name" aria-label="New key name" [ngModel]="newKey()" (ngModelChange)="newKey.set($event)" name="newKey" required />
             <button type="submit">Add key</button>
@@ -49,6 +54,16 @@ interface CellState {
             @for (k of keys(); track k.id) {
               <tr>
                 <td class="key"><code>{{ k.name }}</code>
+                  <span class="tags">
+                    @for (t of k.tags; track t) { <span class="tag-chip">{{ t }}</span> }
+                    @if (tagEditFor() === k.id) {
+                      <input class="tag-edit" aria-label="Edit tags (comma separated)"
+                        [ngModel]="tagDraft()" (ngModelChange)="tagDraft.set($event)"
+                        (blur)="saveTags(k)" (keydown.enter)="saveTags(k)" />
+                    } @else {
+                      <button class="tags-toggle" (click)="openTagEdit(k)">tags</button>
+                    }
+                  </span>
                   <button class="history-toggle" [attr.aria-expanded]="historyFor() === k.id"
                     (click)="toggleHistory(k)">history</button></td>
                 @for (l of p.locales; track l.code) {
@@ -105,6 +120,9 @@ export class EditorComponent implements OnInit {
   keys = signal<Key[]>([]);
   cells = new Map<string, WritableSignal<CellState>>();
   search = signal(''); newKey = signal(''); newLocale = signal(''); ioLocale = signal('en');
+  filterTag = signal(''); filterStatus = signal<'' | TranslationStatus>('');
+  tagEditFor = signal<string | null>(null);
+  tagDraft = signal('');
   historyFor = signal<string | null>(null);
   historyEntries = signal<(HistoryEntry & { locale: string })[]>([]);
   historyLoading = signal(false);
@@ -129,7 +147,12 @@ export class EditorComponent implements OnInit {
   }
   async reload() {
     try {
-      const keys = await this.api.listKeys(this.projectId, this.search() || undefined);
+      const keys = await this.api.listKeys(this.projectId, {
+        search: this.search() || undefined,
+        tag: this.filterTag() || undefined,
+        status: this.filterStatus() || undefined,
+        locale: this.filterStatus() ? this.ioLocale() : undefined,
+      });
       this.keys.set(keys);
       this.cells.clear();
       for (const k of keys) for (const t of k.translations) {
@@ -185,6 +208,19 @@ export class EditorComponent implements OnInit {
       const res = await this.api.setStatus(this.projectId, k.id, locale, status);
       sig.update((c) => ({ ...c, review: res.status }));
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to set status'); }
+  }
+  openTagEdit(k: Key) {
+    this.tagEditFor.set(k.id);
+    this.tagDraft.set(k.tags.join(', '));
+  }
+  async saveTags(k: Key) {
+    if (this.tagEditFor() !== k.id) return;
+    const tags = this.tagDraft().split(',').map((t) => t.trim()).filter(Boolean);
+    this.tagEditFor.set(null);
+    try {
+      await this.api.setTags(this.projectId, k.id, tags);
+      await this.reload();
+    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to save tags'); }
   }
   async toggleHistory(k: Key) {
     if (this.historyFor() === k.id) { this.historyFor.set(null); return; }

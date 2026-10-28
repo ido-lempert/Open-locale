@@ -139,6 +139,34 @@ try {
   await shot('editor-11-history.png');
   await page.click('.grid tbody tr:first-child .history-toggle');
 
+  // Tags + filters via UI
+  await page.click('.grid tbody tr:first-child .tags-toggle');
+  await page.waitForSelector('.tag-edit', { timeout: 5000 });
+  await page.type('.tag-edit', 'web, shop');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => document.body.textContent.includes('shop'), { timeout: 10000 });
+  const chips = await page.$$eval('.grid tbody tr:first-child .tag-chip', (els) => els.map((e) => e.textContent.trim()));
+  check('tags saved and shown as chips', chips.join(',') === 'web,shop', JSON.stringify(chips));
+  await page.type('.tag-filter', 'web');
+  await page.waitForFunction(
+    () => document.querySelectorAll('.grid tbody tr:not(.history-row)').length === 1,
+    { timeout: 10000 },
+  );
+  check('tag filter narrows the grid', true);
+  await page.evaluate(() => { const el = document.querySelector('.tag-filter'); el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.select('select[aria-label="Filter by review status"]', 'TRANSLATED');
+  await page.waitForFunction(
+    () => document.querySelectorAll('.grid tbody tr:not(.history-row)').length === 1,
+    { timeout: 10000 },
+  );
+  check('status filter narrows to reviewed keys', true);
+  await page.select('select[aria-label="Filter by review status"]', '');
+  await page.waitForFunction(
+    () => document.querySelectorAll('.grid tbody tr:not(.history-row)').length === 2,
+    { timeout: 10000 },
+  );
+  await shot('editor-12-tags-filters.png');
+
   const projId = page.url().split('/').pop();
   // Settings screen: rename, add locale, verify grid column appears
   await page.click('.settings-link');

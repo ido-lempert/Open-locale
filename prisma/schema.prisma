@@ -89,6 +89,7 @@ model Key {
   description String   @default("")
   isPlural    Boolean  @default(false)
   maxLength   Int?
+  tags        String[] @default([])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

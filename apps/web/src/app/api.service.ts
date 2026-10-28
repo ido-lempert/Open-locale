@@ -18,6 +18,7 @@ export interface ApiTokenInfo {
 }
 export interface Key {
   id: string; name: string; description: string; isPlural: boolean; maxLength: number | null;
+  tags: string[];
   translations: Translation[];
 }
 
@@ -81,9 +82,16 @@ export class ApiService {
   removeLocale(projectId: string, code: string) {
     return this.request<{ removed: string }>(`/projects/${projectId}/locales/${code}`, { method: 'DELETE' });
   }
-  listKeys(projectId: string, search?: string) {
-    const q = search ? `?search=${encodeURIComponent(search)}` : '';
-    return this.request<Key[]>(`/projects/${projectId}/keys${q}`);
+  listKeys(projectId: string, filters: { search?: string; tag?: string; status?: string; locale?: string } = {}) {
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(filters)) if (v) params.set(k, v);
+    const q = params.toString();
+    return this.request<Key[]>(`/projects/${projectId}/keys${q ? `?${q}` : ''}`);
+  }
+  setTags(projectId: string, keyId: string, tags: string[]) {
+    return this.request<Key>(`/projects/${projectId}/keys/${keyId}/tags`, {
+      method: 'PATCH', body: JSON.stringify({ tags }),
+    });
   }
   createKey(projectId: string, input: { name: string; description?: string }) {
     return this.request<Key>(`/projects/${projectId}/keys`, { method: 'POST', body: JSON.stringify(input) });
