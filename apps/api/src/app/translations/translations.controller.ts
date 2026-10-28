@@ -30,6 +30,11 @@ export class TranslationsController {
     return this.translations.exportJson(user.userId, projectId, locale, flat === 'true');
   }
 
+  @Get('imports')
+  listImportRuns(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string) {
+    return this.translations.listImportRuns(user.userId, projectId);
+  }
+
   @Post('import/:locale')
   importJson(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Body() dto: ImportJsonDto) {
     return this.translations.importJson(user.userId, projectId, locale, dto.entries);

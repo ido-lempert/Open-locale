@@ -105,50 +105,101 @@ export class TranslationsService {
     if (!project.locales.some((l) => l.code === locale)) {
       throw new BadRequestException(`Locale ${locale} is not part of this project`);
     }
-    const flat = flattenJson(entries);
-    const importId = randomUUID();
-    let createdKeys = 0;
-    let upserted = 0;
-    let skipped = 0;
+    const { flat, rejected } = flattenJson(entries);
+    // The run row is committed BEFORE any key is touched: a crash mid-import
+    // always leaves a durable, audited record of what was attempted.
+    const run = await this.prisma.importRun.create({
+      data: { projectId, localeCode: locale, actorId: userId, failed: rejected.length },
+    });
+    let firstError: string | null = rejected.length
+      ? `Non-string values rejected for: ${rejected.slice(0, 5).join(', ')}`
+      : null;
+    let failed = rejected.length;
     for (const [name, value] of Object.entries(flat)) {
-      await this.prisma.$transaction(async (tx) => {
-        const key = await tx.key.upsert({
-          where: { projectId_name: { projectId, name } },
-          create: { projectId, name },
-          update: {},
+      try {
+        // Each key's change, its history row and the run's counters commit in
+        // one transaction - progress on the run row always matches the data.
+        await this.prisma.$transaction(async (tx) => {
+          const key = await tx.key.upsert({
+            where: { projectId_name: { projectId, name } },
+            create: { projectId, name },
+            update: {},
+          });
+          const keyCreated = key.createdAt.getTime() === key.updatedAt.getTime();
+          const existing = await tx.translation.findUnique({
+            where: { keyId_localeCode: { keyId: key.id, localeCode: locale } },
+          });
+          if (existing && existing.value === value) {
+            await tx.importRun.update({
+              where: { id: run.id }, data: { unchangedSkipped: { increment: 1 } },
+            });
+            return;
+          }
+          // Imported wording replaces the old one and has not been reviewed.
+          await tx.translation.upsert({
+            where: { keyId_localeCode: { keyId: key.id, localeCode: locale } },
+            create: { keyId: key.id, projectId, localeCode: locale, value },
+            update: { value, status: 'UNVERIFIED' },
+          });
+          await tx.translationHistory.create({
+            data: {
+              keyId: key.id, localeCode: locale, value,
+              previousValue: existing?.value ?? null,
+              status: 'UNVERIFIED', changedById: userId, importId: run.id,
+            },
+          });
+          await tx.importRun.update({
+            where: { id: run.id },
+            data: {
+              translationsUpserted: { increment: 1 },
+              ...(keyCreated ? { keysCreated: { increment: 1 } } : {}),
+            },
+          });
         });
-        if (key.createdAt.getTime() === key.updatedAt.getTime()) createdKeys += 1;
-        const existing = await tx.translation.findUnique({
-          where: { keyId_localeCode: { keyId: key.id, localeCode: locale } },
+      } catch (e) {
+        failed += 1;
+        const message = e instanceof Error ? e.message : String(e);
+        firstError ??= `${name}: ${truncate(message, 120)}`;
+        await this.prisma.importRun.update({
+          where: { id: run.id },
+          data: { failed: { increment: 1 }, error: truncate(firstError) },
         });
-        if (existing && existing.value === value) {
-          skipped += 1;
-          return;
-        }
-        // Imported wording replaces the old one and has not been reviewed.
-        await tx.translation.upsert({
-          where: { keyId_localeCode: { keyId: key.id, localeCode: locale } },
-          create: { keyId: key.id, projectId, localeCode: locale, value },
-          update: { value, status: 'UNVERIFIED' },
-        });
-        await tx.translationHistory.create({
-          data: {
-            keyId: key.id, localeCode: locale, value,
-            previousValue: existing?.value ?? null,
-            status: 'UNVERIFIED', changedById: userId, importId,
-          },
-        });
-        upserted += 1;
-      });
+      }
     }
-    const summary = { locale, keysCreated: createdKeys, translationsUpserted: upserted, unchangedSkipped: skipped, importId };
-    // One feed entry per import run; per-key lineage stays in TranslationHistory
-    // (written atomically per key above with the same importId).
-    await this.prisma.$transaction((tx) =>
-      this.activity.record(tx, {
+    const counters = await this.prisma.importRun.findUniqueOrThrow({ where: { id: run.id } });
+    const status = failed > 0
+      ? (counters.translationsUpserted + counters.unchangedSkipped > 0 ? 'PARTIAL' : 'FAILED')
+      : 'COMPLETED';
+    // Terminal status and the feed's summary event commit together.
+    const finished = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.importRun.update({
+        where: { id: run.id },
+        data: { status, ...(firstError ? { error: truncate(firstError) } : {}) },
+      });
+      await this.activity.record(tx, {
         projectId, actorId: userId, action: 'project.import', localeCode: locale,
-        detail: { keysCreated: createdKeys, translationsUpserted: upserted, unchangedSkipped: skipped, importId },
-      }));
-    return summary;
+        detail: {
+          keysCreated: row.keysCreated, translationsUpserted: row.translationsUpserted,
+          unchangedSkipped: row.unchangedSkipped, failed: row.failed,
+          status, importId: run.id,
+        },
+      });
+      return row;
+    });
+    return {
+      locale, keysCreated: finished.keysCreated, translationsUpserted: finished.translationsUpserted,
+      unchangedSkipped: finished.unchangedSkipped, failed: finished.failed,
+      status, ...(finished.error ? { error: finished.error } : {}), importId: run.id,
+    };
+  }
+
+  async listImportRuns(userId: string, projectId: string) {
+    await this.projects.getFor(userId, projectId);
+    return this.prisma.importRun.findMany({
+      where: { projectId },
+      include: { actor: { select: { displayName: true, email: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
   }
 }

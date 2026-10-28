@@ -15,9 +15,12 @@ filter and cursor pagination, and a web Activity page linked from the editor.
 - detail payloads are small metadata only (truncated values at 200 chars, status
   transitions, tag lists, import counts). No tokens, passwords or request bodies
   are ever logged.
-- Import is one summary event per run; per-key lineage stays in
-  TranslationHistory with the shared importId (an import is per-key transactions,
-  so a single atomic summary is impossible - recorded honestly).
+- CORRECTED in review 0011: the original claim that a single atomic import
+  summary is impossible was wrong as stated - the real gap was that a crash
+  mid-import committed key changes with no durable run record and no summary.
+  Fixed with recoverable ImportRun rows (created before any key is touched,
+  counters moved inside each key's transaction) plus a summary event that
+  commits atomically with the run's terminal status. See 0011.
 
 ## Pass 2 - Product manager
 - The feed answers "who changed what, when" in one place - the most common
