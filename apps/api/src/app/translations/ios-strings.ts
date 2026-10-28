@@ -8,8 +8,25 @@ export function toIosStrings(rows: [string, string][]): string {
   return rows.map(([k, v]) => `"${esc(k)}" = "${esc(v)}";`).join('\n') + '\n';
 }
 
-const unesc = (v: string) =>
-  v.replace(/\\n/g, '\n').replace(/\\r/g, '\r').replace(/\\t/g, '\t').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+// Sequential left-to-right scan: replace- chains get \\\\n (escaped backslash +
+// 'n') wrong by turning it into a newline; the roundtrip must stay lossless.
+const unesc = (v: string) => {
+  let out = '';
+  for (let i = 0; i < v.length; i++) {
+    if (v[i] === '\\' && i + 1 < v.length) {
+      const c = v[++i];
+      if (c === 'n') { out += '\n'; continue; }
+      if (c === 'r') { out += '\r'; continue; }
+      if (c === 't') { out += '\t'; continue; }
+      if (c === '"') { out += '"'; continue; }
+      if (c === '\\') { out += '\\'; continue; }
+      out += '\\' + c; // unknown escape: keep both characters, never drop data
+      continue;
+    }
+    out += v[i];
+  }
+  return out;
+};
 
 export function parseIosStrings(text: string): { rows: [string, string][]; rejected: number } {
   const rows: [string, string][] = [];
@@ -20,7 +37,12 @@ export function parseIosStrings(text: string): { rows: [string, string][]; rejec
   while ((m = re.exec(text)) !== null) {
     rows.push([unesc(m[1]), unesc(m[2])]);
   }
-  const nonEmpty = text.split('\n').filter((l) => l.trim() && !l.trim().startsWith('//') && !l.trim().startsWith('/*'));
+  // Count real content lines that produced no entry. Strip /* ... */ blocks first
+  // so their continuation lines are not counted as rejections.
+  const withoutBlocks = text.replace(/\/\*[\s\S]*?\*\//g, '');
+  const nonEmpty = withoutBlocks
+    .split('\n')
+    .filter((l) => l.trim() && !l.trim().startsWith('//'));
   rejected = Math.max(0, nonEmpty.length - rows.length);
   return { rows, rejected };
 }
