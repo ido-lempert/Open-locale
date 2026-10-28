@@ -117,3 +117,21 @@ button.cell-status.retry {
     letter-spacing: 0.05em; color: var(--muted); margin-bottom: 0.15rem;
   }
 }
+
+.cell-foot { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.2rem; }
+select.review {
+  width: auto; font-size: 0.72rem; padding: 0.1rem 0.3rem; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--card);
+}
+.review-unverified { border-left: 3px solid #9ca3af !important; color: var(--muted); }
+.review-translated { border-left: 3px solid var(--accent) !important; }
+.review-reviewed { border-left: 3px solid var(--ok) !important; }
+span.review { font-size: 0.72rem; padding: 0.05rem 0.4rem; border: 1px solid var(--line); border-radius: 6px; }
+.history-toggle {
+  border: none; background: none; color: var(--accent); font-size: 0.75rem;
+  padding: 0.15rem 0; cursor: pointer; text-decoration: underline;
+}
+.history-row td { background: #fafbfc; }
+.history-list { list-style: none; margin: 0; padding: 0; }
+.history-list li { display: flex; align-items: baseline; gap: 0.6rem; padding: 0.3rem 0; flex-wrap: wrap; }
+.h-value { max-width: 40ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

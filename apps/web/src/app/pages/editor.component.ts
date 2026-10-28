@@ -1,13 +1,18 @@
+import { DatePipe } from '@angular/common';
 import { Component, OnInit, signal, WritableSignal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { ApiService, Key, Project } from '../api.service';
+import { ApiService, HistoryEntry, Key, Project, TranslationStatus } from '../api.service';
 
-interface CellState { value: string; saved: string; status: 'idle' | 'saving' | 'saved' | 'error'; }
+interface CellState {
+  value: string; saved: string;
+  status: 'idle' | 'saving' | 'saved' | 'error';
+  review: TranslationStatus;
+}
 
 @Component({
   selector: 'ol-editor',
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, DatePipe],
   template: `
     <header class="bar">
       <a routerLink="/projects" class="back">&larr; Projects</a>
@@ -43,7 +48,9 @@ interface CellState { value: string; saved: string; status: 'idle' | 'saving' | 
           <tbody>
             @for (k of keys(); track k.id) {
               <tr>
-                <td class="key"><code>{{ k.name }}</code></td>
+                <td class="key"><code>{{ k.name }}</code>
+                  <button class="history-toggle" [attr.aria-expanded]="historyFor() === k.id"
+                    (click)="toggleHistory(k)">history</button></td>
                 @for (l of p.locales; track l.code) {
                   <td [attr.data-locale]="l.code">
                     <textarea rows="1" [attr.dir]="isRtl(l.code) ? 'rtl' : 'ltr'"
@@ -51,15 +58,41 @@ interface CellState { value: string; saved: string; status: 'idle' | 'saving' | 
                       (ngModelChange)="edit(k, l.code, $event)"
                       (blur)="save(k, l.code)"
                       [attr.aria-label]="k.name + ' in ' + l.code"></textarea>
-                    @if (cell(k.id, l.code)().status === 'error') {
-                      <button class="cell-status retry" (click)="save(k, l.code, true)">save failed - retry</button>
-                    } @else {
-                      <span class="cell-status">{{ statusText(k.id, l.code) }}</span>
-                    }
+                    <div class="cell-foot">
+                      <select class="review" [class]="'review review-' + cell(k.id, l.code)().review.toLowerCase()"
+                        [ngModel]="cell(k.id, l.code)().review"
+                        (ngModelChange)="setReview(k, l.code, $event)"
+                        [attr.aria-label]="'Review status for ' + k.name + ' in ' + l.code">
+                        @for (st of statuses; track st) { <option [value]="st">{{ st.toLowerCase() }}</option> }
+                      </select>
+                      @if (cell(k.id, l.code)().status === 'error') {
+                        <button class="cell-status retry" (click)="save(k, l.code, true)">save failed - retry</button>
+                      } @else {
+                        <span class="cell-status">{{ statusText(k.id, l.code) }}</span>
+                      }
+                    </div>
                   </td>
                 }
                 <td><button class="danger" [attr.aria-label]="'Delete key ' + k.name" title="Delete key" (click)="removeKey(k)">&times;</button></td>
               </tr>
+              @if (historyFor() === k.id) {
+                <tr class="history-row"><td [attr.colspan]="2 + p.locales.length">
+                  @if (historyLoading()) { <p class="muted">Loading history…</p> }
+                  @else if (historyEntries().length === 0) { <p class="muted">No changes recorded yet.</p> }
+                  @else {
+                    <ul class="history-list">
+                      @for (h of historyEntries(); track h.id) {
+                        <li>
+                          <code>{{ h.locale }}</code>
+                          <span class="review review-{{ h.status.toLowerCase() }}">{{ h.status.toLowerCase() }}</span>
+                          <span class="h-value" [attr.dir]="isRtl(h.locale) ? 'rtl' : 'ltr'">{{ h.value || '(empty)' }}</span>
+                          <span class="muted">{{ h.changedBy?.displayName ?? 'unknown' }} · {{ h.createdAt | date:'short' }}</span>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </td></tr>
+              }
             }
           </tbody>
         </table>
@@ -72,6 +105,10 @@ export class EditorComponent implements OnInit {
   keys = signal<Key[]>([]);
   cells = new Map<string, WritableSignal<CellState>>();
   search = signal(''); newKey = signal(''); newLocale = signal(''); ioLocale = signal('en');
+  historyFor = signal<string | null>(null);
+  historyEntries = signal<(HistoryEntry & { locale: string })[]>([]);
+  historyLoading = signal(false);
+  readonly statuses: TranslationStatus[] = ['UNVERIFIED', 'TRANSLATED', 'REVIEWED'];
   notice = signal(''); error = signal('');
   projectId = '';
 
@@ -96,14 +133,15 @@ export class EditorComponent implements OnInit {
       this.keys.set(keys);
       this.cells.clear();
       for (const k of keys) for (const t of k.translations) {
-        this.cells.set(`${k.id}:${t.localeCode}`, signal({ value: t.value, saved: t.value, status: 'idle' }));
+        this.cells.set(`${k.id}:${t.localeCode}`,
+          signal({ value: t.value, saved: t.value, status: 'idle', review: t.status ?? 'UNVERIFIED' }));
       }
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load keys'); }
   }
   cell(keyId: string, locale: string): WritableSignal<CellState> {
     let s = this.cells.get(`${keyId}:${locale}`);
     if (!s) {
-      s = signal<CellState>({ value: '', saved: '', status: 'idle' });
+      s = signal<CellState>({ value: '', saved: '', status: 'idle', review: 'UNVERIFIED' });
       this.cells.set(`${keyId}:${locale}`, s);
     }
     return s;
@@ -118,9 +156,11 @@ export class EditorComponent implements OnInit {
     if (c.status === 'saving') return;
     sig.set({ ...c, status: 'saving' });
     try {
-      await this.api.upsertTranslation(this.projectId, k.id, locale, c.value);
+      const res = await this.api.upsertTranslation(this.projectId, k.id, locale, c.value);
       const latest = sig();
-      sig.set({ value: latest.value, saved: c.value, status: latest.value === c.value ? 'saved' : 'idle' });
+      sig.set({ value: latest.value, saved: c.value,
+        status: latest.value === c.value ? 'saved' : 'idle',
+        review: res.status ?? 'UNVERIFIED' });
     } catch {
       // Keep saved pointing at what the server actually holds so a retry re-sends.
       sig.update((cur) => ({ ...cur, status: 'error' }));
@@ -131,6 +171,28 @@ export class EditorComponent implements OnInit {
     return s === 'saving' ? 'saving…' : s === 'saved' ? 'saved' : s === 'error' ? 'save failed' : '';
   }
   isRtl(code: string) { return ['he', 'ar', 'fa', 'ur'].some((r) => code.startsWith(r)); }
+  async setReview(k: Key, locale: string, status: TranslationStatus) {
+    const sig = this.cell(k.id, locale);
+    try {
+      const res = await this.api.setStatus(this.projectId, k.id, locale, status);
+      sig.update((c) => ({ ...c, review: res.status }));
+    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to set status'); }
+  }
+  async toggleHistory(k: Key) {
+    if (this.historyFor() === k.id) { this.historyFor.set(null); return; }
+    this.historyFor.set(k.id); this.historyLoading.set(true); this.historyEntries.set([]);
+    try {
+      const locales = this.project()?.locales ?? [];
+      const all = await Promise.all(
+        locales.map(async (l) =>
+          (await this.api.getHistory(this.projectId, k.id, l.code)).map((h) => ({ ...h, locale: l.code }))),
+      );
+      this.historyEntries.set(
+        all.flat().sort((x, y) => new Date(y.createdAt).getTime() - new Date(x.createdAt).getTime()).slice(0, 50),
+      );
+    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load history'); }
+    finally { this.historyLoading.set(false); }
+  }
   async addKey() {
     const submitted = this.newKey();
     try {

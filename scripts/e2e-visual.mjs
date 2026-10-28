@@ -121,6 +121,22 @@ try {
     values.includes('Welcome to the shop') && values.includes('ברוכים הבאים לחנות'), JSON.stringify(values));
   await shot('editor-05-editor-reloaded.png');
 
+  // Review statuses + history via UI
+  const reviewSelect = (await page.$$('.grid tbody tr:first-child select.review'))[0];
+  await reviewSelect.select('TRANSLATED');
+  await page.waitForFunction(
+    () => document.querySelector('.grid tbody tr:first-child select.review')?.className.includes('review-translated'),
+    { timeout: 5000 },
+  );
+  check('status change reflected in UI', true);
+  await page.click('.grid tbody tr:first-child .history-toggle');
+  await page.waitForSelector('.history-list li', { timeout: 10000 });
+  const histText = await page.$eval('.history-list', (el) => el.textContent);
+  check('history lists the change with actor and value',
+    histText.includes('translated') && histText.includes('Welcome to the shop') && histText.includes('Demo User'));
+  await shot('editor-11-history.png');
+  await page.click('.grid tbody tr:first-child .history-toggle');
+
   const projId = page.url().split('/').pop();
   // Settings screen: rename, add locale, verify grid column appears
   await page.click('.settings-link');

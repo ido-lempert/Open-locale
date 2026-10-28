@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import type { TranslationStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
 import { flattenJson, unflattenJson } from './json-flatten';
@@ -17,10 +18,57 @@ export class TranslationsService {
     }
     const key = await this.prisma.key.findFirst({ where: { id: keyId, projectId } });
     if (!key) throw new NotFoundException('Key not found');
-    return this.prisma.translation.upsert({
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.translation.findUnique({
+        where: { keyId_localeCode: { keyId, localeCode: locale } },
+      });
+      // Editing the text resets review: new wording has not been reviewed.
+      const status: TranslationStatus = existing && existing.value === value ? existing.status : 'UNVERIFIED';
+      const translation = await tx.translation.upsert({
+        where: { keyId_localeCode: { keyId, localeCode: locale } },
+        create: { keyId, projectId, localeCode: locale, value },
+        update: { value, status },
+      });
+      if (!existing || existing.value !== value || existing.status !== status) {
+        await tx.translationHistory.create({
+          data: { keyId, localeCode: locale, value, status, changedById: userId },
+        });
+      }
+      return translation;
+    });
+  }
+
+  async setStatus(userId: string, projectId: string, keyId: string, locale: string, status: TranslationStatus) {
+    await this.projects.getFor(userId, projectId);
+    const existing = await this.prisma.translation.findUnique({
       where: { keyId_localeCode: { keyId, localeCode: locale } },
-      create: { keyId, projectId, localeCode: locale, value },
-      update: { value },
+    });
+    if (!existing || existing.projectId !== projectId) {
+      throw new NotFoundException('Translation not found');
+    }
+    return this.prisma.$transaction(async (tx) => {
+      const translation = await tx.translation.update({
+        where: { keyId_localeCode: { keyId, localeCode: locale } },
+        data: { status },
+      });
+      if (existing.status !== status) {
+        await tx.translationHistory.create({
+          data: { keyId, localeCode: locale, value: existing.value, status, changedById: userId },
+        });
+      }
+      return translation;
+    });
+  }
+
+  async history(userId: string, projectId: string, keyId: string, locale: string) {
+    await this.projects.getFor(userId, projectId);
+    const key = await this.prisma.key.findFirst({ where: { id: keyId, projectId } });
+    if (!key) throw new NotFoundException('Key not found');
+    return this.prisma.translationHistory.findMany({
+      where: { keyId, localeCode: locale },
+      include: { changedBy: { select: { displayName: true, email: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
     });
   }
 

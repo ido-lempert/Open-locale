@@ -5,7 +5,13 @@ export interface Project {
   id: string; name: string; slug: string; description: string; baseLocale: string;
   locales: ProjectLocale[]; _count?: { keys: number };
 }
-export interface Translation { keyId: string; localeCode: string; value: string; }
+export type TranslationStatus = 'UNVERIFIED' | 'TRANSLATED' | 'REVIEWED';
+export interface Translation { keyId: string; localeCode: string; value: string; status: TranslationStatus; }
+export interface HistoryEntry {
+  id: string; keyId: string; localeCode: string; value: string;
+  status: TranslationStatus; createdAt: string;
+  changedBy: { displayName: string; email: string } | null;
+}
 export interface ApiTokenInfo {
   id: string; name: string; scopes: string[];
   lastUsedAt: string | null; expiresAt: string | null; createdAt: string;
@@ -89,6 +95,14 @@ export class ApiService {
     return this.request<Translation>(`/projects/${projectId}/keys/${keyId}/translations`, {
       method: 'PUT', body: JSON.stringify({ locale, value }),
     });
+  }
+  setStatus(projectId: string, keyId: string, locale: string, status: TranslationStatus) {
+    return this.request<Translation>(`/projects/${projectId}/keys/${keyId}/translations/${locale}/status`, {
+      method: 'PATCH', body: JSON.stringify({ status }),
+    });
+  }
+  getHistory(projectId: string, keyId: string, locale: string) {
+    return this.request<HistoryEntry[]>(`/projects/${projectId}/keys/${keyId}/translations/${locale}/history`);
   }
   exportJson(projectId: string, locale: string) {
     return this.request<Record<string, unknown>>(`/projects/${projectId}/export/${locale}`);

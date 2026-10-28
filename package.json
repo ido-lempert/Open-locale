@@ -4,7 +4,8 @@
   "license": "UNLICENSED",
   "scripts": {
     "test:integration": "node scripts/phase0-db-test.mjs",
-    "test:authz": "node scripts/authz-http-test.mjs"
+    "test:authz": "node scripts/authz-http-test.mjs",
+    "test:statuses": "node scripts/status-history-test.mjs"
   },
   "private": true,
   "dependencies": {

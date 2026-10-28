@@ -18,6 +18,7 @@ model User {
 
   memberships TeamMember[]
   apiTokens   ApiToken[]
+  translationChanges TranslationHistory[]
 
   @@map("users")
 }
@@ -98,18 +99,42 @@ model Key {
   @@map("keys")
 }
 
-model Translation {
-  keyId        String   @db.Uuid
-  projectId    String   @db.Uuid
-  localeCode   String
-  value        String   @default("")
-  updatedAt    DateTime @updatedAt
+enum TranslationStatus {
+  UNVERIFIED
+  TRANSLATED
+  REVIEWED
+}
 
-  key    Key           @relation(fields: [keyId], references: [id], onDelete: Cascade)
-  locale ProjectLocale @relation(fields: [projectId, localeCode], references: [projectId, code], onDelete: Cascade)
+model Translation {
+  keyId        String            @db.Uuid
+  projectId    String            @db.Uuid
+  localeCode   String
+  value        String            @default("")
+  status       TranslationStatus @default(UNVERIFIED)
+  updatedAt    DateTime          @updatedAt
+
+  key     Key                  @relation(fields: [keyId], references: [id], onDelete: Cascade)
+  locale  ProjectLocale        @relation(fields: [projectId, localeCode], references: [projectId, code], onDelete: Cascade)
+  history TranslationHistory[]
 
   @@id([keyId, localeCode])
   @@map("translations")
+}
+
+model TranslationHistory {
+  id            String            @id @default(uuid()) @db.Uuid
+  keyId         String            @db.Uuid
+  localeCode    String
+  value         String
+  status        TranslationStatus
+  changedById   String?           @db.Uuid
+  createdAt     DateTime          @default(now())
+
+  translation Translation @relation(fields: [keyId, localeCode], references: [keyId, localeCode], onDelete: Cascade)
+  changedBy   User?       @relation(fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([keyId, localeCode, createdAt])
+  @@map("translation_history")
 }
 
 model ApiToken {

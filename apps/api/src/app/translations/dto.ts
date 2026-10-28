@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsObject, IsString } from 'class-validator';
+import { IsIn, IsNotEmpty, IsObject, IsString } from 'class-validator';
 
 export class UpsertTranslationDto {
   @IsString()
@@ -15,4 +15,9 @@ export class ImportJsonDto {
 
   @IsObject()
   entries!: Record<string, unknown>;
+}
+
+export class SetStatusDto {
+  @IsIn(['UNVERIFIED', 'TRANSLATED', 'REVIEWED'])
+  status!: 'UNVERIFIED' | 'TRANSLATED' | 'REVIEWED';
 }
