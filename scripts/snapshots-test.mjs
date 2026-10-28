@@ -115,6 +115,36 @@ try {
   const missing = await call(`/projects/${pid}/snapshots/00000000-0000-0000-0000-000000000000/restore`, { jwt, method: 'POST' });
   check('unknown snapshot restore is 404', missing.status === 404);
 
+  // Cross-team isolation: a different user gets 404, never the data.
+  const jwt2 = (await call('/auth/signup', { method: 'POST', body: { email: `s2${Date.now()}@t.dev`, password: 'pass1234', displayName: 'S2' } })).json.accessToken;
+  check('cross-team snapshot list is 404', (await call(`/projects/${pid}/snapshots`, { jwt: jwt2 })).status === 404);
+  check('cross-team snapshot restore is 404', (await call(`/projects/${pid}/snapshots/${snapId}/restore`, { jwt: jwt2, method: 'POST' })).status === 404);
+
+  // Retention: automatic snapshots prune to 25 per project, manual preserved.
+  for (let i = 0; i < 26; i++) {
+    await call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { entries: { [`bulk.k${i}`]: `v${i}` } } });
+  }
+  const afterBulk = (await call(`/projects/${pid}/snapshots`, { jwt })).json;
+  const autoCount = afterBulk.filter((x) => x.automatic).length;
+  check('automatic snapshots pruned to 25', autoCount === 25, `count=${autoCount}`);
+  check('manual snapshot survives pruning', afterBulk.some((x) => x.id === snapId));
+
+  // Concurrency: serialized imports -> each auto snapshot is an authoritative,
+  // strictly-growing pre-import state (sorted by creation, counts increase).
+  const before = (await flat());
+  const concRes = await Promise.all([0, 1, 2].map((i) =>
+    call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { entries: { [`conc.k${i}`]: `c${i}` } } })));
+  const after = await flat();
+  check('concurrent imports all applied', ['conc.k0', 'conc.k1', 'conc.k2'].every((k) => k in after));
+  const concSnaps = (await call(`/projects/${pid}/snapshots`, { jwt })).json
+    .filter((x) => x.automatic)
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  const base = Object.keys(before).length;
+  const counts = concSnaps.slice(-3).map((x) => x.keyCount);
+  check('concurrent auto snapshots capture strictly-growing states',
+    counts[0] >= base && counts[1] === counts[0] + 1 && counts[2] === counts[1] + 1,
+    `counts=${counts.join(',')} base=${base}`);
+
   // Scope: read-only token reads but cannot create/restore.
   const roTok = (await call('/auth/tokens', { jwt, method: 'POST', body: { name: 'ro', scopes: ['read'] } })).json.token;
   check('read-only token lists snapshots', (await call(`/projects/${pid}/snapshots`, { apiKey: roTok })).status === 200);

@@ -85,7 +85,12 @@ export class SnapshotsComponent implements OnInit {
 
   async restore(s: SnapshotMeta) {
     if (this.restoring()) return;
-    if (!confirm(`Restore the project to "${s.label}"? Current keys and translations are replaced by the snapshot.`)) return;
+    if (!confirm(
+      `Restore the project to "${s.label}"?\n\n` +
+      `- Keys and translations return to the snapshot state.\n` +
+      `- Keys added after this snapshot are permanently removed, with their comments and screenshots.\n` +
+      `- Keys deleted after this snapshot come back, but their old comments and screenshot links are not recovered.`,
+    )) return;
     this.restoring.set(true);
     this.error.set('');
     try {

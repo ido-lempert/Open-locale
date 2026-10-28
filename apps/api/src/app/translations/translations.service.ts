@@ -214,6 +214,36 @@ export class TranslationsService {
       throw new BadRequestException(`Locale ${locale} is not part of this project`);
     }
     const { flat, rejected } = flattenJson(entries);
+    // Serialize imports per project with an in-process mutex: the auto
+    // snapshot below must capture the authoritative pre-import state. Without
+    // it, two concurrent imports could each snapshot the other's in-flight
+    // state and a later restore would silently drop one import's keys. A
+    // Postgres advisory lock was tried first and abandoned: lock-holding
+    // interactive transactions exhaust the Prisma connection pool against the
+    // import's own pool work. NOTE: this mutex covers a single API instance;
+    // a multi-instance deployment needs the lock moved to the database with a
+    // dedicated connection.
+    return this.withImportLock(projectId, () =>
+      this.importJsonLocked(userId, projectId, locale, project.baseLocale, entries, flat, rejected));
+  }
+
+  private readonly importLocks = new Map<string, Promise<unknown>>();
+
+  private async withImportLock<T>(projectId: string, fn: () => Promise<T>): Promise<T> {
+    const prev = this.importLocks.get(projectId) ?? Promise.resolve();
+    const next = prev.catch(() => undefined).then(fn);
+    this.importLocks.set(projectId, next);
+    try {
+      return (await next) as T;
+    } finally {
+      if (this.importLocks.get(projectId) === next) this.importLocks.delete(projectId);
+    }
+  }
+
+  private async importJsonLocked(
+    userId: string, projectId: string, locale: string, baseLocale: string,
+    entries: Record<string, unknown>, flat: Record<string, string>, rejected: string[],
+  ) {
     // Restorable auto snapshot BEFORE anything mutates: every import leaves the
     // pre-import state recoverable from the snapshots list.
     await this.snapshots.captureAutomatic(projectId, `before import ${locale}`, userId);
@@ -259,7 +289,7 @@ export class TranslationsService {
               status: 'UNVERIFIED', changedById: userId, importId: run.id,
             },
           });
-          if (value) await this.rememberTx(tx, projectId, project.baseLocale, key.id, locale, value);
+          if (value) await this.rememberTx(tx, projectId, baseLocale, key.id, locale, value);
           await tx.importRun.update({
             where: { id: run.id },
             data: {
