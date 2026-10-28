@@ -3,7 +3,7 @@
 // Run: node scripts/e2e-visual.mjs  (requires: nx build api; npm i puppeteer-core available)
 import { execFileSync, spawn } from 'node:child_process';
 import EmbeddedPostgres from 'embedded-postgres';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 const { default: puppeteer } = await import('puppeteer-core');
@@ -211,7 +211,25 @@ try {
     { timeout: 10000 },
   );
   check('activity filter narrows to comments', true);
+
+  // Screenshots via UI
   await page.click('.back');
+  await page.waitForSelector('.grid tbody tr', { timeout: 10000 });
+  const pngPath = join(tmpdir(), 'ol-e2e-shot.png');
+  writeFileSync(pngPath, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'));
+  await page.click('.grid tbody tr:first-child .shots-toggle');
+  await page.waitForSelector('.shot-upload input[type=file]', { timeout: 5000 });
+  const fileInput = await page.$('.shot-upload input[type=file]');
+  await fileInput.uploadFile(pngPath);
+  await page.waitForSelector('.shots-list img', { timeout: 10000 });
+  check('screenshot uploaded and rendered', true);
+  await page.waitForFunction(
+    () => document.querySelector('.grid tbody tr:first-child .shots-toggle')?.textContent.includes('(1)'),
+    { timeout: 10000 },
+  );
+  check('screenshot count updates on the toggle', true);
+  await shot('editor-15-screenshots.png');
+  await page.click('.grid tbody tr:first-child .shots-toggle');
   await page.waitForSelector('.grid tbody tr', { timeout: 10000 });
 
   const projId = page.url().split('/').pop();

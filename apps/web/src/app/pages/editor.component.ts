@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, OnInit, signal, WritableSignal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { ApiService, CommentEntry, HistoryEntry, Key, Project, TranslationStatus } from '../api.service';
+import { ApiService, ScreenshotMeta, CommentEntry, HistoryEntry, Key, Project, TranslationStatus } from '../api.service';
 
 interface CellState {
   value: string; saved: string;
@@ -68,7 +68,9 @@ interface CellState {
                   <button class="history-toggle" [attr.aria-expanded]="historyFor() === k.id"
                     (click)="toggleHistory(k)">history</button>
                   <button class="comments-toggle" [attr.aria-expanded]="commentsFor() === k.id"
-                    (click)="toggleComments(k)">comments{{ k._count?.comments ? ' (' + k._count.comments + ')' : '' }}</button></td>
+                    (click)="toggleComments(k)">comments{{ k._count?.comments ? ' (' + k._count.comments + ')' : '' }}</button>
+                  <button class="shots-toggle" [attr.aria-expanded]="shotsFor() === k.id"
+                    (click)="toggleShots(k)">shots{{ k._count?.screenshots ? ' (' + k._count.screenshots + ')' : '' }}</button></td>
                 @for (l of p.locales; track l.code) {
                   <td [attr.data-locale]="l.code">
                     <textarea rows="1" [attr.dir]="isRtl(l.code) ? 'rtl' : 'ltr'"
@@ -93,6 +95,27 @@ interface CellState {
                 }
                 <td><button class="danger" [attr.aria-label]="'Delete key ' + k.name" title="Delete key" (click)="removeKey(k)">&times;</button></td>
               </tr>
+              @if (shotsFor() === k.id) {
+                <tr class="history-row shots-row"><td [attr.colspan]="2 + p.locales.length">
+                  @if (shotsLoading()) { <p class="muted">Loading screenshots…</p> }
+                  @else {
+                    @if (shots().length === 0) { <p class="muted">No screenshots yet. Add one to give translators visual context.</p> }
+                    <ul class="shots-list">
+                      @for (sh of shots(); track sh.id) {
+                        <li>
+                          <img [src]="shotUrls()[sh.id]" [alt]="'Screenshot ' + sh.filename" width="160" />
+                          <span class="muted">{{ sh.filename }} · {{ sh.uploader?.displayName ?? 'unknown' }}</span>
+                          <button class="danger" [attr.aria-label]="'Delete screenshot ' + sh.filename" (click)="deleteShot(k, sh.id)">&times;</button>
+                        </li>
+                      }
+                    </ul>
+                    <label class="shot-upload">Add screenshot (PNG, JPEG, GIF or WebP, max 2 MB)
+                      <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" aria-label="Upload screenshot"
+                        (change)="uploadShot(k, $event)" />
+                    </label>
+                  }
+                </td></tr>
+              }
               @if (commentsFor() === k.id) {
                 <tr class="history-row"><td [attr.colspan]="2 + p.locales.length">
                   @if (commentsLoading()) { <p class="muted">Loading comments…</p> }
@@ -154,6 +177,10 @@ export class EditorComponent implements OnInit {
   tagEditFor = signal<string | null>(null);
   tagDraft = signal('');
   historyFor = signal<string | null>(null);
+  shotsFor = signal<string | null>(null);
+  shots = signal<ScreenshotMeta[]>([]);
+  shotUrls = signal<Record<string, string>>({});
+  shotsLoading = signal(false);
   commentsFor = signal<string | null>(null);
   comments = signal<CommentEntry[]>([]);
   commentDraft = signal('');
@@ -275,6 +302,38 @@ export class EditorComponent implements OnInit {
       this.comments.set(await this.api.listComments(this.projectId, k.id));
       this.commentDraft.set('');
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to add comment'); }
+  }
+  async toggleShots(k: Key) {
+    if (this.shotsFor() === k.id) { this.shotsFor.set(null); return; }
+    this.shotsFor.set(k.id); this.shotsLoading.set(true); this.shots.set([]); this.shotUrls.set({});
+    try {
+      const list = await this.api.listScreenshots(this.projectId, k.id);
+      this.shots.set(list);
+      const urls: Record<string, string> = {};
+      for (const sh of list) urls[sh.id] = await this.api.screenshotUrl(this.projectId, k.id, sh.id);
+      this.shotUrls.set(urls);
+    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load screenshots'); }
+    finally { this.shotsLoading.set(false); }
+  }
+  async uploadShot(k: Key, ev: Event) {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      await this.api.uploadScreenshot(this.projectId, k.id, file);
+      await this.reload();
+      this.shotsFor.set(null);
+      await this.toggleShots(k);
+    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to upload screenshot'); }
+    finally { input.value = ''; }
+  }
+  async deleteShot(k: Key, shotId: string) {
+    try {
+      await this.api.deleteScreenshot(this.projectId, k.id, shotId);
+      await this.reload();
+      this.shotsFor.set(null);
+      await this.toggleShots(k);
+    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to delete screenshot'); }
   }
   async deleteComment(k: Key, commentId: string) {
     try {

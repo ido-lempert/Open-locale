@@ -22,6 +22,7 @@ model User {
   comments    Comment[]
   activityEvents ActivityEvent[]
   importRuns  ImportRun[]
+  screenshots Screenshot[]
 
   @@map("users")
 }
@@ -101,6 +102,7 @@ model Key {
   project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   translations Translation[]
   comments     Comment[]
+  screenshots  Screenshot[]
 
   @@unique([projectId, name])
   @@map("keys")
@@ -212,4 +214,22 @@ model ImportRun {
 
   @@index([projectId, createdAt])
   @@map("import_runs")
+}
+
+model Screenshot {
+  id           String   @id @default(uuid()) @db.Uuid
+  keyId        String   @db.Uuid
+  projectId    String   @db.Uuid
+  filename     String
+  mimeType     String
+  byteSize     Int
+  data         Bytes
+  uploadedById String?  @db.Uuid
+  createdAt    DateTime @default(now())
+
+  key      Key     @relation(fields: [keyId], references: [id], onDelete: Cascade)
+  uploader User?   @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([keyId, createdAt])
+  @@map("screenshots")
 }

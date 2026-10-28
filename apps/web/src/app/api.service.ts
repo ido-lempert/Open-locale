@@ -20,7 +20,7 @@ export interface Key {
   id: string; name: string; description: string; isPlural: boolean; maxLength: number | null;
   tags: string[];
   translations: Translation[];
-  _count?: { comments: number };
+  _count?: { comments: number; screenshots?: number };
 }
 export interface ActivityEntry {
   id: string;
@@ -30,6 +30,11 @@ export interface ActivityEntry {
   detail: Record<string, unknown> | null;
   createdAt: string;
   actor: { displayName: string; email: string } | null;
+}
+
+export interface ScreenshotMeta {
+  id: string; filename: string; mimeType: string; byteSize: number; createdAt: string;
+  uploader: { displayName: string; email: string } | null;
 }
 
 export interface CommentEntry {
@@ -47,6 +52,18 @@ export class ApiService {
   set token(value: string | null) {
     if (value) localStorage.setItem(TOKEN_KEY, value);
     else localStorage.removeItem(TOKEN_KEY);
+  }
+
+  private async raw<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const headers: Record<string, string> = {};
+    if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+    const res = await fetch(`${this.base}${path}`, { ...init, headers });
+    if (res.status === 401) { this.token = null; throw new Error('Unauthorized'); }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as { message?: string | string[] }).message?.toString() ?? `HTTP ${res.status}`);
+    }
+    return res.json() as Promise<T>;
   }
 
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -111,6 +128,24 @@ export class ApiService {
     const q = params.toString();
     return this.request<{ items: ActivityEntry[]; nextCursor: string | null }>(
       `/projects/${projectId}/activity${q ? `?${q}` : ''}`);
+  }
+  listScreenshots(projectId: string, keyId: string) {
+    return this.request<ScreenshotMeta[]>(`/projects/${projectId}/keys/${keyId}/screenshots`);
+  }
+  uploadScreenshot(projectId: string, keyId: string, file: File) {
+    const form = new FormData();
+    form.append('file', file);
+    return this.raw<ScreenshotMeta>(`/projects/${projectId}/keys/${keyId}/screenshots`, { method: 'POST', body: form });
+  }
+  deleteScreenshot(projectId: string, keyId: string, screenshotId: string) {
+    return this.request<{ removed: string }>(`/projects/${projectId}/keys/${keyId}/screenshots/${screenshotId}`, { method: 'DELETE' });
+  }
+  async screenshotUrl(projectId: string, keyId: string, screenshotId: string): Promise<string> {
+    const headers: Record<string, string> = {};
+    if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+    const res = await fetch(`${this.base}/projects/${projectId}/keys/${keyId}/screenshots/${screenshotId}`, { headers });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return URL.createObjectURL(await res.blob());
   }
   listComments(projectId: string, keyId: string, locale?: string) {
     const q = locale ? `?locale=${encodeURIComponent(locale)}` : '';

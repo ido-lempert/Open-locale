@@ -15,6 +15,8 @@ export const ACTIVITY_ACTIONS = [
   'project.import',
   'locale.added',
   'locale.removed',
+  'screenshot.added',
+  'screenshot.deleted',
 ] as const;
 
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];

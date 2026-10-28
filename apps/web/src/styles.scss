@@ -164,3 +164,10 @@ span.review { font-size: 0.72rem; padding: 0.05rem 0.4rem; border: 1px solid var
 .activity-row time { margin-left: auto; font-size: 0.78rem; white-space: nowrap; }
 .load-more { margin-top: 0.8rem; padding: 0.4rem 1rem; border: 1px solid #d1d5db; background: #fff; border-radius: 6px; cursor: pointer; }
 .load-more:hover { background: #f9fafb; }
+
+/* Screenshots panel */
+.shots-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.9rem; }
+.shots-list li { display: flex; flex-direction: column; gap: 0.25rem; align-items: flex-start; }
+.shots-list img { border: 1px solid #e5e7eb; border-radius: 6px; max-width: 160px; height: auto; background: #fff; }
+.shot-upload { display: inline-block; margin-top: 0.7rem; font-size: 0.85rem; }
+.shot-upload input { display: block; margin-top: 0.3rem; font-size: 0.82rem; }

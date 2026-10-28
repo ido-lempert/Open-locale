@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
 import { ActivityService, truncate } from '../activity/activity.service';
@@ -25,7 +25,7 @@ export class KeysService {
           ? { translations: { some: { localeCode: locale, status: status as never } } }
           : {}),
       },
-      include: { translations: true, _count: { select: { comments: true } } },
+      include: { translations: true, _count: { select: { comments: true, screenshots: true } } },
       orderBy: { name: 'asc' },
     });
   }
@@ -120,6 +120,83 @@ export class KeysService {
       });
       return comment;
     });
+  }
+
+  // Declared type AND magic bytes must match; SVG is never accepted (executable).
+  private static readonly IMAGE_SIGNATURES: Record<string, { head: number[]; webp?: boolean }> = {
+    'image/png': { head: [0x89, 0x50, 0x4e, 0x47] },
+    'image/jpeg': { head: [0xff, 0xd8, 0xff] },
+    'image/gif': { head: [0x47, 0x49, 0x46, 0x38] },
+    'image/webp': { head: [0x52, 0x49, 0x46, 0x46], webp: true },
+  };
+
+  async uploadScreenshot(userId: string, projectId: string, keyId: string,
+    file?: { originalname: string; mimetype: string; size: number; buffer: Buffer }) {
+    await this.projects.getFor(userId, projectId);
+    const key = await this.prisma.key.findFirst({ where: { id: keyId, projectId } });
+    if (!key) throw new NotFoundException('Key not found');
+    if (!file || !file.buffer?.length) throw new BadRequestException('An image file is required');
+    if (file.size > 2 * 1024 * 1024) throw new BadRequestException('Screenshot must be 2 MB or smaller');
+    const sig = KeysService.IMAGE_SIGNATURES[file.mimetype];
+    if (!sig) throw new BadRequestException('Only PNG, JPEG, GIF or WebP images are allowed');
+    const head = [...file.buffer.subarray(0, 4)];
+    const headOk = sig.head.every((b, i) => head[i] === b);
+    const webpOk = !sig.webp || file.buffer.subarray(8, 12).toString('ascii') === 'WEBP';
+    if (!headOk || !webpOk || file.buffer.length !== file.size) {
+      throw new BadRequestException('File contents do not match a valid image');
+    }
+    const filename = (file.originalname || 'screenshot').split(/[\\/]/).pop()!.slice(0, 120);
+    return this.prisma.$transaction(async (tx) => {
+      const shot = await tx.screenshot.create({
+        data: { keyId, projectId, filename, mimeType: file.mimetype, byteSize: file.size, data: new Uint8Array(file.buffer), uploadedById: userId },
+        select: { id: true, filename: true, mimeType: true, byteSize: true, createdAt: true },
+      });
+      await this.activity.record(tx, {
+        projectId, actorId: userId, action: 'screenshot.added', keyName: key.name,
+        detail: { filename, byteSize: file.size },
+      });
+      return shot;
+    });
+  }
+
+  async listScreenshots(userId: string, projectId: string, keyId: string) {
+    await this.projects.getFor(userId, projectId);
+    const key = await this.prisma.key.findFirst({ where: { id: keyId, projectId } });
+    if (!key) throw new NotFoundException('Key not found');
+    return this.prisma.screenshot.findMany({
+      where: { keyId },
+      select: {
+        id: true, filename: true, mimeType: true, byteSize: true, createdAt: true,
+        uploader: { select: { displayName: true, email: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async getScreenshot(userId: string, projectId: string, keyId: string, screenshotId: string) {
+    await this.projects.getFor(userId, projectId);
+    const shot = await this.prisma.screenshot.findFirst({
+      where: { id: screenshotId, keyId, projectId },
+    });
+    if (!shot) throw new NotFoundException('Screenshot not found');
+    return shot;
+  }
+
+  async deleteScreenshot(userId: string, projectId: string, keyId: string, screenshotId: string) {
+    await this.projects.getFor(userId, projectId);
+    const shot = await this.prisma.screenshot.findFirst({
+      where: { id: screenshotId, keyId, projectId },
+      include: { key: { select: { name: true } } },
+    });
+    if (!shot) throw new NotFoundException('Screenshot not found');
+    await this.prisma.$transaction(async (tx) => {
+      await tx.screenshot.delete({ where: { id: screenshotId } });
+      await this.activity.record(tx, {
+        projectId, actorId: userId, action: 'screenshot.deleted', keyName: shot.key.name,
+        detail: { filename: shot.filename },
+      });
+    });
+    return { removed: screenshotId };
   }
 
   async deleteComment(userId: string, projectId: string, keyId: string, commentId: string) {

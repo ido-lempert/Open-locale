@@ -1,4 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { KeysService } from './keys.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -38,6 +40,39 @@ export class KeysController {
   @Post(':keyId/comments')
   addComment(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('keyId') keyId: string, @Body() dto: CreateCommentDto) {
     return this.keys.addComment(user.userId, projectId, keyId, dto.body, dto.locale);
+  }
+
+  @Post(':keyId/screenshots')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
+  uploadScreenshot(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('keyId') keyId: string,
+    @UploadedFile() file?: { originalname: string; mimetype: string; size: number; buffer: Buffer }) {
+    return this.keys.uploadScreenshot(user.userId, projectId, keyId, file);
+  }
+
+  @Get(':keyId/screenshots')
+  listScreenshots(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('keyId') keyId: string) {
+    return this.keys.listScreenshots(user.userId, projectId, keyId);
+  }
+
+  @Get(':keyId/screenshots/:screenshotId')
+  async getScreenshot(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string,
+    @Param('keyId') keyId: string, @Param('screenshotId') screenshotId: string,
+    @Res({ passthrough: true }) res: Response) {
+    const shot = await this.keys.getScreenshot(user.userId, projectId, keyId, screenshotId);
+    res.set({
+      'Content-Type': shot.mimeType,
+      'Content-Length': String(shot.byteSize),
+      'Content-Disposition': `inline; filename="${shot.filename.replace(/[^\w.\- ]/g, '_')}"`,
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'private, max-age=3600',
+    });
+    return new StreamableFile(shot.data);
+  }
+
+  @Delete(':keyId/screenshots/:screenshotId')
+  deleteScreenshot(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string,
+    @Param('keyId') keyId: string, @Param('screenshotId') screenshotId: string) {
+    return this.keys.deleteScreenshot(user.userId, projectId, keyId, screenshotId);
   }
 
   @Delete(':keyId/comments/:commentId')
