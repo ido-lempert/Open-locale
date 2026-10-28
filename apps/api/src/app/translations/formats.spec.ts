@@ -45,22 +45,25 @@ describe('android-xml adversarial', () => {
     const rows: [string, string][] = [['path', 'C:\\new\\folder']];
     expect(parseAndroidXml(toAndroidXml(rows)).rows).toEqual(rows);
   });
-  it('does not expand custom entities or process a DOCTYPE', () => {
+  it('never expands entities and rejects DOCTYPE/entity declarations outright', () => {
     const xml = '<?xml version="1.0"?><!DOCTYPE resources [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>\n' +
       '<resources><string name="a">&xxe;</string></resources>';
-    const { rows } = parseAndroidXml(xml);
-    expect(rows).toEqual([['a', '&xxe;']]); // entity text kept literally, never expanded
+    const { rows, rejected } = parseAndroidXml(xml);
+    // Tested behavior: no entity expansion happens; and unsupported DTD/entity
+    // markup is counted so the import is rejected rather than half-imported.
+    expect(rows).toEqual([['a', '&xxe;']]);
+    expect(rejected).toBeGreaterThanOrEqual(2); // <!DOCTYPE + <!ENTITY
   });
   it('passes unknown entities through literally', () => {
     expect(parseAndroidXml('<resources><string name="a">x&nbsp;y</string></resources>').rows)
       .toEqual([['a', 'x&nbsp;y']]);
   });
-  it('ignores plurals and string-arrays (unsupported scope)', () => {
+  it('counts plurals and string-arrays as rejected so imports cannot silently lose them', () => {
     const xml = '<resources><plurals name="cats"><item quantity="one">one</item></plurals>' +
       '<string-array name="arr"><item>x</item></string-array><string name="a">v</string></resources>';
     const { rows, rejected } = parseAndroidXml(xml);
     expect(rows).toEqual([['a', 'v']]);
-    expect(rejected).toBe(0);
+    expect(rejected).toBe(2);
   });
 });
 

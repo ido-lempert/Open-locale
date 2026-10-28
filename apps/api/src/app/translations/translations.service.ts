@@ -177,7 +177,7 @@ export class TranslationsService {
   async importAndroid(userId: string, projectId: string, locale: string, xml: string) {
     const { rows, rejected } = parseAndroidXml(xml);
     if (rejected > 0) {
-      throw new BadRequestException(`${rejected} <string> element(s) could not be parsed (nested markup unsupported)`);
+      throw new BadRequestException(`${rejected} unsupported or unparsable element(s) in Android XML: plurals, string-array, DOCTYPE/entity declarations and nested markup are not supported`);
     }
     return this.importJson(userId, projectId, locale, Object.fromEntries(rows));
   }

@@ -62,5 +62,11 @@ export function parseAndroidXml(text: string): { rows: [string, string][]; rejec
   // <string> elements the pattern could not parse at all (extra attributes, unclosed)
   const attempted = (text.match(/<string[\s>]/g) ?? []).length;
   rejected += Math.max(0, attempted - matched);
+  // Unsupported constructs must never be silently dropped: plurals, string
+  // arrays, and DOCTYPE/entity declarations are counted so the caller rejects
+  // the import instead of reporting a false full success.
+  for (const pat of [/<plurals[\s>]/g, /<string-array[\s>]/g, /<!DOCTYPE/gi, /<!ENTITY/gi]) {
+    rejected += (text.match(pat) ?? []).length;
+  }
   return { rows, rejected };
 }

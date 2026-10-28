@@ -339,12 +339,14 @@ try {
   await page.waitForSelector('.grid', { timeout: 10000 });
   const csvFile = '/tmp/e2e-import.csv';
   writeFileSync(csvFile, 'key,value\napp.subtitle,"Welcome, friend"\n');
-  const csvInput = await page.$('input[type=file][accept=".csv"]');
+  // The IO toolbar has a format picker; select CSV first so the import input and the safe/raw note apply to CSV.
+  await page.select('select[aria-label="Import/export format"]', 'csv');
+  const csvInput = await page.$('input[type=file]');
   await csvInput.uploadFile(csvFile);
-  const csvNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('from CSV'), { timeout: 10000 }).then(() => true).catch(() => false);
+  const csvNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('(CSV,'), { timeout: 10000 }).then(() => true).catch(() => false);
   check('CSV import via UI shows summary notice', csvNotice);
   check('CSV-imported key appears in grid', await waitText('app.subtitle'));
-  const csvControls = await page.evaluate(() => (document.body.textContent || '').includes('Export CSV (spreadsheet-safe)') && (document.body.textContent || '').includes('mode=raw'));
+  const csvControls = await page.evaluate(() => (document.body.textContent || '').includes('spreadsheet-safe') && (document.body.textContent || '').includes('mode=raw'));
   check('UI visibly distinguishes spreadsheet-safe CSV from lossless raw', csvControls);
   await shot('editor-20-csv.png');
 

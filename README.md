@@ -43,6 +43,11 @@ npx nx serve web   # starts web on :4200, proxies /api to :3000
 the database is temporary and deleted when the process stops. To run against your own
 PostgreSQL instead, set DATABASE_URL (and JWT_SECRET) and use `npx nx serve api`.
 
+The API binds to 127.0.0.1 by default outside production; the embedded PostgreSQL is
+loopback-only too. To expose the API beyond localhost, set HOST explicitly together
+with a real JWT_SECRET - the process refuses to bind a non-loopback address while
+running on the built-in development secret.
+
 ## Tests
 
 Every database-backed suite starts its own real PostgreSQL automatically; no Docker
