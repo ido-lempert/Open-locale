@@ -215,8 +215,7 @@ try {
   // Screenshots via UI
   await page.click('.back');
   await page.waitForSelector('.grid tbody tr', { timeout: 10000 });
-  const pngPath = join(tmpdir(), 'ol-e2e-shot.png');
-  writeFileSync(pngPath, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'));
+  const pngPath = join(root, 'scripts', 'fixtures', 'checkout-screen.png');
   await page.click('.grid tbody tr:first-child .shots-toggle');
   await page.waitForSelector('.shot-upload input[type=file]', { timeout: 5000 });
   const fileInput = await page.$('.shot-upload input[type=file]');

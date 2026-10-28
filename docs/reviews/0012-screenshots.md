@@ -8,8 +8,11 @@ image-only with verified contents, no SVG, bounded size, authz on every path.
 ## Pass 1 - Developer
 - 2 MB cap enforced twice: multer limit (413) and service check (400). Declared
   Content-Type alone is never trusted: magic bytes must match the declared type
-  (PNG/JPEG/GIF headers, RIFF+WEBP for WebP) and declared size must equal the
-  actual buffer length.
+  AND structural trailers must be intact (PNG IEND, JPEG EOI, GIF trailer, WebP
+  size field) - truncated/malformed files are rejected. Honest limit: this is
+  NOT full decode validation; we never decode server-side, and dimension /
+  decompression-bomb checks would need a real decoder (recorded as a hardening
+  item; the 2 MB bound caps the blast radius in the meantime).
 - Filenames are basename-stripped and length-capped; Content-Disposition on
   download sanitizes anything left. Binary served with X-Content-Type-Options:
   nosniff and private cache.
@@ -36,8 +39,9 @@ image-only with verified contents, no SVG, bounded size, authz on every path.
 - Upload, delete and download write nothing user-controlled into HTML.
 
 ## Pass 5 - QA / integration
-- screenshots-test.mjs (real PostgreSQL + HTTP): 15/15 - PNG + GIF upload,
+- screenshots-test.mjs (real PostgreSQL + HTTP): 18/18 - PNG + GIF upload,
   metadata-only list, byte-exact download with safe headers, SVG 400, fake-PNG
+  400, truncated PNG (header only) 400, PNG missing IEND 400, truncated GIF
   400, >2MB rejected, missing file 400, read-only token 403, cross-team 404
   on all three verbs, delete + gone + binary 404, activity events recorded.
 - e2e-visual.mjs 28/28: real file upload through the UI, thumbnail rendered,

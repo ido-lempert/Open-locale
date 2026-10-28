@@ -79,6 +79,12 @@ try {
   check('svg rejected (400)', svg.status === 400, `got ${svg.status}`);
   const fake = await upload(base, { token: at, bytes: Buffer.from('<script>alert(1)</script>'), filename: 'fake.png', mime: 'image/png' });
   check('declared-png with non-image bytes rejected (400)', fake.status === 400, `got ${fake.status}`);
+  const truncPng = await upload(base, { token: at, bytes: PNG.subarray(0, 30), filename: 'trunc.png', mime: 'image/png' });
+  check('truncated png (header only) rejected (400)', truncPng.status === 400, `got ${truncPng.status}`);
+  const noIend = await upload(base, { token: at, bytes: Buffer.concat([PNG.subarray(0, PNG.length - 12), Buffer.alloc(12, 0)]), filename: 'noiend.png', mime: 'image/png' });
+  check('png without IEND trailer rejected (400)', noIend.status === 400, `got ${noIend.status}`);
+  const truncGif = await upload(base, { token: at, bytes: GIF.subarray(0, GIF.length - 5), filename: 'trunc.gif', mime: 'image/gif' });
+  check('truncated gif rejected (400)', truncGif.status === 400, `got ${truncGif.status}`);
   const big = await upload(base, { token: at, bytes: Buffer.alloc(2 * 1024 * 1024 + 1, 1), filename: 'big.png', mime: 'image/png' });
   check('over 2MB rejected', big.status === 400 || big.status === 413, `got ${big.status}`);
   const none = await upload(base, { token: at, noFile: true });

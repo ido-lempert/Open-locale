@@ -145,6 +145,18 @@ export class KeysService {
     if (!headOk || !webpOk || file.buffer.length !== file.size) {
       throw new BadRequestException('File contents do not match a valid image');
     }
+    // Structural trailers: catches truncated/malformed files cheaply. This is
+    // NOT full decode validation - we never decode server-side (2 MB bound);
+    // dimension/decompression checks would need a real decoder (recorded).
+    const b = file.buffer;
+    const trailerOk =
+      (file.mimetype === 'image/png' && b.length >= 12 && b.subarray(b.length - 8, b.length - 4).toString('ascii') === 'IEND') ||
+      (file.mimetype === 'image/jpeg' && b.length >= 4 && b[b.length - 2] === 0xff && b[b.length - 1] === 0xd9) ||
+      (file.mimetype === 'image/gif' && b.length >= 14 && b[b.length - 1] === 0x3b) ||
+      (file.mimetype === 'image/webp' && b.length >= 12 && b.readUInt32LE(4) + 8 === b.length);
+    if (!trailerOk) {
+      throw new BadRequestException('File contents do not match a valid image');
+    }
     const filename = (file.originalname || 'screenshot').split(/[\\/]/).pop()!.slice(0, 120);
     return this.prisma.$transaction(async (tx) => {
       const shot = await tx.screenshot.create({
