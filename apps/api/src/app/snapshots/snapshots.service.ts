@@ -110,7 +110,8 @@ export class SnapshotsService {
   // else is upserted. One transaction: a crash never leaves a half-restored
   // project, and the audit event commits with the data.
   async restore(userId: string, projectId: string, snapshotId: string) {
-    await this.projects.getFor(userId, projectId);
+    await this.projects.requireAdmin(userId, projectId); // destructive
+
     const snapshot = await this.prisma.snapshot.findFirst({ where: { id: snapshotId, projectId } });
     if (!snapshot) throw new NotFoundException('Snapshot not found');
     // Safety capture + restore run under the shared project lock, serialized

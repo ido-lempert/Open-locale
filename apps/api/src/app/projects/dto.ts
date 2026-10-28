@@ -42,3 +42,29 @@ export class UpdateProjectDto {
   @MaxLength(2000)
   description?: string;
 }
+
+export class AddMemberDto {
+  @IsString()
+  @IsNotEmpty()
+  email!: string;
+
+  @IsOptional()
+  @IsString()
+  role?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  allowedLocales?: string[];
+}
+
+export class UpdateMemberDto {
+  @IsOptional()
+  @IsString()
+  role?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  allowedLocales?: string[];
+}

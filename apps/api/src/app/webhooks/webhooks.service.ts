@@ -28,7 +28,7 @@ export class WebhooksService {
   }
 
   async create(userId: string, projectId: string, dto: CreateWebhookDto) {
-    await this.projects.getFor(userId, projectId);
+    await this.projects.requireAdmin(userId, projectId);
     try {
       validateWebhookUrlString(dto.url);
     } catch (e) {
@@ -43,7 +43,7 @@ export class WebhooksService {
   }
 
   async update(userId: string, projectId: string, hookId: string, dto: UpdateWebhookDto) {
-    await this.projects.getFor(userId, projectId);
+    await this.projects.requireAdmin(userId, projectId);
     const existing = await this.prisma.webhook.findFirst({ where: { id: hookId, projectId } });
     if (!existing) throw new NotFoundException('Webhook not found');
     if (dto.url) {
@@ -61,7 +61,7 @@ export class WebhooksService {
   }
 
   async remove(userId: string, projectId: string, hookId: string) {
-    await this.projects.getFor(userId, projectId);
+    await this.projects.requireAdmin(userId, projectId);
     const existing = await this.prisma.webhook.findFirst({ where: { id: hookId, projectId } });
     if (!existing) throw new NotFoundException('Webhook not found');
     await this.prisma.webhook.delete({ where: { id: existing.id } });

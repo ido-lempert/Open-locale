@@ -54,7 +54,14 @@ export const OPENAPI = {
       patch: p('Update a project', 'projects', true),
       delete: p('Delete a project', 'projects'),
     },
-    '/api/projects/{id}/members': { get: p('List project members', 'projects') },
+    '/api/projects/{id}/members': {
+      get: p('List project members with roles and locale access', 'projects'),
+      post: p('Add a member by email with role and locale restriction (admin)', 'projects', true),
+    },
+    '/api/projects/{id}/members/{userId}': {
+      patch: p('Change a member role or locale access (admin; owner immutable)', 'projects', true),
+      delete: p('Remove a member (admin; owner cannot be removed)', 'projects'),
+    },
     '/api/projects/{id}/locales': { post: p('Add a target locale', 'projects', true) },
     '/api/projects/{id}/locales/{code}': { delete: p('Remove a target locale', 'projects') },
     '/api/projects/{projectId}/keys': {

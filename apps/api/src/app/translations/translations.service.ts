@@ -24,6 +24,7 @@ export class TranslationsService {
   ) {}
 
   async upsert(userId: string, projectId: string, keyId: string, locale: string, value: string) {
+    await this.projects.assertLocaleWrite(userId, projectId, [locale]);
     const project = await this.projects.getFor(userId, projectId);
     if (!project.locales.some((l) => l.code === locale)) {
       throw new BadRequestException(`Locale ${locale} is not part of this project`);
@@ -64,6 +65,7 @@ export class TranslationsService {
   }
 
   async setStatus(userId: string, projectId: string, keyId: string, locale: string, status: TranslationStatus) {
+    await this.projects.assertLocaleWrite(userId, projectId, [locale]);
     await this.projects.getFor(userId, projectId);
     const existing = await this.prisma.translation.findUnique({
       where: { keyId_localeCode: { keyId, localeCode: locale } },
@@ -211,6 +213,7 @@ export class TranslationsService {
   }
 
   async importJson(userId: string, projectId: string, locale: string, entries: Record<string, unknown>) {
+    await this.projects.assertLocaleWrite(userId, projectId, [locale]);
     const project = await this.projects.getFor(userId, projectId);
     if (!project.locales.some((l) => l.code === locale)) {
       throw new BadRequestException(`Locale ${locale} is not part of this project`);

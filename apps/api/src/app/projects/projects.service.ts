@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActivityService } from '../activity/activity.service';
 
@@ -57,6 +57,7 @@ export class ProjectsService {
   }
 
   async updateFor(userId: string, projectId: string, input: { name?: string; description?: string }) {
+    await this.requireAdmin(userId, projectId);
     const before = await this.getFor(userId, projectId);
     return this.prisma.$transaction(async (tx) => {
       const project = await tx.project.update({
@@ -75,9 +76,103 @@ export class ProjectsService {
   }
 
   async removeFor(userId: string, projectId: string) {
-    await this.getFor(userId, projectId);
+    await this.requireAdmin(userId, projectId);
     await this.prisma.project.delete({ where: { id: projectId } });
     return { removed: projectId };
+  }
+
+  // Role + locale access helpers (granular permissions).
+  private async memberFor(userId: string, projectId: string) {
+    const project = await this.prisma.project.findUnique({ where: { id: projectId }, select: { teamId: true } });
+    if (!project) throw new NotFoundException('Project not found');
+    const member = await this.prisma.teamMember.findUnique({
+      where: { teamId_userId: { teamId: project.teamId, userId } },
+    });
+    if (!member) throw new NotFoundException('Project not found'); // no existence leak
+    return member;
+  }
+
+  async roleFor(userId: string, projectId: string) {
+    return (await this.memberFor(userId, projectId)).role;
+  }
+
+  // ADMIN+ for project administration: settings, locales, members, webhooks,
+  // snapshot restore. OWNER satisfies every check.
+  async requireAdmin(userId: string, projectId: string) {
+    const member = await this.memberFor(userId, projectId);
+    if (member.role === 'MEMBER') throw new ForbiddenException('Requires an admin role');
+    return member;
+  }
+
+  // MEMBER with a non-empty allowedLocales list may only write those locales.
+  async assertLocaleWrite(userId: string, projectId: string, locales: string[]) {
+    const member = await this.memberFor(userId, projectId);
+    if (member.role !== 'MEMBER' || member.allowedLocales.length === 0) return member;
+    const denied = locales.filter((l) => !member.allowedLocales.includes(l));
+    if (denied.length) {
+      throw new ForbiddenException(`No write access for locale(s): ${denied.join(', ')}`);
+    }
+    return member;
+  }
+
+  async addMember(userId: string, projectId: string, email: string, role: string, allowedLocales: string[]) {
+    await this.requireAdmin(userId, projectId);
+    if (role === 'OWNER') throw new BadRequestException('Cannot assign the owner role');
+    if (role !== 'ADMIN' && role !== 'MEMBER') throw new BadRequestException('Role must be MEMBER or ADMIN');
+    const target = await this.prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+    if (!target) throw new NotFoundException('No user with that email');
+    const project = await this.prisma.project.findUnique({ where: { id: projectId }, include: { locales: true } });
+    const codes = new Set(project!.locales.map((l) => l.code));
+    const bad = allowedLocales.filter((l) => !codes.has(l));
+    if (bad.length) throw new BadRequestException(`Unknown locale(s) for this project: ${bad.join(', ')}`);
+    const member = await this.prisma.teamMember.upsert({
+      where: { teamId_userId: { teamId: project!.teamId, userId: target.id } },
+      create: { teamId: project!.teamId, userId: target.id, role: role as never, allowedLocales },
+      update: { role: role as never, allowedLocales },
+    });
+    return { userId: target.id, email: target.email, role: member.role, allowedLocales: member.allowedLocales };
+  }
+
+  async updateMember(userId: string, projectId: string, targetUserId: string, input: { role?: string; allowedLocales?: string[] }) {
+    await this.requireAdmin(userId, projectId);
+    const project = await this.prisma.project.findUnique({ where: { id: projectId }, include: { locales: true } });
+    const existing = await this.prisma.teamMember.findUnique({
+      where: { teamId_userId: { teamId: project!.teamId, userId: targetUserId } },
+    });
+    if (!existing) throw new NotFoundException('Member not found');
+    if (existing.role === 'OWNER') throw new BadRequestException('Cannot change the owner');
+    if (input.role === 'OWNER') throw new BadRequestException('Cannot assign the owner role');
+    if (input.role && input.role !== 'ADMIN' && input.role !== 'MEMBER') {
+      throw new BadRequestException('Role must be MEMBER or ADMIN');
+    }
+    if (input.allowedLocales) {
+      const codes = new Set(project!.locales.map((l) => l.code));
+      const bad = input.allowedLocales.filter((l) => !codes.has(l));
+      if (bad.length) throw new BadRequestException(`Unknown locale(s) for this project: ${bad.join(', ')}`);
+    }
+    const member = await this.prisma.teamMember.update({
+      where: { teamId_userId: { teamId: project!.teamId, userId: targetUserId } },
+      data: {
+        ...(input.role ? { role: input.role as never } : {}),
+        ...(input.allowedLocales ? { allowedLocales: input.allowedLocales } : {}),
+      },
+    });
+    return { userId: member.userId, role: member.role, allowedLocales: member.allowedLocales };
+  }
+
+  async removeMember(userId: string, projectId: string, targetUserId: string) {
+    await this.requireAdmin(userId, projectId);
+    if (targetUserId === userId) throw new BadRequestException('Cannot remove yourself');
+    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+    const existing = await this.prisma.teamMember.findUnique({
+      where: { teamId_userId: { teamId: project!.teamId, userId: targetUserId } },
+    });
+    if (!existing) throw new NotFoundException('Member not found');
+    if (existing.role === 'OWNER') throw new BadRequestException('Cannot remove the owner');
+    await this.prisma.teamMember.delete({
+      where: { teamId_userId: { teamId: project!.teamId, userId: targetUserId } },
+    });
+    return { removed: targetUserId };
   }
 
   async listMembers(userId: string, projectId: string) {
@@ -87,11 +182,11 @@ export class ProjectsService {
       include: { user: { select: { id: true, displayName: true, email: true } } },
       orderBy: { user: { displayName: 'asc' } },
     });
-    return members.map((m) => ({ id: m.user.id, displayName: m.user.displayName, email: m.user.email, role: m.role }));
+    return members.map((m) => ({ id: m.user.id, displayName: m.user.displayName, email: m.user.email, role: m.role, allowedLocales: m.allowedLocales }));
   }
 
   async addLocale(userId: string, projectId: string, code: string) {
-    await this.getFor(userId, projectId);
+    await this.requireAdmin(userId, projectId);
     const existing = await this.prisma.projectLocale.findUnique({
       where: { projectId_code: { projectId, code } },
     });

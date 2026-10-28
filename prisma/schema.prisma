@@ -48,9 +48,12 @@ enum TeamRole {
 }
 
 model TeamMember {
-  teamId  String   @db.Uuid
-  userId  String   @db.Uuid
-  role    TeamRole @default(MEMBER)
+  teamId         String   @db.Uuid
+  userId         String   @db.Uuid
+  role           TeamRole @default(MEMBER)
+  // Empty = all locales. Non-empty restricts a MEMBER's translation writes to
+  // these locales; ADMIN and OWNER are never locale-restricted.
+  allowedLocales String[] @default([])
 
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

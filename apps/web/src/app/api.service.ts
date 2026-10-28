@@ -22,6 +22,14 @@ export interface Key {
   translations: Translation[];
   _count?: { comments: number; screenshots?: number };
 }
+export interface MemberInfo {
+  id: string;
+  displayName: string;
+  email: string;
+  role: string;
+  allowedLocales: string[];
+}
+
 export interface SnapshotMeta {
   id: string;
   label: string;
@@ -150,6 +158,18 @@ export class ApiService {
     const q = params.toString();
     return this.request<Key[]>(`/projects/${projectId}/keys${q ? `?${q}` : ''}`);
   }
+  listMembers(projectId: string) {
+    return this.request<MemberInfo[]>(`/projects/${projectId}/members`);
+  }
+  addMember(projectId: string, email: string, role: string, allowedLocales: string[]) {
+    return this.request<MemberInfo>(`/projects/${projectId}/members`, { method: 'POST', body: JSON.stringify({ email, role, allowedLocales }) });
+  }
+  updateMember(projectId: string, userId: string, input: { role?: string; allowedLocales?: string[] }) {
+    return this.request<MemberInfo>(`/projects/${projectId}/members/${userId}`, { method: 'PATCH', body: JSON.stringify(input) });
+  }
+  removeMember(projectId: string, userId: string) {
+    return this.request<{ removed: string }>(`/projects/${projectId}/members/${userId}`, { method: 'DELETE' });
+  }
   listSnapshots(projectId: string) {
     return this.request<SnapshotMeta[]>(`/projects/${projectId}/snapshots`);
   }
@@ -209,9 +229,6 @@ export class ApiService {
   }
   deleteGlossaryTerm(projectId: string, termId: string) {
     return this.request<{ removed: string }>(`/projects/${projectId}/glossary/${termId}`, { method: 'DELETE' });
-  }
-  listMembers(projectId: string) {
-    return this.request<MemberInfo[]>(`/projects/${projectId}/members`);
   }
   listTasks(projectId: string, status?: string) {
     return this.request<TaskItem[]>(`/projects/${projectId}/tasks${status ? `?status=${status}` : ''}`);

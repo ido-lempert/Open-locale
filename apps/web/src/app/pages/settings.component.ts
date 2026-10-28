@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { ApiService, ApiTokenInfo, Project } from '../api.service';
+import { ApiService, ApiTokenInfo, MemberInfo, Project } from '../api.service';
 
 @Component({
   selector: 'ol-settings',
@@ -77,6 +77,35 @@ import { ApiService, ApiTokenInfo, Project } from '../api.service';
             <button type="submit" [disabled]="busy()">Create</button>
           </form>
         </section>
+        <section class="panel">
+          <h2>Members</h2>
+          <ul class="locale-list">
+            @for (m of members(); track m.id) {
+              <li>
+                <span>{{ m.displayName }} <span class="muted">{{ m.email }}</span></span>
+                <span class="role-badge">{{ m.role.toLowerCase() }}</span>
+                <span class="muted">{{ m.role === 'MEMBER' && m.allowedLocales.length ? 'locales: ' + m.allowedLocales.join(', ') : 'all locales' }}</span>
+                @if (m.role !== 'OWNER') {
+                  <select aria-label="Role" [ngModel]="m.role" (ngModelChange)="setRole(m, $event)" name="role-{{m.id}}">
+                    <option value="MEMBER">member</option>
+                    <option value="ADMIN">admin</option>
+                  </select>
+                  <button class="danger" (click)="removeMember(m)">Remove</button>
+                }
+              </li>
+            }
+          </ul>
+          <form class="inline" (ngSubmit)="addMember()">
+            <input aria-label="Member email" placeholder="User email" [ngModel]="memberEmail()" (ngModelChange)="memberEmail.set($event)" name="memberEmail" required />
+            <select aria-label="New member role" [ngModel]="memberRole()" (ngModelChange)="memberRole.set($event)" name="memberRole">
+              <option value="MEMBER">member</option>
+              <option value="ADMIN">admin</option>
+            </select>
+            <input aria-label="Allowed locales" placeholder="Locales (e.g. he,fr) - blank = all" [ngModel]="memberLocales()" (ngModelChange)="memberLocales.set($event)" name="memberLocales" />
+            <button type="submit" [disabled]="busy()">Add</button>
+          </form>
+          <p class="muted">Members with a locale list can only write those locales. Project administration (settings, locales, webhooks, restores, members) requires admin.</p>
+        </section>
         <section class="panel danger-zone">
           <h2>Danger zone</h2>
           @if (!confirming()) {
@@ -103,6 +132,8 @@ export class SettingsComponent implements OnInit {
   tokenName = signal(''); tokenScope = signal('read,write');
   confirmingToken = signal<string | null>(null);
   confirmingLocale = signal<string | null>(null);
+  members = signal<MemberInfo[]>([]);
+  memberEmail = signal(''); memberRole = signal('MEMBER'); memberLocales = signal('');
   localeTxCount = signal(0);
   projectId = '';
 
@@ -116,6 +147,7 @@ export class SettingsComponent implements OnInit {
       this.project.set(p);
       this.name.set(p.name); this.description.set(p.description);
       this.tokens.set(await this.api.listTokens());
+      this.members.set(await this.api.listMembers(this.projectId));
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load'); }
   }
   async createToken() {
@@ -173,6 +205,27 @@ export class SettingsComponent implements OnInit {
     try { await this.api.removeLocale(this.projectId, code); this.confirmingLocale.set(null); await this.reload(); }
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
+  }
+  async addMember() {
+    this.busy.set(true); this.error.set('');
+    try {
+      const locales = this.memberLocales().split(',').map((l) => l.trim()).filter(Boolean);
+      await this.api.addMember(this.projectId, this.memberEmail().trim(), this.memberRole(), locales);
+      this.memberEmail.set(''); this.memberLocales.set('');
+      await this.reload();
+    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+    finally { this.busy.set(false); }
+  }
+  async setRole(m: MemberInfo, role: string) {
+    this.error.set('');
+    try { await this.api.updateMember(this.projectId, m.id, { role }); await this.reload(); }
+    catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+  }
+  async removeMember(m: MemberInfo) {
+    if (!confirm(`Remove ${m.displayName} from the team? They lose access to this project immediately.`)) return;
+    this.error.set('');
+    try { await this.api.removeMember(this.projectId, m.id); await this.reload(); }
+    catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
   }
   async remove() {
     this.busy.set(true);
