@@ -9,9 +9,10 @@ import { TranslationsModule } from './translations/translations.module';
 import { ActivityModule } from './activity/activity.module';
 import { TasksModule } from './tasks/tasks.module';
 import { GlossaryModule } from './glossary/glossary.module';
+import { QaModule } from './qa/qa.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, ProjectsModule, KeysModule, TranslationsModule, ActivityModule, TasksModule, GlossaryModule],
+  imports: [PrismaModule, AuthModule, ProjectsModule, KeysModule, TranslationsModule, ActivityModule, TasksModule, GlossaryModule, QaModule],
   controllers: [AppController],
   providers: [AppService],
 })

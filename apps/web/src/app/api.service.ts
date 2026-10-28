@@ -34,6 +34,12 @@ export interface ActivityEntry {
 
 export interface TmSuggestion { sourceText: string; targetText: string; score: number; }
 
+export interface QaIssue {
+  keyId: string; key: string; locale: string;
+  type: 'untranslated' | 'placeholder_mismatch' | 'max_length';
+  detail: string;
+}
+
 export interface GlossaryTermItem {
   id: string; term: string; notes: string; doNotTranslate: boolean;
   translations: Record<string, string>; createdAt: string;
@@ -147,6 +153,9 @@ export class ApiService {
   suggestTm(projectId: string, locale: string, source: string) {
     return this.request<{ suggestions: TmSuggestion[] }>(
       `/projects/${projectId}/tm/suggest?locale=${encodeURIComponent(locale)}&source=${encodeURIComponent(source)}`);
+  }
+  runQa(projectId: string, locale?: string) {
+    return this.request<{ issues: QaIssue[] }>(`/projects/${projectId}/qa${locale ? `?locale=${locale}` : ''}`);
   }
   listGlossary(projectId: string) {
     return this.request<GlossaryTermItem[]>(`/projects/${projectId}/glossary`);

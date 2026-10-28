@@ -12,7 +12,8 @@
     "test:screenshots": "node scripts/screenshots-test.mjs",
     "test:tasks": "node scripts/tasks-test.mjs",
     "test:tm": "node scripts/tm-test.mjs",
-    "test:glossary": "node scripts/glossary-test.mjs"
+    "test:glossary": "node scripts/glossary-test.mjs",
+    "test:qa": "node scripts/qa-test.mjs"
   },
   "private": true,
   "dependencies": {

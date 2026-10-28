@@ -304,7 +304,39 @@ try {
     await shot('editor-18-glossary.png');
   }
 
+  // --- QA: placeholder mismatch surfaces on the QA page (already on the editor) ---
+  await page.waitForSelector('.grid', { timeout: 10000 });
+  const keyInput3 = await page.$('input[name=newKey]');
+  await keyInput3.evaluate((el) => { el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.type('input[name=newKey]', 'cart.total');
+  await page.click('.inline button');
+  check('cart.total key added', await waitText('cart.total'));
+  const totalEn = (await page.$$('.grid tbody tr:nth-child(3) textarea'))[0];
+  await totalEn.type('Total: {amount}');
+  await totalEn.evaluate((el) => el.blur());
+  await page.waitForFunction(
+    () => [...document.querySelectorAll('.grid tbody tr:nth-child(3) .cell-status')].some((e) => /saved/i.test(e.textContent)),
+    { timeout: 10000 },
+  );
+  const totalHe = (await page.$$('.grid tbody tr:nth-child(3) textarea'))[1];
+  await totalHe.type('סה"כ לתשלום');
+  await totalHe.evaluate((el) => el.blur());
+  await page.waitForFunction(
+    () => [...document.querySelectorAll('.grid tbody tr:nth-child(3) .cell-status')].filter((e) => /saved/i.test(e.textContent)).length >= 2,
+    { timeout: 10000 },
+  );
+  await page.click('.qa-link');
+  await page.waitForSelector('.qa-table', { timeout: 10000 });
+  const qaRow = await page.waitForFunction(() => {
+    const t = document.body.textContent || '';
+    return t.includes('cart.total') && t.includes('Placeholder mismatch') && t.includes('{amount}');
+  }, { timeout: 10000 }).then(() => true).catch(() => false);
+  check('QA page lists the placeholder mismatch for cart.total', qaRow);
+  await shot('editor-19-qa.png');
+
   // Settings screen: rename, add locale, verify grid column appears
+  await page.click('.back');
+  await page.waitForSelector('.settings-link', { timeout: 10000 });
   await page.click('.settings-link');
   await page.waitForSelector('.panel', { timeout: 10000 });
   await shot('editor-06-settings.png');
