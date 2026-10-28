@@ -85,3 +85,31 @@ textarea { resize: vertical; }
 
 .grid td.key code { overflow-wrap: anywhere; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.panel {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 1.1rem 1.25rem; margin: 1rem 0; max-width: 560px;
+}
+.panel h2 { font-size: 1rem; margin: 0 0 0.75rem; }
+.panel label { display: block; margin-bottom: 0.75rem; font-size: 0.9rem; }
+.panel label input { margin-top: 0.2rem; }
+.panel .inline { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+.locale-list { list-style: none; margin: 0; padding: 0; }
+.locale-list li { display: flex; align-items: center; gap: 0.75rem; padding: 0.35rem 0; }
+.danger-zone { border-color: #f3c2c2; }
+button.danger-outline { color: var(--danger); border-color: #f3c2c2; }
+button.danger-solid { background: var(--danger); border-color: var(--danger); color: #fff; margin-right: 0.5rem; }
+.settings-link { color: var(--accent); text-decoration: none; }
+
+button.cell-status.retry {
+  border: none; background: none; padding: 0; color: var(--danger);
+  font-size: 0.72rem; cursor: pointer; text-decoration: underline; display: block;
+}
+
+@media (max-width: 760px) {
+  .grid td[data-locale]::before {
+    content: attr(data-locale);
+    display: block; font-size: 0.7rem; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--muted); margin-bottom: 0.15rem;
+  }
+}

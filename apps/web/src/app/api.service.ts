@@ -50,6 +50,12 @@ export class ApiService {
     return this.request<Project>('/projects', { method: 'POST', body: JSON.stringify(input) });
   }
   getProject(id: string) { return this.request<Project>(`/projects/${id}`); }
+  updateProject(id: string, input: { name?: string; description?: string }) {
+    return this.request<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
+  }
+  deleteProject(id: string) {
+    return this.request<{ removed: string }>(`/projects/${id}`, { method: 'DELETE' });
+  }
   addLocale(projectId: string, code: string) {
     return this.request<ProjectLocale>(`/projects/${projectId}/locales`, { method: 'POST', body: JSON.stringify({ code }) });
   }

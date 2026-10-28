@@ -84,6 +84,8 @@ try {
   await page.type('input[name=newKey]', 'home.title');
   await page.click('.inline button');
   check('first key added', await waitText('home.title'));
+  const keyInput = await page.$('input[name=newKey]');
+  await keyInput.evaluate((el) => { el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); });
   await page.type('input[name=newKey]', 'cart.checkout');
   await page.click('.inline button');
   check('second key added', await waitText('cart.checkout'));
@@ -118,6 +120,50 @@ try {
   check('translations persist after reload (en + he)',
     values.includes('Welcome to the shop') && values.includes('ברוכים הבאים לחנות'), JSON.stringify(values));
   await shot('editor-05-editor-reloaded.png');
+
+  // Settings screen: rename, add locale, verify grid column appears
+  await page.click('.settings-link');
+  await page.waitForSelector('.panel', { timeout: 10000 });
+  await shot('editor-06-settings.png');
+  const nameInput = await page.$('input[name=name]');
+  await nameInput.evaluate((el) => { el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await nameInput.type('Demo Shop IL');
+  await page.click('.panel button.primary');
+  try {
+    await page.waitForFunction(() => document.querySelector('input[name=name]')?.value === 'Demo Shop IL', { timeout: 10000 });
+    check('project renamed via settings', true);
+  } catch {
+    const val = await page.$eval('input[name=name]', (el) => el.value);
+    const err = await page.evaluate(() => document.querySelector('.error')?.textContent ?? '');
+    console.log('DIAG name input:', JSON.stringify(val), 'error el:', JSON.stringify(err));
+    check('project renamed via settings', false);
+  }
+  await page.type('input[name=newLocale]', 'ar');
+  await page.click('.locale-list + .inline button, .panel .inline button');
+  await page.waitForFunction(
+    () => [...document.querySelectorAll('.locale-list code')].some((e) => e.textContent.trim() === 'ar'),
+    { timeout: 10000 },
+  );
+  check('locale ar added via settings', true);
+  // Base locale guard: base locale has no Remove button
+  const baseHasRemove = await page.evaluate(() => {
+    const li = [...document.querySelectorAll('.locale-list li')].find((el) => el.textContent.includes('base'));
+    return li ? !!li.querySelector('button') : true;
+  });
+  check('base locale cannot be removed from UI', !baseHasRemove);
+  await page.click('.back');
+  await page.waitForSelector('.grid', { timeout: 10000 });
+  const headers = await page.$$eval('.grid th', (els) => els.map((e) => e.textContent.trim()));
+  check('editor grid shows new locale column', headers.includes('ar') || headers.includes('AR'), JSON.stringify(headers));
+
+  // Mobile viewport evidence (390px)
+  await page.setViewport({ width: 390, height: 844 });
+  await page.reload({ waitUntil: 'networkidle0' });
+  await page.waitForSelector('.toolbar', { timeout: 10000 });
+  await shot('editor-07-mobile-editor.png');
+  await page.goto(`${WEB}/projects`, { waitUntil: 'networkidle0' });
+  await shot('editor-08-mobile-projects.png');
+  check('mobile screenshots captured', true);
 } finally {
   await browser?.close().catch(() => {});
   web?.kill('SIGTERM'); api?.kill('SIGTERM');

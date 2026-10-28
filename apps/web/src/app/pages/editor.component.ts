@@ -12,18 +12,19 @@ interface CellState { value: string; saved: string; status: 'idle' | 'saving' | 
     <header class="bar">
       <a routerLink="/projects" class="back">&larr; Projects</a>
       <h1>{{ project()?.name ?? 'Loading…' }}</h1>
+      <a [routerLink]="['/projects', projectId, 'settings']" class="settings-link">Settings</a>
       <span class="muted">{{ keys().length }} keys</span>
     </header>
     <main>
       @if (project(); as p) {
         <section class="toolbar">
-          <input class="search" placeholder="Search keys" [ngModel]="search()" (ngModelChange)="search.set($event); onSearch()" />
+          <input class="search" placeholder="Search keys" aria-label="Search keys" [ngModel]="search()" (ngModelChange)="search.set($event); onSearch()" />
           <form class="inline" (ngSubmit)="addKey()">
-            <input placeholder="new.key.name" [ngModel]="newKey()" (ngModelChange)="newKey.set($event)" name="newKey" required />
+            <input placeholder="new.key.name" aria-label="New key name" [ngModel]="newKey()" (ngModelChange)="newKey.set($event)" name="newKey" required />
             <button type="submit">Add key</button>
           </form>
           <form class="inline" (ngSubmit)="addLocale()">
-            <input placeholder="locale (e.g. fr)" [ngModel]="newLocale()" (ngModelChange)="newLocale.set($event)" name="newLocale" required maxlength="10" />
+            <input placeholder="locale (e.g. fr)" aria-label="New locale code" [ngModel]="newLocale()" (ngModelChange)="newLocale.set($event)" name="newLocale" required maxlength="10" />
             <button type="submit">Add locale</button>
           </form>
           <button (click)="exportJson()">Export JSON</button>
@@ -44,17 +45,20 @@ interface CellState { value: string; saved: string; status: 'idle' | 'saving' | 
               <tr>
                 <td class="key"><code>{{ k.name }}</code></td>
                 @for (l of p.locales; track l.code) {
-                  <td>
+                  <td [attr.data-locale]="l.code">
                     <textarea rows="1" [attr.dir]="isRtl(l.code) ? 'rtl' : 'ltr'"
                       [ngModel]="cell(k.id, l.code)().value"
                       (ngModelChange)="edit(k, l.code, $event)"
                       (blur)="save(k, l.code)"
                       [attr.aria-label]="k.name + ' in ' + l.code"></textarea>
-                    <span class="cell-status" [class.error]="cell(k.id, l.code)().status === 'error'">
-                      {{ statusText(k.id, l.code) }}</span>
+                    @if (cell(k.id, l.code)().status === 'error') {
+                      <button class="cell-status retry" (click)="save(k, l.code, true)">save failed - retry</button>
+                    } @else {
+                      <span class="cell-status">{{ statusText(k.id, l.code) }}</span>
+                    }
                   </td>
                 }
-                <td><button class="danger" title="Delete key" (click)="removeKey(k)">&times;</button></td>
+                <td><button class="danger" [attr.aria-label]="'Delete key ' + k.name" title="Delete key" (click)="removeKey(k)">&times;</button></td>
               </tr>
             }
           </tbody>
@@ -69,7 +73,7 @@ export class EditorComponent implements OnInit {
   cells = new Map<string, WritableSignal<CellState>>();
   search = signal(''); newKey = signal(''); newLocale = signal(''); ioLocale = signal('en');
   notice = signal(''); error = signal('');
-  private projectId = '';
+  projectId = '';
 
   constructor(private api: ApiService, route: ActivatedRoute) {
     this.projectId = route.snapshot.paramMap.get('id') ?? '';
@@ -107,16 +111,18 @@ export class EditorComponent implements OnInit {
   edit(k: Key, locale: string, value: string) {
     this.cell(k.id, locale).update((c) => ({ ...c, value }));
   }
-  async save(k: Key, locale: string) {
+  async save(k: Key, locale: string, force = false) {
     const sig = this.cell(k.id, locale);
     const c = sig();
-    if (c.value === c.saved) return;
+    if (!force && c.value === c.saved) return;
+    if (c.status === 'saving') return;
     sig.set({ ...c, status: 'saving' });
     try {
       await this.api.upsertTranslation(this.projectId, k.id, locale, c.value);
       const latest = sig();
       sig.set({ value: latest.value, saved: c.value, status: latest.value === c.value ? 'saved' : 'idle' });
     } catch {
+      // Keep saved pointing at what the server actually holds so a retry re-sends.
       sig.update((cur) => ({ ...cur, status: 'error' }));
     }
   }

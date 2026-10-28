@@ -11,9 +11,9 @@ import { ApiService, Project } from '../api.service';
       <button (click)="logout()">Log out</button></header>
     <main>
       <form class="create" (ngSubmit)="create()">
-        <input placeholder="Project name" [ngModel]="name()" (ngModelChange)="name.set($event)" name="name" required />
-        <input placeholder="slug" [ngModel]="slug()" (ngModelChange)="slug.set($event)" name="slug" required pattern="[a-z0-9-]+" />
-        <input placeholder="Locales (e.g. en, he, ar)" [ngModel]="locales()" (ngModelChange)="locales.set($event)" name="locales" required />
+        <input placeholder="Project name" aria-label="Project name" [ngModel]="name()" (ngModelChange)="name.set($event)" name="name" required />
+        <input placeholder="slug" aria-label="Project slug" [ngModel]="slug()" (ngModelChange)="slug.set($event)" name="slug" required pattern="[a-z0-9-]+" />
+        <input placeholder="Locales (e.g. en, he, ar)" aria-label="Locales" [ngModel]="locales()" (ngModelChange)="locales.set($event)" name="locales" required />
         <button class="primary" type="submit" [disabled]="busy()">New project</button>
       </form>
       @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
