@@ -18,7 +18,9 @@
     "test:webhooks": "node scripts/webhooks-test.mjs",
     "dev:api": "node scripts/dev-db.mjs",
     "test:tags": "node scripts/tags-filters-test.mjs",
-    "test:apitokens": "node scripts/api-tokens-test.mjs"
+    "test:apitokens": "node scripts/api-tokens-test.mjs",
+    "test:docs": "node scripts/docs-consistency-test.mjs",
+    "test:cli": "node scripts/cli-test.mjs"
   },
   "private": true,
   "dependencies": {

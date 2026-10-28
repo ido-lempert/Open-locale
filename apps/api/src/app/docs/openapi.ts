@@ -37,6 +37,7 @@ export const OPENAPI = {
     },
   },
   paths: {
+    '/api/openapi.json': { get: pub('This OpenAPI document', 'meta') },
     '/api/auth/signup': { post: pub('Create an account', 'auth', true) },
     '/api/auth/login': { post: pub('Log in and receive a session JWT', 'auth', true) },
     '/api/auth/tokens': {

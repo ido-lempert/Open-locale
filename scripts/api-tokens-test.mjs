@@ -8,6 +8,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from 'pg';
+import { createHmac } from 'node:crypto';
 
 const PG_PORT = 55449, API_PORT = 3016;
 const API = `http://127.0.0.1:${API_PORT}/api`;
@@ -117,6 +118,38 @@ try {
 
   const badKey = await call(`/projects/${pid}/keys`, { apiKey: 'ol_nonexistent' });
   check('unknown token rejected with 401', badKey.status === 401);
+
+  // Session JWT failures must be 401 (not 403) on token management.
+  const b64u = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const mintJwt = (payload) => {
+    const h = `${b64u({ alg: 'HS256', typ: 'JWT' })}.${b64u(payload)}`;
+    return `${h}.${createHmac('sha256', 'tok-secret').update(h).digest('base64url')}`;
+  };
+  const expiredJwt = mintJwt({ sub: 'x', email, exp: Math.floor(Date.now() / 1000) - 60 });
+  const expiredJwtMgmt = await call('/auth/tokens', { jwt: expiredJwt });
+  check('expired session JWT on token management rejected 401', expiredJwtMgmt.status === 401);
+  const malformedMgmt = await call('/auth/tokens', { jwt: 'not-a-jwt' });
+  check('malformed session JWT on token management rejected 401', malformedMgmt.status === 401);
+
+  // Production expiry behavior: timestamps created through the API write path,
+  // no SQL backdating. Cover Z and +02:00 spellings of the same instant.
+  const soon = await call('/auth/tokens', { jwt, method: 'POST', body: { name: 'soon', scopes: ['read'], expiresAt: new Date(Date.now() + 1500).toISOString() } });
+  check('API-created token usable before expiry', soon.status === 201);
+  const preExp = await call(`/projects/${pid}/keys`, { apiKey: soon.json.token });
+  check('API-created token works before its expiry', preExp.status === 200);
+  await new Promise((r) => setTimeout(r, 2000));
+  const postExp = await call(`/projects/${pid}/keys`, { apiKey: soon.json.token });
+  check('API-created token rejected after its expiry (401)', postExp.status === 401, `status=${postExp.status}`);
+  const offsetExp = await call('/auth/tokens', { jwt, method: 'POST', body: { name: 'offset', scopes: ['read'], expiresAt: '2020-01-01T02:00:00+02:00' } });
+  check('past expiry with +02:00 offset rejected 400 (offset parsed as absolute)', offsetExp.status === 400);
+
+  // Read-only scope covers newer routes too: webhook management is a write.
+  const roHook = await call(`/projects/${pid}/webhooks`, { apiKey: roToken, method: 'POST', body: { url: 'https://example.com/hook', events: ['translation.updated'] } });
+  check('read-only token cannot manage webhooks (403)', roHook.status === 403);
+  const roTask = await call(`/projects/${pid}/tasks`, { apiKey: roToken, method: 'POST', body: { title: 't' } });
+  check('read-only token cannot create tasks (403)', roTask.status === 403);
+  const roHookRead = await call(`/projects/${pid}/webhooks`, { apiKey: roToken });
+  check('read-only token can list webhooks', roHookRead.status === 200);
 
   // OpenAPI v1 docs.
   const docs = await fetch(`${API}/openapi.json`);

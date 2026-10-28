@@ -1,0 +1,8 @@
+{
+  "name": "@open-locale/cli",
+  "version": "0.1.0",
+  "description": "Open-locale CLI: upload and download translation files from the terminal",
+  "type": "module",
+  "bin": { "open-locale": "./src/main.mjs" },
+  "engines": { "node": ">=20" }
+}
