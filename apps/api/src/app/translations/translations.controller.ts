@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Header, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { TranslationsService } from './translations.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -26,8 +26,15 @@ export class TranslationsController {
   }
 
   @Get('export/:locale')
-  exportJson(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('flat') flat?: string) {
-    return this.translations.exportJson(user.userId, projectId, locale, flat === 'true');
+  @Header('Cache-Control', 'no-store')
+  exportJson(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('flat') flat?: string, @Query('format') format?: string) {
+    return this.translations.exportJson(user.userId, projectId, locale, flat === 'true' || format === 'flat');
+  }
+
+  @Get('export/:locale/csv')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  exportCsv(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string) {
+    return this.translations.exportCsv(user.userId, projectId, locale);
   }
 
   @Get('tm/suggest')
@@ -43,6 +50,8 @@ export class TranslationsController {
 
   @Post('import/:locale')
   importJson(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Body() dto: ImportJsonDto) {
-    return this.translations.importJson(user.userId, projectId, locale, dto.entries);
+    if (dto.csv != null) return this.translations.importCsv(user.userId, projectId, locale, dto.csv);
+    if (dto.entries != null) return this.translations.importJson(user.userId, projectId, locale, dto.entries);
+    throw new BadRequestException('Provide either entries (JSON) or csv');
   }
 }

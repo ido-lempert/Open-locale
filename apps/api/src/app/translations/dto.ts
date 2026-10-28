@@ -1,4 +1,4 @@
-import { IsIn, IsNotEmpty, IsObject, IsString } from 'class-validator';
+import { IsIn, IsNotEmpty, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class UpsertTranslationDto {
   @IsString()
@@ -9,12 +9,13 @@ export class UpsertTranslationDto {
 }
 
 export class ImportJsonDto {
-  @IsString()
-  @IsNotEmpty()
-  locale!: string;
+  @IsOptional() @IsString() @MaxLength(2_000_000)
+  csv?: string;
+  @IsOptional() @IsString()
+  locale?: string;
 
-  @IsObject()
-  entries!: Record<string, unknown>;
+  @IsOptional() @IsObject()
+  entries?: Record<string, unknown>;
 }
 
 export class SetStatusDto {

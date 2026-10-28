@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
 import { ActivityService, truncate } from '../activity/activity.service';
 import { flattenJson, unflattenJson } from './json-flatten';
+import { parseCsv, toCsv } from './csv';
 
 @Injectable()
 export class TranslationsService {
@@ -154,6 +155,19 @@ export class TranslationsService {
     const map: Record<string, string> = {};
     for (const t of translations) map[t.key.name] = t.value;
     return flat ? map : unflattenJson(map);
+  }
+
+  async exportCsv(userId: string, projectId: string, locale: string) {
+    const flat = (await this.exportJson(userId, projectId, locale, true)) as Record<string, string>;
+    return toCsv(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)));
+  }
+
+  async importCsv(userId: string, projectId: string, locale: string, csv: string) {
+    const { rows, rejected } = parseCsv(csv);
+    if (rejected > 0) {
+      throw new BadRequestException(`${rejected} CSV row(s) have more than 2 columns`);
+    }
+    return this.importJson(userId, projectId, locale, Object.fromEntries(rows));
   }
 
   async importJson(userId: string, projectId: string, locale: string, entries: Record<string, unknown>) {
