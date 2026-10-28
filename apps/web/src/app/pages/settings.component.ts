@@ -99,7 +99,7 @@ export class SettingsComponent implements OnInit {
   name = signal(''); description = signal(''); newLocale = signal('');
   busy = signal(false); error = signal(''); confirming = signal(false);
   tokens = signal<ApiTokenInfo[]>([]);
-  createdToken = signal<{ name: string; token: string } | null>(null);
+  createdToken = signal<{ id: string; name: string; token: string } | null>(null);
   tokenName = signal(''); tokenScope = signal('read,write');
   confirmingToken = signal<string | null>(null);
   confirmingLocale = signal<string | null>(null);
@@ -124,7 +124,7 @@ export class SettingsComponent implements OnInit {
     try {
       const scopes = this.tokenScope().split(',');
       const res = await this.api.createToken(submitted, scopes);
-      this.createdToken.set({ name: res.name, token: res.token });
+      this.createdToken.set({ id: res.id, name: res.name, token: res.token });
       if (this.tokenName() === submitted) this.tokenName.set('');
       await this.reload();
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
@@ -135,7 +135,12 @@ export class SettingsComponent implements OnInit {
   }
   async revokeToken(id: string) {
     this.busy.set(true); this.error.set('');
-    try { await this.api.revokeToken(id); this.confirmingToken.set(null); await this.reload(); }
+    try {
+      await this.api.revokeToken(id);
+      this.confirmingToken.set(null);
+      if (this.createdToken()?.id === id) this.createdToken.set(null);
+      await this.reload();
+    }
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }

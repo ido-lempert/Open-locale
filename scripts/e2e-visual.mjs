@@ -176,7 +176,7 @@ try {
   await page.waitForSelector('.token-reveal code', { timeout: 10000 });
   const rawToken = await page.$eval('.token-reveal code', (el) => el.textContent);
   check('token revealed once after creation', rawToken.startsWith('ol_'));
-  await shot('editor-10-token-created.png');
+  // Security: never screenshot the raw token value.
   const tokenExercise = await page.evaluate(async (tok) => {
     const headers = { 'Content-Type': 'application/json', 'X-Api-Key': tok };
     const pid = location.pathname.split('/')[2];
@@ -200,6 +200,8 @@ try {
     return res.status;
   }, rawToken);
   check('revoked token rejected (401)', afterRevoke === 401, `got ${afterRevoke}`);
+  // Safe to capture now: the panel shows only names/scopes/dates, no raw token.
+  await shot('editor-10-tokens.png');
 
   // Mobile viewport evidence (390px)
   await page.goto(`${WEB}/projects/${projId}`, { waitUntil: 'networkidle0' });
