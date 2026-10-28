@@ -26,10 +26,19 @@ with autosave, locale add, JSON import/export, search, RTL-aware cells, mobile l
   repo; dev proxy targets localhost only; API requires auth on every route (0002 proof).
 - Large JSON imports hit the API body-size limit with a clean 413; noted.
 
-## Pass 5 - QA / integration
+## Pass 5 - QA / integration (rerun with browser e2e)
 - nx build web: success. nx test web: 3/3 (router outlet shell, login tabs, project list
   rendering with mocked API). API suites unchanged: 5/5 unit, 7/7 integration, 19/19 authz.
-- Visual browser pass pending: no display/browser available in the development container;
-  tracked as a follow-up before the milestone demo.
+- scripts/e2e-visual.mjs (puppeteer-core + headless Chrome + real PostgreSQL + real API +
+  real dev server): drives signup -> project creation -> key creation -> bilingual
+  translation entry -> reload persistence. 9/9 checks PASS. Screenshots archived.
+- REAL DEFECT FOUND by e2e (fixed in the follow-up commit): the app is zoneless
+  (no zone.js), and the editor kept cell state in a plain Map and form fields in plain
+  ngModel properties. Async autosave completions never re-rendered ("saving..." stuck
+  although the write landed), and programmatically cleared inputs kept stale text.
+  Fix: cell state and all form fields converted to Angular signals.
+  This also resolves the Pass 1 save-in-flight race: a save now reconciles against the
+  latest signal value, and an edit during save returns the cell to idle so the next
+  blur persists the newest text.
 
 All findings fixed or explicitly deferred with phase. Clean rerun achieved.

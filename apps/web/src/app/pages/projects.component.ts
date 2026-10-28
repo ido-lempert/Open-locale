@@ -11,9 +11,9 @@ import { ApiService, Project } from '../api.service';
       <button (click)="logout()">Log out</button></header>
     <main>
       <form class="create" (ngSubmit)="create()">
-        <input placeholder="Project name" [(ngModel)]="name" name="name" required />
-        <input placeholder="slug" [(ngModel)]="slug" name="slug" required pattern="[a-z0-9-]+" />
-        <input placeholder="Locales (e.g. en, he, ar)" [(ngModel)]="locales" name="locales" required />
+        <input placeholder="Project name" [ngModel]="name()" (ngModelChange)="name.set($event)" name="name" required />
+        <input placeholder="slug" [ngModel]="slug()" (ngModelChange)="slug.set($event)" name="slug" required pattern="[a-z0-9-]+" />
+        <input placeholder="Locales (e.g. en, he, ar)" [ngModel]="locales()" (ngModelChange)="locales.set($event)" name="locales" required />
         <button class="primary" type="submit" [disabled]="busy()">New project</button>
       </form>
       @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
@@ -36,7 +36,7 @@ import { ApiService, Project } from '../api.service';
 })
 export class ProjectsComponent implements OnInit {
   projects = signal<Project[]>([]);
-  name = ''; slug = ''; locales = '';
+  name = signal(''); slug = signal(''); locales = signal('');
   busy = signal(false); error = signal('');
   constructor(private api: ApiService) {}
   async ngOnInit() { await this.reload(); }
@@ -47,9 +47,9 @@ export class ProjectsComponent implements OnInit {
   async create() {
     this.busy.set(true); this.error.set('');
     try {
-      const codes = this.locales.split(',').map((s) => s.trim()).filter(Boolean);
-      await this.api.createProject({ name: this.name, slug: this.slug, locales: codes });
-      this.name = this.slug = this.locales = '';
+      const codes = this.locales().split(',').map((s) => s.trim()).filter(Boolean);
+      await this.api.createProject({ name: this.name(), slug: this.slug(), locales: codes });
+      this.name.set(''); this.slug.set(''); this.locales.set('');
       await this.reload();
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }

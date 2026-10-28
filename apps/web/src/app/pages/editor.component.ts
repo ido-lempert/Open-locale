@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, signal, WritableSignal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiService, Key, Project } from '../api.service';
@@ -17,18 +17,18 @@ interface CellState { value: string; saved: string; status: 'idle' | 'saving' | 
     <main>
       @if (project(); as p) {
         <section class="toolbar">
-          <input class="search" placeholder="Search keys" [(ngModel)]="search" (ngModelChange)="onSearch()" />
+          <input class="search" placeholder="Search keys" [ngModel]="search()" (ngModelChange)="search.set($event); onSearch()" />
           <form class="inline" (ngSubmit)="addKey()">
-            <input placeholder="new.key.name" [(ngModel)]="newKey" name="newKey" required />
+            <input placeholder="new.key.name" [ngModel]="newKey()" (ngModelChange)="newKey.set($event)" name="newKey" required />
             <button type="submit">Add key</button>
           </form>
           <form class="inline" (ngSubmit)="addLocale()">
-            <input placeholder="locale (e.g. fr)" [(ngModel)]="newLocale" name="newLocale" required maxlength="10" />
+            <input placeholder="locale (e.g. fr)" [ngModel]="newLocale()" (ngModelChange)="newLocale.set($event)" name="newLocale" required maxlength="10" />
             <button type="submit">Add locale</button>
           </form>
           <button (click)="exportJson()">Export JSON</button>
           <label class="import">Import JSON <input type="file" accept=".json" (change)="importJson($event)" hidden /></label>
-          <select [(ngModel)]="ioLocale" name="ioLocale" aria-label="Import/export locale">
+          <select [ngModel]="ioLocale()" (ngModelChange)="ioLocale.set($event)" name="ioLocale" aria-label="Import/export locale">
             @for (l of p.locales; track l.code) { <option [value]="l.code">{{ l.code }}</option> }
           </select>
         </section>
@@ -46,11 +46,11 @@ interface CellState { value: string; saved: string; status: 'idle' | 'saving' | 
                 @for (l of p.locales; track l.code) {
                   <td>
                     <textarea rows="1" [attr.dir]="isRtl(l.code) ? 'rtl' : 'ltr'"
-                      [ngModel]="cell(k.id, l.code).value"
+                      [ngModel]="cell(k.id, l.code)().value"
                       (ngModelChange)="edit(k, l.code, $event)"
                       (blur)="save(k, l.code)"
                       [attr.aria-label]="k.name + ' in ' + l.code"></textarea>
-                    <span class="cell-status" [class.error]="cell(k.id, l.code).status === 'error'">
+                    <span class="cell-status" [class.error]="cell(k.id, l.code)().status === 'error'">
                       {{ statusText(k.id, l.code) }}</span>
                   </td>
                 }
@@ -66,8 +66,8 @@ interface CellState { value: string; saved: string; status: 'idle' | 'saving' | 
 export class EditorComponent implements OnInit {
   project = signal<Project | null>(null);
   keys = signal<Key[]>([]);
-  cells = new Map<string, CellState>();
-  search = ''; newKey = ''; newLocale = ''; ioLocale = 'en';
+  cells = new Map<string, WritableSignal<CellState>>();
+  search = signal(''); newKey = signal(''); newLocale = signal(''); ioLocale = signal('en');
   notice = signal(''); error = signal('');
   private projectId = '';
 
@@ -77,7 +77,7 @@ export class EditorComponent implements OnInit {
   async ngOnInit() {
     try {
       const p = await this.api.getProject(this.projectId);
-      this.project.set(p); this.ioLocale = p.baseLocale;
+      this.project.set(p); this.ioLocale.set(p.baseLocale);
       await this.reload();
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load project'); }
   }
@@ -88,40 +88,47 @@ export class EditorComponent implements OnInit {
   }
   async reload() {
     try {
-      const keys = await this.api.listKeys(this.projectId, this.search || undefined);
+      const keys = await this.api.listKeys(this.projectId, this.search() || undefined);
       this.keys.set(keys);
       this.cells.clear();
       for (const k of keys) for (const t of k.translations) {
-        this.cells.set(`${k.id}:${t.localeCode}`, { value: t.value, saved: t.value, status: 'idle' });
+        this.cells.set(`${k.id}:${t.localeCode}`, signal({ value: t.value, saved: t.value, status: 'idle' }));
       }
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load keys'); }
   }
-  cell(keyId: string, locale: string): CellState {
-    return this.cells.get(`${keyId}:${locale}`) ?? { value: '', saved: '', status: 'idle' };
+  cell(keyId: string, locale: string): WritableSignal<CellState> {
+    let s = this.cells.get(`${keyId}:${locale}`);
+    if (!s) {
+      s = signal<CellState>({ value: '', saved: '', status: 'idle' });
+      this.cells.set(`${keyId}:${locale}`, s);
+    }
+    return s;
   }
   edit(k: Key, locale: string, value: string) {
-    this.cells.set(`${k.id}:${locale}`, { ...this.cell(k.id, locale), value });
+    this.cell(k.id, locale).update((c) => ({ ...c, value }));
   }
   async save(k: Key, locale: string) {
-    const c = this.cell(k.id, locale);
+    const sig = this.cell(k.id, locale);
+    const c = sig();
     if (c.value === c.saved) return;
-    this.cells.set(`${k.id}:${locale}`, { ...c, status: 'saving' });
+    sig.set({ ...c, status: 'saving' });
     try {
       await this.api.upsertTranslation(this.projectId, k.id, locale, c.value);
-      this.cells.set(`${k.id}:${locale}`, { value: c.value, saved: c.value, status: 'saved' });
+      const latest = sig();
+      sig.set({ value: latest.value, saved: c.value, status: latest.value === c.value ? 'saved' : 'idle' });
     } catch {
-      this.cells.set(`${k.id}:${locale}`, { ...c, status: 'error' });
+      sig.update((cur) => ({ ...cur, status: 'error' }));
     }
   }
   statusText(keyId: string, locale: string): string {
-    const s = this.cell(keyId, locale).status;
+    const s = this.cell(keyId, locale)().status;
     return s === 'saving' ? 'saving…' : s === 'saved' ? 'saved' : s === 'error' ? 'save failed' : '';
   }
   isRtl(code: string) { return ['he', 'ar', 'fa', 'ur'].some((r) => code.startsWith(r)); }
   async addKey() {
     try {
-      await this.api.createKey(this.projectId, { name: this.newKey });
-      this.newKey = ''; await this.reload();
+      await this.api.createKey(this.projectId, { name: this.newKey() });
+      this.newKey.set(''); await this.reload();
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
   }
   async removeKey(k: Key) {
@@ -130,19 +137,19 @@ export class EditorComponent implements OnInit {
   }
   async addLocale() {
     try {
-      await this.api.addLocale(this.projectId, this.newLocale.trim());
-      this.newLocale = '';
+      await this.api.addLocale(this.projectId, this.newLocale().trim());
+      this.newLocale.set('');
       this.project.set(await this.api.getProject(this.projectId));
       await this.reload();
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
   }
   async exportJson() {
     try {
-      const data = await this.api.exportJson(this.projectId, this.ioLocale);
+      const data = await this.api.exportJson(this.projectId, this.ioLocale());
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `${this.project()?.slug ?? 'export'}.${this.ioLocale}.json`;
+      a.download = `${this.project()?.slug ?? 'export'}.${this.ioLocale()}.json`;
       a.click(); URL.revokeObjectURL(a.href);
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Export failed'); }
   }
@@ -151,8 +158,8 @@ export class EditorComponent implements OnInit {
     if (!file) return;
     try {
       const entries = JSON.parse(await file.text()) as Record<string, unknown>;
-      const res = await this.api.importJson(this.projectId, this.ioLocale, entries);
-      this.notice.set(`Imported ${res.keysCreated} keys, ${res.translationsUpserted} translations (${this.ioLocale}).`);
+      const res = await this.api.importJson(this.projectId, this.ioLocale(), entries);
+      this.notice.set(`Imported ${res.keysCreated} keys, ${res.translationsUpserted} translations (${this.ioLocale()}).`);
       await this.reload();
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Import failed: invalid JSON'); }
   }
