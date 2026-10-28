@@ -104,7 +104,7 @@ import { ApiService, ApiTokenInfo, MemberInfo, Project } from '../api.service';
             <input aria-label="Allowed locales" placeholder="Locales (e.g. he,fr) - blank = all" [ngModel]="memberLocales()" (ngModelChange)="memberLocales.set($event)" name="memberLocales" />
             <button type="submit" [disabled]="busy()">Add</button>
           </form>
-          <p class="muted">Members with a locale list can only write those locales. Project administration (settings, locales, webhooks, restores, members) requires admin.</p>
+          <p class="muted">Members join this team and can access every project in it. A locale list limits their translation writes across all of the team's projects. Project administration (settings, locales, webhooks, restores, members) requires admin.</p>
         </section>
         <section class="panel danger-zone">
           <h2>Danger zone</h2>

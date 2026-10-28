@@ -78,7 +78,10 @@ export class KeysService {
   }
 
   async remove(userId: string, projectId: string, keyId: string) {
-    await this.projects.getFor(userId, projectId);
+    // Deleting a key removes every locale's value, so a locale-restricted
+    // member must not do it: require write access to ALL project locales.
+    const project = await this.projects.getFor(userId, projectId);
+    await this.projects.assertLocaleWrite(userId, projectId, project.locales.map((l) => l.code));
     const existing = await this.prisma.key.findFirst({ where: { id: keyId, projectId } });
     if (!existing) throw new NotFoundException('Key not found');
     await this.prisma.$transaction(async (tx) => {
