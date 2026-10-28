@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import type { TranslationStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
@@ -12,8 +11,18 @@ import { parseCsv, toCsv } from './csv';
 import { parseAndroidXml, toAndroidXml } from './android-xml';
 import { parseIosStrings, toIosStrings } from './ios-strings';
 
+// Statuses every project supports; a project may extend this list with
+// customStatuses (validated in ProjectsService.updateFor).
+export const BASE_STATUSES = ['UNVERIFIED', 'TRANSLATED', 'REVIEWED'] as const;
+
 @Injectable()
 export class TranslationsService {
+  private assertKnownStatus(project: { customStatuses: string[] }, status: string) {
+    if (!(BASE_STATUSES as readonly string[]).includes(status) && !project.customStatuses.includes(status)) {
+      throw new BadRequestException(`Unknown status '${status}'. Base statuses or one of the project's custom statuses are allowed`);
+    }
+  }
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly projects: ProjectsService,
@@ -36,7 +45,7 @@ export class TranslationsService {
         where: { keyId_localeCode: { keyId, localeCode: locale } },
       });
       // Editing the text resets review: new wording has not been reviewed.
-      const status: TranslationStatus = existing && existing.value === value ? existing.status : 'UNVERIFIED';
+      const status = existing && existing.value === value ? existing.status : 'UNVERIFIED';
       const translation = await tx.translation.upsert({
         where: { keyId_localeCode: { keyId, localeCode: locale } },
         create: { keyId, projectId, localeCode: locale, value },
@@ -64,9 +73,37 @@ export class TranslationsService {
     });
   }
 
-  async setStatus(userId: string, projectId: string, keyId: string, locale: string, status: TranslationStatus) {
+  // Review queue bulk transition: set one status for many translations in a
+  // single locale at once. Same gates as single setStatus; one history row per
+  // actually-changed translation and one activity event for the batch.
+  async bulkSetStatus(userId: string, projectId: string, locale: string, status: string, keyIds?: string[]) {
     await this.projects.assertLocaleWrite(userId, projectId, [locale]);
-    await this.projects.getFor(userId, projectId);
+    const project = await this.projects.getFor(userId, projectId);
+    this.assertKnownStatus(project, status);
+    if (!project.locales.some((l) => l.code === locale)) {
+      throw new BadRequestException(`Locale ${locale} is not part of this project`);
+    }
+    return this.prisma.$transaction(async (tx) => {
+      const where = { projectId, localeCode: locale, NOT: { status }, ...(keyIds?.length ? { keyId: { in: keyIds } } : {}) };
+      const targets = await tx.translation.findMany({ where, include: { key: { select: { name: true } } } });
+      if (targets.length) {
+        await tx.translation.updateMany({ where: { projectId, localeCode: locale, keyId: { in: targets.map((t) => t.keyId) } }, data: { status } });
+        await tx.translationHistory.createMany({
+          data: targets.map((t) => ({ keyId: t.keyId, localeCode: locale, value: t.value, previousValue: t.value, status, changedById: userId })),
+        });
+        await this.activity.record(tx, {
+          projectId, actorId: userId, action: 'translation.status',
+          detail: { bulk: true, locale, to: status, count: targets.length },
+        });
+      }
+      return { updated: targets.length };
+    });
+  }
+
+  async setStatus(userId: string, projectId: string, keyId: string, locale: string, status: string) {
+    await this.projects.assertLocaleWrite(userId, projectId, [locale]);
+    const project = await this.projects.getFor(userId, projectId);
+    this.assertKnownStatus(project, status);
     const existing = await this.prisma.translation.findUnique({
       where: { keyId_localeCode: { keyId, localeCode: locale } },
       include: { key: { select: { name: true } } },

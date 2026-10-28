@@ -3,9 +3,9 @@ import { Injectable } from '@angular/core';
 export interface ProjectLocale { code: string; }
 export interface Project {
   id: string; name: string; slug: string; description: string; baseLocale: string;
-  locales: ProjectLocale[]; _count?: { keys: number };
+  locales: ProjectLocale[]; customStatuses?: string[]; _count?: { keys: number };
 }
-export type TranslationStatus = 'UNVERIFIED' | 'TRANSLATED' | 'REVIEWED';
+export type TranslationStatus = string; // base UNVERIFIED/TRANSLATED/REVIEWED + project custom statuses
 export interface Translation { keyId: string; localeCode: string; value: string; status: TranslationStatus; }
 export interface HistoryEntry {
   id: string; keyId: string; localeCode: string; value: string;
@@ -140,7 +140,7 @@ export class ApiService {
     return this.request<Project>('/projects', { method: 'POST', body: JSON.stringify(input) });
   }
   getProject(id: string) { return this.request<Project>(`/projects/${id}`); }
-  updateProject(id: string, input: { name?: string; description?: string }) {
+  updateProject(id: string, input: { name?: string; description?: string; customStatuses?: string[] }) {
     return this.request<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
   }
   deleteProject(id: string) {
@@ -287,6 +287,9 @@ export class ApiService {
     return this.request<Translation>(`/projects/${projectId}/keys/${keyId}/translations`, {
       method: 'PUT', body: JSON.stringify({ locale, value }),
     });
+  }
+  bulkSetStatus(projectId: string, locale: string, status: string) {
+    return this.request<{ updated: number }>(`/projects/${projectId}/review/bulk-status`, { method: 'POST', body: JSON.stringify({ locale, status }) });
   }
   setStatus(projectId: string, keyId: string, locale: string, status: TranslationStatus) {
     return this.request<Translation>(`/projects/${projectId}/keys/${keyId}/translations/${locale}/status`, {

@@ -69,6 +69,7 @@ model Project {
   slug           String
   description    String   @default("")
   baseLocale     String   @default("en")
+  customStatuses String[] @default([])
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -118,18 +119,13 @@ model Key {
   @@map("keys")
 }
 
-enum TranslationStatus {
-  UNVERIFIED
-  TRANSLATED
-  REVIEWED
-}
-
 model Translation {
   keyId        String            @db.Uuid
   projectId    String            @db.Uuid
   localeCode   String
   value        String            @default("")
-  status       TranslationStatus @default(UNVERIFIED)
+  // Base statuses UNVERIFIED/TRANSLATED/REVIEWED plus project.customStatuses.
+  status       String   @default("UNVERIFIED")
   updatedAt    DateTime          @updatedAt
 
   key     Key                  @relation(fields: [keyId], references: [id], onDelete: Cascade)
@@ -161,7 +157,7 @@ model TranslationHistory {
   localeCode    String
   value         String
   previousValue String?
-  status        TranslationStatus
+  status        String
   changedById   String?           @db.Uuid
   importId      String?           @db.Uuid
   createdAt     DateTime          @default(now())

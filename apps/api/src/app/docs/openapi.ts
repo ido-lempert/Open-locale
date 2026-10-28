@@ -91,8 +91,11 @@ export const OPENAPI = {
     '/api/projects/{projectId}/keys/{keyId}/translations': {
       put: p('Upsert translations for a key', 'translations', true),
     },
+    '/api/projects/{projectId}/review/bulk-status': {
+      post: p('Bulk-set one status for translations in a locale (review queue; requires locale write access)', 'translations', true),
+    },
     '/api/projects/{projectId}/keys/{keyId}/translations/{locale}/status': {
-      patch: p('Set the translation status for a locale', 'translations', true),
+      patch: p('Set the translation status for a locale (base statuses + project custom statuses)', 'translations', true),
     },
     '/api/projects/{projectId}/keys/{keyId}/translations/{locale}/history': {
       get: p('Translation history for a key and locale', 'translations'),

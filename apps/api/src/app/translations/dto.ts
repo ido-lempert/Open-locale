@@ -1,4 +1,4 @@
-import { IsIn, IsNotEmpty, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsNotEmpty, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class UpsertTranslationDto {
   @IsString()
@@ -25,6 +25,24 @@ export class ImportJsonDto {
 }
 
 export class SetStatusDto {
-  @IsIn(['UNVERIFIED', 'TRANSLATED', 'REVIEWED'])
-  status!: 'UNVERIFIED' | 'TRANSLATED' | 'REVIEWED';
+  // Validated against base statuses + project customStatuses in the service.
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(40)
+  status!: string;
+}
+
+export class BulkStatusDto {
+  @IsString()
+  @IsNotEmpty()
+  locale!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(40)
+  status!: string;
+
+  @IsOptional()
+  @IsString({ each: true })
+  keyIds?: string[];
 }

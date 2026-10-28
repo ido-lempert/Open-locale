@@ -78,6 +78,23 @@ import { ApiService, ApiTokenInfo, MemberInfo, Project } from '../api.service';
           </form>
         </section>
         <section class="panel">
+          <h2>Review statuses</h2>
+          <ul class="locale-list">
+            <li><span class="badge">unverified</span><span class="badge">translated</span><span class="badge">reviewed</span> <span class="muted">base statuses, always available</span></li>
+            @for (st of project()?.customStatuses ?? []; track st) {
+              <li>
+                <span class="badge">{{ st.toLowerCase() }}</span>
+                <button class="danger" (click)="removeStatus(st)">Remove</button>
+              </li>
+            }
+          </ul>
+          <form class="inline" (ngSubmit)="addStatus()">
+            <input aria-label="New custom status" placeholder="e.g. NEEDS_WORK (A-Z, 0-9, _)" [ngModel]="newStatus()" (ngModelChange)="newStatus.set($event)" name="newStatus" required maxlength="24" />
+            <button type="submit" [disabled]="busy()">Add</button>
+          </form>
+          <p class="muted">Custom statuses appear in the editor status dropdowns and the review queue. Removing one does not change translations already carrying it.</p>
+        </section>
+        <section class="panel">
           <h2>Members</h2>
           <ul class="locale-list">
             @for (m of members(); track m.id) {
@@ -133,7 +150,7 @@ export class SettingsComponent implements OnInit {
   confirmingToken = signal<string | null>(null);
   confirmingLocale = signal<string | null>(null);
   members = signal<MemberInfo[]>([]);
-  memberEmail = signal(''); memberRole = signal('MEMBER'); memberLocales = signal('');
+  memberEmail = signal(''); memberRole = signal('MEMBER'); memberLocales = signal(''); newStatus = signal('');
   localeTxCount = signal(0);
   projectId = '';
 
@@ -204,6 +221,25 @@ export class SettingsComponent implements OnInit {
     this.busy.set(true); this.error.set('');
     try { await this.api.removeLocale(this.projectId, code); this.confirmingLocale.set(null); await this.reload(); }
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+    finally { this.busy.set(false); }
+  }
+  async addStatus() {
+    this.busy.set(true); this.error.set('');
+    try {
+      const current = this.project()?.customStatuses ?? [];
+      await this.api.updateProject(this.projectId, { customStatuses: [...current, this.newStatus().trim().toUpperCase()] });
+      this.newStatus.set('');
+      await this.reload();
+    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+    finally { this.busy.set(false); }
+  }
+  async removeStatus(st: string) {
+    this.busy.set(true); this.error.set('');
+    try {
+      const current = this.project()?.customStatuses ?? [];
+      await this.api.updateProject(this.projectId, { customStatuses: current.filter((x) => x !== st) });
+      await this.reload();
+    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }
   async addMember() {

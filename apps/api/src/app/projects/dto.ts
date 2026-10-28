@@ -41,6 +41,10 @@ export class UpdateProjectDto {
   @IsString()
   @MaxLength(2000)
   description?: string;
+
+  @IsOptional()
+  @IsString({ each: true })
+  customStatuses?: string[];
 }
 
 export class AddMemberDto {

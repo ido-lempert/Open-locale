@@ -22,7 +22,8 @@
     "test:docs": "node scripts/docs-consistency-test.mjs",
     "test:cli": "node scripts/cli-test.mjs",
     "test:snapshots": "node scripts/snapshots-test.mjs",
-    "test:permissions": "node scripts/permissions-test.mjs"
+    "test:permissions": "node scripts/permissions-test.mjs",
+    "test:review": "node scripts/review-workflow-test.mjs"
   },
   "private": true,
   "dependencies": {

@@ -35,6 +35,15 @@ interface CellState {
             <option value="">all statuses</option>
             @for (st of statuses; track st) { <option [value]="st">{{ st.toLowerCase() }}</option> }
           </select>
+          @if (filterStatus()) {
+            <span class="review-queue">
+              queue: {{ ioLocale() }}
+              <select aria-label="Bulk set status" [ngModel]="bulkStatus()" (ngModelChange)="bulkStatus.set($event)" name="bulkStatus">
+                @for (st of statuses; track st) { <option [value]="st">{{ st.toLowerCase() }}</option> }
+              </select>
+              <button (click)="bulkMark()">Mark all</button>
+            </span>
+          }
           <form class="inline" (ngSubmit)="addKey()">
             <input placeholder="new.key.name" aria-label="New key name" [ngModel]="newKey()" (ngModelChange)="newKey.set($event)" name="newKey" required />
             <button type="submit">Add key</button>
@@ -205,7 +214,7 @@ export class EditorComponent implements OnInit {
   project = signal<Project | null>(null);
   keys = signal<Key[]>([]);
   cells = new Map<string, WritableSignal<CellState>>();
-  search = signal(''); newKey = signal(''); newLocale = signal(''); ioLocale = signal('en'); ioFormat = signal<'json' | 'csv' | 'android' | 'ios'>('json');
+  search = signal(''); newKey = signal(''); newLocale = signal(''); ioLocale = signal('en'); bulkStatus = signal('REVIEWED'); ioFormat = signal<'json' | 'csv' | 'android' | 'ios'>('json');
   glossary = signal<GlossaryTermItem[]>([]);
   filterTag = signal(''); filterStatus = signal<'' | TranslationStatus>('');
   tagEditFor = signal<string | null>(null);
@@ -225,7 +234,8 @@ export class EditorComponent implements OnInit {
   commentsLoading = signal(false);
   historyEntries = signal<(HistoryEntry & { locale: string })[]>([]);
   historyLoading = signal(false);
-  readonly statuses: TranslationStatus[] = ['UNVERIFIED', 'TRANSLATED', 'REVIEWED'];
+  readonly baseStatuses = ['UNVERIFIED', 'TRANSLATED', 'REVIEWED'];
+  get statuses(): string[] { return [...this.baseStatuses, ...(this.project()?.customStatuses ?? [])]; }
   notice = signal(''); error = signal('');
   projectId = '';
 
@@ -455,6 +465,16 @@ export class EditorComponent implements OnInit {
       a.download = `${this.project()?.slug ?? 'export'}.${this.ioLocale()}.json`;
       a.click(); URL.revokeObjectURL(a.href);
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Export failed'); }
+  }
+  // Review queue: set one status for every translation in the selected locale
+  // (server-side bulk transition; the visible filter is the queue view).
+  async bulkMark() {
+    this.error.set('');
+    try {
+      const res = await this.api.bulkSetStatus(this.projectId, this.ioLocale(), this.bulkStatus());
+      this.notice.set(`Marked ${res.updated} translations in ${this.ioLocale()} as ${this.bulkStatus().toLowerCase()}.`);
+      await this.reload();
+    } catch (err) { this.error.set(err instanceof Error ? err.message : 'Bulk update failed'); }
   }
   async exportFile() {
     const fmt = this.ioFormat();

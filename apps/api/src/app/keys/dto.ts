@@ -1,4 +1,4 @@
-import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Matches, MaxLength, Min } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, Matches, MaxLength, Min } from 'class-validator';
 
 export class CreateKeyDto {
   @IsString()
@@ -54,9 +54,11 @@ export class ListKeysQueryDto {
   @MaxLength(40)
   tag?: string;
 
+  // Base statuses plus project custom statuses; a string so custom values pass.
   @IsOptional()
-  @IsIn(['UNVERIFIED', 'TRANSLATED', 'REVIEWED'])
-  status?: 'UNVERIFIED' | 'TRANSLATED' | 'REVIEWED';
+  @IsString()
+  @MaxLength(40)
+  status?: string;
 
   @IsOptional()
   @IsString()

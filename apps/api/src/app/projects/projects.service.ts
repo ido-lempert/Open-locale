@@ -56,13 +56,28 @@ export class ProjectsService {
     return project;
   }
 
-  async updateFor(userId: string, projectId: string, input: { name?: string; description?: string }) {
+  async updateFor(userId: string, projectId: string, input: { name?: string; description?: string; customStatuses?: string[] }) {
     await this.requireAdmin(userId, projectId);
     const before = await this.getFor(userId, projectId);
+    let customStatuses: string[] | undefined;
+    if (input.customStatuses !== undefined) {
+      const base = ['UNVERIFIED', 'TRANSLATED', 'REVIEWED'];
+      customStatuses = Array.from(new Set(input.customStatuses));
+      for (const s of customStatuses) {
+        if (!/^[A-Z][A-Z0-9_]{1,23}$/.test(s)) {
+          throw new BadRequestException(`Custom status '${s}' must be 2-24 chars of A-Z, 0-9, _ and start with a letter`);
+        }
+        if (base.includes(s)) throw new BadRequestException(`'${s}' is a base status and is always available`);
+      }
+    }
     return this.prisma.$transaction(async (tx) => {
       const project = await tx.project.update({
         where: { id: projectId },
-        data: { ...(input.name !== undefined ? { name: input.name } : {}), ...(input.description !== undefined ? { description: input.description } : {}) },
+        data: {
+          ...(input.name !== undefined ? { name: input.name } : {}),
+          ...(input.description !== undefined ? { description: input.description } : {}),
+          ...(customStatuses !== undefined ? { customStatuses } : {}),
+        },
         include: { locales: true },
       });
       if (input.name !== undefined && input.name !== before.name) {

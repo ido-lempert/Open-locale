@@ -3,7 +3,7 @@ import { TranslationsService } from './translations.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthPrincipal } from '../auth/auth.service';
-import { ImportJsonDto, SetStatusDto, UpsertTranslationDto } from './dto';
+import { BulkStatusDto, ImportJsonDto, SetStatusDto, UpsertTranslationDto } from './dto';
 
 @Controller('projects/:projectId')
 @UseGuards(JwtAuthGuard)
@@ -13,6 +13,11 @@ export class TranslationsController {
   @Put('keys/:keyId/translations')
   upsert(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('keyId') keyId: string, @Body() dto: UpsertTranslationDto) {
     return this.translations.upsert(user.userId, projectId, keyId, dto.locale, dto.value);
+  }
+
+  @Post('review/bulk-status')
+  bulkSetStatus(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Body() dto: BulkStatusDto) {
+    return this.translations.bulkSetStatus(user.userId, projectId, dto.locale, dto.status, dto.keyIds);
   }
 
   @Patch('keys/:keyId/translations/:locale/status')
