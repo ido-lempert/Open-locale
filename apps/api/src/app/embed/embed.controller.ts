@@ -79,14 +79,19 @@ const FRAME_JS = `(() => {
   const projectId = document.currentScript.getAttribute('data-project-id');
   const TOKEN_KEY = 'ol_embed_token';
   const qs = new URLSearchParams(location.search);
+  const isEmbedded = window.parent !== window;
   const state = {
     token: localStorage.getItem(TOKEN_KEY) || null,
-    origins: [], keys: [], versions: {}, drafts: {}, project: null, withdrawn: null,
+    origins: [], keys: [], identities: {}, drafts: {}, project: null, withdrawn: null,
+    // Established ONLY by a verified source+origin handshake (a protocol
+    // message from window.parent on an allowlisted origin). document.referrer
+    // is never used: it can be suppressed, and embedding trust must fail
+    // closed until the handshake happens.
+    parentOrigin: null,
     branch: qs.get('branch') || 'main',
     editLocale: qs.get('locale') || null,
   };
   const esc = (s) => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
-  const hostOrigin = () => { try { return document.referrer ? new URL(document.referrer).origin : null; } catch { return null; } };
   const api = async (path, opts = {}) => {
     const res = await fetch('/api' + path, {
       method: opts.method || 'GET',
@@ -139,8 +144,7 @@ const FRAME_JS = `(() => {
       return false;
     }
     state.origins = fresh.embedOrigins || [];
-    const ho = hostOrigin();
-    if (ho && !state.origins.includes(ho)) {
+    if (state.parentOrigin && !state.origins.includes(state.parentOrigin)) {
       withdrawEditing('This host page is no longer allowlisted. Editing is paused; your drafts are kept.');
       return false;
     }
@@ -148,17 +152,20 @@ const FRAME_JS = `(() => {
   };
   const tFor = (k) => (k.translations || []).find((t) => t.localeCode === state.editLocale);
   const render = () => {
+    const locked = isEmbedded && !state.parentOrigin && !state.withdrawn;
+    const disabled = state.withdrawn || locked;
     root.innerHTML = '<header class="bar"><strong>Open-locale</strong><span class="muted">in-context - ' + esc(state.project.name) +
       ' (' + esc(state.branch) + ', editing <code>' + esc(state.editLocale) + '</code>)</span></header>' +
       (state.withdrawn ? '<p class="error" id="withdrawn">' + esc(state.withdrawn) + '</p>' : '') +
+      (locked ? '<p class="error" id="locked">Editing is locked until the host page connects over the allowlisted-origin handshake.</p>' : '') +
       '<p class="muted" id="conn">Waiting for the host page. This frame answers only allowlisted origins; saves happen only here, never from host messages.</p>' +
       '<ul>' + state.keys.map((k) => {
         const t = tFor(k);
         const draft = state.drafts[k.id];
         const shown = draft !== undefined ? draft : (t ? t.value : '');
         return '<li data-key-id="' + esc(k.id) + '"><code>' + esc(k.name) + '</code>' +
-          '<input aria-label="Translation" value="' + esc(shown) + '"' + (state.withdrawn ? ' disabled' : '') + '>' +
-          '<button type="button" class="save"' + (state.withdrawn ? ' disabled' : '') + '>Save</button><span class="muted st"></span></li>';
+          '<input aria-label="Translation" value="' + esc(shown) + '"' + (disabled ? ' disabled' : '') + '>' +
+          '<button type="button" class="save"' + (disabled ? ' disabled' : '') + '>Save</button><span class="muted st"></span></li>';
       }).join('') + '</ul>' +
       (state.keys.length ? '' : '<p class="muted">No keys on this branch.</p>');
     for (const li of root.querySelectorAll('li[data-key-id]')) {
@@ -167,8 +174,9 @@ const FRAME_JS = `(() => {
       li.querySelector('.save').addEventListener('click', () => saveRow(li));
     }
   };
-  const saveRow = async (li, forceVersion) => {
+  const saveRow = async (li, forceIdentity) => {
     if (state.withdrawn) return;
+    if (isEmbedded && !state.parentOrigin) return; // locked: no handshake yet
     const keyId = li.getAttribute('data-key-id');
     const key = state.keys.find((k) => k.id === keyId);
     const value = li.querySelector('input').value;
@@ -178,13 +186,14 @@ const FRAME_JS = `(() => {
     // Writes revalidate trust at save time too, not only on host messages:
     // a withdrawn origin or lost membership must not accept ongoing writes.
     if (!(await revalidate())) return;
+    const identity = forceIdentity || state.identities[keyId] || { version: 0, rowId: null };
     st.textContent = 'Saving...'; st.className = 'muted st';
     try {
       const saved = await api('/projects/' + projectId + '/keys/' + keyId + '/translations', {
         method: 'PUT',
-        body: { locale: state.editLocale, value, expectedVersion: forceVersion !== undefined ? forceVersion : (state.versions[keyId] || 0) },
+        body: { locale: state.editLocale, value, expectedVersion: identity.version, ...(identity.rowId ? { expectedRowId: identity.rowId } : {}) },
       });
-      state.versions[keyId] = saved.version;
+      state.identities[keyId] = { version: saved.version, rowId: saved.rowId };
       delete state.drafts[keyId];
       const t = tFor(key);
       if (t) { t.value = saved.value; t.version = saved.version; } else { key.translations = (key.translations || []).concat([{ localeCode: state.editLocale, value: saved.value, version: saved.version }]); }
@@ -193,12 +202,12 @@ const FRAME_JS = `(() => {
       if (e.status === 409) {
         // Re-read the current server value so the conflict UI shows truth,
         // not the value from the error body alone.
-        let current = e.body && e.body.currentValue, currentVersion = e.body && e.body.currentVersion;
+        let current = e.body && e.body.currentValue, currentVersion = e.body && e.body.currentVersion, currentRowId = e.body && e.body.currentRowId;
         try {
           const fresh = await api('/projects/' + projectId + '/keys?branch=' + encodeURIComponent(state.branch));
           const fk = fresh.find((x) => x.id === keyId);
           const ft = fk && (fk.translations || []).find((t) => t.localeCode === state.editLocale);
-          if (ft) { current = ft.value; currentVersion = ft.version; }
+          if (ft) { current = ft.value; currentVersion = ft.version; currentRowId = ft.rowId; }
         } catch { /* keep error-body values */ }
         st.textContent = '';
         const box = document.createElement('div');
@@ -208,14 +217,14 @@ const FRAME_JS = `(() => {
         box.querySelector('.cur').textContent = current == null ? '(empty)' : current;
         box.querySelector('.use-latest').addEventListener('click', () => {
           li.querySelector('input').value = current || '';
-          state.versions[keyId] = currentVersion || 0;
+          state.identities[keyId] = { version: currentVersion || 0, rowId: currentRowId || null };
           delete state.drafts[keyId];
           box.remove();
           st.textContent = 'Loaded latest'; st.className = 'muted st';
         });
         // Overwrite re-runs saveRow, which revalidates trust and permissions
         // again before any write is attempted.
-        box.querySelector('.overwrite').addEventListener('click', () => { saveRow(li, currentVersion || 0); });
+        box.querySelector('.overwrite').addEventListener('click', () => { saveRow(li, { version: currentVersion || 0, rowId: currentRowId || null }); });
         li.appendChild(box);
       } else if (e.status === 403) {
         st.textContent = 'No write access for ' + state.editLocale; st.className = 'error st';
@@ -230,8 +239,8 @@ const FRAME_JS = `(() => {
       state.origins = state.project.embedOrigins || [];
       if (!state.editLocale) state.editLocale = state.project.baseLocale;
       state.keys = await api('/projects/' + projectId + '/keys?branch=' + encodeURIComponent(state.branch));
-      state.versions = {};
-      for (const k of state.keys) { const t = tFor(k); state.versions[k.id] = t ? (t.version || 0) : 0; }
+      state.identities = {};
+      for (const k of state.keys) { const t = tFor(k); state.identities[k.id] = t ? { version: t.version || 0, rowId: t.rowId || null } : { version: 0, rowId: null }; }
       render();
     } catch (e) {
       state.token = null; localStorage.removeItem(TOKEN_KEY);
@@ -264,6 +273,9 @@ const FRAME_JS = `(() => {
       if (!state.withdrawn) withdrawEditing('This host page is no longer allowlisted. Editing is paused; your drafts are kept.');
       return;
     }
+    // Verified source+origin handshake: THIS is what establishes the parent
+    // origin and unlocks editing (fail-closed until now).
+    if (!state.parentOrigin) { state.parentOrigin = event.origin; render(); }
     if (state.withdrawn) { state.withdrawn = null; render(); } // trust restored: re-enable with drafts intact
     const reply = (msg) => event.source.postMessage(Object.assign({ source: 'open-locale-embed' }, msg), event.origin);
     const conn = document.getElementById('conn');

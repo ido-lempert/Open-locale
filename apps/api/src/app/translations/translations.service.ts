@@ -35,7 +35,7 @@ export class TranslationsService {
     private readonly branches: BranchesService,
   ) {}
 
-  async upsert(userId: string, projectId: string, keyId: string, locale: string, value: string, expectedVersion?: number) {
+  async upsert(userId: string, projectId: string, keyId: string, locale: string, value: string, expectedVersion?: number, expectedRowId?: string) {
     await this.projects.assertLocaleWrite(userId, projectId, [locale]);
     const project = await this.projects.getFor(userId, projectId);
     if (!project.locales.some((l) => l.code === locale)) {
@@ -44,22 +44,26 @@ export class TranslationsService {
     const key = await this.prisma.key.findFirst({ where: { id: keyId, projectId } });
     if (!key) throw new NotFoundException('Key not found');
     return this.prisma.$transaction(async (tx) => {
-      let existing: { value: string; status: string; version: number } | null;
+      let existing: { value: string; status: string; version: number; rowId?: string } | null;
       if (expectedVersion !== undefined) {
         // Optimistic concurrency: lock the row first, then compare the locked
         // version, so the value checked is exactly the value overwritten.
         // A missing row is version 0 - an expectedVersion of 0 asserts
         // "no translation yet" and races with a concurrent create.
-        const locked = await tx.$queryRaw<{ value: string; status: string; version: number }[]>`
-          SELECT "value", "status", "version" FROM "translations"
+        const locked = await tx.$queryRaw<{ value: string; status: string; version: number; rowId: string }[]>`
+          SELECT "value", "status", "version", "rowId" FROM "translations"
           WHERE "keyId" = ${keyId}::uuid AND "localeCode" = ${locale} FOR UPDATE`;
         existing = locked[0] ?? null;
         const currentVersion = existing ? existing.version : 0;
-        if (currentVersion !== expectedVersion) {
+        // Version AND immutable row identity: a recreated row that climbs back
+        // to the same version number still fails on rowId.
+        const identityMismatch = expectedRowId !== undefined && existing && existing.rowId !== expectedRowId;
+        if (currentVersion !== expectedVersion || identityMismatch) {
           throw new ConflictException({
             message: 'This translation changed since it was loaded.',
             currentValue: existing ? existing.value : null,
             currentVersion,
+            currentRowId: existing ? existing.rowId : null,
           });
         }
       } else {

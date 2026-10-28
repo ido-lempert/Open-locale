@@ -32,9 +32,9 @@ const waitFor = async (url, tries = 90) => {
 
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-ie-'));
 const pg = new EmbeddedPostgres({ databaseDir: dataDir, user: 'postgres', password: 'postgres', port: PG_PORT, persistent: false });
-let api, browser, host1;
-const hostPage = (pid) => `<!doctype html><html><body><h1>host</h1>
-<iframe id="ol" src="${EMBED}/embed/projects/${pid}" width="560" height="640"></iframe>
+let api, browser, host1, host2;
+const hostPage = (pid, frameQuery = '') => `<!doctype html><html><head><meta name="referrer" content="no-referrer"></head><body><h1>host</h1>
+<iframe id="ol" src="${EMBED}/embed/projects/${pid}${frameQuery}" width="560" height="640"></iframe>
 <script>
 window.__received = [];
 window.addEventListener('message', (e) => { window.__received.push({ origin: e.origin, data: e.data }); });
@@ -137,8 +137,31 @@ try {
   const abaLocale = await call(`/projects/${pid}/keys/${k1.id}/translations`, { jwt, method: 'PUT', body: { locale: 'he', value: 'aba', expectedVersion: heBefore ? heBefore.version : 1 } });
   check('locale remove/re-add: old expectedVersion conflicts (row restarted)', abaLocale.status === 409, `got ${abaLocale.status}`);
 
+  // ---- Part A3: immutable row identity vs recreated version collisions ----
+  await call(`/projects/${pid}/keys/${k1.id}/translations`, { jwt, method: 'PUT', body: { locale: 'he', value: 'aba one' } });
+  const heRow1 = (await call(`/projects/${pid}/keys?branch=main`, { jwt })).json.find((k) => k.id === k1.id).translations.find((t) => t.localeCode === 'he');
+  const rowId1 = heRow1.rowId;
+  check('rows expose an immutable rowId', typeof rowId1 === 'string' && rowId1.length === 36, String(rowId1));
+  await call(`/projects/${pid}/locales/he`, { jwt, method: 'DELETE' });
+  await call(`/projects/${pid}/locales`, { jwt, method: 'POST', body: { code: 'he' } });
+  await call(`/projects/${pid}/keys/${k1.id}/translations`, { jwt, method: 'PUT', body: { locale: 'he', value: 'aba recreated' } });
+  const heRow2 = (await call(`/projects/${pid}/keys?branch=main`, { jwt })).json.find((k) => k.id === k1.id).translations.find((t) => t.localeCode === 'he');
+  check('recreated row climbs back to the SAME version with a NEW rowId', heRow2.version === heRow1.version && heRow2.rowId !== rowId1, JSON.stringify({ v: heRow2.version, sameRowId: heRow2.rowId === rowId1 }));
+  const abaStale = await call(`/projects/${pid}/keys/${k1.id}/translations`, { jwt, method: 'PUT', body: { locale: 'he', value: 'stale identity write', expectedVersion: heRow2.version, expectedRowId: rowId1 } });
+  check('stale rowId 409s even when the version matches (ABA collision closed)', abaStale.status === 409 && abaStale.json.currentRowId === heRow2.rowId, `got ${abaStale.status} ${JSON.stringify(abaStale.json)}`);
+  const heStill = (await call(`/projects/${pid}/keys?branch=main`, { jwt })).json.find((k) => k.id === k1.id).translations.find((t) => t.localeCode === 'he');
+  check('identity conflict left the recreated row untouched', heStill.value === 'aba recreated');
+  const abaCompat = await call(`/projects/${pid}/keys/${k1.id}/translations`, { jwt, method: 'PUT', body: { locale: 'he', value: 'version-only writer', expectedVersion: heRow2.version } });
+  check('save without expectedRowId still commits on version alone (compat)', abaCompat.status === 200 && abaCompat.json.rowId === heRow2.rowId, `got ${abaCompat.status}`);
+  const abaMatch = await call(`/projects/${pid}/keys/${k1.id}/translations`, { jwt, method: 'PUT', body: { locale: 'he', value: 'identity-matched write', expectedVersion: abaCompat.json.version, expectedRowId: heRow2.rowId } });
+  check('save with matching rowId commits', abaMatch.status === 200, `got ${abaMatch.status}`);
+
   // ---- Part B: the frame UI in real Chrome ----
-  host1 = createServer((req, res) => { res.setHeader('Content-Type', 'text/html'); res.end(hostPage(pid)); });
+  host1 = createServer((req, res) => {
+    const u = new URL(req.url, HOST1);
+    res.setHeader('Content-Type', 'text/html');
+    res.end(hostPage(u.searchParams.get('pid') || pid, u.searchParams.get('fq') || ''));
+  });
   await new Promise((r) => host1.listen(HOST_PORT, r));
   const { default: puppeteer } = await import('puppeteer-core');
   browser = await puppeteer.launch({
@@ -147,6 +170,8 @@ try {
     defaultViewport: { width: 1100, height: 800 },
   });
   const page = await browser.newPage();
+  page.on('console', (m) => console.log('[chrome]', m.text().slice(0, 200)));
+  page.on('pageerror', (e) => console.log('[pageerror]', String(e).slice(0, 300)));
   // Seed the frame session on the API origin, then load the host page.
   await page.goto(`${EMBED}/embed/projects/${pid}`, { waitUntil: 'networkidle0' });
   await page.evaluate((t) => localStorage.setItem('ol_embed_token', t), jwt);
@@ -156,6 +181,23 @@ try {
   check('embed frame loaded', !!frame);
   await frame.waitForFunction(() => document.querySelector('li[data-key-id] input'), { timeout: 10000 });
   check('frame renders editable rows for the base locale', await frame.evaluate(() => document.querySelectorAll('li[data-key-id] input').length === 2));
+  // Fail closed: embedded with no verified handshake yet (and no Referer
+  // header on this host - the frame never consults it), editing is locked.
+  const k1sel = `li[data-key-id="${k1.id}"]`;
+  const lockedState = await frame.evaluate(() => ({
+    notice: !!document.getElementById('locked'),
+    disabled: [...document.querySelectorAll('li input, li .save')].every((el) => el.disabled),
+  }));
+  check('before the handshake the frame is visibly locked (fail closed)', lockedState.notice && lockedState.disabled, JSON.stringify(lockedState));
+  await page.screenshot({ path: join(SHOTS, 'frame-00-locked.png') });
+  const vBeforeLocked = (await vOf(k1.id, 'en')).version;
+  await frame.evaluate((sel) => document.querySelector(sel + ' .save').click(), k1sel);
+  await new Promise((r) => setTimeout(r, 800));
+  check('save while locked writes nothing', (await vOf(k1.id, 'en')).version === vBeforeLocked);
+  // Verified source+origin handshake unlocks editing.
+  await page.evaluate(() => window.__send({ source: 'open-locale-host', type: 'ol:ping' }));
+  await frame.waitForFunction(() => !document.getElementById('locked') && ![...document.querySelectorAll('li input')].some((el) => el.disabled), { timeout: 8000 });
+  check('verified handshake unlocks editing', true);
   await page.screenshot({ path: join(SHOTS, 'frame-01-editor.png') });
 
   // User-initiated save inside the frame.
@@ -242,9 +284,88 @@ try {
     draftKept: document.querySelector(sel + ' input').value,
   }), rowSel(k1.id));
   check('re-allowlisting re-enables editing with the draft still intact', reenabled.bannerGone && reenabled.enabled && reenabled.draftKept === 'unsaved draft text', JSON.stringify(reenabled).slice(0, 140));
+
+  // ---- Part C: frame-level ABA - recreated row at the SAME version, new rowId ----
+  const pidB = (await call('/projects', { jwt, method: 'POST', body: { name: 'IeB', slug: `ieb-${Date.now()}`, baseLocale: 'en', locales: ['en', 'de'] } })).json.id;
+  const kB = (await call(`/projects/${pidB}/keys`, { jwt, method: 'POST', body: { name: 'aba.key' } })).json;
+  await call(`/projects/${pidB}`, { jwt, method: 'PATCH', body: { embedOrigins: [HOST1] } });
+  const trB = async () => (await call(`/projects/${pidB}/keys?branch=main`, { jwt })).json.find((k) => k.id === kB.id).translations.find((t) => t.localeCode === 'de');
+  await page.goto(`${HOST1}/?pid=${pidB}&fq=${encodeURIComponent('?locale=de')}`, { waitUntil: 'networkidle0' });
+  let frameB;
+  for (let i = 0; i < 40 && !frameB; i++) { frameB = page.frames().find((f) => f.url().includes(`/embed/projects/${pidB}`)); if (!frameB) await new Promise((r) => setTimeout(r, 250)); }
+  check('project B frame loaded', !!frameB);
+  try {
+    await frameB.waitForFunction(() => document.querySelector('li[data-key-id] input'), { timeout: 10000 });
+  } catch (e) {
+    console.log('frameB url:', frameB.url());
+    console.log('frameB body:', await frameB.evaluate(() => document.body.innerText.slice(0, 400)).catch((x) => String(x)));
+    throw e;
+  }
+  check('project B frame locked before handshake', await frameB.evaluate(() => !!document.getElementById('locked')));
+  await page.evaluate(() => window.__send({ source: 'open-locale-host', type: 'ol:ping' }));
+  await frameB.waitForFunction(() => !document.getElementById('locked'), { timeout: 8000 });
+  await frameB.evaluate(() => {
+    const input = document.querySelector('li[data-key-id] input');
+    input.value = 'draft one';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await frameB.evaluate(() => document.querySelector('li[data-key-id] .save').click());
+  await frameB.waitForFunction(() => document.querySelector('li[data-key-id] .st')?.textContent === 'Saved', { timeout: 8000 });
+  const rowB1 = await trB();
+  check('frame B save lands at v1 with rowId', rowB1.version === 1 && !!rowB1.rowId);
+  // Recreate the de row back at v1 with a NEW rowId (locale remove/re-add).
+  await call(`/projects/${pidB}/locales/de`, { jwt, method: 'DELETE' });
+  await call(`/projects/${pidB}/locales`, { jwt, method: 'POST', body: { code: 'de' } });
+  await call(`/projects/${pidB}/keys/${kB.id}/translations`, { jwt, method: 'PUT', body: { locale: 'de', value: 'recreated draft' } });
+  const rowB2 = await trB();
+  check('frame B target row recreated at the same version, new rowId', rowB2.version === 1 && rowB2.rowId !== rowB1.rowId);
+  // The frame still holds {v1, old rowId}: its save must conflict.
+  await frameB.evaluate(() => {
+    const input = document.querySelector('li[data-key-id] input');
+    input.value = 'stale frame write';
+  });
+  await frameB.evaluate(() => document.querySelector('li[data-key-id] .save').click());
+  await frameB.waitForFunction(() => !!document.querySelector('li[data-key-id] .conflict'), { timeout: 8000 });
+  const abaConflict = await frameB.evaluate(() => document.querySelector('li[data-key-id] .conflict').textContent);
+  check('frame ABA conflict shows the recreated current value', abaConflict.includes('recreated draft'), abaConflict.slice(0, 120));
+  check('frame ABA conflict did NOT overwrite the recreated row', (await trB()).value === 'recreated draft');
+  await page.screenshot({ path: join(SHOTS, 'frame-05-aba.png') });
+  await frameB.evaluate(() => document.querySelector('li[data-key-id] .use-latest').click());
+  await frameB.waitForFunction(() => document.querySelector('li[data-key-id] input').value === 'recreated draft', { timeout: 5000 });
+  await frameB.evaluate(() => document.querySelector('li[data-key-id] .save').click());
+  await frameB.waitForFunction(() => document.querySelector('li[data-key-id] .st')?.textContent === 'Saved', { timeout: 8000 });
+  check('use-latest adopts the new identity and saves', (await trB()).version === 2 && (await trB()).value === 'recreated draft');
+
+  // Origin removal between handshake and save: the save-time revalidation
+  // must stop the write and withdraw editing.
+  await call(`/projects/${pidB}`, { jwt, method: 'PATCH', body: { embedOrigins: [] } });
+  await frameB.evaluate(() => {
+    const input = document.querySelector('li[data-key-id] input');
+    input.value = 'should be refused';
+  });
+  await frameB.evaluate(() => document.querySelector('li[data-key-id] .save').click());
+  await frameB.waitForFunction(() => !!document.getElementById('withdrawn'), { timeout: 8000 });
+  const trAfterRemoval = await trB();
+  check('origin removal between handshake and save blocks the write', trAfterRemoval.version === 2 && trAfterRemoval.value === 'recreated draft', JSON.stringify({ v: trAfterRemoval.version, val: trAfterRemoval.value }));
+  await page.screenshot({ path: join(SHOTS, 'frame-06-withdrawn-save.png') });
+
+  // ---- Part D: denied host (origin not on the allowlist) ----
+  const HOST2 = 'http://127.0.0.1:4902';
+  await call(`/projects/${pidB}`, { jwt, method: 'PATCH', body: { embedOrigins: [HOST1] } });
+  host2 = createServer((req, res) => { res.setHeader('Content-Type', 'text/html'); res.end(hostPage(pidB, '?locale=de')); });
+  await new Promise((r) => host2.listen(4902, r));
+  await page.goto(`${HOST2}/`, { waitUntil: 'networkidle0' });
+  await new Promise((r) => setTimeout(r, 3000));
+  const frameC = page.frames().find((f) => f.url().includes(`/embed/projects/${pidB}`));
+  check('denied host: CSP frame-ancestors blocks the frame from loading at all', !frameC);
+  await page.evaluate(() => window.__send({ source: 'open-locale-host', type: 'ol:ping' }));
+  await new Promise((r) => setTimeout(r, 1200));
+  check('denied host handshake gets no pong', await page.evaluate(() => window.__received.filter((r) => r.data && r.data.type === 'ol:pong').length === 0));
+  check('denied host caused no writes', (await trB()).version === 2);
 } finally {
   if (browser) await browser.close().catch(() => {});
   if (host1) host1.close();
+  if (host2) host2.close();
   if (api) api.kill('SIGTERM');
   await pg.stop();
   rmSync(dataDir, { recursive: true, force: true });

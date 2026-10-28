@@ -1,4 +1,4 @@
-import { IsBoolean, IsInt, IsNotEmpty, IsObject, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsNotEmpty, IsObject, IsOptional, IsString, IsUUID, MaxLength, Min } from 'class-validator';
 
 export class UpsertTranslationDto {
   @IsString()
@@ -11,6 +11,12 @@ export class UpsertTranslationDto {
   // current version equals this value (0 = the client expects no row yet).
   @IsOptional() @IsInt() @Min(0)
   expectedVersion?: number;
+
+  // Immutable row identity, checked together with expectedVersion when both
+  // are sent: protects against delete/recreate ABA where a recreated row
+  // climbs back to the same version number.
+  @IsOptional() @IsUUID()
+  expectedRowId?: string;
 }
 
 export class ImportJsonDto {

@@ -12,10 +12,9 @@
   REVIEWED decision; tested that the 409 leaves status and value untouched.
 - Delete/recreate ABA, tested: a recreated key has a NEW id, so a frame
   holding the old keyId gets 404. A removed/re-added locale restarts rows at
-  version 0/1, so an old expectedVersion 409s. Residual: a recreated locale
-  row that climbs back to the exact same version number would pass the check
-  - accepted as a known narrow hole, since row identity (keyId) and fresh
-  reads on conflict limit its blast radius.
+  version 0/1, so an old expectedVersion 409s. The remaining hole - a
+  recreated row that climbs back to the exact same version number - is
+  closed in 0033 by an immutable rowId checked alongside the version.
 - Trust withdrawal on the open frame (in-context): removing the embed origin
   now (a) silences host-message answers AND (b) visibly pauses editing:
   banner, disabled inputs/buttons. Unsaved drafts are captured and kept.
