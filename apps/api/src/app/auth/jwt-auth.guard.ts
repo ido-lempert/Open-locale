@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -13,6 +14,7 @@ export class JwtAuthGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<{
       headers: Record<string, string | undefined>;
+      method?: string;
       user?: AuthPrincipal;
     }>();
     const header = request.headers['authorization'];
@@ -26,6 +28,11 @@ export class JwtAuthGuard implements CanActivate {
     }
     if (!principal) {
       throw new UnauthorizedException('Valid Bearer token or X-Api-Key required');
+    }
+    const method = (request.method ?? 'GET').toUpperCase();
+    const isRead = method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
+    if (principal.via === 'api-token' && !isRead && !(principal.scopes ?? []).includes('write')) {
+      throw new ForbiddenException('This API token is read-only');
     }
     request.user = principal;
     return true;

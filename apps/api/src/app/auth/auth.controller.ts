@@ -1,7 +1,12 @@
 import {
+  BadRequestException,
   Body,
   Controller,
+  Delete,
+  Get,
   HttpCode,
+  NotFoundException,
+  Param,
   Post,
   UnauthorizedException,
   UseGuards,
@@ -31,6 +36,25 @@ export class AuthController {
   @Post('tokens')
   @UseGuards(JwtAuthGuard)
   async createToken(@CurrentUser() user: AuthPrincipal, @Body() dto: CreateApiTokenDto) {
-    return this.auth.createApiToken(user.userId, dto.name, dto.scopes ?? ['read', 'write']);
+    const scopes = dto.scopes?.length ? dto.scopes : ['read', 'write'];
+    const valid = scopes.every((s) => s === 'read' || s === 'write');
+    if (!valid || !scopes.includes('read')) {
+      throw new BadRequestException('Scopes must be read and/or write');
+    }
+    return this.auth.createApiToken(user.userId, dto.name, scopes);
+  }
+
+  @Get('tokens')
+  @UseGuards(JwtAuthGuard)
+  async listTokens(@CurrentUser() user: AuthPrincipal) {
+    return this.auth.listApiTokens(user.userId);
+  }
+
+  @Delete('tokens/:id')
+  @UseGuards(JwtAuthGuard)
+  async revokeToken(@CurrentUser() user: AuthPrincipal, @Param('id') id: string) {
+    const result = await this.auth.revokeApiToken(user.userId, id);
+    if (!result) throw new NotFoundException('Token not found');
+    return result;
   }
 }

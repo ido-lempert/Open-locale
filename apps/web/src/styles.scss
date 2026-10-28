@@ -30,12 +30,16 @@ input, textarea, select {
 textarea { resize: vertical; }
 
 .bar {
-  display: flex; align-items: center; gap: 1rem;
+  display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
   background: var(--card); border-bottom: 1px solid var(--line); padding: 0.75rem 1.25rem;
   position: sticky; top: 0; z-index: 5;
 }
-.bar h1 { flex: 0 0 auto; }
-.bar .muted { margin-left: auto; }
+.bar h1 {
+  flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bar .muted { flex: 0 0 auto; white-space: nowrap; }
+@media (max-width: 420px) { .bar { padding: 0.6rem 0.8rem; gap: 0.5rem; } }
 .back { color: var(--accent); text-decoration: none; }
 
 .auth-card {

@@ -39,3 +39,37 @@ describe('ProjectsComponent', () => {
     expect(el.textContent).toContain('3 keys');
   });
 });
+
+describe('EditorComponent input preservation', () => {
+  it('does not wipe text the user typed while an add was in flight', async () => {
+    let resolveCreate: (v: unknown) => void = () => undefined;
+    const mock = {
+      getProject: () => Promise.resolve({
+        id: 'p1', name: 'P', slug: 'p', description: '', baseLocale: 'en',
+        locales: [{ code: 'en' }], _count: { keys: 0 },
+      }),
+      listKeys: () => Promise.resolve([]),
+      createKey: () => new Promise((r) => { resolveCreate = r; }),
+    };
+    const { EditorComponent } = await import('./editor.component');
+    const { ActivatedRoute, convertToParamMap } = await import('@angular/router');
+    await TestBed.configureTestingModule({
+      imports: [EditorComponent],
+      providers: [
+        provideRouter([]),
+        { provide: ApiService, useValue: mock },
+        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ id: 'p1' }) } } },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(EditorComponent);
+    await fixture.whenStable();
+    const comp = fixture.componentInstance;
+    comp.newKey.set('first.key');
+    const pending = comp.addKey();
+    // user keeps typing while the request is in flight
+    comp.newKey.set('second.key');
+    resolveCreate({ id: 'k1' });
+    await pending;
+    expect(comp.newKey()).toBe('second.key');
+  });
+});

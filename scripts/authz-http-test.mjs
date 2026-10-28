@@ -111,6 +111,24 @@ try {
   });
   check('foreign key id on own project rejected (404)', xkey.status === 404, `got ${xkey.status}`);
 
+  // API tokens: creation, scoping, revocation
+  const roToken = (await call('/auth/tokens', { token: a.accessToken, method: 'POST', body: { name: 'ci-read', scopes: ['read'] } })).json;
+  check('read-only token created with raw value shown once', Boolean(roToken?.token?.startsWith('ol_')) && Boolean(roToken?.id));
+  const list = await call('/auth/tokens', { token: a.accessToken });
+  check('token list has no tokenHash or raw token', list.status === 200 && !JSON.stringify(list.json).includes('tokenHash') && !JSON.stringify(list.json).includes(roToken.token));
+  const roGet = await call(`/projects/${proj.id}`, { apiKey: roToken.token });
+  check('read-only token can GET', roGet.status === 200);
+  const roWrite = await call(`/projects/${proj.id}/keys`, { apiKey: roToken.token, method: 'POST', body: { name: 'nope.key' } });
+  check('read-only token write rejected (403)', roWrite.status === 403, `got ${roWrite.status}`);
+  const bList = await call('/auth/tokens', { token: bt });
+  check('B token list excludes A tokens', !bList.json?.some?.((t) => t.id === roToken.id));
+  const bRevoke = await call(`/auth/tokens/${roToken.id}`, { token: bt, method: 'DELETE' });
+  check('cross-user token revoke denied (404)', bRevoke.status === 404, `got ${bRevoke.status}`);
+  const aRevoke = await call(`/auth/tokens/${roToken.id}`, { token: a.accessToken, method: 'DELETE' });
+  check('owner can revoke token', aRevoke.status === 200);
+  const afterRevoke = await call(`/projects/${proj.id}`, { apiKey: roToken.token });
+  check('revoked token rejected (401)', afterRevoke.status === 401);
+
   // A's data untouched after B's attempts
   const after = await call(`/projects/${proj.id}`, { token: a.accessToken });
   const exp = await call(`/projects/${proj.id}/export/en`, { token: a.accessToken });

@@ -121,6 +121,7 @@ try {
     values.includes('Welcome to the shop') && values.includes('ברוכים הבאים לחנות'), JSON.stringify(values));
   await shot('editor-05-editor-reloaded.png');
 
+  const projId = page.url().split('/').pop();
   // Settings screen: rename, add locale, verify grid column appears
   await page.click('.settings-link');
   await page.waitForSelector('.panel', { timeout: 10000 });
@@ -140,11 +141,21 @@ try {
   }
   await page.type('input[name=newLocale]', 'ar');
   await page.click('.locale-list + .inline button, .panel .inline button');
-  await page.waitForFunction(
-    () => [...document.querySelectorAll('.locale-list code')].some((e) => e.textContent.trim() === 'ar'),
-    { timeout: 10000 },
-  );
-  check('locale ar added via settings', true);
+  try {
+    await page.waitForFunction(
+      () => [...document.querySelectorAll('.locale-list code')].some((e) => e.textContent.trim() === 'ar'),
+      { timeout: 10000 },
+    );
+    check('locale ar added via settings', true);
+  } catch {
+    const diag = await page.evaluate(() => ({
+      codes: [...document.querySelectorAll('.locale-list code')].map((e) => e.textContent.trim()),
+      error: document.querySelector('.error')?.textContent ?? '',
+      localeInput: document.querySelector('input[name=newLocale]')?.value ?? null,
+    }));
+    console.log('DIAG locale add:', JSON.stringify(diag));
+    check('locale ar added via settings', false);
+  }
   // Base locale guard: base locale has no Remove button
   const baseHasRemove = await page.evaluate(() => {
     const li = [...document.querySelectorAll('.locale-list li')].find((el) => el.textContent.includes('base'));
@@ -156,13 +167,53 @@ try {
   const headers = await page.$$eval('.grid th', (els) => els.map((e) => e.textContent.trim()));
   check('editor grid shows new locale column', headers.includes('ar') || headers.includes('AR'), JSON.stringify(headers));
 
+  // API tokens via UI: create read-only, exercise it, revoke it
+  await page.goto(`${WEB}/projects/${projId}/settings`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('input[name=tokenName]', { timeout: 10000 });
+  await page.type('input[name=tokenName]', 'ci');
+  await page.select('select[name=tokenScope]', 'read');
+  await page.click('select[name=tokenScope] ~ button');
+  await page.waitForSelector('.token-reveal code', { timeout: 10000 });
+  const rawToken = await page.$eval('.token-reveal code', (el) => el.textContent);
+  check('token revealed once after creation', rawToken.startsWith('ol_'));
+  await shot('editor-10-token-created.png');
+  const tokenExercise = await page.evaluate(async (tok) => {
+    const headers = { 'Content-Type': 'application/json', 'X-Api-Key': tok };
+    const pid = location.pathname.split('/')[2];
+    const get = await fetch(`/api/projects/${pid}`, { headers });
+    const write = await fetch(`/api/projects/${pid}/keys`, {
+      method: 'POST', headers, body: JSON.stringify({ name: 'should.fail' }),
+    });
+    return { get: get.status, write: write.status };
+  }, rawToken);
+  check('read-only token: GET 200, write 403', tokenExercise.get === 200 && tokenExercise.write === 403, JSON.stringify(tokenExercise));
+  await page.evaluate(() => {
+    const li = [...document.querySelectorAll('.locale-list li')].find((el) => el.textContent.includes('ci'));
+    [...li.querySelectorAll('button')].find((b) => b.textContent === 'Revoke').click();
+  });
+  await page.waitForFunction(() => document.body.textContent.includes('Yes, revoke'), { timeout: 5000 });
+  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Yes, revoke').click());
+  await page.waitForFunction(() => !document.body.textContent.includes('Yes, revoke'), { timeout: 5000 });
+  const afterRevoke = await page.evaluate(async (tok) => {
+    const pid = location.pathname.split('/')[2];
+    const res = await fetch(`/api/projects/${pid}`, { headers: { 'X-Api-Key': tok } });
+    return res.status;
+  }, rawToken);
+  check('revoked token rejected (401)', afterRevoke === 401, `got ${afterRevoke}`);
+
   // Mobile viewport evidence (390px)
+  await page.goto(`${WEB}/projects/${projId}`, { waitUntil: 'networkidle0' });
   await page.setViewport({ width: 390, height: 844 });
   await page.reload({ waitUntil: 'networkidle0' });
   await page.waitForSelector('.toolbar', { timeout: 10000 });
   await shot('editor-07-mobile-editor.png');
   await page.goto(`${WEB}/projects`, { waitUntil: 'networkidle0' });
   await shot('editor-08-mobile-projects.png');
+  await page.goto(`${WEB}/projects/${projId}`, { waitUntil: 'networkidle0' });
+  await page.setViewport({ width: 320, height: 700 });
+  await page.reload({ waitUntil: 'networkidle0' });
+  await page.waitForSelector('.toolbar', { timeout: 10000 });
+  await shot('editor-09-mobile-320.png');
   check('mobile screenshots captured', true);
 } finally {
   await browser?.close().catch(() => {});

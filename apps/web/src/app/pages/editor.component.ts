@@ -132,9 +132,11 @@ export class EditorComponent implements OnInit {
   }
   isRtl(code: string) { return ['he', 'ar', 'fa', 'ur'].some((r) => code.startsWith(r)); }
   async addKey() {
+    const submitted = this.newKey();
     try {
-      await this.api.createKey(this.projectId, { name: this.newKey() });
-      this.newKey.set(''); await this.reload();
+      await this.api.createKey(this.projectId, { name: submitted });
+      if (this.newKey() === submitted) this.newKey.set('');
+      await this.reload();
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
   }
   async removeKey(k: Key) {
@@ -142,9 +144,10 @@ export class EditorComponent implements OnInit {
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
   }
   async addLocale() {
+    const submitted = this.newLocale().trim();
     try {
-      await this.api.addLocale(this.projectId, this.newLocale().trim());
-      this.newLocale.set('');
+      await this.api.addLocale(this.projectId, submitted);
+      if (this.newLocale().trim() === submitted) this.newLocale.set('');
       this.project.set(await this.api.getProject(this.projectId));
       await this.reload();
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }

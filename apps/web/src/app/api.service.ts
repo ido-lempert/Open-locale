@@ -6,6 +6,10 @@ export interface Project {
   locales: ProjectLocale[]; _count?: { keys: number };
 }
 export interface Translation { keyId: string; localeCode: string; value: string; }
+export interface ApiTokenInfo {
+  id: string; name: string; scopes: string[];
+  lastUsedAt: string | null; expiresAt: string | null; createdAt: string;
+}
 export interface Key {
   id: string; name: string; description: string; isPlural: boolean; maxLength: number | null;
   translations: Translation[];
@@ -35,6 +39,15 @@ export class ApiService {
     return res.json() as Promise<T>;
   }
 
+  listTokens() { return this.request<ApiTokenInfo[]>('/auth/tokens'); }
+  createToken(name: string, scopes: string[]) {
+    return this.request<{ id: string; name: string; token: string }>('/auth/tokens', {
+      method: 'POST', body: JSON.stringify({ name, scopes }),
+    });
+  }
+  revokeToken(id: string) {
+    return this.request<{ revoked: string }>(`/auth/tokens/${id}`, { method: 'DELETE' });
+  }
   signup(email: string, password: string, displayName: string) {
     return this.request<{ accessToken: string }>('/auth/signup', {
       method: 'POST', body: JSON.stringify({ email, password, displayName }),

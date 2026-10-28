@@ -8,6 +8,7 @@ export interface AuthPrincipal {
   userId: string;
   email: string;
   via: 'jwt' | 'api-token';
+  scopes?: string[];
 }
 
 function sha256(value: string): string {
@@ -68,6 +69,22 @@ export class AuthService {
     }
   }
 
+  async listApiTokens(userId: string) {
+    const tokens = await this.prisma.apiToken.findMany({
+      where: { userId },
+      select: { id: true, name: true, scopes: true, lastUsedAt: true, expiresAt: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    return tokens;
+  }
+
+  async revokeApiToken(userId: string, tokenId: string) {
+    const record = await this.prisma.apiToken.findFirst({ where: { id: tokenId, userId } });
+    if (!record) return null;
+    await this.prisma.apiToken.delete({ where: { id: record.id } });
+    return { revoked: tokenId };
+  }
+
   async createApiToken(userId: string, name: string, scopes: string[]) {
     const raw = `ol_${randomBytes(24).toString('base64url')}`;
     const tokenHash = sha256(raw);
@@ -92,6 +109,6 @@ export class AuthService {
       where: { id: record.id },
       data: { lastUsedAt: new Date() },
     });
-    return { userId: record.userId, email: record.user.email, via: 'api-token' };
+    return { userId: record.userId, email: record.user.email, via: 'api-token', scopes: record.scopes };
   }
 }

@@ -47,9 +47,12 @@ export class ProjectsComponent implements OnInit {
   async create() {
     this.busy.set(true); this.error.set('');
     try {
-      const codes = this.locales().split(',').map((s) => s.trim()).filter(Boolean);
-      await this.api.createProject({ name: this.name(), slug: this.slug(), locales: codes });
-      this.name.set(''); this.slug.set(''); this.locales.set('');
+      const submitted = { name: this.name(), slug: this.slug(), locales: this.locales() };
+      const codes = submitted.locales.split(',').map((s) => s.trim()).filter(Boolean);
+      await this.api.createProject({ name: submitted.name, slug: submitted.slug, locales: codes });
+      if (this.name() === submitted.name) this.name.set('');
+      if (this.slug() === submitted.slug) this.slug.set('');
+      if (this.locales() === submitted.locales) this.locales.set('');
       await this.reload();
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
