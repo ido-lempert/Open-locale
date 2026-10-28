@@ -20,6 +20,11 @@ export interface Key {
   id: string; name: string; description: string; isPlural: boolean; maxLength: number | null;
   tags: string[];
   translations: Translation[];
+  _count?: { comments: number };
+}
+export interface CommentEntry {
+  id: string; keyId: string; localeCode: string | null; body: string; createdAt: string;
+  author: { displayName: string; email: string } | null;
 }
 
 const TOKEN_KEY = 'ol_token';
@@ -87,6 +92,18 @@ export class ApiService {
     for (const [k, v] of Object.entries(filters)) if (v) params.set(k, v);
     const q = params.toString();
     return this.request<Key[]>(`/projects/${projectId}/keys${q ? `?${q}` : ''}`);
+  }
+  listComments(projectId: string, keyId: string, locale?: string) {
+    const q = locale ? `?locale=${encodeURIComponent(locale)}` : '';
+    return this.request<CommentEntry[]>(`/projects/${projectId}/keys/${keyId}/comments${q}`);
+  }
+  addComment(projectId: string, keyId: string, body: string, locale?: string) {
+    return this.request<CommentEntry>(`/projects/${projectId}/keys/${keyId}/comments`, {
+      method: 'POST', body: JSON.stringify({ body, ...(locale ? { locale } : {}) }),
+    });
+  }
+  deleteComment(projectId: string, keyId: string, commentId: string) {
+    return this.request<{ removed: string }>(`/projects/${projectId}/keys/${keyId}/comments/${commentId}`, { method: 'DELETE' });
   }
   setTags(projectId: string, keyId: string, tags: string[]) {
     return this.request<Key>(`/projects/${projectId}/keys/${keyId}/tags`, {

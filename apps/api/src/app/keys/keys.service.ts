@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
 
@@ -23,7 +23,7 @@ export class KeysService {
           ? { translations: { some: { localeCode: locale, status: status as never } } }
           : {}),
       },
-      include: { translations: true },
+      include: { translations: true, _count: { select: { comments: true } } },
       orderBy: { name: 'asc' },
     });
   }
@@ -68,5 +68,43 @@ export class KeysService {
     if (!existing) throw new NotFoundException('Key not found');
     await this.prisma.key.delete({ where: { id: keyId } });
     return { removed: existing.name };
+  }
+
+  async listComments(userId: string, projectId: string, keyId: string, locale?: string) {
+    await this.projects.getFor(userId, projectId);
+    const key = await this.prisma.key.findFirst({ where: { id: keyId, projectId } });
+    if (!key) throw new NotFoundException('Key not found');
+    return this.prisma.comment.findMany({
+      where: { keyId, ...(locale ? { OR: [{ localeCode: locale }, { localeCode: null }] } : {}) },
+      include: { author: { select: { displayName: true, email: true } } },
+      orderBy: { createdAt: 'asc' },
+      take: 200,
+    });
+  }
+
+  async addComment(userId: string, projectId: string, keyId: string, body: string, locale?: string) {
+    const project = await this.projects.getFor(userId, projectId);
+    const key = await this.prisma.key.findFirst({ where: { id: keyId, projectId } });
+    if (!key) throw new NotFoundException('Key not found');
+    if (locale && !project.locales.some((l) => l.code === locale)) {
+      throw new NotFoundException(`Locale ${locale} is not part of this project`);
+    }
+    return this.prisma.comment.create({
+      data: { keyId, body, localeCode: locale ?? null, authorId: userId },
+      include: { author: { select: { displayName: true, email: true } } },
+    });
+  }
+
+  async deleteComment(userId: string, projectId: string, keyId: string, commentId: string) {
+    await this.projects.getFor(userId, projectId);
+    const comment = await this.prisma.comment.findFirst({
+      where: { id: commentId, keyId, key: { projectId } },
+    });
+    if (!comment) throw new NotFoundException('Comment not found');
+    if (comment.authorId !== userId) {
+      throw new ForbiddenException('Only the author can delete a comment');
+    }
+    await this.prisma.comment.delete({ where: { id: commentId } });
+    return { removed: commentId };
   }
 }

@@ -71,3 +71,15 @@ export class SetTagsDto {
   @MaxLength(40, { each: true })
   tags!: string[];
 }
+
+export class CreateCommentDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(2000)
+  body!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(10)
+  locale?: string;
+}

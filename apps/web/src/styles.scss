@@ -145,3 +145,12 @@ span.review { font-size: 0.72rem; padding: 0.05rem 0.4rem; border: 1px solid var
 .tag-edit { width: 140px; font-size: 0.8rem; padding: 0.15rem 0.4rem; }
 
 .key > .history-toggle { margin-left: 0.45rem; }
+
+.key > .comments-toggle { margin-left: 0.45rem; }
+.history-toggle, .tags-toggle, .comments-toggle {
+  border: none; background: none; color: var(--accent); font-size: 0.75rem;
+  padding: 0.15rem 0; cursor: pointer; text-decoration: underline;
+}
+.comment-form { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
+.comment-form input { flex: 1; }
+.comment-form select { width: auto; }

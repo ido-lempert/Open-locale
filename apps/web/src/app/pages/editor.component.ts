@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, OnInit, signal, WritableSignal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { ApiService, HistoryEntry, Key, Project, TranslationStatus } from '../api.service';
+import { ApiService, CommentEntry, HistoryEntry, Key, Project, TranslationStatus } from '../api.service';
 
 interface CellState {
   value: string; saved: string;
@@ -65,7 +65,9 @@ interface CellState {
                     }
                   </span>
                   <button class="history-toggle" [attr.aria-expanded]="historyFor() === k.id"
-                    (click)="toggleHistory(k)">history</button></td>
+                    (click)="toggleHistory(k)">history</button>
+                  <button class="comments-toggle" [attr.aria-expanded]="commentsFor() === k.id"
+                    (click)="toggleComments(k)">comments{{ k._count?.comments ? ' (' + k._count.comments + ')' : '' }}</button></td>
                 @for (l of p.locales; track l.code) {
                   <td [attr.data-locale]="l.code">
                     <textarea rows="1" [attr.dir]="isRtl(l.code) ? 'rtl' : 'ltr'"
@@ -90,6 +92,33 @@ interface CellState {
                 }
                 <td><button class="danger" [attr.aria-label]="'Delete key ' + k.name" title="Delete key" (click)="removeKey(k)">&times;</button></td>
               </tr>
+              @if (commentsFor() === k.id) {
+                <tr class="history-row"><td [attr.colspan]="2 + p.locales.length">
+                  @if (commentsLoading()) { <p class="muted">Loading comments…</p> }
+                  @else {
+                    @if (comments().length === 0) { <p class="muted">No comments yet.</p> }
+                    <ul class="history-list">
+                      @for (cm of comments(); track cm.id) {
+                        <li>
+                          <code>{{ cm.localeCode ?? 'all' }}</code>
+                          <span>{{ cm.body }}</span>
+                          <span class="muted">{{ cm.author?.displayName ?? 'unknown' }} · {{ cm.createdAt | date:'short' }}</span>
+                          <button class="danger" [attr.aria-label]="'Delete comment'" (click)="deleteComment(k, cm.id)">&times;</button>
+                        </li>
+                      }
+                    </ul>
+                    <form class="comment-form" (ngSubmit)="addComment(k)">
+                      <input aria-label="New comment" placeholder="Add a comment…" maxlength="2000"
+                        [ngModel]="commentDraft()" (ngModelChange)="commentDraft.set($event)" name="commentDraft" required />
+                      <select aria-label="Comment scope" [ngModel]="commentLocale()" (ngModelChange)="commentLocale.set($event)" name="commentLocale">
+                        <option value="">all languages</option>
+                        @for (l of p.locales; track l.code) { <option [value]="l.code">{{ l.code }}</option> }
+                      </select>
+                      <button type="submit">Post</button>
+                    </form>
+                  }
+                </td></tr>
+              }
               @if (historyFor() === k.id) {
                 <tr class="history-row"><td [attr.colspan]="2 + p.locales.length">
                   @if (historyLoading()) { <p class="muted">Loading history…</p> }
@@ -124,6 +153,11 @@ export class EditorComponent implements OnInit {
   tagEditFor = signal<string | null>(null);
   tagDraft = signal('');
   historyFor = signal<string | null>(null);
+  commentsFor = signal<string | null>(null);
+  comments = signal<CommentEntry[]>([]);
+  commentDraft = signal('');
+  commentLocale = signal('');
+  commentsLoading = signal(false);
   historyEntries = signal<(HistoryEntry & { locale: string })[]>([]);
   historyLoading = signal(false);
   readonly statuses: TranslationStatus[] = ['UNVERIFIED', 'TRANSLATED', 'REVIEWED'];
@@ -221,6 +255,32 @@ export class EditorComponent implements OnInit {
       await this.api.setTags(this.projectId, k.id, tags);
       await this.reload();
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to save tags'); }
+  }
+  async toggleComments(k: Key) {
+    if (this.commentsFor() === k.id) { this.commentsFor.set(null); return; }
+    this.commentsFor.set(k.id); this.commentsLoading.set(true); this.comments.set([]);
+    this.commentDraft.set(''); this.commentLocale.set('');
+    try {
+      this.comments.set(await this.api.listComments(this.projectId, k.id));
+    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load comments'); }
+    finally { this.commentsLoading.set(false); }
+  }
+  async addComment(k: Key) {
+    const body = this.commentDraft().trim();
+    if (!body) return;
+    try {
+      await this.api.addComment(this.projectId, k.id, body, this.commentLocale() || undefined);
+      await this.reload();
+      this.comments.set(await this.api.listComments(this.projectId, k.id));
+      this.commentDraft.set('');
+    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to add comment'); }
+  }
+  async deleteComment(k: Key, commentId: string) {
+    try {
+      await this.api.deleteComment(this.projectId, k.id, commentId);
+      await this.reload();
+      this.comments.set(await this.api.listComments(this.projectId, k.id));
+    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to delete comment'); }
   }
   async toggleHistory(k: Key) {
     if (this.historyFor() === k.id) { this.historyFor.set(null); return; }

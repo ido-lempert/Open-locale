@@ -167,6 +167,36 @@ try {
   );
   await shot('editor-12-tags-filters.png');
 
+  // Comments via UI
+  await page.click('.grid tbody tr:first-child .comments-toggle');
+  await page.waitForSelector('.comment-form', { timeout: 5000 });
+  await page.type('input[name=commentDraft]', 'Please double-check the checkout wording');
+  await page.evaluate(() => {
+    const form = document.querySelector('.comment-form');
+    form.requestSubmit();
+  });
+  await page.waitForFunction(
+    () => document.body.textContent.includes('Please double-check the checkout wording'),
+    { timeout: 10000 },
+  );
+  const commentLine = await page.$eval('.history-row .history-list', (el) => el.textContent);
+  check('comment listed with author', commentLine.includes('Demo User'), commentLine.slice(0, 80));
+  let countOk = true;
+  try {
+    await page.waitForFunction(
+      () => document.querySelector('.grid tbody tr:first-child .comments-toggle')?.textContent.includes('(1)'),
+      { timeout: 10000 },
+    );
+  } catch {
+    countOk = false;
+    const dump = await page.$$eval('.comments-toggle', (els) => els.map((e) => e.textContent.trim()));
+    const err = await page.$eval('.error', (e) => e.textContent).catch(() => null);
+    console.log('DIAG toggles:', JSON.stringify(dump), 'error-banner:', JSON.stringify(err));
+  }
+  check('comment count updates on the toggle', countOk);
+  await shot('editor-13-comments.png');
+  await page.click('.grid tbody tr:first-child .comments-toggle');
+
   const projId = page.url().split('/').pop();
   // Settings screen: rename, add locale, verify grid column appears
   await page.click('.settings-link');
