@@ -16,11 +16,12 @@ import { SnapshotsModule } from './snapshots/snapshots.module';
 import { LocksModule } from './locks/locks.module';
 import { BranchesModule } from './branches/branches.module';
 import { OtaModule } from './ota/ota.module';
+import { MtModule } from './mt/mt.module';
 import { ReportsModule } from './reports/reports.module';
 import { EmbedModule } from './embed/embed.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, ProjectsModule, KeysModule, TranslationsModule, ActivityModule, TasksModule, GlossaryModule, QaModule, WebhooksModule, SnapshotsModule, LocksModule, BranchesModule, OtaModule, ReportsModule, EmbedModule],
+  imports: [PrismaModule, AuthModule, ProjectsModule, KeysModule, TranslationsModule, ActivityModule, TasksModule, GlossaryModule, QaModule, WebhooksModule, SnapshotsModule, LocksModule, BranchesModule, OtaModule, MtModule, ReportsModule, EmbedModule],
   controllers: [AppController, DocsController],
   providers: [AppService],
 })

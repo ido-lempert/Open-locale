@@ -86,6 +86,7 @@ model Project {
   webhooks     Webhook[]
   snapshots    Snapshot[]
   otaPublications OtaPublication[]
+  mtProviders    MtProvider[]
 
   @@unique([teamId, slug])
   @@map("projects")
@@ -371,4 +372,22 @@ model Snapshot {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@map("snapshots")
+}
+
+model MtProvider {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId String   @db.Uuid
+  name      String
+  // Driver type. 'pseudo' is the only built-in; external MT engines (Google,
+  // DeepL, ...) are part of the provider contract but intentionally
+  // unimplemented until credentials and explicit authority exist.
+  type      String
+  config    Json     @default("{}")
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, name])
+  @@map("mt_providers")
 }

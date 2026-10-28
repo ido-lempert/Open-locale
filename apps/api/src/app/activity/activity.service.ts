@@ -30,6 +30,7 @@ export const ACTIVITY_ACTIONS = [
   'branch.merged',
   'ota.published',
   'project.embedOrigins.updated',
+  'mt.pretranslate',
 ] as const;
 
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];

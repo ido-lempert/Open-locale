@@ -1,0 +1,143 @@
+// MT hooks slice: provider CRUD + pseudo driver + fill-empty-only
+// pre-translate with version/history/activity accounting, permissions, and
+// the batch cap. Real PG + HTTP.
+// Run: node scripts/mt-test.mjs (requires: nx build api)
+import { execFileSync, spawn } from 'node:child_process';
+import EmbeddedPostgres from 'embedded-postgres';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+const PG_PORT = 55469, API_PORT = 3000;
+const API = `http://127.0.0.1:${API_PORT}/api`;
+const root = process.cwd();
+let failures = 0;
+const check = (n, c, x = '') => { console.log(`${c ? 'PASS' : (failures++, 'FAIL')} ${n} ${x}`); };
+async function call(path, { jwt, method = 'GET', body } = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (jwt) headers.Authorization = `Bearer ${jwt}`;
+  const res = await fetch(`${API}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  return { status: res.status, json: await res.json().catch(() => null) };
+}
+const waitFor = async (url, tries = 90) => {
+  for (let i = 0; i < tries; i++) { await new Promise((r) => setTimeout(r, 500)); if (await fetch(url).then((r) => r.status > 0).catch(() => false)) return true; }
+  return false;
+};
+
+const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-mt-'));
+const pg = new EmbeddedPostgres({ databaseDir: dataDir, user: 'postgres', password: 'postgres', port: PG_PORT, persistent: false });
+let api;
+try {
+  await pg.initialise(); await pg.start(); await pg.createDatabase('openlocale_mt');
+  const url = `postgresql://postgres:postgres@localhost:${PG_PORT}/openlocale_mt`;
+  execFileSync(join(root, 'node_modules', '.bin', 'prisma'), ['migrate', 'deploy'], {
+    env: { ...process.env, DATABASE_URL: url }, stdio: 'pipe' });
+  api = spawn(process.execPath, [join(root, 'dist', 'apps', 'api', 'main.js')], {
+    env: { ...process.env, DATABASE_URL: url, JWT_SECRET: 'mt-secret', PORT: String(API_PORT) }, stdio: 'pipe' });
+  if (!(await waitFor(`${API}/projects`))) throw new Error('API did not start');
+
+  const ts = Date.now();
+  const owner = (await call('/auth/signup', { method: 'POST', body: { email: `mt${ts}@t.dev`, password: 'pass1234', displayName: 'mt' } })).json;
+  const jwt = owner.accessToken;
+  const member = (await call('/auth/signup', { method: 'POST', body: { email: `mtm${ts}@t.dev`, password: 'pass1234', displayName: 'm' } })).json;
+  const pid = (await call('/projects', { jwt, method: 'POST', body: { name: 'Mt', slug: `mt-${ts}`, baseLocale: 'en', locales: ['en', 'he', 'fr'] } })).json.id;
+  await call(`/projects/${pid}/members`, { jwt, method: 'POST', body: { email: member.user.email, role: 'MEMBER', allowedLocales: ['fr'] } });
+
+  // Provider management is admin-only.
+  const memberCreate = await call(`/projects/${pid}/mt/providers`, { jwt: member.accessToken, method: 'POST', body: { name: 'x', type: 'pseudo' } });
+  check('member cannot create a provider (403)', memberCreate.status === 403, `got ${memberCreate.status}`);
+  const badType = await call(`/projects/${pid}/mt/providers`, { jwt, method: 'POST', body: { name: 'x', type: 'google' } });
+  check('unimplemented provider type rejected (400)', badType.status === 400, `got ${badType.status}`);
+  const provider = (await call(`/projects/${pid}/mt/providers`, { jwt, method: 'POST', body: { name: 'Pseudo', type: 'pseudo' } })).json;
+  check('admin creates a pseudo provider', !!provider.id && provider.enabled === true);
+  const dup = await call(`/projects/${pid}/mt/providers`, { jwt, method: 'POST', body: { name: 'Pseudo', type: 'pseudo' } });
+  check('duplicate provider name conflicts (409)', dup.status === 409, `got ${dup.status}`);
+
+  // Keys with fixtures: normal, placeholder+html, empty source, existing target.
+  const k1 = (await call(`/projects/${pid}/keys`, { jwt, method: 'POST', body: { name: 'a.hello' } })).json;
+  await call(`/projects/${pid}/keys/${k1.id}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value: 'Hello {name}!' } });
+  const k2 = (await call(`/projects/${pid}/keys`, { jwt, method: 'POST', body: { name: 'a.cta' } })).json;
+  await call(`/projects/${pid}/keys/${k2.id}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value: 'Click <b>here</b> %s' } });
+  const k3 = (await call(`/projects/${pid}/keys`, { jwt, method: 'POST', body: { name: 'a.empty' } })).json;
+  const k4 = (await call(`/projects/${pid}/keys`, { jwt, method: 'POST', body: { name: 'a.bye' } })).json;
+  await call(`/projects/${pid}/keys/${k4.id}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value: 'Bye' } });
+  await call(`/projects/${pid}/keys/${k4.id}/translations`, { jwt, method: 'PUT', body: { locale: 'he', value: ' existing human ' } });
+  const k4v1 = (await call(`/projects/${pid}/keys/${k4.id}/translations/he/history`, { jwt })).json.length;
+
+  // Locale-restricted member can only run pre-translate on their locales.
+  const deny = await call(`/projects/${pid}/mt/pretranslate`, { jwt: member.accessToken, method: 'POST', body: { providerId: provider.id, locale: 'he' } });
+  check('locale-restricted member denied for he (403)', deny.status === 403, `got ${deny.status}`);
+  const allowFr = await call(`/projects/${pid}/mt/pretranslate`, { jwt: member.accessToken, method: 'POST', body: { providerId: provider.id, locale: 'fr' } });
+  check('locale-restricted member may pre-translate fr', allowFr.status === 200 || allowFr.status === 201, `got ${allowFr.status}`);
+
+  const run1 = await call(`/projects/${pid}/mt/pretranslate`, { jwt, method: 'POST', body: { providerId: provider.id, locale: 'he' } });
+  check('pretranslate fills exactly the empty rows', run1.json && run1.json.translated === 2 && run1.json.skippedExisting === 1 && run1.json.skippedNoSource === 1 && run1.json.totalKeys === 4, JSON.stringify(run1.json));
+  const keys1 = (await call(`/projects/${pid}/keys?branch=main`, { jwt })).json;
+  const t1 = keys1.find((k) => k.id === k1.id).translations.find((t) => t.localeCode === 'he');
+  const t2 = keys1.find((k) => k.id === k2.id).translations.find((t) => t.localeCode === 'he');
+  const t4 = keys1.find((k) => k.id === k4.id).translations.find((t) => t.localeCode === 'he');
+  check('pseudo output is wrapped, accented and target-tagged', /^\[.*·he\]$/.test(t1.value) && t1.value.includes('Ħ'), t1.value);
+  check('placeholders and html survive untouched', t2.value.includes('<b>') && t2.value.includes('</b>') && t2.value.includes('%s'), t2.value);
+  check('placeholder token preserved verbatim', t1.value.includes('{name}'), t1.value);
+  check('existing human value untouched and unversioned', t4.value === ' existing human ' && t4.version === 1, JSON.stringify({ v: t4.version, val: t4.value }));
+  const k4v2 = (await call(`/projects/${pid}/keys/${k4.id}/translations/he/history`, { jwt })).json.length;
+  check('no new history for the untouched row', k4v2 === k4v1, `${k4v1} -> ${k4v2}`);
+  const h1 = (await call(`/projects/${pid}/keys/${k1.id}/translations/he/history`, { jwt })).json;
+  check('MT write has a history row with actor attribution', h1.length === 1 && h1[0].changedBy && h1[0].status === 'UNVERIFIED', JSON.stringify(h1[0] && h1[0].status));
+
+  const run2 = await call(`/projects/${pid}/mt/pretranslate`, { jwt, method: 'POST', body: { providerId: provider.id, locale: 'he' } });
+  check('second run translates nothing (fill-empty-only)', run2.json.translated === 0 && run2.json.skippedExisting === 3 && run2.json.skippedNoSource === 1, JSON.stringify(run2.json));
+  const t1b = (await call(`/projects/${pid}/keys?branch=main`, { jwt })).json.find((k) => k.id === k1.id).translations.find((t) => t.localeCode === 'he');
+  check('second run leaves value and version untouched', t1b.value === t1.value && t1b.version === 1, `v=${t1b.version}`);
+
+  // Determinism: same input in another locale produces the same letters with a
+  // different locale tag.
+  const t1fr = (await call(`/projects/${pid}/keys?branch=main`, { jwt })).json.find((k) => k.id === k1.id).translations.find((t) => t.localeCode === 'fr');
+  check('pseudo is deterministic modulo the locale tag', t1fr && t1fr.value.replace('·fr]', ']') === t1.value.replace('·he]', ']'), `${t1fr && t1fr.value} vs ${t1.value}`);
+
+  // keyIds scoping: only the listed keys are considered.
+  const k5 = (await call(`/projects/${pid}/keys`, { jwt, method: 'POST', body: { name: 'a.scoped' } })).json;
+  await call(`/projects/${pid}/keys/${k5.id}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value: 'Scoped' } });
+  const scoped = await call(`/projects/${pid}/mt/pretranslate`, { jwt, method: 'POST', body: { providerId: provider.id, locale: 'he', keyIds: [k5.id] } });
+  check('keyIds scopes the run', scoped.json.translated === 1 && scoped.json.totalKeys === 1, JSON.stringify(scoped.json));
+
+  // Disabled provider refuses runs; re-enable works.
+  await call(`/projects/${pid}/mt/providers/${provider.id}`, { jwt, method: 'PATCH', body: { enabled: false } });
+  const dis = await call(`/projects/${pid}/mt/pretranslate`, { jwt, method: 'POST', body: { providerId: provider.id, locale: 'fr' } });
+  check('disabled provider refuses (400)', dis.status === 400, `got ${dis.status}`);
+  await call(`/projects/${pid}/mt/providers/${provider.id}`, { jwt, method: 'PATCH', body: { enabled: true } });
+
+  // Same-target-as-source rejected.
+  const sameLoc = await call(`/projects/${pid}/mt/pretranslate`, { jwt, method: 'POST', body: { providerId: provider.id, locale: 'he', sourceLocale: 'he' } });
+  check('source == target rejected (400)', sameLoc.status === 400, `got ${sameLoc.status}`);
+
+  // Cross-project provider id is invisible.
+  const pidB = (await call('/projects', { jwt, method: 'POST', body: { name: 'MtB', slug: `mtb-${ts}`, baseLocale: 'en', locales: ['en', 'he'] } })).json.id;
+  const cross = await call(`/projects/${pidB}/mt/pretranslate`, { jwt, method: 'POST', body: { providerId: provider.id, locale: 'he' } });
+  check('provider from another project is 404', cross.status === 404, `got ${cross.status}`);
+
+  // Batch cap: >200 selected keys is a 400.
+  for (let i = 0; i < 201; i++) {
+    await call(`/projects/${pidB}/keys`, { jwt, method: 'POST', body: { name: `bulk.k${i}` } });
+  }
+  const over = await call(`/projects/${pidB}/mt/pretranslate`, { jwt, method: 'POST', body: { providerId: (await call(`/projects/${pidB}/mt/providers`, { jwt, method: 'POST', body: { name: 'P', type: 'pseudo' } })).json.id, locale: 'he' } });
+  check('batch cap rejects runs over 200 keys (400)', over.status === 400, `got ${over.status}`);
+  const withinCap = await call(`/projects/${pidB}/mt/pretranslate`, { jwt, method: 'POST', body: { providerId: over.json ? (await call(`/projects/${pidB}/mt/providers`, { jwt })).json[0].id : '', locale: 'he', keyIds: [] } });
+  check('empty keyIds list selects nothing, not everything', withinCap.json && withinCap.json.totalKeys === 0 && withinCap.json.translated === 0, JSON.stringify(withinCap.json));
+
+  // Activity trail.
+  const acts = (await call(`/projects/${pid}/activity`, { jwt })).json;
+  const mtActs = (acts.items || []).filter((a) => a.action === 'mt.pretranslate');
+  check('activity log records pre-translate runs', mtActs.length >= 2, `got ${mtActs.length}`);
+
+  // Delete provider: further runs 404.
+  await call(`/projects/${pid}/mt/providers/${provider.id}`, { jwt, method: 'DELETE' });
+  const gone = await call(`/projects/${pid}/mt/pretranslate`, { jwt, method: 'POST', body: { providerId: provider.id, locale: 'he' } });
+  check('deleted provider is 404', gone.status === 404, `got ${gone.status}`);
+} finally {
+  if (api) api.kill('SIGTERM');
+  await pg.stop();
+  rmSync(dataDir, { recursive: true, force: true });
+}
+console.log(failures ? `mt: ${failures} FAILURES` : 'mt pass complete');
+process.exit(failures ? 1 : 0);

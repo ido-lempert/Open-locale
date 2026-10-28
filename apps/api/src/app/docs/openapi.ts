@@ -77,6 +77,17 @@ export const OPENAPI = {
     '/api/projects/{projectId}/branches/{branchId}/merge': {
       post: p('Merge a branch into another: pre-merge snapshot, copy keys and translations with history attribution, target-only keys kept, post-preview edits skipped (admin)', 'branches', true),
     },
+    '/api/projects/{projectId}/mt/providers': {
+      get: p('List machine-translation providers for the project', 'mt'),
+      post: p('Create an MT provider (admin; built-in type: pseudo)', 'mt', true),
+    },
+    '/api/projects/{projectId}/mt/providers/{providerId}': {
+      patch: p('Update an MT provider (admin): rename, enable/disable, config', 'mt', true),
+      delete: p('Delete an MT provider (admin)', 'mt', true),
+    },
+    '/api/projects/{projectId}/mt/pretranslate': {
+      post: p('Pre-translate EMPTY target cells via a provider (fill-empty-only, max 200 keys, rows start UNVERIFIED)', 'mt', true),
+    },
     '/api/projects/{projectId}/ota': {
       get: p('List OTA publications (version, branch, locales, counts)', 'ota'),
     },

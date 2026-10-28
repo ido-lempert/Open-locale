@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { ApiService, BranchInfo, OtaPublicationInfo, ApiTokenInfo, MemberInfo, Project } from '../api.service';
+import { ApiService, BranchInfo, MtProviderInfo, OtaPublicationInfo, ApiTokenInfo, MemberInfo, Project } from '../api.service';
 
 @Component({
   selector: 'ol-settings',
@@ -112,6 +112,41 @@ import { ApiService, BranchInfo, OtaPublicationInfo, ApiTokenInfo, MemberInfo, P
           </form>
         </section>
         <section class="panel">
+          <h2>Machine translation</h2>
+          <p class="muted">Providers pre-translate EMPTY target cells only - existing human or reviewed values are never touched. Runs are attributed to you in the activity log and each filled row starts UNVERIFIED so it still goes through review. The built-in pseudo provider is deterministic and offline; external MT engines plug into the same provider contract once configured.</p>
+          <ul class="locale-list">
+            @for (p of mtProviders(); track p.id) {
+              <li>
+                <span>{{ p.name }} <span class="muted">{{ p.type }}</span></span>
+                <button (click)="toggleMtProvider(p)">{{ p.enabled ? 'Disable' : 'Enable' }}</button>
+                <button class="danger" (click)="removeMtProvider(p)">Remove</button>
+              </li>
+            }
+            @if (!mtProviders().length) { <li class="muted">No providers yet - add the pseudo provider to pre-translate empty cells.</li> }
+          </ul>
+          <form class="inline" (ngSubmit)="addMtProvider()">
+            <input aria-label="New provider name" placeholder="Provider name" [ngModel]="newMtName()" (ngModelChange)="newMtName.set($event)" name="newMtName" required />
+            <select aria-label="Provider type" [ngModel]="newMtType()" (ngModelChange)="newMtType.set($event)" name="newMtType">
+              <option value="pseudo">pseudo (built-in, offline)</option>
+            </select>
+            <button type="submit" [disabled]="busy()">Add provider</button>
+          </form>
+          @if (mtProviders().length) {
+            <form class="inline" (ngSubmit)="runPretranslate()">
+              <select aria-label="Pre-translate provider" [ngModel]="mtProviderId()" (ngModelChange)="mtProviderId.set($event)" name="mtProviderId">
+                @for (p of mtProviders(); track p.id) { <option [value]="p.id" [disabled]="!p.enabled">{{ p.name }}</option> }
+              </select>
+              <select aria-label="Target locale" [ngModel]="mtLocale()" (ngModelChange)="mtLocale.set($event)" name="mtLocale">
+                @for (l of project()?.locales ?? []; track l.code) {
+                  @if (l.code !== project()?.baseLocale) { <option [value]="l.code">{{ l.code }}</option> }
+                }
+              </select>
+              <button type="submit" [disabled]="busy()">Pre-translate empty cells</button>
+            </form>
+            @if (mtResult()) { <p class="muted" role="status">{{ mtResult() }}</p> }
+          }
+        </section>
+        <section class="panel">
           <h2>Members</h2>
           <ul class="locale-list">
             @for (m of members(); track m.id) {
@@ -205,6 +240,12 @@ export class SettingsComponent implements OnInit {
       this.members.set(await this.api.listMembers(this.projectId));
       this.otaPubs.set(await this.api.listOtaPublications(this.projectId));
       this.branches.set(await this.api.listBranches(this.projectId));
+      this.mtProviders.set(await this.api.listMtProviders(this.projectId));
+      if (!this.mtProviderId() && this.mtProviders().length) this.mtProviderId.set(this.mtProviders()[0].id);
+      if (!this.mtLocale()) {
+        const first = (this.project()?.locales ?? []).find((l) => l.code !== this.project()?.baseLocale);
+        if (first) this.mtLocale.set(first.code);
+      }
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load'); }
   }
   async publishOta() {
@@ -273,6 +314,9 @@ export class SettingsComponent implements OnInit {
     finally { this.busy.set(false); }
   }
   readonly newOrigin = signal('');
+  mtProviders = signal<MtProviderInfo[]>([]);
+  newMtName = signal(''); newMtType = signal('pseudo');
+  mtProviderId = signal(''); mtLocale = signal(''); mtResult = signal('');
 
   async addOrigin() {
     const origin = this.newOrigin().trim();
@@ -295,6 +339,41 @@ export class SettingsComponent implements OnInit {
       await this.reload();
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
+  }
+
+  async addMtProvider() {
+    this.busy.set(true); this.error.set('');
+    try {
+      await this.api.createMtProvider(this.projectId, this.newMtName().trim(), this.newMtType());
+      this.newMtName.set('');
+      this.mtProviders.set(await this.api.listMtProviders(this.projectId));
+      if (!this.mtProviderId() && this.mtProviders().length) this.mtProviderId.set(this.mtProviders()[0].id);
+    } catch (e) { this.error.set(e instanceof Error ? e.message : String(e)); } finally { this.busy.set(false); }
+  }
+
+  async toggleMtProvider(p: MtProviderInfo) {
+    this.busy.set(true); this.error.set('');
+    try {
+      await this.api.updateMtProvider(this.projectId, p.id, { enabled: !p.enabled });
+      this.mtProviders.set(await this.api.listMtProviders(this.projectId));
+    } catch (e) { this.error.set(e instanceof Error ? e.message : String(e)); } finally { this.busy.set(false); }
+  }
+
+  async removeMtProvider(p: MtProviderInfo) {
+    this.busy.set(true); this.error.set('');
+    try {
+      await this.api.deleteMtProvider(this.projectId, p.id);
+      this.mtProviders.set(await this.api.listMtProviders(this.projectId));
+      if (this.mtProviderId() === p.id) this.mtProviderId.set(this.mtProviders()[0]?.id ?? '');
+    } catch (e) { this.error.set(e instanceof Error ? e.message : String(e)); } finally { this.busy.set(false); }
+  }
+
+  async runPretranslate() {
+    this.busy.set(true); this.error.set(''); this.mtResult.set('');
+    try {
+      const r = await this.api.pretranslate(this.projectId, this.mtProviderId(), this.mtLocale());
+      this.mtResult.set(`Pre-translate (${this.mtLocale()}): ${r.translated} filled, ${r.skippedExisting} already translated (untouched), ${r.skippedNoSource} without source text. Filled rows are UNVERIFIED and attributed to you.`);
+    } catch (e) { this.error.set(e instanceof Error ? e.message : String(e)); } finally { this.busy.set(false); }
   }
 
   async addStatus() {

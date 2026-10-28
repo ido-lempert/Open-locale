@@ -579,6 +579,33 @@ try {
   await new Promise((r) => setTimeout(r, 300));
   await shot('editor-27-embed-origins.png');
 
+  // --- Machine translation: add the pseudo provider and pre-translate ---
+  await page.evaluate(() => {
+    const input = document.querySelector('input[name=newMtName]');
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    setter.call(input, 'Pseudo');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.closest('form').requestSubmit();
+  });
+  const mtListed = await page.waitForFunction(() => (document.body.textContent || '').includes('pseudo (built-in, offline)') && [...document.querySelectorAll('li')].some((li) => li.textContent.includes('Pseudo')), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('MT provider added via settings UI and listed', mtListed);
+  await page.evaluate(() => {
+    const sel = document.querySelector('select[name=mtLocale]');
+    if (sel && [...sel.options].some((o) => o.value === 'he')) {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
+      setter.call(sel, 'he');
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    sel.closest('form').requestSubmit();
+  });
+  const mtDone = await page.waitForFunction(() => (document.body.textContent || '').includes('Pre-translate (he):'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('pre-translate run reports fill/skip counts', mtDone);
+  const mtLine = await page.evaluate(() => document.querySelector('p[role=status]')?.textContent || '');
+  check('pre-translate filled at least one empty cell', /: ([1-9]\d*) filled/.test(mtLine), mtLine);
+  await page.evaluate(() => { [...document.querySelectorAll('h2')].find((h) => h.textContent === 'Machine translation')?.scrollIntoView({ block: 'center' }); window.scrollBy(0, 140); });
+  await new Promise((r) => setTimeout(r, 300));
+  await shot('editor-28-mt.png');
+
   // --- Progress report ---
   await page.setViewport({ width: 1280, height: 900 });
   await page.goto(`${WEB}/projects/${projId}/reports`, { waitUntil: 'networkidle0' });

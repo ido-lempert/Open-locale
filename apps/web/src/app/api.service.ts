@@ -25,6 +25,12 @@ export interface Key {
 export interface LocaleProgress { locale: string; base: boolean; total: number; translated: number; untranslated: number; percent: number; byStatus: Record<string, number>; }
 export interface ProgressReport { branch: string; totalKeys: number; locales: LocaleProgress[]; }
 
+export interface MtProviderInfo {
+  id: string; name: string; type: string; enabled: boolean; createdAt: string;
+}
+export interface MtPretranslateResult {
+  translated: number; skippedExisting: number; skippedNoSource: number; totalKeys: number;
+}
 export interface OtaPublicationInfo { id: string; version: number; branch: string; createdAt: string; locales: string[]; translations: number; }
 
 export interface BranchInfo { id: string; name: string; createdAt: string; _count?: { keys: number }; }
@@ -174,6 +180,21 @@ export class ApiService {
   }
   getProgress(projectId: string, branch?: string) {
     return this.request<ProgressReport>(`/projects/${projectId}/reports/progress${branch ? `?branch=${encodeURIComponent(branch)}` : ''}`);
+  }
+  listMtProviders(projectId: string) {
+    return this.request<MtProviderInfo[]>(`/projects/${projectId}/mt/providers`);
+  }
+  createMtProvider(projectId: string, name: string, type: string) {
+    return this.request<MtProviderInfo>(`/projects/${projectId}/mt/providers`, { method: 'POST', body: JSON.stringify({ name, type }) });
+  }
+  updateMtProvider(projectId: string, providerId: string, patch: { enabled?: boolean }) {
+    return this.request<MtProviderInfo>(`/projects/${projectId}/mt/providers/${providerId}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  }
+  deleteMtProvider(projectId: string, providerId: string) {
+    return this.request<{ deleted: boolean }>(`/projects/${projectId}/mt/providers/${providerId}`, { method: 'DELETE' });
+  }
+  pretranslate(projectId: string, providerId: string, locale: string) {
+    return this.request<MtPretranslateResult>(`/projects/${projectId}/mt/pretranslate`, { method: 'POST', body: JSON.stringify({ providerId, locale }) });
   }
   listOtaPublications(projectId: string) {
     return this.request<OtaPublicationInfo[]>(`/projects/${projectId}/ota`);
