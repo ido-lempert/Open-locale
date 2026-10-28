@@ -15,9 +15,10 @@ import { DocsController } from './docs/docs.controller';
 import { SnapshotsModule } from './snapshots/snapshots.module';
 import { LocksModule } from './locks/locks.module';
 import { BranchesModule } from './branches/branches.module';
+import { OtaModule } from './ota/ota.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, ProjectsModule, KeysModule, TranslationsModule, ActivityModule, TasksModule, GlossaryModule, QaModule, WebhooksModule, SnapshotsModule, LocksModule, BranchesModule],
+  imports: [PrismaModule, AuthModule, ProjectsModule, KeysModule, TranslationsModule, ActivityModule, TasksModule, GlossaryModule, QaModule, WebhooksModule, SnapshotsModule, LocksModule, BranchesModule, OtaModule],
   controllers: [AppController, DocsController],
   providers: [AppService],
 })

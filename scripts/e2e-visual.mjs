@@ -535,6 +535,36 @@ try {
   check('conflicting key overwritten on main by merge', homeTitleVal.includes('Checkout from the branch'));
   await shot('editor-22-branch-merged.png');
   
+
+  // --- OTA: publish a bundle from settings, pull it via API ---
+  await page.goto(`${WEB}/projects/${projId}/settings`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('select[name=otaBranch]', { timeout: 10000 });
+  await page.evaluate(() => {
+    const form = document.querySelector('select[name=otaBranch]').closest('form');
+    form.requestSubmit();
+  });
+  const otaNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('Published main v1'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('OTA publish via UI shows summary notice', otaNotice);
+  const otaPull = await page.evaluate(async () => {
+    const token = localStorage.getItem('ol_token');
+    const pid = location.pathname.split('/')[2];
+    const res = await fetch(`/api/projects/${pid}/ota/latest?locale=he`, { headers: { Authorization: `Bearer ${token}` } });
+    return { status: res.status, etag: res.headers.get('etag'), body: await res.json() };
+  });
+  check('published bundle pulls with ETag and branch values',
+    otaPull.status === 200 && !!otaPull.etag && otaPull.body.branch === 'main' && otaPull.body.version === 1 && typeof otaPull.body.translations === 'object',
+    JSON.stringify({ status: otaPull.status, v: otaPull.body.version }));
+  const ota304 = await page.evaluate(async (et) => {
+    const token = localStorage.getItem('ol_token');
+    const pid = location.pathname.split('/')[2];
+    const res = await fetch(`/api/projects/${pid}/ota/latest?locale=he`, { headers: { Authorization: `Bearer ${token}`, 'If-None-Match': et } });
+    return res.status;
+  }, otaPull.etag);
+  check('If-None-Match yields 304 via UI session', ota304 === 304, `got ${ota304}`);
+  await page.evaluate(() => [...document.querySelectorAll('h2')].find((h) => h.textContent === 'OTA publications')?.scrollIntoView({ block: 'start' }));
+  await new Promise((r) => setTimeout(r, 300));
+  await shot('editor-24-ota.png');
+
   // Mobile viewport evidence (390px)
   await page.goto(`${WEB}/projects/${projId}`, { waitUntil: 'networkidle0' });
   await page.setViewport({ width: 390, height: 844 });

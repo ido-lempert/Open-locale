@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { ApiService, ApiTokenInfo, MemberInfo, Project } from '../api.service';
+import { ApiService, BranchInfo, OtaPublicationInfo, ApiTokenInfo, MemberInfo, Project } from '../api.service';
 
 @Component({
   selector: 'ol-settings',
@@ -123,6 +123,26 @@ import { ApiService, ApiTokenInfo, MemberInfo, Project } from '../api.service';
           </form>
           <p class="muted">Members join this team and can access every project in it. A locale list limits their translation writes across all of the team's projects. Project administration (settings, locales, webhooks, restores, members) requires admin.</p>
         </section>
+        <section class="panel">
+          <h2>OTA publications</h2>
+          <p class="muted">Immutable per-branch translation bundles for OTA pull. Pull requires a session or a read API token - bundles are never public.</p>
+          <ul class="locale-list">
+            @for (o of otaPubs(); track o.id) {
+              <li>
+                <span>{{ o.branch }} <span class="muted">v{{ o.version }}</span></span>
+                <span class="muted">{{ o.locales.join(', ') }} - {{ o.translations }} translations - {{ o.createdAt | date:'medium' }}</span>
+              </li>
+            }
+            @if (!otaPubs().length) { <li class="muted">No publications yet.</li> }
+          </ul>
+          <form class="inline" (ngSubmit)="publishOta()">
+            <select aria-label="OTA branch" [ngModel]="otaBranch()" (ngModelChange)="otaBranch.set($event)" name="otaBranch">
+              @for (b of branches(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }
+            </select>
+            <button type="submit" [disabled]="busy()">Publish bundle</button>
+          </form>
+          @if (otaNotice()) { <p class="notice">{{ otaNotice() }}</p> }
+        </section>
         <section class="panel danger-zone">
           <h2>Danger zone</h2>
           @if (!confirming()) {
@@ -150,6 +170,7 @@ export class SettingsComponent implements OnInit {
   confirmingToken = signal<string | null>(null);
   confirmingLocale = signal<string | null>(null);
   members = signal<MemberInfo[]>([]);
+  otaPubs = signal<OtaPublicationInfo[]>([]); otaBranch = signal('main'); branches = signal<BranchInfo[]>([]); otaNotice = signal('');
   memberEmail = signal(''); memberRole = signal('MEMBER'); memberLocales = signal(''); newStatus = signal('');
   localeTxCount = signal(0);
   projectId = '';
@@ -165,7 +186,18 @@ export class SettingsComponent implements OnInit {
       this.name.set(p.name); this.description.set(p.description);
       this.tokens.set(await this.api.listTokens());
       this.members.set(await this.api.listMembers(this.projectId));
+      this.otaPubs.set(await this.api.listOtaPublications(this.projectId));
+      this.branches.set(await this.api.listBranches(this.projectId));
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load'); }
+  }
+  async publishOta() {
+    this.busy.set(true); this.error.set(''); this.otaNotice.set('');
+    try {
+      const pub = await this.api.publishOta(this.projectId, this.otaBranch());
+      this.otaNotice.set(`Published ${pub.branch} v${pub.version}: ${pub.locales.length} locales, ${pub.translations} translations.`);
+      this.otaPubs.set(await this.api.listOtaPublications(this.projectId));
+    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Publish failed'); }
+    finally { this.busy.set(false); }
   }
   async createToken() {
     this.busy.set(true); this.error.set('');

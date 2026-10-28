@@ -22,6 +22,8 @@ export interface Key {
   translations: Translation[];
   _count?: { comments: number; screenshots?: number };
 }
+export interface OtaPublicationInfo { id: string; version: number; branch: string; createdAt: string; locales: string[]; translations: number; }
+
 export interface BranchInfo { id: string; name: string; createdAt: string; _count?: { keys: number }; }
 
 export interface MemberInfo {
@@ -70,6 +72,8 @@ export interface TaskItem {
   assignee: { id: string; displayName: string; email: string } | null;
   creator: { id: string; displayName: string; email: string } | null;
 }
+export interface OtaPublicationInfo { id: string; version: number; branch: string; createdAt: string; locales: string[]; translations: number; }
+
 export interface BranchInfo { id: string; name: string; createdAt: string; _count?: { keys: number }; }
 
 export interface MemberInfo { id: string; displayName: string; email: string; role: string; }
@@ -161,6 +165,12 @@ export class ApiService {
     for (const [k, v] of Object.entries(filters)) if (v) params.set(k, v);
     const q = params.toString();
     return this.request<Key[]>(`/projects/${projectId}/keys${q ? `?${q}` : ''}`);
+  }
+  listOtaPublications(projectId: string) {
+    return this.request<OtaPublicationInfo[]>(`/projects/${projectId}/ota`);
+  }
+  publishOta(projectId: string, branch?: string) {
+    return this.request<OtaPublicationInfo>(`/projects/${projectId}/ota/publish`, { method: 'POST', body: JSON.stringify(branch ? { branch } : {}) });
   }
   listBranches(projectId: string) {
     return this.request<BranchInfo[]>(`/projects/${projectId}/branches`);

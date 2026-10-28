@@ -26,7 +26,8 @@
     "test:review": "node scripts/review-workflow-test.mjs",
     "test:migration": "node scripts/migration-status-test.mjs",
     "test:branches": "node scripts/branches-test.mjs",
-    "test:merge-concurrency": "node scripts/merge-concurrency-test.mjs"
+    "test:merge-concurrency": "node scripts/merge-concurrency-test.mjs",
+    "test:ota": "node scripts/ota-test.mjs"
   },
   "private": true,
   "dependencies": {

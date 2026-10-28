@@ -24,7 +24,7 @@ try {
   // Stage 1: apply every migration EXCEPT the enum->text one, on the old schema.
   const migDir = join(root, 'prisma', 'migrations');
   const staged = mkdtempSync(join(tmpdir(), 'ol-mig-stage-'));
-  for (const m of readdirSync(migDir).filter((m) => m !== '20261028224500_review_workflow' && m !== '20261028232000_branches' && !m.endsWith('.toml'))) {
+  for (const m of readdirSync(migDir).filter((m) => !['20261028224500_review_workflow', '20261028232000_branches', '20261028235000_ota_publications'].includes(m) && !m.endsWith('.toml'))) {
     cpSync(join(migDir, m), join(staged, m), { recursive: true });
   }
   const shadow = mkdtempSync(join(tmpdir(), 'ol-mig-shadow-'));

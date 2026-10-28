@@ -18,6 +18,10 @@ const ACTION_LABELS: Record<string, string> = {
   'snapshot.restored': 'restored a snapshot',
   'locale.added': 'added locale',
   'locale.removed': 'removed locale',
+  'branch.created': 'created branch',
+  'branch.deleted': 'deleted branch',
+  'branch.merged': 'merged branch',
+  'ota.published': 'published an OTA bundle',
 };
 
 @Component({

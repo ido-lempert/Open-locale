@@ -77,6 +77,18 @@ export const OPENAPI = {
     '/api/projects/{projectId}/branches/{branchId}/merge': {
       post: p('Merge a branch into another: pre-merge snapshot, copy keys and translations with history attribution, target-only keys kept, post-preview edits skipped (admin)', 'branches', true),
     },
+    '/api/projects/{projectId}/ota': {
+      get: p('List OTA publications (version, branch, locales, counts)', 'ota'),
+    },
+    '/api/projects/{projectId}/ota/publish': {
+      post: p('Publish an immutable OTA bundle for a branch (admin, session only)', 'ota', true),
+    },
+    '/api/projects/{projectId}/ota/latest': {
+      get: p('Pull the latest OTA bundle for a locale/branch (ETag, 304 on If-None-Match; authenticated, never public)', 'ota'),
+    },
+    '/api/projects/{projectId}/ota/{version}/{locale}': {
+      get: p('Pull a specific OTA bundle version for a locale (immutable)', 'ota'),
+    },
     '/api/projects/{projectId}/keys': {
       get: p('List keys (supports search, tag, status and branch filters)', 'keys'),
       post: p('Create a key', 'keys', true),

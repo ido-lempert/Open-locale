@@ -84,6 +84,7 @@ model Project {
   glossaryTerms GlossaryTerm[]
   webhooks     Webhook[]
   snapshots    Snapshot[]
+  otaPublications OtaPublication[]
 
   @@unique([teamId, slug])
   @@map("projects")
@@ -108,6 +109,7 @@ model Branch {
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   keys    Key[]
+  otaPublications OtaPublication[]
 
   @@unique([projectId, name])
   @@map("branches")
@@ -328,6 +330,25 @@ model Webhook {
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@map("webhooks")
+}
+
+// Immutable published translation bundle for OTA pull: one row per publish
+// per branch, payload maps locale -> { key: value }. Authenticated pull only;
+// there is no public endpoint.
+model OtaPublication {
+  id          String   @id @default(uuid()) @db.Uuid
+  projectId   String   @db.Uuid
+  branchId    String   @db.Uuid
+  version     Int
+  payload     Json
+  createdById String?  @db.Uuid
+  createdAt   DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  branch  Branch  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, branchId, version])
+  @@map("ota_publications")
 }
 
 model Snapshot {
