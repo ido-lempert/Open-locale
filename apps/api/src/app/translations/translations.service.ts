@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
@@ -74,29 +75,54 @@ export class TranslationsService {
   }
 
   // Review queue bulk transition: set one status for many translations in a
-  // single locale at once. Same gates as single setStatus; one history row per
-  // actually-changed translation and one activity event for the batch.
-  async bulkSetStatus(userId: string, projectId: string, locale: string, status: string, keyIds?: string[]) {
+  // single locale at once. The update is ONE atomic UPDATE ... RETURNING whose
+  // WHERE re-checks every condition at write time, so a concurrent edit that
+  // changes a row's status or value after a preview excludes that row from the
+  // commit. Scope: the given locale only; only rows whose CURRENT status
+  // matches `from` (when given); optionally narrowed to keys matching search/
+  // tag; empty values are never marked reviewed-or-anything (an empty string
+  // is not a translation). dryRun returns the count without writing.
+  async bulkSetStatus(userId: string, projectId: string, input: {
+    locale: string; status: string; from?: string; search?: string; tag?: string; keyIds?: string[]; dryRun?: boolean;
+  }) {
+    const { locale, status, from, search, tag, keyIds, dryRun } = input;
     await this.projects.assertLocaleWrite(userId, projectId, [locale]);
     const project = await this.projects.getFor(userId, projectId);
     this.assertKnownStatus(project, status);
     if (!project.locales.some((l) => l.code === locale)) {
       throw new BadRequestException(`Locale ${locale} is not part of this project`);
     }
+    const keyConditions = [Prisma.sql`k."projectId" = ${projectId}::uuid`];
+    if (search) keyConditions.push(Prisma.sql`k."name" ILIKE ${'%' + search + '%'}`);
+    if (tag) keyConditions.push(Prisma.sql`k."tags" @> ARRAY[${tag}]::text[]`);
+    if (keyIds?.length) keyConditions.push(Prisma.sql`k."id" = ANY(${keyIds}::uuid[])`);
+    const conditions = [
+      Prisma.sql`t."projectId" = ${projectId}::uuid`,
+      Prisma.sql`t."localeCode" = ${locale}`,
+      Prisma.sql`t."status" <> ${status}`,
+      Prisma.sql`t."value" <> ''`,
+      ...(from ? [Prisma.sql`t."status" = ${from}`] : []),
+      Prisma.sql`t."keyId" IN (SELECT k."id" FROM "keys" k WHERE ${Prisma.join(keyConditions, ' AND ')})`,
+    ];
+    const where = Prisma.join(conditions, ' AND ');
+    if (dryRun) {
+      const rows = await this.prisma.$queryRaw<{ count: bigint }[]>(
+        Prisma.sql`SELECT count(*) AS count FROM "translations" t WHERE ${where}`);
+      return { matched: Number(rows[0].count), updated: 0 };
+    }
     return this.prisma.$transaction(async (tx) => {
-      const where = { projectId, localeCode: locale, NOT: { status }, ...(keyIds?.length ? { keyId: { in: keyIds } } : {}) };
-      const targets = await tx.translation.findMany({ where, include: { key: { select: { name: true } } } });
-      if (targets.length) {
-        await tx.translation.updateMany({ where: { projectId, localeCode: locale, keyId: { in: targets.map((t) => t.keyId) } }, data: { status } });
+      const updated = await tx.$queryRaw<{ keyId: string; value: string }[]>(
+        Prisma.sql`UPDATE "translations" t SET "status" = ${status} WHERE ${where} RETURNING t."keyId" AS "keyId", t."value" AS "value"`);
+      if (updated.length) {
         await tx.translationHistory.createMany({
-          data: targets.map((t) => ({ keyId: t.keyId, localeCode: locale, value: t.value, previousValue: t.value, status, changedById: userId })),
+          data: updated.map((t) => ({ keyId: t.keyId, localeCode: locale, value: t.value, previousValue: t.value, status, changedById: userId })),
         });
         await this.activity.record(tx, {
           projectId, actorId: userId, action: 'translation.status',
-          detail: { bulk: true, locale, to: status, count: targets.length },
+          detail: { bulk: true, locale, to: status, from: from ?? null, count: updated.length },
         });
       }
-      return { updated: targets.length };
+      return { matched: updated.length, updated: updated.length };
     });
   }
 

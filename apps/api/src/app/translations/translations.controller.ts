@@ -17,7 +17,7 @@ export class TranslationsController {
 
   @Post('review/bulk-status')
   bulkSetStatus(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Body() dto: BulkStatusDto) {
-    return this.translations.bulkSetStatus(user.userId, projectId, dto.locale, dto.status, dto.keyIds);
+    return this.translations.bulkSetStatus(user.userId, projectId, dto);
   }
 
   @Patch('keys/:keyId/translations/:locale/status')

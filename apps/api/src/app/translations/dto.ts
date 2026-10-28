@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsNotEmpty, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class UpsertTranslationDto {
   @IsString()
@@ -42,7 +42,27 @@ export class BulkStatusDto {
   @MaxLength(40)
   status!: string;
 
+  // Only rows currently at this status are touched (the visible queue filter).
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  from?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  search?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  tag?: string;
+
   @IsOptional()
   @IsString({ each: true })
   keyIds?: string[];
+
+  @IsOptional()
+  @IsBoolean()
+  dryRun?: boolean;
 }

@@ -288,8 +288,8 @@ export class ApiService {
       method: 'PUT', body: JSON.stringify({ locale, value }),
     });
   }
-  bulkSetStatus(projectId: string, locale: string, status: string) {
-    return this.request<{ updated: number }>(`/projects/${projectId}/review/bulk-status`, { method: 'POST', body: JSON.stringify({ locale, status }) });
+  bulkSetStatus(projectId: string, input: { locale: string; status: string; from?: string; search?: string; tag?: string; dryRun?: boolean }) {
+    return this.request<{ matched: number; updated: number }>(`/projects/${projectId}/review/bulk-status`, { method: 'POST', body: JSON.stringify(input) });
   }
   setStatus(projectId: string, keyId: string, locale: string, status: TranslationStatus) {
     return this.request<Translation>(`/projects/${projectId}/keys/${keyId}/translations/${locale}/status`, {

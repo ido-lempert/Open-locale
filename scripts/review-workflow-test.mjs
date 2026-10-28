@@ -92,6 +92,65 @@ try {
     (await call(`/projects/${pid}/keys/${k1}/translations/he/status`, { jwt, method: 'PATCH', body: { status: 'NEEDS_WORK' } })).status === 400);
   check('key list filters by custom status',
     (await call(`/projects/${pid}/keys?status=LEGAL_HOLD&locale=he`, { jwt })).json.length === 1);
+
+  // --- Bulk queue scope: preview, filter match, empty values, concurrency ---
+  // Reset he rows to a known mix: k1 REVIEWED, k2 UNVERIFIED, k3 UNVERIFIED+tag.
+  const k3 = (await call(`/projects/${pid}/keys`, { jwt, method: 'POST', body: { name: 'rev.three' } })).json.id;
+  await call(`/projects/${pid}/keys/${k3}/tags`, { jwt, method: 'PATCH', body: { tags: ['billing'] } });
+  await call(`/projects/${pid}/keys/${k3}/translations`, { jwt, method: 'PUT', body: { locale: 'he', value: 'ג' } });
+  await call(`/projects/${pid}/keys/${k1}/translations/he/status`, { jwt, method: 'PATCH', body: { status: 'REVIEWED' } });
+  await call(`/projects/${pid}/keys/${k2}/translations/he/status`, { jwt, method: 'PATCH', body: { status: 'UNVERIFIED' } });
+  // An empty translation must never be marked.
+  const k4 = (await call(`/projects/${pid}/keys`, { jwt, method: 'POST', body: { name: 'rev.empty' } })).json.id;
+  await call(`/projects/${pid}/keys/${k4}/translations`, { jwt, method: 'PUT', body: { locale: 'he', value: '' } });
+
+  const dry = await call(`/projects/${pid}/review/bulk-status`, { jwt, method: 'POST', body: { locale: 'he', status: 'REVIEWED', from: 'UNVERIFIED', dryRun: true } });
+  check('dry run previews exact affected count', dry.status === 201 && dry.json.matched === 2 && dry.json.updated === 0, JSON.stringify(dry.json));
+  const histBefore = (await call(`/projects/${pid}/keys/${k2}/translations/he/history`, { jwt })).json.length;
+  const dryRow = (await call(`/projects/${pid}/keys/${k2}/translations/he/history`, { jwt })).json;
+  check('dry run writes nothing', dryRow.length === histBefore);
+
+  const k1heBefore = (await call(`/projects/${pid}/keys/${k1}/translations/he/history`, { jwt })).json.length;
+  const scoped = await call(`/projects/${pid}/review/bulk-status`, { jwt, method: 'POST', body: { locale: 'he', status: 'REVIEWED', from: 'UNVERIFIED' } });
+  check('from filter marks only matching rows', scoped.status === 201 && scoped.json.updated === 2, JSON.stringify(scoped.json));
+  const k1he = (await call(`/projects/${pid}/keys/${k1}/translations/he/history`, { jwt })).json;
+  check('row already at another status untouched', k1he.length === k1heBefore);
+  const emptyHist = (await call(`/projects/${pid}/keys/${k4}/translations/he/history`, { jwt })).json;
+  check('empty translation never marked', !emptyHist.some((h) => h.status === 'REVIEWED'));
+
+  // Search/tag narrowing: only keys matching the visible filter are touched.
+  await call(`/projects/${pid}/keys/${k2}/translations/he/status`, { jwt, method: 'PATCH', body: { status: 'UNVERIFIED' } });
+  await call(`/projects/${pid}/keys/${k3}/translations/he/status`, { jwt, method: 'PATCH', body: { status: 'UNVERIFIED' } });
+  const tagOnly = await call(`/projects/${pid}/review/bulk-status`, { jwt, method: 'POST', body: { locale: 'he', status: 'REVIEWED', from: 'UNVERIFIED', tag: 'billing' } });
+  check('tag filter narrows bulk to tagged keys', tagOnly.status === 201 && tagOnly.json.updated === 1, JSON.stringify(tagOnly.json));
+  const searchOnly = await call(`/projects/${pid}/review/bulk-status`, { jwt, method: 'POST', body: { locale: 'he', status: 'REVIEWED', from: 'UNVERIFIED', search: 'rev.two' } });
+  check('search filter narrows bulk to matching keys', searchOnly.status === 201 && searchOnly.json.updated === 1, JSON.stringify(searchOnly.json));
+
+  // Concurrent-edit preservation: preview N, change one row, commit touches N-1.
+  await call(`/projects/${pid}/keys/${k2}/translations/he/status`, { jwt, method: 'PATCH', body: { status: 'UNVERIFIED' } });
+  await call(`/projects/${pid}/keys/${k3}/translations/he/status`, { jwt, method: 'PATCH', body: { status: 'UNVERIFIED' } });
+  const pre = await call(`/projects/${pid}/review/bulk-status`, { jwt, method: 'POST', body: { locale: 'he', status: 'REVIEWED', from: 'UNVERIFIED', dryRun: true } });
+  check('preview sees both unverified rows', pre.json.matched === 2);
+  await call(`/projects/${pid}/keys/${k2}/translations/he/status`, { jwt, method: 'PATCH', body: { status: 'TRANSLATED' } });
+  const post = await call(`/projects/${pid}/review/bulk-status`, { jwt, method: 'POST', body: { locale: 'he', status: 'REVIEWED', from: 'UNVERIFIED' } });
+  check('rows changed after preview are excluded at write time', post.json.updated === 1, JSON.stringify(post.json));
+
+  // Restricted member: dry run on a denied locale is still 403.
+  check('restricted member dry run on denied locale (403)',
+    (await call(`/projects/${pid}/review/bulk-status`, { jwt: member.accessToken, method: 'POST', body: { locale: 'fr', status: 'REVIEWED', dryRun: true } })).status === 403);
+
+  // Snapshot restore preserves custom statuses verbatim, even after the status
+  // is removed from project settings (restore must not validate or drop it).
+  await call(`/projects/${pid}`, { jwt, method: 'PATCH', body: { customStatuses: ['NEEDS_WORK'] } });
+  await call(`/projects/${pid}/keys/${k1}/translations/he/status`, { jwt, method: 'PATCH', body: { status: 'NEEDS_WORK' } });
+  const snap2 = (await call(`/projects/${pid}/snapshots`, { jwt, method: 'POST', body: { label: 'custom-status-snap' } })).json;
+  await call(`/projects/${pid}/keys/${k1}/translations/he/status`, { jwt, method: 'PATCH', body: { status: 'UNVERIFIED' } });
+  await call(`/projects/${pid}`, { jwt, method: 'PATCH', body: { customStatuses: [] } });
+  const rest = await call(`/projects/${pid}/snapshots/${snap2.id}/restore`, { jwt, method: 'POST' });
+  check('restore succeeds after status removed from settings', rest.status === 201);
+  const restored = await call(`/projects/${pid}/keys?status=NEEDS_WORK&locale=he`, { jwt });
+  check('restored translations keep the orphan custom status', restored.status === 200 && restored.json.some((k) => k.name === 'rev.one'));
+
 } finally {
   if (api) api.kill('SIGTERM');
   await pg.stop();

@@ -119,6 +119,9 @@ interface CellState {
                         (ngModelChange)="setReview(k, l.code, $event)"
                         [attr.aria-label]="'Review status for ' + k.name + ' in ' + l.code">
                         @for (st of statuses; track st) { <option [value]="st">{{ st.toLowerCase() }}</option> }
+                        @if (!statuses.includes(cell(k.id, l.code)().review)) {
+                          <option [value]="cell(k.id, l.code)().review">{{ cell(k.id, l.code)().review.toLowerCase() }} (removed)</option>
+                        }
                       </select>
                       @if (cell(k.id, l.code)().status === 'error') {
                         <button class="cell-status retry" (click)="save(k, l.code, true)">save failed - retry</button>
@@ -466,13 +469,23 @@ export class EditorComponent implements OnInit {
       a.click(); URL.revokeObjectURL(a.href);
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Export failed'); }
   }
-  // Review queue: set one status for every translation in the selected locale
-  // (server-side bulk transition; the visible filter is the queue view).
+  // Review queue: set one status for the translations the CURRENT filter
+  // selects in the selected locale. Previews the exact affected count first;
+  // the server re-checks status/value at write time, so rows edited between
+  // preview and confirm are excluded. Empty translations are never marked.
   async bulkMark() {
     this.error.set('');
+    const scope = { locale: this.ioLocale(), status: this.bulkStatus(), from: this.filterStatus() || undefined, search: this.search() || undefined, tag: this.filterTag() || undefined };
     try {
-      const res = await this.api.bulkSetStatus(this.projectId, this.ioLocale(), this.bulkStatus());
-      this.notice.set(`Marked ${res.updated} translations in ${this.ioLocale()} as ${this.bulkStatus().toLowerCase()}.`);
+      const preview = await this.api.bulkSetStatus(this.projectId, { ...scope, dryRun: true });
+      const bits = [];
+      if (scope.from) bits.push(`currently ${scope.from.toLowerCase()}`);
+      if (scope.search) bits.push(`keys matching "${scope.search}"`);
+      if (scope.tag) bits.push(`tagged ${scope.tag}`);
+      const scopeText = bits.length ? ` (${bits.join(', ')})` : '';
+      if (!confirm(`Mark ${preview.matched} translations in ${scope.locale}${scopeText} as ${scope.status.toLowerCase()}?\nEmpty translations and rows edited since this count are excluded.`)) return;
+      const res = await this.api.bulkSetStatus(this.projectId, scope);
+      this.notice.set(`Marked ${res.updated} translations in ${scope.locale} as ${scope.status.toLowerCase()}.`);
       await this.reload();
     } catch (err) { this.error.set(err instanceof Error ? err.message : 'Bulk update failed'); }
   }
