@@ -14,6 +14,10 @@ const appDir = join(process.cwd(), 'apps', 'api', 'src', 'app');
 const implemented = new Map(); // "METHOD /api/path" -> file
 for (const f of readdirSync(appDir, { recursive: true })) {
   if (!String(f).endsWith('.controller.ts')) continue;
+  // The in-context embed shell is served outside /api by design (dynamic
+  // per-project CSP frame-ancestors); it is not part of the documented REST
+  // surface and its delivery is covered by incontext-test.mjs instead.
+  if (String(f).includes('embed.controller')) continue;
   const src = readFileSync(join(appDir, f), 'utf8');
   const cm = src.match(/@Controller\('([^']*)'\)/);
   const prefix = cm ? cm[1] : '';

@@ -17,9 +17,10 @@ import { LocksModule } from './locks/locks.module';
 import { BranchesModule } from './branches/branches.module';
 import { OtaModule } from './ota/ota.module';
 import { ReportsModule } from './reports/reports.module';
+import { EmbedModule } from './embed/embed.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, ProjectsModule, KeysModule, TranslationsModule, ActivityModule, TasksModule, GlossaryModule, QaModule, WebhooksModule, SnapshotsModule, LocksModule, BranchesModule, OtaModule, ReportsModule],
+  imports: [PrismaModule, AuthModule, ProjectsModule, KeysModule, TranslationsModule, ActivityModule, TasksModule, GlossaryModule, QaModule, WebhooksModule, SnapshotsModule, LocksModule, BranchesModule, OtaModule, ReportsModule, EmbedModule],
   controllers: [AppController, DocsController],
   providers: [AppService],
 })

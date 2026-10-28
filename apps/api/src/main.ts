@@ -1,4 +1,4 @@
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger, RequestMethod, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app/app.module';
 import { DEV_FALLBACK_JWT_SECRET } from './app/auth/dev-secret';
@@ -28,7 +28,13 @@ async function bootstrap() {
   app.enableCors({ origin: corsOrigin, credentials: false });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   const globalPrefix = 'api';
-  app.setGlobalPrefix(globalPrefix);
+  app.setGlobalPrefix(globalPrefix, {
+    exclude: [
+      { path: 'embed/projects/:projectId', method: RequestMethod.GET },
+      { path: 'embed/frame.js', method: RequestMethod.GET },
+      { path: 'embed/frame.css', method: RequestMethod.GET },
+    ],
+  });
   const port = process.env.PORT || 3000;
   if (host) {
     await app.listen(port, host);
