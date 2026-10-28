@@ -92,6 +92,13 @@ try {
   check('Android export-import roundtrip stable', xmlRound.status === 201 && xmlRound.json.unchangedSkipped >= 2, JSON.stringify(xmlRound.json));
   const nested = await call(`${P}/import/he`, { token: at, method: 'POST', body: { xml: '<resources><string name="x">a <b>bold</b></string></resources>' } });
   check('nested markup rejected (400)', nested.status === 400, String(nested.status));
+  // Atomicity: a mixed import (one valid <string> plus an unsupported <plurals>)
+  // must 400 and leave keys, translations and history exactly as before.
+  const before = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  const mixed = await call(`${P}/import/he`, { token: at, method: 'POST', body: { xml: '<resources><string name="mixed.new">should not land</string><plurals name="cats"><item quantity="one">one</item></plurals></resources>' } });
+  const after = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('mixed valid+unsupported import rejected (400)', mixed.status === 400, String(mixed.status));
+  check('rejected mixed import leaves all keys unchanged', JSON.stringify(before) === JSON.stringify(after) && after['mixed.new'] === undefined, JSON.stringify(after).slice(0, 120));
 
   // iOS .strings round-trip + rejection
   const iosIn = '"app.title" = "האפליקציה";\n"msg.esc" = "line1\\nline2";\n';

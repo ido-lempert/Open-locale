@@ -1,6 +1,7 @@
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app/app.module';
+import { DEV_FALLBACK_JWT_SECRET } from './app/auth/dev-secret';
 
 const isLoopbackHost = (host: string) =>
   ['127.0.0.1', '::1', 'localhost'].includes(host);
@@ -11,10 +12,15 @@ async function bootstrap() {
   }
   const host = process.env.HOST;
   // Development default: loopback only. Listening beyond localhost requires an
-  // explicit HOST and a real JWT_SECRET - never the built-in fallback.
-  if (host && !isLoopbackHost(host) && !process.env.JWT_SECRET) {
+  // explicit HOST and a real JWT_SECRET - setting the variable to the known
+  // built-in value does not count as configuring a secret.
+  if (
+    host &&
+    !isLoopbackHost(host) &&
+    (!process.env.JWT_SECRET || process.env.JWT_SECRET === DEV_FALLBACK_JWT_SECRET)
+  ) {
     throw new Error(
-      `Refusing to bind ${host}: a non-loopback listener needs an explicit JWT_SECRET (the built-in development secret is not acceptable).`,
+      `Refusing to bind ${host}: a non-loopback listener needs an explicit non-default JWT_SECRET (the built-in development secret is not acceptable).`,
     );
   }
   const app = await NestFactory.create(AppModule);
