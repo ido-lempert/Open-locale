@@ -22,6 +22,16 @@ export interface Key {
   translations: Translation[];
   _count?: { comments: number };
 }
+export interface ActivityEntry {
+  id: string;
+  action: string;
+  keyName: string | null;
+  localeCode: string | null;
+  detail: Record<string, unknown> | null;
+  createdAt: string;
+  actor: { displayName: string; email: string } | null;
+}
+
 export interface CommentEntry {
   id: string; keyId: string; localeCode: string | null; body: string; createdAt: string;
   author: { displayName: string; email: string } | null;
@@ -92,6 +102,15 @@ export class ApiService {
     for (const [k, v] of Object.entries(filters)) if (v) params.set(k, v);
     const q = params.toString();
     return this.request<Key[]>(`/projects/${projectId}/keys${q ? `?${q}` : ''}`);
+  }
+  listActivity(projectId: string, opts: { action?: string; cursor?: string; limit?: number } = {}) {
+    const params = new URLSearchParams();
+    if (opts.action) params.set('action', opts.action);
+    if (opts.cursor) params.set('cursor', opts.cursor);
+    if (opts.limit) params.set('limit', String(opts.limit));
+    const q = params.toString();
+    return this.request<{ items: ActivityEntry[]; nextCursor: string | null }>(
+      `/projects/${projectId}/activity${q ? `?${q}` : ''}`);
   }
   listComments(projectId: string, keyId: string, locale?: string) {
     const q = locale ? `?locale=${encodeURIComponent(locale)}` : '';

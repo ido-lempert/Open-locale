@@ -3,6 +3,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import type { TranslationStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
+import { ActivityService, truncate } from '../activity/activity.service';
 import { flattenJson, unflattenJson } from './json-flatten';
 
 @Injectable()
@@ -10,6 +11,7 @@ export class TranslationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly projects: ProjectsService,
+    private readonly activity: ActivityService,
   ) {}
 
   async upsert(userId: string, projectId: string, keyId: string, locale: string, value: string) {
@@ -35,6 +37,11 @@ export class TranslationsService {
           data: { keyId, localeCode: locale, value,
             previousValue: existing?.value ?? null, status, changedById: userId },
         });
+        await this.activity.record(tx, {
+          projectId, actorId: userId, action: 'translation.value',
+          keyName: key.name, localeCode: locale,
+          detail: { previousValue: truncate(existing?.value ?? ''), value: truncate(value) },
+        });
       }
       return translation;
     });
@@ -44,6 +51,7 @@ export class TranslationsService {
     await this.projects.getFor(userId, projectId);
     const existing = await this.prisma.translation.findUnique({
       where: { keyId_localeCode: { keyId, localeCode: locale } },
+      include: { key: { select: { name: true } } },
     });
     if (!existing || existing.projectId !== projectId) {
       throw new NotFoundException('Translation not found');
@@ -57,6 +65,11 @@ export class TranslationsService {
         await tx.translationHistory.create({
           data: { keyId, localeCode: locale, value: existing.value,
             previousValue: existing.value, status, changedById: userId },
+        });
+        await this.activity.record(tx, {
+          projectId, actorId: userId, action: 'translation.status',
+          keyName: existing.key.name, localeCode: locale,
+          detail: { from: existing.status, to: status },
         });
       }
       return translation;
@@ -128,6 +141,14 @@ export class TranslationsService {
         upserted += 1;
       });
     }
-    return { locale, keysCreated: createdKeys, translationsUpserted: upserted, unchangedSkipped: skipped, importId };
+    const summary = { locale, keysCreated: createdKeys, translationsUpserted: upserted, unchangedSkipped: skipped, importId };
+    // One feed entry per import run; per-key lineage stays in TranslationHistory
+    // (written atomically per key above with the same importId).
+    await this.prisma.$transaction((tx) =>
+      this.activity.record(tx, {
+        projectId, actorId: userId, action: 'project.import', localeCode: locale,
+        detail: { keysCreated: createdKeys, translationsUpserted: upserted, unchangedSkipped: skipped, importId },
+      }));
+    return summary;
   }
 }

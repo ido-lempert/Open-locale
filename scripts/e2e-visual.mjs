@@ -197,6 +197,23 @@ try {
   await shot('editor-13-comments.png');
   await page.click('.grid tbody tr:first-child .comments-toggle');
 
+  // Activity page
+  await page.click('.activity-link');
+  await page.waitForSelector('.activity-row', { timeout: 10000 });
+  const actRows = await page.$$eval('.activity-row', (els) => els.map((e) => e.textContent));
+  check('activity feed lists recent actions with actor',
+    actRows.some((r) => r.includes('edited translation')) && actRows.some((r) => r.includes('commented on')) && actRows.every((r) => r.includes('Demo User')),
+    `${actRows.length} rows`);
+  await shot('editor-14-activity.png');
+  await page.select('select[aria-label="Filter by action"]', 'comment.added');
+  await page.waitForFunction(
+    () => document.querySelectorAll('.activity-row').length === 1,
+    { timeout: 10000 },
+  );
+  check('activity filter narrows to comments', true);
+  await page.click('.back');
+  await page.waitForSelector('.grid tbody tr', { timeout: 10000 });
+
   const projId = page.url().split('/').pop();
   // Settings screen: rename, add locale, verify grid column appears
   await page.click('.settings-link');

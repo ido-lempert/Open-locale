@@ -1,9 +1,13 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { ActivityService } from '../activity/activity.service';
 
 @Injectable()
 export class ProjectsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activity: ActivityService,
+  ) {}
 
   private async teamIdsFor(userId: string): Promise<string[]> {
     const memberships = await this.prisma.teamMember.findMany({
@@ -53,11 +57,20 @@ export class ProjectsService {
   }
 
   async updateFor(userId: string, projectId: string, input: { name?: string; description?: string }) {
-    await this.getFor(userId, projectId);
-    return this.prisma.project.update({
-      where: { id: projectId },
-      data: { ...(input.name !== undefined ? { name: input.name } : {}), ...(input.description !== undefined ? { description: input.description } : {}) },
-      include: { locales: true },
+    const before = await this.getFor(userId, projectId);
+    return this.prisma.$transaction(async (tx) => {
+      const project = await tx.project.update({
+        where: { id: projectId },
+        data: { ...(input.name !== undefined ? { name: input.name } : {}), ...(input.description !== undefined ? { description: input.description } : {}) },
+        include: { locales: true },
+      });
+      if (input.name !== undefined && input.name !== before.name) {
+        await this.activity.record(tx, {
+          projectId, actorId: userId, action: 'project.renamed',
+          detail: { from: before.name, to: input.name },
+        });
+      }
+      return project;
     });
   }
 
@@ -69,10 +82,16 @@ export class ProjectsService {
 
   async addLocale(userId: string, projectId: string, code: string) {
     await this.getFor(userId, projectId);
-    return this.prisma.projectLocale.upsert({
+    const existing = await this.prisma.projectLocale.findUnique({
       where: { projectId_code: { projectId, code } },
-      create: { projectId, code },
-      update: {},
+    });
+    if (existing) return existing;
+    return this.prisma.$transaction(async (tx) => {
+      const locale = await tx.projectLocale.create({ data: { projectId, code } });
+      await this.activity.record(tx, {
+        projectId, actorId: userId, action: 'locale.added', localeCode: code,
+      });
+      return locale;
     });
   }
 
@@ -81,8 +100,13 @@ export class ProjectsService {
     if (code === project.baseLocale) {
       throw new ForbiddenException('Cannot remove the base locale');
     }
-    await this.prisma.projectLocale.delete({
-      where: { projectId_code: { projectId, code } },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.projectLocale.delete({
+        where: { projectId_code: { projectId, code } },
+      });
+      await this.activity.record(tx, {
+        projectId, actorId: userId, action: 'locale.removed', localeCode: code,
+      });
     });
     return { removed: code };
   }
