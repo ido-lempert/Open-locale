@@ -85,16 +85,20 @@ export class TranslationsService {
   // tag; empty values are never marked reviewed-or-anything (an empty string
   // is not a translation). dryRun returns the count without writing.
   async bulkSetStatus(userId: string, projectId: string, input: {
-    locale: string; status: string; from?: string; search?: string; tag?: string; keyIds?: string[]; dryRun?: boolean; notChangedSince?: string;
+    locale: string; status: string; from?: string; search?: string; tag?: string; keyIds?: string[]; branch?: string; dryRun?: boolean; notChangedSince?: string;
   }) {
-    const { locale, status, from, search, tag, keyIds, dryRun, notChangedSince } = input;
+    const { locale, status, from, search, tag, keyIds, branch, dryRun, notChangedSince } = input;
     await this.projects.assertLocaleWrite(userId, projectId, [locale]);
     const project = await this.projects.getFor(userId, projectId);
     this.assertKnownStatus(project, status);
     if (!project.locales.some((l) => l.code === locale)) {
       throw new BadRequestException(`Locale ${locale} is not part of this project`);
     }
-    const keyConditions = [Prisma.sql`k."projectId" = ${projectId}::uuid`];
+    const branchRow = await this.branches.branchFor(projectId, branch);
+    const keyConditions = [
+      Prisma.sql`k."projectId" = ${projectId}::uuid`,
+      Prisma.sql`k."branchId" = ${branchRow.id}::uuid`,
+    ];
     if (search) keyConditions.push(Prisma.sql`k."name" ILIKE ${'%' + search + '%'}`);
     if (tag) keyConditions.push(Prisma.sql`k."tags" @> ARRAY[${tag}]::text[]`);
     if (keyIds?.length) keyConditions.push(Prisma.sql`k."id" = ANY(${keyIds}::uuid[])`);

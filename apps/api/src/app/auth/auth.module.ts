@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { SessionOnlyGuard } from './session-only.guard';
 import { DEV_FALLBACK_JWT_SECRET } from './dev-secret';
 
 @Module({
@@ -14,7 +15,7 @@ import { DEV_FALLBACK_JWT_SECRET } from './dev-secret';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtAuthGuard],
-  exports: [AuthService, JwtAuthGuard],
+  providers: [AuthService, JwtAuthGuard, SessionOnlyGuard],
+  exports: [AuthService, JwtAuthGuard, SessionOnlyGuard],
 })
 export class AuthModule {}

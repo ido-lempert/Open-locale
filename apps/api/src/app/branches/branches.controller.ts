@@ -1,7 +1,8 @@
 import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
-import { IsNotEmpty, IsString, Matches, MaxLength } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 import { BranchesService } from './branches.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { SessionOnlyGuard } from '../auth/session-only.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthPrincipal } from '../auth/auth.service';
 
@@ -18,10 +19,14 @@ class MergeBranchDto {
   @IsNotEmpty()
   @MaxLength(40)
   into!: string;
+
+  @IsString()
+  @IsOptional()
+  previewedAt?: string;
 }
 
 @Controller('projects/:projectId/branches')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SessionOnlyGuard)
 export class BranchesController {
   constructor(private readonly branches: BranchesService) {}
 
@@ -40,8 +45,13 @@ export class BranchesController {
     return this.branches.remove(user.userId, projectId, branchId);
   }
 
+  @Post(':branchId/merge/preview')
+  preview(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('branchId') branchId: string, @Body() dto: MergeBranchDto) {
+    return this.branches.previewMerge(user.userId, projectId, branchId, dto.into);
+  }
+
   @Post(':branchId/merge')
   merge(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('branchId') branchId: string, @Body() dto: MergeBranchDto) {
-    return this.branches.merge(user.userId, projectId, branchId, dto.into);
+    return this.branches.merge(user.userId, projectId, branchId, dto.into, dto.previewedAt);
   }
 }

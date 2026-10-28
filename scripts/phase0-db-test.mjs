@@ -59,11 +59,12 @@ try {
   });
   check('project created with two locales', project.locales.length === 2);
 
+  const mainBranch = await prisma.branch.create({ data: { projectId: project.id, name: 'main' } });
   const entries = { 'checkout.pay_button': 'Pay', 'checkout.cart.title': 'Cart' };
   for (const [name, value] of Object.entries(entries)) {
     const key = await prisma.key.upsert({
-      where: { projectId_name: { projectId: project.id, name } },
-      create: { projectId: project.id, name }, update: {},
+      where: { branchId_name: { branchId: mainBranch.id, name } },
+      create: { projectId: project.id, branchId: mainBranch.id, name }, update: {},
     });
     await prisma.translation.upsert({
       where: { keyId_localeCode: { keyId: key.id, localeCode: 'en' } },

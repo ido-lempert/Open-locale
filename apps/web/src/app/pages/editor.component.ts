@@ -33,8 +33,8 @@ interface CellState {
             @for (b of branches(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }
           </select>
           <form class="branch-form" (ngSubmit)="addBranch()">
-            <input placeholder="new-branch" aria-label="New branch name" [ngModel]="newBranch()" (ngModelChange)="newBranch.set($event)" name="newBranch" maxlength="40" />
-            <button type="submit">Add branch</button>
+            <input placeholder="new-empty-branch" aria-label="New branch name" [ngModel]="newBranch()" (ngModelChange)="newBranch.set($event)" name="newBranch" maxlength="40" />
+            <button type="submit">Add empty branch</button>
           </form>
           @if (branch() !== 'main') {
             <button (click)="mergeIntoMain()">Merge {{ branch() }} into main</button>
@@ -496,18 +496,35 @@ export class EditorComponent implements OnInit {
       await this.api.createBranch(this.projectId, name);
       this.newBranch.set('');
       this.branches.set(await this.api.listBranches(this.projectId));
-      this.notice.set(`Branch ${name} created. You are still on ${this.branch()}; pick it from the branch list to work there.`);
+      this.notice.set(`Empty branch ${name} created. Branches start with no keys - they do not copy ${this.branch()} or any other branch. Pick it from the branch list to work there.`);
     } catch (err) { this.error.set(err instanceof Error ? err.message : 'Failed to create branch'); }
   }
   async mergeIntoMain() {
     const from = this.branch();
     const b = this.branches().find((x) => x.name === from);
     if (!b) return;
-    if (!confirm(`Merge ${from} into main? Keys and translations from ${from} are copied into main; keys only in main are kept; nothing is deleted. ${from} itself stays as it is.`)) return;
     this.error.set('');
     try {
-      const res = await this.api.mergeBranch(this.projectId, b.id, 'main');
-      this.notice.set(`Merged ${res.merged}: ${res.keysMerged} keys, ${res.translationsMerged} translations copied.`);
+      const p = await this.api.previewMergeBranch(this.projectId, b.id, 'main');
+      const lines = [
+        `Merge ${from} into main (copy-forward; ${from} itself stays as it is):`,
+        `- ${p.keysCreated} new key(s) added to main`,
+        `- ${p.keysExisting} key(s) exist on both; main gets ${from}'s description, plural and tag settings`,
+        `- ${p.translationsAdded} translation(s) added`,
+        `- ${p.translationsIdentical} identical, skipped`,
+      ];
+      if (p.translationsOverwritten > 0) {
+        lines.push(`- WARNING: ${p.translationsOverwritten} existing main translation(s) will be OVERWRITTEN by ${from}'s version`);
+      }
+      lines.push(`- ${p.targetOnlyKeys} key(s) only on main are kept untouched`);
+      lines.push('An automatic snapshot of the current state is taken first, and every overwritten translation keeps its previous value in history.');
+      if (!confirm(lines.join('\n'))) return;
+      const res = await this.api.mergeBranch(this.projectId, b.id, 'main', p.previewAt);
+      const skipped = res.translationsSkipped > 0 || res.keysSkipped > 0
+        ? ` ${res.keysSkipped} key(s) and ${res.translationsSkipped} translation(s) changed on main after the preview were skipped - preview again to re-check them.`
+        : '';
+      this.notice.set(`Merged ${res.merged}: ${res.keysMerged} keys, ${res.translationsMerged} translations copied.${skipped}`);
+      await this.reload();
     } catch (err) { this.error.set(err instanceof Error ? err.message : 'Merge failed'); }
   }
   // Review queue: set one status for the translations the CURRENT filter
@@ -516,7 +533,7 @@ export class EditorComponent implements OnInit {
   // preview and confirm are excluded. Empty translations are never marked.
   async bulkMark() {
     this.error.set('');
-    const scope = { locale: this.ioLocale(), status: this.bulkStatus(), from: this.filterStatus() || undefined, search: this.search() || undefined, tag: this.filterTag() || undefined };
+    const scope = { locale: this.ioLocale(), status: this.bulkStatus(), from: this.filterStatus() || undefined, search: this.search() || undefined, tag: this.filterTag() || undefined, branch: this.branch() };
     try {
       const preview = await this.api.bulkSetStatus(this.projectId, { ...scope, dryRun: true });
       const bits = [];
@@ -524,7 +541,7 @@ export class EditorComponent implements OnInit {
       if (scope.search) bits.push(`keys matching "${scope.search}"`);
       if (scope.tag) bits.push(`tagged ${scope.tag}`);
       const scopeText = bits.length ? ` (${bits.join(', ')})` : '';
-      if (!confirm(`Mark up to ${preview.matched} translations in ${scope.locale}${scopeText} as ${scope.status.toLowerCase()}?\nEmpty translations are skipped, and anything saved after this preview is excluded.`)) return;
+      if (!confirm(`Mark up to ${preview.matched} translations in ${scope.locale} on branch ${scope.branch}${scopeText} as ${scope.status.toLowerCase()}?\nOnly branch ${scope.branch} is touched. Empty translations are skipped, and anything saved after this preview is excluded.`)) return;
       const res = await this.api.bulkSetStatus(this.projectId, { ...scope, notChangedSince: preview.previewAt ?? undefined });
       this.notice.set(`Marked ${res.updated} translations in ${scope.locale} as ${scope.status.toLowerCase()}.`);
       await this.reload();

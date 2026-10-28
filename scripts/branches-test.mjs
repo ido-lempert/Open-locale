@@ -120,6 +120,98 @@ try {
   const qaFeat = (await call(`/projects/${pid}/qa?branch=feat`, { jwt })).json;
   check('qa branch scope sees feat keys', qaFeat.issues.some((i) => i.key === 'qa.probe' && i.type === 'untranslated'), JSON.stringify(qaFeat.issues?.slice(0, 3)));
   check('qa main does not see feat-only probe', qaMain.issues.every((i) => i.key !== 'qa.probe'));
+
+  // --- Session-only: API tokens (even read+write) cannot touch branch endpoints ---
+  const tok = (await call('/auth/tokens', { jwt, method: 'POST', body: { name: 'ci', scopes: ['read', 'write'] } })).json;
+  const apiCall = (path, opt = {}) => call(path, { ...opt, jwt: undefined, headers: undefined });
+  const tokHeaders = { 'Content-Type': 'application/json', 'X-Api-Key': tok.token };
+  const tokReq = async (path, method = 'GET', body) => {
+    const res = await fetch(`${API}${path}`, { method, headers: tokHeaders, body: body ? JSON.stringify(body) : undefined });
+    return res.status;
+  };
+  check('write token cannot list branches (403)', (await tokReq(`/projects/${pid}/branches`)) === 403);
+  check('write token cannot create a branch (403)', (await tokReq(`/projects/${pid}/branches`, 'POST', { name: 'evil' })) === 403);
+  check('write token cannot merge (403)', (await tokReq(`/projects/${pid}/branches/${feat.id}/merge`, 'POST', { into: 'main' })) === 403);
+  check('write token cannot preview a merge (403)', (await tokReq(`/projects/${pid}/branches/${feat.id}/merge/preview`, 'POST', { into: 'main' })) === 403);
+  check('write token cannot delete a branch (403)', (await tokReq(`/projects/${pid}/branches/${feat.id}`, 'DELETE')) === 403);
+  check('write token CAN read keys with ?branch= (branch param stays token-usable)',
+    (await tokReq(`/projects/${pid}/keys?branch=main`)) === 200);
+  void apiCall;
+
+  // --- Bulk review is branch-scoped: same-named keys on main are never touched ---
+  const bmMain = (await call(`/projects/${pid}/keys`, { jwt, method: 'POST', body: { name: 'bulk.probe' } })).json;
+  const bmFeat = (await call(`/projects/${pid}/keys`, { jwt, method: 'POST', body: { name: 'bulk.probe', branch: 'feat' } })).json;
+  await call(`/projects/${pid}/keys/${bmMain.id}/translations`, { jwt, method: 'PUT', body: { locale: 'he', value: 'ראשי בלק' } });
+  await call(`/projects/${pid}/keys/${bmFeat.id}/translations`, { jwt, method: 'PUT', body: { locale: 'he', value: 'ברנץ בלק' } });
+  const bulkPrev = await call(`/projects/${pid}/review/bulk-status`, { jwt, method: 'POST', body: { locale: 'he', status: 'REVIEWED', from: 'UNVERIFIED', search: 'bulk.probe', branch: 'feat', dryRun: true } });
+  check('bulk preview on feat counts only feat rows', bulkPrev.json?.matched === 1, JSON.stringify(bulkPrev.json));
+  const bulkRun = await call(`/projects/${pid}/review/bulk-status`, { jwt, method: 'POST', body: { locale: 'he', status: 'REVIEWED', from: 'UNVERIFIED', search: 'bulk.probe', branch: 'feat', notChangedSince: bulkPrev.json.previewAt } });
+  check('bulk commit on feat updates 1 row', bulkRun.json?.updated === 1, JSON.stringify(bulkRun.json));
+  const bmMainAfter = (await call(`/projects/${pid}/keys`, { jwt })).json.find((k) => k.name === 'bulk.probe');
+  const mainTrans = bmMainAfter.translations?.find?.((t) => t.localeCode === 'he') ?? bmMainAfter.translations?.he;
+  const mainStatus = bmMainAfter.translations?.he?.status ?? mainTrans?.status;
+  check('same-named main key untouched by feat bulk', mainStatus === 'UNVERIFIED', JSON.stringify(mainStatus));
+  check('bulk with unknown branch 404', (await call(`/projects/${pid}/review/bulk-status`, { jwt, method: 'POST', body: { locale: 'he', status: 'REVIEWED', branch: 'nope', dryRun: true } })).status === 404);
+
+  // --- Merge preview + optimistic guard + history + snapshot (fresh project, controlled counts) ---
+  const pid2 = (await call('/projects', { jwt, method: 'POST', body: { name: 'Br2', slug: `br2-${Date.now()}`, baseLocale: 'en', locales: ['en', 'he'] } })).json.id;
+  const patchSt = await call(`/projects/${pid2}`, { jwt, method: 'PATCH', body: { customStatuses: ['NEEDS_FIX'] } });
+  check('custom status registered on project', patchSt.status === 200, JSON.stringify(patchSt.json).slice(0, 120));
+  const trOf = (k, l) => k.translations?.[l] ?? k.translations?.find?.((t) => t.localeCode === l);
+  const f2 = (await call(`/projects/${pid2}/branches`, { jwt, method: 'POST', body: { name: 'feat' } })).json;
+  const put = async (keyId, locale, value, status) => {
+    await call(`/projects/${pid2}/keys/${keyId}/translations`, { jwt, method: 'PUT', body: { locale, value } });
+    if (status) await call(`/projects/${pid2}/keys/${keyId}/translations/${locale}/status`, { jwt, method: 'PATCH', body: { status } });
+  };
+  const sh = (n, branch, desc, tags) => call(`/projects/${pid2}/keys`, { jwt, method: 'POST', body: { name: n, branch, description: desc, tags } }).then((r) => r.json);
+  const mShared = await sh('shared', undefined, 'main-desc', ['a']);
+  const fShared = await sh('shared', 'feat', 'feat-desc', ['b']);
+  const mSame = await sh('same'); const fSame = await sh('same', 'feat');
+  const fNew = await sh('newkey', 'feat'); const mOnly = await sh('keeponly');
+  await put(mShared.id, 'he', 'main text', 'REVIEWED');
+  await put(fShared.id, 'he', 'feat text', 'UNVERIFIED');
+  const stSet = await call(`/projects/${pid2}/keys/${fShared.id}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value: 'Source' } });
+  const stPatch = await call(`/projects/${pid2}/keys/${fShared.id}/translations/en/status`, { jwt, method: 'PATCH', body: { status: 'NEEDS_FIX' } });
+  check('custom status set on feat translation', stSet.status < 300 && stPatch.status === 200, JSON.stringify(stPatch.json).slice(0, 120));
+  await put(mShared.id, 'en', 'Source', 'UNVERIFIED');
+  await put(mSame.id, 'he', 'same', 'UNVERIFIED'); await put(fSame.id, 'he', 'same', 'UNVERIFIED');
+  await put(fNew.id, 'he', 'new val', 'UNVERIFIED');
+  await put(mOnly.id, 'he', 'stay', 'REVIEWED');
+
+  check('member cannot preview a merge (403)', (await call(`/projects/${pid2}/branches/${f2.id}/merge/preview`, { jwt: member.accessToken, method: 'POST', body: { into: 'main' } })).status === 403);
+  const prev = (await call(`/projects/${pid2}/branches/${f2.id}/merge/preview`, { jwt, method: 'POST', body: { into: 'main' } })).json;
+  check('preview counts: 1 created, 2 existing, 2 overwrites, 1 identical, 1 added, 1 target-only',
+    prev.keysCreated === 1 && prev.keysExisting === 2 && prev.translationsOverwritten === 2 && prev.translationsIdentical === 1 && prev.targetOnlyKeys === 1 && prev.translationsAdded === 1,
+    JSON.stringify(prev));
+  check('preview returns previewAt', typeof prev.previewAt === 'string' && prev.previewAt.includes('T'));
+
+  // Concurrent target edit AFTER the preview: guarded merge skips it.
+  await call(`/projects/${pid2}/keys/${mShared.id}/translations`, { jwt, method: 'PUT', body: { locale: 'he', value: 'edited after preview' } });
+  const gMerge = (await call(`/projects/${pid2}/branches/${f2.id}/merge`, { jwt, method: 'POST', body: { into: 'main', previewedAt: prev.previewAt } })).json;
+  check('guarded merge reports the skip', gMerge.translationsSkipped === 1, JSON.stringify(gMerge));
+  const sharedAfterGuard = (await call(`/projects/${pid2}/keys`, { jwt })).json.find((k) => k.name === 'shared');
+  const sharedHe = trOf(sharedAfterGuard, 'he')?.value;
+  check('post-preview target edit survives guarded merge', sharedHe === 'edited after preview', JSON.stringify(sharedHe));
+  const snaps2 = (await call(`/projects/${pid2}/snapshots`, { jwt })).json;
+  check('pre-merge automatic snapshot exists', snaps2.some((x) => x.automatic && x.label.includes('before merge feat -> main')), JSON.stringify(snaps2.map((x) => x.label)));
+
+  // Unguarded merge: overwrites, with history attribution and custom status copy.
+  const prev2 = (await call(`/projects/${pid2}/branches/${f2.id}/merge/preview`, { jwt, method: 'POST', body: { into: 'main' } })).json;
+  check('re-preview shows the overwrite is still pending', prev2.translationsOverwritten === 1, JSON.stringify(prev2));
+  const uMerge = (await call(`/projects/${pid2}/branches/${f2.id}/merge`, { jwt, method: 'POST', body: { into: 'main' } })).json;
+  check('unguarded merge copies the overwrite', uMerge.translationsSkipped === 0 && uMerge.translationsMerged === 1, JSON.stringify(uMerge));
+  const sharedFinal = (await call(`/projects/${pid2}/keys`, { jwt })).json.find((k) => k.name === 'shared');
+  check('unguarded merge overwrote target value', trOf(sharedFinal, 'he')?.value === 'feat text', JSON.stringify(trOf(sharedFinal, 'he')));
+  check('merge copied custom status verbatim', trOf(sharedFinal, 'en')?.status === 'NEEDS_FIX', JSON.stringify(trOf(sharedFinal, 'en')));
+  check('merge copied key metadata from source', sharedFinal.description === 'feat-desc' && JSON.stringify(sharedFinal.tags) === '["b"]', JSON.stringify({ d: sharedFinal.description, t: sharedFinal.tags }));
+  const hist = (await call(`/projects/${pid2}/keys/${sharedFinal.id}/translations/he/history`, { jwt })).json;
+  const mergeRow = (hist.items ?? hist).find?.((h) => h.previousValue === 'edited after preview');
+  check('overwritten value preserved in history with merging actor',
+    !!mergeRow && mergeRow.value === 'feat text' && !!mergeRow.changedBy?.displayName,
+    JSON.stringify(mergeRow).slice(0, 200));
+  const mOnlyAfter = (await call(`/projects/${pid2}/keys`, { jwt })).json.find((k) => k.name === 'keeponly');
+  check('target-only key untouched by merge', trOf(mOnlyAfter, 'he')?.value === 'stay' && trOf(mOnlyAfter, 'he')?.status === 'REVIEWED');
+
 } finally {
   if (api) api.kill('SIGTERM');
   await pg.stop();

@@ -62,6 +62,15 @@ export class BulkStatusDto {
   @IsString({ each: true })
   keyIds?: string[];
 
+  // Branch scope of the visible queue. Defaults to main; the editor always
+  // sends the selected branch so a bulk mark on a feature branch can never
+  // touch same-named keys on main (key ids differ per branch anyway, but the
+  // filter-only path must be scoped too).
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  branch?: string;
+
   @IsOptional()
   @IsBoolean()
   dryRun?: boolean;

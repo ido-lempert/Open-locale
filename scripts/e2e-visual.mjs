@@ -456,8 +456,8 @@ try {
     const form = document.querySelector('input[aria-label="New branch name"]').closest('form');
     form.requestSubmit();
   });
-  const branchNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('Branch feature-x created'), { timeout: 10000 }).then(() => true).catch(() => false);
-  check('branch created via UI with notice', branchNotice);
+  const branchNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('Empty branch feature-x created'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('branch created via UI with accurate empty-branch notice', branchNotice);
   await page.select('select[aria-label="Branch"]', 'feature-x');
   await page.waitForFunction(
     () => document.querySelectorAll('.grid tbody tr:not(.history-row)').length === 0,
@@ -478,8 +478,11 @@ try {
     () => [...document.querySelectorAll('.grid tbody tr:first-child .cell-status')].some((e) => /saved/i.test(e.textContent)),
     { timeout: 10000 },
   );
-  page.once('dialog', (d) => d.accept());
+  let dialogText = '';
+  page.once('dialog', (d) => { dialogText = d.message(); d.accept(); });
   await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Merge feature-x into main')).click());
+  await new Promise((r) => setTimeout(r, 500));
+  check('merge dialog shows preview diff and snapshot note', dialogText.includes('new key(s) added to main') && dialogText.includes('automatic snapshot'), dialogText.slice(0, 120));
   const mergeNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('Merged feature-x'), { timeout: 10000 }).then(() => true).catch(() => false);
   check('merge completes with summary notice', mergeNotice);
   await page.select('select[aria-label="Branch"]', 'main');

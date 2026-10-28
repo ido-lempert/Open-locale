@@ -4,9 +4,10 @@ import { BranchesService } from './branches.service';
 import { AuthModule } from '../auth/auth.module';
 import { ProjectsModule } from '../projects/projects.module';
 import { LocksModule } from '../locks/locks.module';
+import { SnapshotsModule } from '../snapshots/snapshots.module';
 
 @Module({
-  imports: [AuthModule, ProjectsModule, LocksModule],
+  imports: [AuthModule, ProjectsModule, LocksModule, SnapshotsModule],
   controllers: [BranchesController],
   providers: [BranchesService],
   exports: [BranchesService],

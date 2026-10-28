@@ -171,8 +171,13 @@ export class ApiService {
   deleteBranch(projectId: string, branchId: string) {
     return this.request<{ removed: string; keysRemoved: number }>(`/projects/${projectId}/branches/${branchId}`, { method: 'DELETE' });
   }
-  mergeBranch(projectId: string, branchId: string, into: string) {
-    return this.request<{ merged: string; keysMerged: number; translationsMerged: number }>(`/projects/${projectId}/branches/${branchId}/merge`, { method: 'POST', body: JSON.stringify({ into }) });
+  previewMergeBranch(projectId: string, branchId: string, into: string) {
+    return this.request<{ from: string; into: string; keysCreated: number; keysExisting: number; translationsAdded: number; translationsOverwritten: number; translationsIdentical: number; targetOnlyKeys: number; previewAt: string }>(
+      `/projects/${projectId}/branches/${branchId}/merge/preview`, { method: 'POST', body: JSON.stringify({ into }) });
+  }
+  mergeBranch(projectId: string, branchId: string, into: string, previewedAt?: string) {
+    return this.request<{ merged: string; keysMerged: number; translationsMerged: number; keysSkipped: number; translationsSkipped: number }>(
+      `/projects/${projectId}/branches/${branchId}/merge`, { method: 'POST', body: JSON.stringify({ into, previewedAt }) });
   }
   listMembers(projectId: string) {
     return this.request<MemberInfo[]>(`/projects/${projectId}/members`);
@@ -308,7 +313,7 @@ export class ApiService {
       method: 'PUT', body: JSON.stringify({ locale, value }),
     });
   }
-  bulkSetStatus(projectId: string, input: { locale: string; status: string; from?: string; search?: string; tag?: string; dryRun?: boolean; notChangedSince?: string }) {
+  bulkSetStatus(projectId: string, input: { locale: string; status: string; from?: string; search?: string; tag?: string; branch?: string; dryRun?: boolean; notChangedSince?: string }) {
     return this.request<{ matched: number; updated: number; previewAt: string | null }>(`/projects/${projectId}/review/bulk-status`, { method: 'POST', body: JSON.stringify(input) });
   }
   setStatus(projectId: string, keyId: string, locale: string, status: TranslationStatus) {
