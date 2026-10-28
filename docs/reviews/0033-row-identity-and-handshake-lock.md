@@ -29,7 +29,7 @@ was not positively established.
   kept, nothing sent to the host).
 
 ## Verified
-scripts/incontext-edit-test.mjs - 48 checks, real PG + HTTP + Chrome
+scripts/incontext-edit-test.mjs - 51 checks, real PG + HTTP + Chrome
 (local fixture hosts, not a real host integration):
 - API ABA: recreated he row climbed back to the SAME version with a NEW
   rowId; a stale save carrying the old rowId with the matching version 409s
