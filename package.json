@@ -2,7 +2,10 @@
   "name": "@open-locale/source",
   "version": "0.0.0",
   "license": "UNLICENSED",
-  "scripts": {},
+  "scripts": {
+    "test:integration": "node scripts/phase0-db-test.mjs",
+    "test:authz": "node scripts/authz-http-test.mjs"
+  },
   "private": true,
   "dependencies": {
     "@angular/common": "~22.2.0",
