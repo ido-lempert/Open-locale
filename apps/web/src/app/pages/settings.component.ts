@@ -125,7 +125,7 @@ import { ApiService, BranchInfo, OtaPublicationInfo, ApiTokenInfo, MemberInfo, P
         </section>
         <section class="panel">
           <h2>OTA publications</h2>
-          <p class="muted">Immutable per-branch translation bundles for OTA pull. Pull requires a session or a read API token - bundles are never public.</p>
+          <p class="muted">Immutable per-branch translation bundles for OTA pull. Pull requires a session or a read API token - bundles are never public. A bundle includes EVERY translation on the branch: empty values and all review statuses, not only reviewed ones.</p>
           <ul class="locale-list">
             @for (o of otaPubs(); track o.id) {
               <li>

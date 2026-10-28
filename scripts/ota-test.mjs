@@ -101,6 +101,52 @@ try {
   const list = (await call(`/projects/${pid}/ota`, { jwt })).json;
   check('list shows main v1+v2 and feat v1 with counts', list.length === 3 && list.every((x) => x.translations >= 1 && x.locales.length >= 1), JSON.stringify(list.map((x) => `${x.branch}@${x.version}`)));
 
+  // Validator uniqueness: same version+locale on another project or branch
+  // must produce a different ETag (no false 304 across projects/branches).
+  const pid3 = (await call('/projects', { jwt, method: 'POST', body: { name: 'Ota3', slug: `ota3-${Date.now()}`, baseLocale: 'en', locales: ['en', 'he'] } })).json.id;
+  const k3 = (await call(`/projects/${pid3}/keys`, { jwt, method: 'POST', body: { name: 'app.title' } })).json;
+  await call(`/projects/${pid3}/keys/${k3.id}/translations`, { jwt, method: 'PUT', body: { locale: 'he', value: 'כותרת חדשה' } });
+  await call(`/projects/${pid3}/ota/publish`, { jwt, method: 'POST', body: {} });
+  const p3l = await call(`/projects/${pid3}/ota/latest?locale=he`, { jwt });
+  check('same v1/he on another project has a different ETag', p3l.etag !== lf.etag, `${p3l.etag} vs ${lf.etag}`);
+  const mainV1 = await call(`/projects/${pid}/ota/1/he`, { jwt });
+  check('same v1/he across branches has a different ETag', mainV1.etag !== lf.etag, `${mainV1.etag} vs ${lf.etag}`);
+  // Content hash: an identical payload republished under a new version still
+  // differs by version, and identical content across projects differs by id.
+  check('cross-project conditional request cannot 304', (await call(`/projects/${pid3}/ota/latest?locale=he`, { jwt, headers: { 'If-None-Match': lf.etag } })).status === 200);
+
+  // Authorization precedes 304: after membership removal or token revocation,
+  // a request with a previously valid If-None-Match must NOT get 304.
+  const memberTok = member.accessToken;
+  const memberFirst = await call(`/projects/${pid}/ota/latest?locale=he`, { jwt: memberTok });
+  check('member can pull before removal', memberFirst.status === 200);
+  const memberId = (await call(`/projects/${pid}/members`, { jwt })).json.find((m) => m.email === member.user.email)?.userId
+    ?? (await call(`/projects/${pid}/members`, { jwt })).json.find((m) => m.email === member.user.email)?.id;
+  await call(`/projects/${pid}/members/${memberId}`, { jwt, method: 'DELETE' });
+  const afterRemoval = await call(`/projects/${pid}/ota/latest?locale=he`, { jwt: memberTok, headers: { 'If-None-Match': memberFirst.etag } });
+  check('removed member with valid ETag gets 403/404, not 304', [403, 404].includes(afterRemoval.status), `got ${afterRemoval.status}`);
+  const sdkTokRow = (await call('/auth/tokens', { jwt })).json.find((x) => x.name === 'sdk');
+  await call(`/auth/tokens/${sdkTokRow.id}`, { jwt, method: 'DELETE' });
+  const afterRevoke = await call(`/projects/${pid}/ota/latest?locale=he`, { token: rtok, headers: { 'If-None-Match': lt.etag } });
+  check('revoked token with valid ETag gets 401, not 304', afterRevoke.status === 401, `got ${afterRevoke.status}`);
+  // Restore member access for subsequent checks.
+  await call(`/projects/${pid}/members`, { jwt, method: 'POST', body: { email: member.user.email } });
+
+  // Concurrent publish: versions strictly unique and monotonic, each payload a
+  // consistent full read (every version has both locales and the same keys).
+  const pre = (await call(`/projects/${pid}/ota`, { jwt })).json.filter((x) => x.branch === 'main').map((x) => x.version);
+  const base = Math.max(...pre);
+  const pubs = await Promise.all([0, 1, 2, 3, 4].map(() => call(`/projects/${pid}/ota/publish`, { jwt, method: 'POST', body: {} })));
+  const versions = pubs.map((r) => r.json?.version).sort((x, y) => x - y);
+  check('5 concurrent publishes all succeed with unique monotonic versions',
+    pubs.every((r) => r.status === 201) && new Set(versions).size === 5 && JSON.stringify(versions) === JSON.stringify([base + 1, base + 2, base + 3, base + 4, base + 5]),
+    JSON.stringify(versions));
+  const payloadChecks = await Promise.all(versions.map(async (v) => {
+    const b = (await call(`/projects/${pid}/ota/${v}/he`, { jwt })).json;
+    return b.version === v && typeof b.translations['app.title'] === 'string';
+  }));
+  check('every concurrently published bundle is self-consistent', payloadChecks.every(Boolean), JSON.stringify(payloadChecks));
+
   // Pruning: 26 publishes on feat keep only the latest 25.
   for (let i = 0; i < 25; i++) {
     await call(`/projects/${pid}/ota/publish`, { jwt, method: 'POST', body: { branch: 'feat' } });

@@ -1,9 +1,11 @@
+import { createHash } from 'node:crypto';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
 import { ActivityService } from '../activity/activity.service';
 import { BranchesService } from '../branches/branches.service';
+import { LocksService } from '../locks/locks.service';
 import { DEFAULT_BRANCH } from '../branches/branches.service';
 
 // Retained publications per (project, branch): bundles duplicate project
@@ -21,6 +23,7 @@ export class OtaService {
     private readonly projects: ProjectsService,
     private readonly activity: ActivityService,
     private readonly branches: BranchesService,
+    private readonly locks: LocksService,
   ) {}
 
   private meta(r: { id: string; version: number; createdAt: Date; payload: unknown; branch: { name: string } }) {
@@ -35,7 +38,9 @@ export class OtaService {
   async publish(userId: string, projectId: string, branchName?: string) {
     await this.projects.requireAdmin(userId, projectId);
     const branch = await this.branches.branchFor(projectId, branchName ?? DEFAULT_BRANCH);
-    return this.prisma.$transaction(async (tx) => {
+    // Serialized per project: two concurrent publishes can never compute the
+    // same next version, and each payload is one consistent post-lock read.
+    return this.locks.withProjectLock(projectId, () => this.prisma.$transaction(async (tx) => {
       const latest = await tx.otaPublication.findFirst({
         where: { projectId, branchId: branch.id }, orderBy: { version: 'desc' }, select: { version: true },
       });
@@ -63,7 +68,7 @@ export class OtaService {
       });
       if (stale.length) await tx.otaPublication.deleteMany({ where: { id: { in: stale.map((s) => s.id) } } });
       return this.meta(row);
-    });
+    }));
   }
 
   async list(userId: string, projectId: string) {
@@ -95,8 +100,13 @@ export class OtaService {
         });
     if (!row) throw new NotFoundException('No OTA publication for this branch yet');
     const payload = row.payload as Record<string, Record<string, string>>;
+    // The validator must name the exact immutable thing: same v1/he on another
+    // project or branch, or identical content re-published after a branch
+    // delete/recreate, must never share an ETag. projectId + branchId +
+    // version + a content hash of this locale's payload achieves that.
+    const hash = createHash('sha256').update(JSON.stringify(payload[opts.locale] ?? {})).digest('hex').slice(0, 12);
     return {
-      etag: `W/"v${row.version}-${opts.locale}"`,
+      etag: `W/"ota-${projectId}-${branch.id}-v${row.version}-${opts.locale}-${hash}`,
       body: {
         project: project.slug, branch: row.branch.name, locale: opts.locale,
         version: row.version, publishedAt: row.createdAt,
