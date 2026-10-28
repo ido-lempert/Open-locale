@@ -154,6 +154,17 @@ export class ApiService {
     return this.request<{ suggestions: TmSuggestion[] }>(
       `/projects/${projectId}/tm/suggest?locale=${encodeURIComponent(locale)}&source=${encodeURIComponent(source)}`);
   }
+  async exportCsv(projectId: string, locale: string, mode?: 'raw') {
+    const res = await fetch(`${this.base}/projects/${projectId}/export/${locale}/csv${mode ? '?mode=raw' : ''}`, {
+      headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
+    });
+    if (!res.ok) throw new Error(`Export failed (HTTP ${res.status})`);
+    return res.text();
+  }
+  importCsv(projectId: string, locale: string, csv: string) {
+    return this.request<{ keysCreated: number; translationsUpserted: number }>(
+      `/projects/${projectId}/import/${locale}`, { method: 'POST', body: JSON.stringify({ csv }) });
+  }
   runQa(projectId: string, locale?: string) {
     return this.request<{ issues: QaIssue[] }>(`/projects/${projectId}/qa${locale ? `?locale=${locale}` : ''}`);
   }

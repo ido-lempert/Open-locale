@@ -334,9 +334,21 @@ try {
   check('QA page lists the placeholder mismatch for cart.total', qaRow);
   await shot('editor-19-qa.png');
 
-  // Settings screen: rename, add locale, verify grid column appears
+  // --- CSV via UI: import a new key, verify notice + grid, export buttons visible ---
   await page.click('.back');
-  await page.waitForSelector('.settings-link', { timeout: 10000 });
+  await page.waitForSelector('.grid', { timeout: 10000 });
+  const csvFile = '/tmp/e2e-import.csv';
+  writeFileSync(csvFile, 'key,value\napp.subtitle,"Welcome, friend"\n');
+  const csvInput = await page.$('input[type=file][accept=".csv"]');
+  await csvInput.uploadFile(csvFile);
+  const csvNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('from CSV'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('CSV import via UI shows summary notice', csvNotice);
+  check('CSV-imported key appears in grid', await waitText('app.subtitle'));
+  const csvControls = await page.evaluate(() => (document.body.textContent || '').includes('Export CSV (spreadsheet-safe)') && (document.body.textContent || '').includes('mode=raw'));
+  check('UI visibly distinguishes spreadsheet-safe CSV from lossless raw', csvControls);
+  await shot('editor-20-csv.png');
+
+  // Settings screen: rename, add locale, verify grid column appears (on the editor)
   await page.click('.settings-link');
   await page.waitForSelector('.panel', { timeout: 10000 });
   await shot('editor-06-settings.png');

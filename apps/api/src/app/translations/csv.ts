@@ -4,7 +4,7 @@
 // Spreadsheet formula-injection guard (OWASP): values that a spreadsheet app would
 // execute get a leading apostrophe. Safe mode is for opening exports in Excel/Sheets;
 // use mode=raw for a lossless roundtrip export.
-const FORMULA_PREFIX = /^[=+\-@\t\r]/;
+const FORMULA_PREFIX = /^[\s\p{C}]*[=+\-@]/u; // whitespace/control chars before a formula char still execute in common spreadsheets
 const shield = (v: string) => (FORMULA_PREFIX.test(v) ? `'${v}` : v);
 
 export function toCsv(rows: [string, string][], opts: { spreadsheetSafe?: boolean } = {}): string {

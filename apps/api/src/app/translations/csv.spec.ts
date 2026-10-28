@@ -29,14 +29,21 @@ describe('csv', () => {
       ['k4', '@mention'],
       ['k5', '\tleading-tab'],
       ['k6', 'plain'],
+      ['k7', '  =padded()'],
+      ['k8', '\n=lf-prefixed'],
+      ['k9', '  plain-padded'],
     ];
     const safe = toCsv(rows, { spreadsheetSafe: true });
-    for (const p of ["'=HYPERLINK", "'+cmd", "'-2+3", "'@mention"]) expect(safe).toContain(p);
+    for (const p of ["'=HYPERLINK", "'+cmd", "'-2+3", "'@mention", "'  =padded()", "'\n=lf-prefixed"]) expect(safe).toContain(p);
     expect(safe).toContain('k6,plain');
+    expect(safe).toContain('k9,  plain-padded'); // leading space alone is harmless
     const raw = toCsv(rows);
     expect(raw).toContain('=HYPERLINK'); // CSV-escaped but unprefixed
     expect(raw).not.toContain("'=HYPERLINK");
     expect(raw).toContain('+cmd');
     expect(parseCsv(raw).rows).toEqual(rows); // raw roundtrip is lossless
+    // delimiter/quote/newline breakout stays one field through roundtrip
+    const nasty: [string, string][] = [['k,nasty', 'x,"y\n=d']];
+    expect(parseCsv(toCsv(nasty)).rows).toEqual(nasty);
   });
 });

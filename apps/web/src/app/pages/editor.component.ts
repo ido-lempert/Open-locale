@@ -44,6 +44,9 @@ interface CellState {
           </form>
           <button (click)="exportJson()">Export JSON</button>
           <label class="import">Import JSON <input type="file" accept=".json" (change)="importJson($event)" hidden /></label>
+          <button (click)="exportCsv()">Export CSV (spreadsheet-safe)</button>
+          <label class="import">Import CSV <input type="file" accept=".csv" (change)="importCsv($event)" hidden /></label>
+          <div class="muted csv-note">CSV exports are spreadsheet-safe: values starting with formula characters get a protective prefix, so re-importing a safe export keeps those prefixes and changes stored values. For a lossless roundtrip use the API with <code>mode=raw</code>.</div>
           <select [ngModel]="ioLocale()" (ngModelChange)="ioLocale.set($event)" name="ioLocale" aria-label="Import/export locale">
             @for (l of p.locales; track l.code) { <option [value]="l.code">{{ l.code }}</option> }
           </select>
@@ -445,6 +448,27 @@ export class EditorComponent implements OnInit {
       a.download = `${this.project()?.slug ?? 'export'}.${this.ioLocale()}.json`;
       a.click(); URL.revokeObjectURL(a.href);
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Export failed'); }
+  }
+  async exportCsv() {
+    try {
+      const csv = await this.api.exportCsv(this.projectId, this.ioLocale());
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${this.project()?.slug ?? 'export'}.${this.ioLocale()}.csv`;
+      a.click(); URL.revokeObjectURL(a.href);
+      this.notice.set('CSV exported (spreadsheet-safe). For a lossless roundtrip export use the API with mode=raw.');
+    } catch (err) { this.error.set(err instanceof Error ? err.message : 'Export failed'); }
+  }
+  async importCsv(event: Event) {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    try {
+      const csv = await file.text();
+      const res = await this.api.importCsv(this.projectId, this.ioLocale(), csv);
+      this.notice.set(`Imported ${res.keysCreated} keys, ${res.translationsUpserted} translations from CSV (${this.ioLocale()}).`);
+      await this.reload();
+    } catch (err) { this.error.set(err instanceof Error ? err.message : 'Import failed: invalid CSV'); }
   }
   async importJson(event: Event) {
     const file = (event.target as HTMLInputElement).files?.[0];
