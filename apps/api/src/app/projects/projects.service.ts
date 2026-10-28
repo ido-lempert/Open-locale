@@ -41,8 +41,9 @@ export class ProjectsService {
         description: input.description ?? '',
         baseLocale,
         locales: { create: locales.map((code) => ({ code })) },
+        branches: { create: { name: 'main' } },
       },
-      include: { locales: true },
+      include: { locales: true, branches: true },
     });
   }
 

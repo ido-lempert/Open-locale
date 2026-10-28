@@ -32,26 +32,26 @@ export class TranslationsController {
 
   @Get('export/:locale')
   @Header('Cache-Control', 'no-store')
-  exportJson(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('flat') flat?: string, @Query('format') format?: string) {
-    return this.translations.exportJson(user.userId, projectId, locale, flat === 'true' || format === 'flat');
+  exportJson(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('flat') flat?: string, @Query('format') format?: string, @Query('branch') branch?: string) {
+    return this.translations.exportJson(user.userId, projectId, locale, flat === 'true' || format === 'flat', branch);
   }
 
   @Get('export/:locale/csv')
   @Header('Content-Type', 'text/csv; charset=utf-8')
-  exportCsv(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('mode') mode?: string) {
-    return this.translations.exportCsv(user.userId, projectId, locale, mode);
+  exportCsv(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('mode') mode?: string, @Query('branch') branch?: string) {
+    return this.translations.exportCsv(user.userId, projectId, locale, mode, branch);
   }
 
   @Get('export/:locale/android')
   @Header('Content-Type', 'text/xml; charset=utf-8')
-  exportAndroid(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string) {
-    return this.translations.exportAndroid(user.userId, projectId, locale);
+  exportAndroid(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
+    return this.translations.exportAndroid(user.userId, projectId, locale, branch);
   }
 
   @Get('export/:locale/ios')
   @Header('Content-Type', 'text/plain; charset=utf-8')
-  exportIos(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string) {
-    return this.translations.exportIos(user.userId, projectId, locale);
+  exportIos(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
+    return this.translations.exportIos(user.userId, projectId, locale, branch);
   }
 
   @Get('tm/suggest')
@@ -66,11 +66,11 @@ export class TranslationsController {
   }
 
   @Post('import/:locale')
-  importJson(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Body() dto: ImportJsonDto) {
-    if (dto.csv != null) return this.translations.importCsv(user.userId, projectId, locale, dto.csv);
-    if (dto.xml != null) return this.translations.importAndroid(user.userId, projectId, locale, dto.xml);
-    if (dto.strings != null) return this.translations.importIos(user.userId, projectId, locale, dto.strings);
-    if (dto.entries != null) return this.translations.importJson(user.userId, projectId, locale, dto.entries);
+  importJson(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch: string | undefined, @Body() dto: ImportJsonDto) {
+    if (dto.csv != null) return this.translations.importCsv(user.userId, projectId, locale, dto.csv, branch);
+    if (dto.xml != null) return this.translations.importAndroid(user.userId, projectId, locale, dto.xml, branch);
+    if (dto.strings != null) return this.translations.importIos(user.userId, projectId, locale, dto.strings, branch);
+    if (dto.entries != null) return this.translations.importJson(user.userId, projectId, locale, dto.entries, branch);
     throw new BadRequestException('Provide entries (JSON), csv, xml or strings');
   }
 }

@@ -24,7 +24,7 @@ try {
   // Stage 1: apply every migration EXCEPT the enum->text one, on the old schema.
   const migDir = join(root, 'prisma', 'migrations');
   const staged = mkdtempSync(join(tmpdir(), 'ol-mig-stage-'));
-  for (const m of readdirSync(migDir).filter((m) => m !== '20261028224500_review_workflow' && !m.endsWith('.toml'))) {
+  for (const m of readdirSync(migDir).filter((m) => m !== '20261028224500_review_workflow' && m !== '20261028232000_branches' && !m.endsWith('.toml'))) {
     cpSync(join(migDir, m), join(staged, m), { recursive: true });
   }
   const shadow = mkdtempSync(join(tmpdir(), 'ol-mig-shadow-'));
@@ -61,6 +61,12 @@ try {
   check('status column is now text', colType.rows[0]?.data_type === 'text');
   const enumGone = await db.query(`SELECT 1 FROM pg_type WHERE typname = 'TranslationStatus'`);
   check('enum type dropped', enumGone.rows.length === 0);
+
+  // Branch backfill: the pre-branches key must land on a new 'main' branch.
+  const br = await db.query(`SELECT b.name FROM "keys" k JOIN "branches" b ON b.id = k."branchId" WHERE k.name = 'mig.key'`);
+  check('existing key backfilled onto main branch', br.rows[0]?.name === 'main');
+  const brCount = await db.query(`SELECT count(*) AS c FROM "branches" WHERE "projectId" = '33333333-3333-3333-3333-333333333333'`);
+  check('exactly one default branch created per project', brCount.rows[0]?.c === '1');
 
   // Verify through the real API: old value preserved, custom status now works.
   api = spawn(process.execPath, [join(root, 'dist', 'apps', 'api', 'main.js')], {

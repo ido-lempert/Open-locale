@@ -50,6 +50,7 @@ describe('EditorComponent input preservation', () => {
       }),
       listKeys: () => Promise.resolve([]),
       listGlossary: () => Promise.resolve([]),
+      listBranches: () => Promise.resolve([]),
       createKey: () => new Promise((r) => { resolveCreate = r; }),
     };
     const { EditorComponent } = await import('./editor.component');
@@ -89,6 +90,7 @@ describe('EditorComponent save/status ordering', () => {
           translations: [{ keyId: 'k1', localeCode: 'en', value: 'hi', status: 'UNVERIFIED' }] },
       ]),
       listGlossary: () => Promise.resolve([]),
+      listBranches: () => Promise.resolve([]),
       upsertTranslation: () => new Promise((r) => { resolveUpsert = r; }),
       setStatus: (_p: string, _k: string, _l: string, st: string) => {
         setStatusCalls.push(st);

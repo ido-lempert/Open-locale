@@ -8,6 +8,7 @@ import { LocksService } from '../locks/locks.service';
 
 interface SnapshotKey {
   name: string;
+  branch?: string; // absent in pre-branch snapshots: those keys restore into 'main'
   description: string;
   isPlural: boolean;
   maxLength: number | null;
@@ -15,6 +16,7 @@ interface SnapshotKey {
 }
 interface SnapshotTranslation {
   keyName: string;
+  branch?: string;
   localeCode: string;
   value: string;
   status: string;
@@ -38,16 +40,16 @@ export class SnapshotsService {
   private async capture(projectId: string, label: string, automatic: boolean, actorId: string | null) {
     const keys = await this.prisma.key.findMany({
       where: { projectId },
-      include: { translations: true },
+      include: { translations: true, branch: { select: { name: true } } },
       orderBy: { name: 'asc' },
     });
     const snapKeys: SnapshotKey[] = keys.map((k) => ({
-      name: k.name, description: k.description, isPlural: k.isPlural,
+      name: k.name, branch: k.branch.name, description: k.description, isPlural: k.isPlural,
       maxLength: k.maxLength, tags: k.tags,
     }));
     const snapTranslations: SnapshotTranslation[] = keys.flatMap((k) =>
       k.translations.map((t) => ({
-        keyName: k.name, localeCode: t.localeCode, value: t.value, status: t.status,
+        keyName: k.name, branch: k.branch.name, localeCode: t.localeCode, value: t.value, status: t.status,
       })));
     return this.prisma.snapshot.create({
       data: {
@@ -134,34 +136,48 @@ export class SnapshotsService {
     const snapshotId = snapshot.id;
     const snapKeys = snapshot.keys as unknown as SnapshotKey[];
     const snapTranslations = snapshot.translations as unknown as SnapshotTranslation[];
-    const keepNames = new Set(snapKeys.map((k) => k.name));
+    // Keys are identified per branch: (branch, name). Pre-branch snapshots
+    // have no branch on their keys and restore into 'main'.
+    const keepKeys = new Set(snapKeys.map((k) => `${k.branch ?? 'main'}${k.name}`));
 
     const result = await this.prisma.$transaction(async (tx) => {
-      const existing = await tx.key.findMany({ where: { projectId }, include: { translations: true } });
-      const byName = new Map(existing.map((k) => [k.name, k]));
+      const existing = await tx.key.findMany({ where: { projectId }, include: { translations: true, branch: { select: { name: true } } } });
+      const byName = new Map(existing.map((k) => [`${k.branch.name}${k.name}`, k]));
       let keysRemoved = 0;
       let valuesChanged = 0;
 
       for (const key of existing) {
-        if (!keepNames.has(key.name)) {
+        if (!keepKeys.has(`${key.branch.name}${key.name}`)) {
           await tx.key.delete({ where: { id: key.id } });
           keysRemoved += 1;
         }
       }
+      const branchIdByName = new Map<string, string>();
       for (const sk of snapKeys) {
+        const branchName = sk.branch ?? 'main';
+        let branchId = branchIdByName.get(branchName);
+        if (!branchId) {
+          const b = await tx.branch.upsert({
+            where: { projectId_name: { projectId, name: branchName } },
+            create: { projectId, name: branchName },
+            update: {},
+          });
+          branchId = b.id;
+          branchIdByName.set(branchName, branchId);
+        }
         await tx.key.upsert({
-          where: { projectId_name: { projectId, name: sk.name } },
-          create: { projectId, name: sk.name, description: sk.description, isPlural: sk.isPlural, maxLength: sk.maxLength, tags: sk.tags },
+          where: { branchId_name: { branchId, name: sk.name } },
+          create: { projectId, branchId, name: sk.name, description: sk.description, isPlural: sk.isPlural, maxLength: sk.maxLength, tags: sk.tags },
           update: { description: sk.description, isPlural: sk.isPlural, maxLength: sk.maxLength, tags: sk.tags },
         });
       }
       // Re-read ids: upserts above may have created the keys we translate now.
-      const current = await tx.key.findMany({ where: { projectId } });
-      const idByName = new Map(current.map((k) => [k.name, k.id]));
+      const current = await tx.key.findMany({ where: { projectId }, include: { branch: { select: { name: true } } } });
+      const idByName = new Map(current.map((k) => [`${k.branch.name}${k.name}`, k.id]));
       for (const st of snapTranslations) {
-        const keyId = idByName.get(st.keyName);
+        const keyId = idByName.get(`${st.branch ?? 'main'}${st.keyName}`);
         if (!keyId) continue; // translation for a key not in the snapshot: ignore defensively
-        const before = byName.get(st.keyName)?.translations.find((t) => t.localeCode === st.localeCode);
+        const before = byName.get(`${st.branch ?? 'main'}${st.keyName}`)?.translations.find((t) => t.localeCode === st.localeCode);
         if (before && before.value === st.value && before.status === st.status) continue;
         await tx.translation.upsert({
           where: { keyId_localeCode: { keyId, localeCode: st.localeCode } },

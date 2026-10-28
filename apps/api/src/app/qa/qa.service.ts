@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { BranchesService } from '../branches/branches.service';
 import { ProjectsService } from '../projects/projects.service';
 
 export interface QaIssue {
@@ -22,16 +23,18 @@ export class QaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly projects: ProjectsService,
+    private readonly branches: BranchesService,
   ) {}
 
-  async run(userId: string, projectId: string, locale?: string): Promise<{ issues: QaIssue[] }> {
+  async run(userId: string, projectId: string, locale?: string, branch?: string): Promise<{ issues: QaIssue[] }> {
     const project = await this.projects.getFor(userId, projectId);
+    const b = await this.branches.branchFor(projectId, branch);
     const base = project.baseLocale;
     const targets = project.locales
       .map((l) => l.code)
       .filter((c) => c !== base && (!locale || c === locale));
     const keys = await this.prisma.key.findMany({
-      where: { projectId },
+      where: { projectId, branchId: b.id },
       include: { translations: true },
       orderBy: { name: 'asc' },
     });

@@ -65,8 +65,8 @@ textarea { resize: vertical; }
 
 .toolbar { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin: 1rem 0; }
 .toolbar .search { max-width: 220px; }
-.toolbar .inline { display: flex; gap: 0.4rem; }
-.toolbar .inline input { width: 160px; }
+.toolbar .inline, .toolbar .branch-form { display: flex; gap: 0.4rem; }
+.toolbar .inline input, .toolbar .branch-form input { width: 160px; }
 .toolbar select { width: auto; }
 .toolbar .import {
   border: 1px solid var(--line); border-radius: 8px; padding: 0.45rem 0.9rem;

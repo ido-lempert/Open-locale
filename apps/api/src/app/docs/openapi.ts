@@ -64,8 +64,18 @@ export const OPENAPI = {
     },
     '/api/projects/{id}/locales': { post: p('Add a target locale', 'projects', true) },
     '/api/projects/{id}/locales/{code}': { delete: p('Remove a target locale', 'projects') },
+    '/api/projects/{projectId}/branches': {
+      get: p('List branches with key counts', 'branches'),
+      post: p('Create a branch (admin)', 'branches', true),
+    },
+    '/api/projects/{projectId}/branches/{branchId}': {
+      delete: p('Delete a branch and its keys (admin; main cannot be deleted)', 'branches'),
+    },
+    '/api/projects/{projectId}/branches/{branchId}/merge': {
+      post: p('Merge a branch into another: upsert keys and translations, target-only keys kept (admin)', 'branches', true),
+    },
     '/api/projects/{projectId}/keys': {
-      get: p('List keys (supports search, tag and status filters)', 'keys'),
+      get: p('List keys (supports search, tag, status and branch filters)', 'keys'),
       post: p('Create a key', 'keys', true),
     },
     '/api/projects/{projectId}/keys/{keyId}': {

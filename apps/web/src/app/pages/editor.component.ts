@@ -3,7 +3,7 @@ import { Component, OnInit, signal, WritableSignal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { hintsForTarget, GlossaryHint } from '../glossary-match';
-import { ApiService, ScreenshotMeta, TmSuggestion, GlossaryTermItem, CommentEntry, HistoryEntry, Key, Project, TranslationStatus } from '../api.service';
+import { ApiService, BranchInfo, ScreenshotMeta, TmSuggestion, GlossaryTermItem, CommentEntry, HistoryEntry, Key, Project, TranslationStatus } from '../api.service';
 
 interface CellState {
   value: string; saved: string;
@@ -29,6 +29,16 @@ interface CellState {
     <main>
       @if (project(); as p) {
         <section class="toolbar">
+          <select aria-label="Branch" [ngModel]="branch()" (ngModelChange)="switchBranch($event)" name="branch">
+            @for (b of branches(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }
+          </select>
+          <form class="branch-form" (ngSubmit)="addBranch()">
+            <input placeholder="new-branch" aria-label="New branch name" [ngModel]="newBranch()" (ngModelChange)="newBranch.set($event)" name="newBranch" maxlength="40" />
+            <button type="submit">Add branch</button>
+          </form>
+          @if (branch() !== 'main') {
+            <button (click)="mergeIntoMain()">Merge {{ branch() }} into main</button>
+          }
           <input class="search" placeholder="Search keys" aria-label="Search keys" [ngModel]="search()" (ngModelChange)="search.set($event); onSearch()" />
           <input class="tag-filter" placeholder="tag" aria-label="Filter by tag" [ngModel]="filterTag()" (ngModelChange)="filterTag.set($event); onSearch()" />
           <select aria-label="Filter by review status" [ngModel]="filterStatus()" (ngModelChange)="filterStatus.set($event); onSearch()">
@@ -217,7 +227,8 @@ export class EditorComponent implements OnInit {
   project = signal<Project | null>(null);
   keys = signal<Key[]>([]);
   cells = new Map<string, WritableSignal<CellState>>();
-  search = signal(''); newKey = signal(''); newLocale = signal(''); ioLocale = signal('en'); bulkStatus = signal('REVIEWED'); ioFormat = signal<'json' | 'csv' | 'android' | 'ios'>('json');
+  search = signal(''); newKey = signal(''); newLocale = signal(''); ioLocale = signal('en'); bulkStatus = signal('REVIEWED');
+  branch = signal('main'); branches = signal<BranchInfo[]>([]); newBranch = signal(''); ioFormat = signal<'json' | 'csv' | 'android' | 'ios'>('json');
   glossary = signal<GlossaryTermItem[]>([]);
   filterTag = signal(''); filterStatus = signal<'' | TranslationStatus>('');
   tagEditFor = signal<string | null>(null);
@@ -249,6 +260,7 @@ export class EditorComponent implements OnInit {
     try {
       const p = await this.api.getProject(this.projectId);
       this.project.set(p); this.ioLocale.set(p.baseLocale);
+      this.branches.set(await this.api.listBranches(this.projectId));
       this.api.listGlossary(this.projectId).then((g) => this.glossary.set(g)).catch(() => this.glossary.set([]));
       await this.reload();
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load project'); }
@@ -265,6 +277,7 @@ export class EditorComponent implements OnInit {
         tag: this.filterTag() || undefined,
         status: this.filterStatus() || undefined,
         locale: this.filterStatus() ? this.ioLocale() : undefined,
+        branch: this.branch(),
       });
       this.keys.set(keys);
       this.cells.clear();
@@ -441,7 +454,7 @@ export class EditorComponent implements OnInit {
   async addKey() {
     const submitted = this.newKey();
     try {
-      await this.api.createKey(this.projectId, { name: submitted });
+      await this.api.createKey(this.projectId, { name: submitted, branch: this.branch() });
       if (this.newKey() === submitted) this.newKey.set('');
       await this.reload();
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
@@ -461,13 +474,41 @@ export class EditorComponent implements OnInit {
   }
   async exportJson() {
     try {
-      const data = await this.api.exportJson(this.projectId, this.ioLocale());
+      const data = await this.api.exportJson(this.projectId, this.ioLocale(), this.branch());
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = `${this.project()?.slug ?? 'export'}.${this.ioLocale()}.json`;
       a.click(); URL.revokeObjectURL(a.href);
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Export failed'); }
+  }
+  async switchBranch(name: string) {
+    this.branch.set(name);
+    this.notice.set('');
+    this.error.set('');
+    await this.reload();
+  }
+  async addBranch() {
+    const name = this.newBranch().trim();
+    if (!name) return;
+    this.error.set('');
+    try {
+      await this.api.createBranch(this.projectId, name);
+      this.newBranch.set('');
+      this.branches.set(await this.api.listBranches(this.projectId));
+      this.notice.set(`Branch ${name} created. You are still on ${this.branch()}; pick it from the branch list to work there.`);
+    } catch (err) { this.error.set(err instanceof Error ? err.message : 'Failed to create branch'); }
+  }
+  async mergeIntoMain() {
+    const from = this.branch();
+    const b = this.branches().find((x) => x.name === from);
+    if (!b) return;
+    if (!confirm(`Merge ${from} into main? Keys and translations from ${from} are copied into main; keys only in main are kept; nothing is deleted. ${from} itself stays as it is.`)) return;
+    this.error.set('');
+    try {
+      const res = await this.api.mergeBranch(this.projectId, b.id, 'main');
+      this.notice.set(`Merged ${res.merged}: ${res.keysMerged} keys, ${res.translationsMerged} translations copied.`);
+    } catch (err) { this.error.set(err instanceof Error ? err.message : 'Merge failed'); }
   }
   // Review queue: set one status for the translations the CURRENT filter
   // selects in the selected locale. Previews the exact affected count first;
@@ -495,13 +536,13 @@ export class EditorComponent implements OnInit {
     try {
       let content: string, type: string, ext: string;
       if (fmt === 'json') {
-        content = JSON.stringify(await this.api.exportJson(this.projectId, locale), null, 2);
+        content = JSON.stringify(await this.api.exportJson(this.projectId, locale, this.branch()), null, 2);
         type = 'application/json'; ext = 'json';
       } else if (fmt === 'csv') {
-        content = await this.api.exportCsv(this.projectId, locale);
+        content = await this.api.exportCsv(this.projectId, locale, undefined, this.branch());
         type = 'text/csv'; ext = 'csv';
       } else {
-        content = await this.api.exportText(this.projectId, locale, fmt);
+        content = await this.api.exportText(this.projectId, locale, fmt, this.branch());
         type = fmt === 'android' ? 'text/xml' : 'text/plain';
         ext = fmt === 'android' ? 'xml' : 'strings';
       }
@@ -526,7 +567,7 @@ export class EditorComponent implements OnInit {
       const payload = fmt === 'json' ? { entries: JSON.parse(text) }
         : fmt === 'csv' ? { csv: text }
         : fmt === 'android' ? { xml: text } : { strings: text };
-      const res = await this.api.importPayload(this.projectId, this.ioLocale(), payload);
+      const res = await this.api.importPayload(this.projectId, this.ioLocale(), payload, this.branch());
       this.notice.set(`Imported ${res.keysCreated} keys, ${res.translationsUpserted} translations (${this.formatLabel()}, ${this.ioLocale()}).`);
       await this.reload();
     } catch (err) { this.error.set(err instanceof Error ? err.message : `Import failed: invalid ${this.formatLabel()}`); }

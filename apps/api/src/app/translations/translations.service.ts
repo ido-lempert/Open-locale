@@ -7,6 +7,7 @@ import { WebhooksService } from '../webhooks/webhooks.service';
 import { ActivityService, truncate } from '../activity/activity.service';
 import { SnapshotsService } from '../snapshots/snapshots.service';
 import { LocksService } from '../locks/locks.service';
+import { BranchesService } from '../branches/branches.service';
 import { flattenJson, unflattenJson } from './json-flatten';
 import { parseCsv, toCsv } from './csv';
 import { parseAndroidXml, toAndroidXml } from './android-xml';
@@ -31,6 +32,7 @@ export class TranslationsService {
     private readonly snapshots: SnapshotsService,
     private readonly locks: LocksService,
     private readonly webhooks: WebhooksService,
+    private readonly branches: BranchesService,
   ) {}
 
   async upsert(userId: string, projectId: string, keyId: string, locale: string, value: string) {
@@ -241,10 +243,11 @@ export class TranslationsService {
     });
   }
 
-  async exportJson(userId: string, projectId: string, locale: string, flat: boolean) {
+  async exportJson(userId: string, projectId: string, locale: string, flat: boolean, branch?: string) {
     await this.projects.getFor(userId, projectId);
+    const b = await this.branches.branchFor(projectId, branch);
     const translations = await this.prisma.translation.findMany({
-      where: { projectId, localeCode: locale },
+      where: { projectId, localeCode: locale, key: { branchId: b.id } },
       include: { key: true },
       orderBy: { key: { name: 'asc' } },
     });
@@ -253,47 +256,48 @@ export class TranslationsService {
     return flat ? map : unflattenJson(map);
   }
 
-  async exportCsv(userId: string, projectId: string, locale: string, mode?: string) {
-    const flat = (await this.exportJson(userId, projectId, locale, true)) as Record<string, string>;
+  async exportCsv(userId: string, projectId: string, locale: string, mode?: string, branch?: string) {
+    const flat = (await this.exportJson(userId, projectId, locale, true, branch)) as Record<string, string>;
     return toCsv(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)), { spreadsheetSafe: mode !== 'raw' });
   }
 
-  async exportAndroid(userId: string, projectId: string, locale: string) {
-    const flat = (await this.exportJson(userId, projectId, locale, true)) as Record<string, string>;
+  async exportAndroid(userId: string, projectId: string, locale: string, branch?: string) {
+    const flat = (await this.exportJson(userId, projectId, locale, true, branch)) as Record<string, string>;
     return toAndroidXml(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)));
   }
 
-  async exportIos(userId: string, projectId: string, locale: string) {
-    const flat = (await this.exportJson(userId, projectId, locale, true)) as Record<string, string>;
+  async exportIos(userId: string, projectId: string, locale: string, branch?: string) {
+    const flat = (await this.exportJson(userId, projectId, locale, true, branch)) as Record<string, string>;
     return toIosStrings(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)));
   }
 
-  async importAndroid(userId: string, projectId: string, locale: string, xml: string) {
+  async importAndroid(userId: string, projectId: string, locale: string, xml: string, branch?: string) {
     const { rows, rejected } = parseAndroidXml(xml);
     if (rejected > 0) {
       throw new BadRequestException(`${rejected} unsupported or unparsable element(s) in Android XML: plurals, string-array, DOCTYPE/entity declarations and nested markup are not supported`);
     }
-    return this.importJson(userId, projectId, locale, Object.fromEntries(rows));
+    return this.importJson(userId, projectId, locale, Object.fromEntries(rows), branch);
   }
 
-  async importIos(userId: string, projectId: string, locale: string, strings: string) {
+  async importIos(userId: string, projectId: string, locale: string, strings: string, branch?: string) {
     const { rows, rejected } = parseIosStrings(strings);
     if (rejected > 0) {
       throw new BadRequestException(`${rejected} line(s) are not valid "key" = "value"; entries`);
     }
-    return this.importJson(userId, projectId, locale, Object.fromEntries(rows));
+    return this.importJson(userId, projectId, locale, Object.fromEntries(rows), branch);
   }
 
-  async importCsv(userId: string, projectId: string, locale: string, csv: string) {
+  async importCsv(userId: string, projectId: string, locale: string, csv: string, branch?: string) {
     const { rows, rejected } = parseCsv(csv);
     if (rejected > 0) {
       throw new BadRequestException(`${rejected} CSV row(s) have more than 2 columns`);
     }
-    return this.importJson(userId, projectId, locale, Object.fromEntries(rows));
+    return this.importJson(userId, projectId, locale, Object.fromEntries(rows), branch);
   }
 
-  async importJson(userId: string, projectId: string, locale: string, entries: Record<string, unknown>) {
+  async importJson(userId: string, projectId: string, locale: string, entries: Record<string, unknown>, branch?: string) {
     await this.projects.assertLocaleWrite(userId, projectId, [locale]);
+    const b = await this.branches.branchFor(projectId, branch);
     const project = await this.projects.getFor(userId, projectId);
     if (!project.locales.some((l) => l.code === locale)) {
       throw new BadRequestException(`Locale ${locale} is not part of this project`);
@@ -304,12 +308,13 @@ export class TranslationsService {
     // state. Single-instance in-process mutex; see LocksService for why not a
     // Postgres advisory lock and what multi-instance needs.
     return this.locks.withProjectLock(projectId, () =>
-      this.importJsonLocked(userId, projectId, locale, project.baseLocale, entries, flat, rejected));
+      this.importJsonLocked(userId, projectId, locale, project.baseLocale, entries, flat, rejected, b.id));
   }
 
   private async importJsonLocked(
     userId: string, projectId: string, locale: string, baseLocale: string,
     entries: Record<string, unknown>, flat: Record<string, string>, rejected: string[],
+    branchId: string,
   ) {
     // Restorable auto snapshot BEFORE anything mutates: every import leaves the
     // pre-import state recoverable from the snapshots list.
@@ -329,8 +334,8 @@ export class TranslationsService {
         // one transaction - progress on the run row always matches the data.
         await this.prisma.$transaction(async (tx) => {
           const key = await tx.key.upsert({
-            where: { projectId_name: { projectId, name } },
-            create: { projectId, name },
+            where: { branchId_name: { branchId, name } },
+            create: { projectId, branchId, name },
             update: {},
           });
           const keyCreated = key.createdAt.getTime() === key.updatedAt.getTime();

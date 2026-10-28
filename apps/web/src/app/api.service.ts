@@ -22,6 +22,8 @@ export interface Key {
   translations: Translation[];
   _count?: { comments: number; screenshots?: number };
 }
+export interface BranchInfo { id: string; name: string; createdAt: string; _count?: { keys: number }; }
+
 export interface MemberInfo {
   id: string;
   displayName: string;
@@ -68,6 +70,8 @@ export interface TaskItem {
   assignee: { id: string; displayName: string; email: string } | null;
   creator: { id: string; displayName: string; email: string } | null;
 }
+export interface BranchInfo { id: string; name: string; createdAt: string; _count?: { keys: number }; }
+
 export interface MemberInfo { id: string; displayName: string; email: string; role: string; }
 
 export interface ScreenshotMeta {
@@ -152,11 +156,23 @@ export class ApiService {
   removeLocale(projectId: string, code: string) {
     return this.request<{ removed: string }>(`/projects/${projectId}/locales/${code}`, { method: 'DELETE' });
   }
-  listKeys(projectId: string, filters: { search?: string; tag?: string; status?: string; locale?: string } = {}) {
+  listKeys(projectId: string, filters: { search?: string; tag?: string; status?: string; locale?: string; branch?: string } = {}) {
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(filters)) if (v) params.set(k, v);
     const q = params.toString();
     return this.request<Key[]>(`/projects/${projectId}/keys${q ? `?${q}` : ''}`);
+  }
+  listBranches(projectId: string) {
+    return this.request<BranchInfo[]>(`/projects/${projectId}/branches`);
+  }
+  createBranch(projectId: string, name: string) {
+    return this.request<BranchInfo>(`/projects/${projectId}/branches`, { method: 'POST', body: JSON.stringify({ name }) });
+  }
+  deleteBranch(projectId: string, branchId: string) {
+    return this.request<{ removed: string; keysRemoved: number }>(`/projects/${projectId}/branches/${branchId}`, { method: 'DELETE' });
+  }
+  mergeBranch(projectId: string, branchId: string, into: string) {
+    return this.request<{ merged: string; keysMerged: number; translationsMerged: number }>(`/projects/${projectId}/branches/${branchId}/merge`, { method: 'POST', body: JSON.stringify({ into }) });
   }
   listMembers(projectId: string) {
     return this.request<MemberInfo[]>(`/projects/${projectId}/members`);
@@ -193,27 +209,31 @@ export class ApiService {
     return this.request<{ suggestions: TmSuggestion[] }>(
       `/projects/${projectId}/tm/suggest?locale=${encodeURIComponent(locale)}&source=${encodeURIComponent(source)}`);
   }
-  async exportCsv(projectId: string, locale: string, mode?: 'raw') {
-    const res = await fetch(`${this.base}/projects/${projectId}/export/${locale}/csv${mode ? '?mode=raw' : ''}`, {
+  async exportCsv(projectId: string, locale: string, mode?: 'raw', branch?: string) {
+    const params = new URLSearchParams();
+    if (mode) params.set('mode', mode);
+    if (branch) params.set('branch', branch);
+    const qs = params.toString();
+    const res = await fetch(`${this.base}/projects/${projectId}/export/${locale}/csv${qs ? `?${qs}` : ''}`, {
       headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
     });
     if (!res.ok) throw new Error(`Export failed (HTTP ${res.status})`);
     return res.text();
   }
-  importCsv(projectId: string, locale: string, csv: string) {
+  importCsv(projectId: string, locale: string, csv: string, branch?: string) {
     return this.request<{ keysCreated: number; translationsUpserted: number }>(
-      `/projects/${projectId}/import/${locale}`, { method: 'POST', body: JSON.stringify({ csv }) });
+      `/projects/${projectId}/import/${locale}${branch ? `?branch=${encodeURIComponent(branch)}` : ''}`, { method: 'POST', body: JSON.stringify({ csv }) });
   }
-  async exportText(projectId: string, locale: string, kind: 'android' | 'ios') {
-    const res = await fetch(`${this.base}/projects/${projectId}/export/${locale}/${kind}`, {
+  async exportText(projectId: string, locale: string, kind: 'android' | 'ios', branch?: string) {
+    const res = await fetch(`${this.base}/projects/${projectId}/export/${locale}/${kind}${branch ? `?branch=${encodeURIComponent(branch)}` : ''}`, {
       headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
     });
     if (!res.ok) throw new Error(`Export failed (HTTP ${res.status})`);
     return res.text();
   }
-  importPayload(projectId: string, locale: string, payload: Record<string, unknown>) {
+  importPayload(projectId: string, locale: string, payload: Record<string, unknown>, branch?: string) {
     return this.request<{ keysCreated: number; translationsUpserted: number }>(
-      `/projects/${projectId}/import/${locale}`, { method: 'POST', body: JSON.stringify(payload) });
+      `/projects/${projectId}/import/${locale}${branch ? `?branch=${encodeURIComponent(branch)}` : ''}`, { method: 'POST', body: JSON.stringify(payload) });
   }
   runQa(projectId: string, locale?: string) {
     return this.request<{ issues: QaIssue[] }>(`/projects/${projectId}/qa${locale ? `?locale=${locale}` : ''}`);
@@ -277,7 +297,7 @@ export class ApiService {
       method: 'PATCH', body: JSON.stringify({ tags }),
     });
   }
-  createKey(projectId: string, input: { name: string; description?: string }) {
+  createKey(projectId: string, input: { name: string; description?: string; branch?: string }) {
     return this.request<Key>(`/projects/${projectId}/keys`, { method: 'POST', body: JSON.stringify(input) });
   }
   deleteKey(projectId: string, keyId: string) {
@@ -299,8 +319,8 @@ export class ApiService {
   getHistory(projectId: string, keyId: string, locale: string) {
     return this.request<HistoryEntry[]>(`/projects/${projectId}/keys/${keyId}/translations/${locale}/history`);
   }
-  exportJson(projectId: string, locale: string) {
-    return this.request<Record<string, unknown>>(`/projects/${projectId}/export/${locale}`);
+  exportJson(projectId: string, locale: string, branch?: string) {
+    return this.request<Record<string, unknown>>(`/projects/${projectId}/export/${locale}${branch ? `?branch=${encodeURIComponent(branch)}` : ''}`);
   }
   importJson(projectId: string, locale: string, entries: Record<string, unknown>) {
     return this.request<{ keysCreated: number; translationsUpserted: number }>(

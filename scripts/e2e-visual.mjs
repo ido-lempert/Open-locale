@@ -445,6 +445,52 @@ try {
   // Safe to capture now: the panel shows only names/scopes/dates, no raw token.
   await shot('editor-10-tokens.png');
 
+
+  // --- Branches: create via UI, isolation, merge into main ---
+  await page.goto(`${WEB}/projects/${projId}`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('select[aria-label="Branch"]', { timeout: 10000 });
+  const mainBranchRows = await page.$$eval('.grid tbody tr:not(.history-row)', (els) => els.length);
+  check('main branch shows existing keys', mainBranchRows >= 5, `${mainBranchRows} rows`);
+  await page.type('input[aria-label="New branch name"]', 'feature-x');
+  await page.evaluate(() => {
+    const form = document.querySelector('input[aria-label="New branch name"]').closest('form');
+    form.requestSubmit();
+  });
+  const branchNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('Branch feature-x created'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('branch created via UI with notice', branchNotice);
+  await page.select('select[aria-label="Branch"]', 'feature-x');
+  await page.waitForFunction(
+    () => document.querySelectorAll('.grid tbody tr:not(.history-row)').length === 0,
+    { timeout: 10000 },
+  );
+  check('new branch starts empty (isolation from main)', true);
+  const mergeBtn = await page.waitForFunction(() => (document.body.textContent || '').includes('Merge feature-x into main'), { timeout: 5000 }).then(() => true).catch(() => false);
+  check('merge button visible on non-main branch', mergeBtn);
+  await shot('editor-21-branch-empty.png');
+  // Add a branch-only key, then merge into main
+  await page.type('input[name=newKey]', 'branch.only');
+  await page.click('.inline button');
+  check('branch-only key added on feature-x', await waitText('branch.only'));
+  const bCells = await page.$$('.grid tbody tr:first-child textarea');
+  await bCells[0].type('Only on the branch');
+  await bCells[0].evaluate((el) => el.blur());
+  await page.waitForFunction(
+    () => [...document.querySelectorAll('.grid tbody tr:first-child .cell-status')].some((e) => /saved/i.test(e.textContent)),
+    { timeout: 10000 },
+  );
+  page.once('dialog', (d) => d.accept());
+  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Merge feature-x into main')).click());
+  const mergeNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('Merged feature-x'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('merge completes with summary notice', mergeNotice);
+  await page.select('select[aria-label="Branch"]', 'main');
+  await page.waitForFunction(
+    () => (document.body.textContent || '').includes('home.title') && (document.body.textContent || '').includes('branch.only'),
+    { timeout: 10000 },
+  );
+  const mainRowsAfter = await page.$$eval('.grid tbody tr:not(.history-row)', (els) => els.length);
+  check('merged key visible on main, existing keys kept', mainRowsAfter === mainBranchRows + 1, `${mainRowsAfter} rows (was ${mainBranchRows})`);
+  await shot('editor-22-branch-merged.png');
+
   // Mobile viewport evidence (390px)
   await page.goto(`${WEB}/projects/${projId}`, { waitUntil: 'networkidle0' });
   await page.setViewport({ width: 390, height: 844 });

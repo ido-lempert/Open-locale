@@ -10,7 +10,7 @@ export class QaController {
   constructor(private readonly qa: QaService) {}
 
   @Get()
-  run(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Query('locale') locale?: string) {
-    return this.qa.run(user.userId, projectId, locale);
+  run(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Query('locale') locale?: string, @Query('branch') branch?: string) {
+    return this.qa.run(user.userId, projectId, locale, branch);
   }
 }

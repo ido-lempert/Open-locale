@@ -25,6 +25,11 @@ export class CreateKeyDto {
   @IsString({ each: true })
   @MaxLength(40, { each: true })
   tags?: string[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  branch?: string;
 }
 
 export class UpdateKeyDto {
@@ -64,6 +69,11 @@ export class ListKeysQueryDto {
   @IsString()
   @MaxLength(10)
   locale?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  branch?: string;
 }
 
 export class SetTagsDto {
@@ -84,4 +94,9 @@ export class CreateCommentDto {
   @IsString()
   @MaxLength(10)
   locale?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  branch?: string;
 }

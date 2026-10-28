@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
+import { BranchesService } from '../branches/branches.service';
 import { ActivityService, truncate } from '../activity/activity.service';
 
 @Injectable()
@@ -9,16 +10,19 @@ export class KeysService {
     private readonly prisma: PrismaService,
     private readonly projects: ProjectsService,
     private readonly activity: ActivityService,
+    private readonly branches: BranchesService,
   ) {}
 
   async list(userId: string, projectId: string, filters: {
-    search?: string; tag?: string; status?: string; locale?: string;
+    search?: string; tag?: string; status?: string; locale?: string; branch?: string;
   }) {
     await this.projects.getFor(userId, projectId);
     const { search, tag, status, locale } = filters;
+    const branch = await this.branches.branchFor(projectId, filters.branch);
     return this.prisma.key.findMany({
       where: {
         projectId,
+        branchId: branch.id,
         ...(search ? { name: { contains: search, mode: 'insensitive' as const } } : {}),
         ...(tag ? { tags: { has: tag } } : {}),
         ...(status && locale
@@ -46,13 +50,15 @@ export class KeysService {
   }
 
   async create(userId: string, projectId: string, input: {
-    name: string; description?: string; isPlural?: boolean; maxLength?: number; tags?: string[];
+    name: string; description?: string; isPlural?: boolean; maxLength?: number; tags?: string[]; branch?: string;
   }) {
     await this.projects.getFor(userId, projectId);
+    const branch = await this.branches.branchFor(projectId, input.branch);
     return this.prisma.$transaction(async (tx) => {
       const key = await tx.key.create({
         data: {
           projectId,
+          branchId: branch.id,
           name: input.name,
           description: input.description ?? '',
           isPlural: input.isPlural ?? false,
