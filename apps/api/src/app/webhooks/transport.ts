@@ -23,6 +23,10 @@ export function deliverPinned(
   headers: Record<string, string>,
   body: string,
   timeoutMs = 5000,
+  // Test hook: trust anchors for controlled HTTPS fixtures. Certificate
+  // verification itself is never disabled - there is no rejectUnauthorized
+  // switch here.
+  tls?: { ca?: string | string[] },
 ): Promise<DeliverResult> {
   return new Promise((resolve) => {
     const isTls = url.protocol === 'https:';
@@ -42,6 +46,7 @@ export function deliverPinned(
         headers: { 'Content-Type': 'application/json', ...headers },
         lookup, // pinned: no second resolution can rebinding to another address
         timeout: timeoutMs,
+        ...(isTls && tls?.ca ? { ca: tls.ca } : {}),
       },
       (res) => {
         res.resume(); // drain so the socket frees

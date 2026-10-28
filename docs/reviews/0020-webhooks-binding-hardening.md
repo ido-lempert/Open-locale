@@ -74,3 +74,14 @@ Findings:
   receives zero requests.
 
 Both run against real HTTP servers on loopback, exercising the real socket path rather than mocks.
+
+Three further cases run against real HTTPS servers (test-only fixture CA, checked in under
+`apps/api/src/app/webhooks/fixtures/`) with certificate verification fully enabled:
+
+- **Valid TLS**: delivery to the pinned address succeeds when the server presents a certificate
+  valid for the SNI hostname and chained to the test CA.
+- **Hostname mismatch**: a certificate for a different hostname is rejected (delivery fails).
+- **Untrusted CA**: a certificate signed by an unrelated CA is rejected (delivery fails).
+
+The transport exposes only a trust-anchor injection for fixtures; there is no switch to disable
+verification.
