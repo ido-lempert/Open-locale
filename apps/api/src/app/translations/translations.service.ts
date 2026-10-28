@@ -157,9 +157,9 @@ export class TranslationsService {
     return flat ? map : unflattenJson(map);
   }
 
-  async exportCsv(userId: string, projectId: string, locale: string) {
+  async exportCsv(userId: string, projectId: string, locale: string, mode?: string) {
     const flat = (await this.exportJson(userId, projectId, locale, true)) as Record<string, string>;
-    return toCsv(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)));
+    return toCsv(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)), { spreadsheetSafe: mode !== 'raw' });
   }
 
   async importCsv(userId: string, projectId: string, locale: string, csv: string) {

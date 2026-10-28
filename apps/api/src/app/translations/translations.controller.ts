@@ -33,8 +33,8 @@ export class TranslationsController {
 
   @Get('export/:locale/csv')
   @Header('Content-Type', 'text/csv; charset=utf-8')
-  exportCsv(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string) {
-    return this.translations.exportCsv(user.userId, projectId, locale);
+  exportCsv(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('mode') mode?: string) {
+    return this.translations.exportCsv(user.userId, projectId, locale, mode);
   }
 
   @Get('tm/suggest')

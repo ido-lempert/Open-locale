@@ -29,15 +29,20 @@ Strict on shape: rows with more than 2 columns are rejected 400.
 ## Pass 4 - Security
 - Same membership guard (404 cross-team both directions, tested). CSV body capped at
   2MB by DTO validation; parser is a single linear scan, no regex backtracking
-  (no ReDoS surface). Export sets no-store. No formula-injection mitigation yet -
-  values starting with = + - @ are exported as-is; tracked as a gap since some
-  spreadsheet apps execute them.
+  (no ReDoS surface). Export sets no-store.
+- Formula-injection (OWASP CSV injection) addressed before any UI ships: default
+  export is spreadsheet-safe, prefixing values/keys starting with = + - @ tab CR with
+  an apostrophe; mode=raw is the clearly distinguished lossless roundtrip mode.
+  Tested at unit level (all six prefix families shielded, raw preserved, raw
+  roundtrip lossless) and integration level (safe vs raw export of an actual
+  =HYPERLINK value, verbatim import, byte-identical raw export->import->export).
 
 ## Pass 5 - QA / integration
-- import-runs 15/15, formats 8/8, tm 12/12, activity 24/24, api unit 9/9 - all exit 0.
+- import-runs 15/15, formats 11/11, tm 12/12, activity 24/24, api unit 10/10 - all exit 0.
 - Full loop + e2e deferred to the CSV-UI slice; no UI paths touched in this commit.
 
 ## Known gaps
 - No CSV controls in the editor UI yet (next slice).
-- No spreadsheet formula-injection escaping on export.
 - Single-locale narrow CSV only; no multi-locale wide export.
+- Safe-mode exports are for spreadsheet viewing; re-importing one keeps the
+  apostrophe prefixes (verbatim import) - documented behavior, not a silent fix-up.

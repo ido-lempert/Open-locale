@@ -1,9 +1,16 @@
 // Minimal, correct CSV for translation interchange: RFC-4180 quoting,
 // \r\n row endings, header row 'key,value'.
 
-export function toCsv(rows: [string, string][]): string {
+// Spreadsheet formula-injection guard (OWASP): values that a spreadsheet app would
+// execute get a leading apostrophe. Safe mode is for opening exports in Excel/Sheets;
+// use mode=raw for a lossless roundtrip export.
+const FORMULA_PREFIX = /^[=+\-@\t\r]/;
+const shield = (v: string) => (FORMULA_PREFIX.test(v) ? `'${v}` : v);
+
+export function toCsv(rows: [string, string][], opts: { spreadsheetSafe?: boolean } = {}): string {
+  const guard = opts.spreadsheetSafe ? shield : (v: string) => v;
   const esc = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-  return ['key,value', ...rows.map(([k, v]) => `${esc(k)},${esc(v)}`)].join('\r\n') + '\r\n';
+  return ['key,value', ...rows.map(([k, v]) => `${esc(guard(k))},${esc(guard(v))}`)].join('\r\n') + '\r\n';
 }
 
 export function parseCsv(text: string): { rows: [string, string][]; rejected: number } {
