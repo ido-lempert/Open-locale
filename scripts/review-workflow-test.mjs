@@ -158,7 +158,7 @@ try {
   await call(`/projects/${pid}/keys/${k2}/translations/he/status`, { jwt, method: 'PATCH', body: { status: 'UNVERIFIED' } });
   await call(`/projects/${pid}/keys/${k3}/translations/he/status`, { jwt, method: 'PATCH', body: { status: 'UNVERIFIED' } });
   const pv = await call(`/projects/${pid}/review/bulk-status`, { jwt, method: 'POST', body: { locale: 'he', status: 'REVIEWED', from: 'UNVERIFIED', dryRun: true } });
-  check('preview returns a server timestamp', pv.status === 201 && typeof pv.json.previewAt === 'string');
+  check('preview returns a server timestamp', pv.status === 201 && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/.test(pv.json.previewAt), String(pv.json.previewAt));
   // Same-status value edit after preview.
   await call(`/projects/${pid}/keys/${k2}/translations`, { jwt, method: 'PUT', body: { locale: 'he', value: 'edited after preview' } });
   await call(`/projects/${pid}/keys/${k2}/translations/he/status`, { jwt, method: 'PATCH', body: { status: 'UNVERIFIED' } });

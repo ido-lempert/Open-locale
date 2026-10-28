@@ -113,15 +113,18 @@ export class TranslationsService {
     // the preview timestamp is produced and compared as a naive UTC literal:
     // no session-timezone conversion can shift the window.
     if (notChangedSince !== undefined) {
-      if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}$/.test(notChangedSince)) {
+      if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/.test(notChangedSince)) {
         throw new BadRequestException('notChangedSince must be the previewAt value from a dry-run preview');
       }
       conditions.push(Prisma.sql`t."updatedAt" <= ${notChangedSince}::timestamp`);
     }
     const where = Prisma.join(conditions, ' AND ');
     if (dryRun) {
+      // statement_timestamp() matches the READ COMMITTED statement snapshot
+      // that count(*) actually sees (now() is transaction start and could be
+      // earlier); microseconds match updatedAt's stored precision.
       const rows = await this.prisma.$queryRaw<{ count: bigint; now: string }[]>(
-        Prisma.sql`SELECT count(*) AS count, to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS') AS now FROM "translations" t WHERE ${where}`);
+        Prisma.sql`SELECT count(*) AS count, to_char(statement_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US') AS now FROM "translations" t WHERE ${where}`);
       return { matched: Number(rows[0].count), updated: 0, previewAt: rows[0].now };
     }
     return this.prisma.$transaction(async (tx) => {
