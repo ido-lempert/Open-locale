@@ -565,6 +565,20 @@ try {
   await new Promise((r) => setTimeout(r, 300));
   await shot('editor-24-ota.png');
 
+  // --- In-context embedding settings ---
+  await page.evaluate(() => {
+    const input = document.querySelector('input[name=newOrigin]');
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    setter.call(input, 'https://app.example.com');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.closest('form').requestSubmit();
+  });
+  const originListed = await page.waitForFunction(() => (document.body.textContent || '').includes('https://app.example.com'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('embed origin added via settings UI and listed', originListed);
+  await page.evaluate(() => [...document.querySelectorAll('h2')].find((h) => h.textContent === 'In-context embedding')?.scrollIntoView({ block: 'center' }));
+  await new Promise((r) => setTimeout(r, 300));
+  await shot('editor-27-embed-origins.png');
+
   // --- Progress report ---
   await page.setViewport({ width: 1280, height: 900 });
   await page.goto(`${WEB}/projects/${projId}/reports`, { waitUntil: 'networkidle0' });

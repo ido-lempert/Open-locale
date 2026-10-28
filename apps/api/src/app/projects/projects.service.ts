@@ -57,7 +57,27 @@ export class ProjectsService {
     return project;
   }
 
-  async updateFor(userId: string, projectId: string, input: { name?: string; description?: string; customStatuses?: string[] }) {
+  private validateEmbedOrigins(raw: string[]): string[] {
+    const origins = Array.from(new Set(raw.map((o) => o.trim())));
+    for (const o of origins) {
+      let url: URL;
+      try {
+        url = new URL(o);
+      } catch {
+        throw new BadRequestException(`Embed origin '${o}' is not a valid URL`);
+      }
+      if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+        throw new BadRequestException(`Embed origin '${o}' must use http or https`);
+      }
+      // Origin only: no path, query, hash, credentials, or trailing slash.
+      if (url.origin !== o) {
+        throw new BadRequestException(`Embed origin '${o}' must be a bare origin like https://app.example.com (no path, query or trailing slash)`);
+      }
+    }
+    return origins;
+  }
+
+  async updateFor(userId: string, projectId: string, input: { name?: string; description?: string; customStatuses?: string[]; embedOrigins?: string[] }) {
     await this.requireAdmin(userId, projectId);
     const before = await this.getFor(userId, projectId);
     let customStatuses: string[] | undefined;
@@ -78,9 +98,16 @@ export class ProjectsService {
           ...(input.name !== undefined ? { name: input.name } : {}),
           ...(input.description !== undefined ? { description: input.description } : {}),
           ...(customStatuses !== undefined ? { customStatuses } : {}),
+          ...(input.embedOrigins !== undefined ? { embedOrigins: this.validateEmbedOrigins(input.embedOrigins) } : {}),
         },
         include: { locales: true },
       });
+      if (input.embedOrigins !== undefined) {
+        await this.activity.record(tx, {
+          projectId, actorId: userId, action: 'project.embedOrigins.updated',
+          detail: { from: before.embedOrigins, to: project.embedOrigins },
+        });
+      }
       if (input.name !== undefined && input.name !== before.name) {
         await this.activity.record(tx, {
           projectId, actorId: userId, action: 'project.renamed',

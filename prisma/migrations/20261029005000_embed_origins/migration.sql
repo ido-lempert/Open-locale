@@ -1,0 +1,1 @@
+ALTER TABLE "projects" ADD COLUMN "embedOrigins" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];

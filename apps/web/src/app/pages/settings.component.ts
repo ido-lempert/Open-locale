@@ -95,6 +95,23 @@ import { ApiService, BranchInfo, OtaPublicationInfo, ApiTokenInfo, MemberInfo, P
           <p class="muted">Custom statuses appear in the editor status dropdowns and the review queue. Removing one does not change translations already carrying it.</p>
         </section>
         <section class="panel">
+          <h2>In-context embedding</h2>
+          <p class="muted">Origins allowed to embed the in-context editor (/embed/projects/{{ projectId }}) in an iframe and exchange messages with it. Bare origins only (https://app.example.com - no path or trailing slash). The embedded frame answers only these origins and never exposes your session to the host page. Changes here require a signed-in session, not an API token.</p>
+          <ul class="locale-list">
+            @for (o of project()?.embedOrigins ?? []; track o) {
+              <li>
+                <code>{{ o }}</code>
+                <button class="danger" (click)="removeOrigin(o)">Remove</button>
+              </li>
+            }
+            @if (!(project()?.embedOrigins ?? []).length) { <li class="muted">No origins allowlisted - the embed endpoint answers nothing yet.</li> }
+          </ul>
+          <form class="inline" (ngSubmit)="addOrigin()">
+            <input aria-label="New embed origin" placeholder="https://app.example.com" [ngModel]="newOrigin()" (ngModelChange)="newOrigin.set($event)" name="newOrigin" required />
+            <button type="submit" [disabled]="busy()">Add origin</button>
+          </form>
+        </section>
+        <section class="panel">
           <h2>Members</h2>
           <ul class="locale-list">
             @for (m of members(); track m.id) {
@@ -255,6 +272,31 @@ export class SettingsComponent implements OnInit {
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }
+  readonly newOrigin = signal('');
+
+  async addOrigin() {
+    const origin = this.newOrigin().trim();
+    if (!origin) return;
+    this.busy.set(true); this.error.set('');
+    try {
+      const current = this.project()?.embedOrigins ?? [];
+      await this.api.updateProject(this.projectId, { embedOrigins: [...current, origin] });
+      this.newOrigin.set('');
+      await this.reload();
+    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+    finally { this.busy.set(false); }
+  }
+
+  async removeOrigin(origin: string) {
+    this.busy.set(true); this.error.set('');
+    try {
+      const current = this.project()?.embedOrigins ?? [];
+      await this.api.updateProject(this.projectId, { embedOrigins: current.filter((x) => x !== origin) });
+      await this.reload();
+    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+    finally { this.busy.set(false); }
+  }
+
   async addStatus() {
     this.busy.set(true); this.error.set('');
     try {

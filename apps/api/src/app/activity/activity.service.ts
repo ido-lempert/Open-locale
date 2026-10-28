@@ -29,6 +29,7 @@ export const ACTIVITY_ACTIONS = [
   'branch.deleted',
   'branch.merged',
   'ota.published',
+  'project.embedOrigins.updated',
 ] as const;
 
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];

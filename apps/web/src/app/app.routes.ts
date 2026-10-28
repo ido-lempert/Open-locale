@@ -10,6 +10,7 @@ import { GlossaryComponent } from './pages/glossary.component';
 import { QaComponent } from './pages/qa.component';
 import { SnapshotsComponent } from './pages/snapshots.component';
 import { ReportsComponent } from './pages/reports.component';
+import { EmbedComponent } from './pages/embed.component';
 
 export const appRoutes: Routes = [
   { path: 'login', component: LoginComponent },
@@ -22,6 +23,7 @@ export const appRoutes: Routes = [
   { path: 'projects/:id/qa', component: QaComponent, canActivate: [authGuard] },
   { path: 'projects/:id/snapshots', component: SnapshotsComponent, canActivate: [authGuard] },
   { path: 'projects/:id/reports', component: ReportsComponent, canActivate: [authGuard] },
+  { path: 'embed/projects/:id', component: EmbedComponent, canActivate: [authGuard] },
   { path: '', pathMatch: 'full', redirectTo: 'projects' },
   { path: '**', redirectTo: 'projects' },
 ];

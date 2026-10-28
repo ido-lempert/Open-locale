@@ -231,3 +231,8 @@ span.review { font-size: 0.72rem; padding: 0.05rem 0.4rem; border: 1px solid var
 .progress-table td { border-bottom: 1px solid var(--line, #e5e7eb); }
 .progress-table .status-group { border-left: 2px solid var(--line, #d1d5db); }
 .progress-table .row-head { vertical-align: bottom; }
+.embed-main { max-width: 520px; margin: 0 auto; padding: 0.5rem; }
+.embed-keys { list-style: none; padding: 0; margin: 0.5rem 0; }
+.embed-keys li { display: flex; gap: 0.6rem; padding: 0.35rem 0.5rem; border-radius: 6px; align-items: baseline; }
+.embed-keys li.highlighted { background: #fef3c7; outline: 2px solid #f59e0b; }
+.embed-keys li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

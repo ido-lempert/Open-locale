@@ -28,7 +28,8 @@
     "test:branches": "node scripts/branches-test.mjs",
     "test:merge-concurrency": "node scripts/merge-concurrency-test.mjs",
     "test:ota": "node scripts/ota-test.mjs",
-    "test:reports": "node scripts/reports-test.mjs"
+    "test:reports": "node scripts/reports-test.mjs",
+    "test:incontext": "node scripts/incontext-test.mjs"
   },
   "private": true,
   "dependencies": {

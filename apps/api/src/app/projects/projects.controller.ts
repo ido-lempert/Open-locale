@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -47,6 +47,12 @@ export class ProjectsController {
 
   @Patch(':id')
   update(@CurrentUser() user: AuthPrincipal, @Param('id') id: string, @Body() dto: UpdateProjectDto) {
+    // Embed origins grant a host page a postMessage channel into the embedded
+    // editor. Like OTA publish and branch management, a leaked CI/SDK token
+    // must not be able to widen that trust boundary - session principals only.
+    if (dto.embedOrigins !== undefined && user.via !== 'jwt') {
+      throw new ForbiddenException('Embed origin management requires a signed-in session, not an API token');
+    }
     return this.projects.updateFor(user.userId, id, dto);
   }
 

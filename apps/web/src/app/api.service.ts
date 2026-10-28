@@ -3,7 +3,7 @@ import { Injectable } from '@angular/core';
 export interface ProjectLocale { code: string; }
 export interface Project {
   id: string; name: string; slug: string; description: string; baseLocale: string;
-  locales: ProjectLocale[]; customStatuses?: string[]; _count?: { keys: number };
+  locales: ProjectLocale[]; customStatuses?: string[]; embedOrigins?: string[]; _count?: { keys: number };
 }
 export type TranslationStatus = string; // base UNVERIFIED/TRANSLATED/REVIEWED + project custom statuses
 export interface Translation { keyId: string; localeCode: string; value: string; status: TranslationStatus; }
@@ -154,7 +154,7 @@ export class ApiService {
     return this.request<Project>('/projects', { method: 'POST', body: JSON.stringify(input) });
   }
   getProject(id: string) { return this.request<Project>(`/projects/${id}`); }
-  updateProject(id: string, input: { name?: string; description?: string; customStatuses?: string[] }) {
+  updateProject(id: string, input: { name?: string; description?: string; customStatuses?: string[]; embedOrigins?: string[] }) {
     return this.request<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(input) });
   }
   deleteProject(id: string) {

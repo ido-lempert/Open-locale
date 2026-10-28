@@ -45,6 +45,11 @@ export class UpdateProjectDto {
   @IsOptional()
   @IsString({ each: true })
   customStatuses?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  embedOrigins?: string[];
 }
 
 export class AddMemberDto {
