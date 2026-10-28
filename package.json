@@ -25,7 +25,8 @@
     "test:permissions": "node scripts/permissions-test.mjs",
     "test:review": "node scripts/review-workflow-test.mjs",
     "test:migration": "node scripts/migration-status-test.mjs",
-    "test:branches": "node scripts/branches-test.mjs"
+    "test:branches": "node scripts/branches-test.mjs",
+    "test:merge-concurrency": "node scripts/merge-concurrency-test.mjs"
   },
   "private": true,
   "dependencies": {

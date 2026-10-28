@@ -181,7 +181,14 @@ export class BranchesService {
           }
           if (tkId !== sk.id) keysMerged++;
           for (const tr of sk.translations) {
-            const existing = await tx.translation.findUnique({ where: { keyId_localeCode: { keyId: tkId, localeCode: tr.localeCode } } });
+            // SELECT ... FOR UPDATE locks the latest committed row version
+            // (blocking until any in-flight concurrent writer commits or
+            // rolls back), so `existing.value` below is EXACTLY the value the
+            // merge's conditional write then replaces - not a stale pre-read.
+            const existingRows = await tx.$queryRaw<{ value: string; status: string; updatedAt: Date }[]>(Prisma.sql`
+              SELECT "value", "status", "updatedAt" FROM "translations"
+              WHERE "keyId" = ${tkId}::uuid AND "localeCode" = ${tr.localeCode} FOR UPDATE`);
+            const existing = existingRows[0] ?? null;
             if (existing && existing.value === tr.value && existing.status === tr.status) continue;
             // INSERT ... ON CONFLICT ... DO UPDATE ... WHERE is one atomic
             // statement: the conflict target row is locked while the freshness
@@ -203,9 +210,9 @@ export class BranchesService {
                   RETURNING "keyId"`);
             if (wrote.length === 0) { translationsSkipped++; continue; }
             // Attribution: every overwrite or merge-created translation gets a
-            // history row with the previous value (as read at merge time) and
-            // the merging user, so the merge is visible and the old value
-            // recoverable in key history.
+            // history row whose previousValue is the exact value read under
+            // the FOR UPDATE row lock above - the value this write actually
+            // replaced - plus the merging user.
             await tx.translationHistory.create({
               data: {
                 keyId: tkId, localeCode: tr.localeCode, value: tr.value,
