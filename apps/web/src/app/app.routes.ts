@@ -1,3 +1,13 @@
-import { Route } from '@angular/router';
+import { Routes } from '@angular/router';
+import { authGuard } from './auth.guard';
+import { LoginComponent } from './pages/login.component';
+import { ProjectsComponent } from './pages/projects.component';
+import { EditorComponent } from './pages/editor.component';
 
-export const appRoutes: Route[] = [];
+export const appRoutes: Routes = [
+  { path: 'login', component: LoginComponent },
+  { path: 'projects', component: ProjectsComponent, canActivate: [authGuard] },
+  { path: 'projects/:id', component: EditorComponent, canActivate: [authGuard] },
+  { path: '', pathMatch: 'full', redirectTo: 'projects' },
+  { path: '**', redirectTo: 'projects' },
+];

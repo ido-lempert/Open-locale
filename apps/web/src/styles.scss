@@ -1,1 +1,87 @@
-/* You can add global styles to this file, and also import other style files */
+:root {
+  --bg: #f6f7f9; --card: #ffffff; --ink: #1c2430; --muted: #6b7686;
+  --accent: #2563eb; --accent-ink: #ffffff; --danger: #dc2626; --line: #e2e6ec;
+  --ok: #059669; --radius: 10px;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; font-size: 15px;
+}
+main { max-width: 1100px; margin: 0 auto; padding: 1rem; }
+h1 { font-size: 1.35rem; margin: 0; }
+code { background: #eef1f5; padding: 0.1em 0.35em; border-radius: 4px; }
+.muted { color: var(--muted); }
+.error { color: var(--danger); }
+.notice { color: var(--ok); }
+.empty { text-align: center; padding: 2.5rem 0; }
+button {
+  border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  border-radius: 8px; padding: 0.45rem 0.9rem; cursor: pointer; font-size: 0.9rem;
+}
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+button.danger { color: var(--danger); border-color: transparent; background: transparent; font-size: 1.1rem; }
+button:disabled { opacity: 0.55; cursor: default; }
+input, textarea, select {
+  border: 1px solid var(--line); border-radius: 8px; padding: 0.45rem 0.6rem;
+  font: inherit; background: var(--card); color: var(--ink); width: 100%;
+}
+textarea { resize: vertical; }
+
+.bar {
+  display: flex; align-items: center; gap: 1rem;
+  background: var(--card); border-bottom: 1px solid var(--line); padding: 0.75rem 1.25rem;
+  position: sticky; top: 0; z-index: 5;
+}
+.bar h1 { flex: 0 0 auto; }
+.bar .muted { margin-left: auto; }
+.back { color: var(--accent); text-decoration: none; }
+
+.auth-card {
+  max-width: 380px; margin: 8vh auto; background: var(--card);
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 2rem;
+}
+.auth-card h1 { margin-bottom: 0.25rem; }
+.auth-card .tabs { display: flex; gap: 0.5rem; margin: 1.25rem 0; }
+.auth-card .tabs button { flex: 1; }
+.auth-card .tabs button.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.auth-card label { display: block; margin-bottom: 0.9rem; font-size: 0.9rem; }
+.auth-card label input { margin-top: 0.25rem; }
+.auth-card .primary { width: 100%; margin-top: 0.25rem; }
+
+.create { display: grid; grid-template-columns: 2fr 1fr 2fr auto; gap: 0.6rem; margin: 1rem 0; }
+.cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; }
+.cards a {
+  display: flex; flex-direction: column; gap: 0.2rem; background: var(--card);
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 0.9rem 1.1rem;
+  text-decoration: none; color: inherit;
+}
+.cards a:hover { border-color: var(--accent); }
+
+.toolbar { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin: 1rem 0; }
+.toolbar .search { max-width: 220px; }
+.toolbar .inline { display: flex; gap: 0.4rem; }
+.toolbar .inline input { width: 160px; }
+.toolbar select { width: auto; }
+.toolbar .import {
+  border: 1px solid var(--line); border-radius: 8px; padding: 0.45rem 0.9rem;
+  cursor: pointer; font-size: 0.9rem; background: var(--card);
+}
+.grid { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.grid th { text-align: left; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--line); }
+.grid td { padding: 0.5rem 0.8rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+.grid tr:last-child td { border-bottom: none; }
+.grid td.key { white-space: nowrap; }
+.cell-status { display: block; font-size: 0.72rem; color: var(--ok); min-height: 0.9em; }
+.cell-status.error { color: var(--danger); }
+
+@media (max-width: 760px) {
+  .create { grid-template-columns: 1fr; }
+  .grid, .grid tbody, .grid tr, .grid td { display: block; width: 100%; }
+  .grid thead { display: none; }
+  .grid td.key { border-bottom: none; padding-bottom: 0; }
+}
+
+.grid td.key code { overflow-wrap: anywhere; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
