@@ -3,6 +3,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import type { TranslationStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
 import { ActivityService, truncate } from '../activity/activity.service';
 import { flattenJson, unflattenJson } from './json-flatten';
 import { parseCsv, toCsv } from './csv';
@@ -15,6 +16,7 @@ export class TranslationsService {
     private readonly prisma: PrismaService,
     private readonly projects: ProjectsService,
     private readonly activity: ActivityService,
+    private readonly webhooks: WebhooksService,
   ) {}
 
   async upsert(userId: string, projectId: string, keyId: string, locale: string, value: string) {
@@ -47,6 +49,12 @@ export class TranslationsService {
           detail: { previousValue: truncate(existing?.value ?? ''), value: truncate(value) },
         });
       }
+      return translation;
+    }).then((translation) => {
+      // Webhooks are fire-and-forget: delivery must never fail the write.
+      this.webhooks.deliver(projectId, 'translation.updated', {
+        key: key.name, locale, value,
+      }).catch(() => {});
       return translation;
     });
   }

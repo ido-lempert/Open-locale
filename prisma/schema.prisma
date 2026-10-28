@@ -77,6 +77,7 @@ model Project {
   tasks     Task[]
   tmEntries TmEntry[]
   glossaryTerms GlossaryTerm[]
+  webhooks     Webhook[]
 
   @@unique([teamId, slug])
   @@map("projects")
@@ -297,4 +298,18 @@ model GlossaryTerm {
   // Case-insensitive uniqueness enforced by functional unique index
   // glossary_terms_project_lower_term_key on (projectId, lower(term)) - see migration 20261028202000.
   @@map("glossary_terms")
+}
+
+model Webhook {
+  id        String   @id @default(uuid()) @db.Uuid
+  projectId String   @db.Uuid
+  url       String
+  secret    String
+  events    String[]
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("webhooks")
 }
