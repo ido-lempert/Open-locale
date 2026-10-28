@@ -89,6 +89,9 @@ export const OPENAPI = {
     '/api/projects/{projectId}/ota/{version}/{locale}': {
       get: p('Pull a specific OTA bundle version for a locale (immutable)', 'ota'),
     },
+    '/api/projects/{projectId}/reports/progress': {
+      get: p('Translation progress per locale for a branch: translated/untranslated counts, percent, and per-status breakdown (read scope)', 'reports'),
+    },
     '/api/projects/{projectId}/keys': {
       get: p('List keys (supports search, tag, status and branch filters)', 'keys'),
       post: p('Create a key', 'keys', true),

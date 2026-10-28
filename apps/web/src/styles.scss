@@ -220,3 +220,6 @@ span.review { font-size: 0.72rem; padding: 0.05rem 0.4rem; border: 1px solid var
 .merge-diff { margin: 0.75rem 0; padding-left: 1.25rem; }
 .merge-diff li.warn { color: var(--danger); font-weight: 600; }
 .modal-actions { display: flex; gap: 0.5rem; margin-top: 1rem; }
+.progress-bar-col { min-width: 140px; }
+.progress-bar { display: inline-block; width: 100px; height: 10px; background: #e5e7eb; border-radius: 5px; overflow: hidden; vertical-align: middle; margin-right: 0.4rem; }
+.progress-fill { height: 100%; background: var(--ok, #16a34a); }

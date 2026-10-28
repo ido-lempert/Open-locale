@@ -565,6 +565,28 @@ try {
   await new Promise((r) => setTimeout(r, 300));
   await shot('editor-24-ota.png');
 
+  // --- Progress report ---
+  await page.setViewport({ width: 1280, height: 900 });
+  await page.goto(`${WEB}/projects/${projId}/reports`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.progress-table tbody tr', { timeout: 10000 });
+  const report = await page.evaluate(() => {
+    const note = (document.querySelector('.progress-table')?.parentElement?.querySelector('p.muted')?.textContent) || '';
+    const rows = [...document.querySelectorAll('.progress-table tbody tr')].map((tr) => {
+      const tds = [...tr.querySelectorAll('td')].map((td) => td.textContent.trim());
+      const nums = tds.slice(2).map((x) => parseInt(x, 10));
+      return { locale: tds[0], translated: nums[0], untranslated: nums[1], statusSum: nums.slice(2).reduce((a, b) => a + b, 0) };
+    });
+    const totalKeys = parseInt((note.match(/(\d+) keys on/) || [])[1], 10);
+    return { note, rows, totalKeys, branch: document.querySelector('select[name=reportBranch]')?.value };
+  });
+  check('progress table lists a row per locale', report.rows.length >= 2, JSON.stringify(report.rows.map((r) => r.locale)));
+  check('progress rows consistent: translated + untranslated = total keys, status sum = translated',
+    Number.isInteger(report.totalKeys) && report.rows.every((r) => r.translated + r.untranslated === report.totalKeys && r.statusSum === r.translated),
+    JSON.stringify({ total: report.totalKeys, rows: report.rows }));
+  check('definition note visible next to the table', report.note.includes('not empty'), JSON.stringify(report.note.slice(0, 80)));
+  check('branch selector defaults to main', report.branch === 'main', `got ${report.branch}`);
+  await shot('editor-25-reports.png');
+
   // Mobile viewport evidence (390px)
   await page.goto(`${WEB}/projects/${projId}`, { waitUntil: 'networkidle0' });
   await page.setViewport({ width: 390, height: 844 });
