@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { TranslationStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -31,7 +32,8 @@ export class TranslationsService {
       });
       if (!existing || existing.value !== value || existing.status !== status) {
         await tx.translationHistory.create({
-          data: { keyId, localeCode: locale, value, status, changedById: userId },
+          data: { keyId, localeCode: locale, value,
+            previousValue: existing?.value ?? null, status, changedById: userId },
         });
       }
       return translation;
@@ -53,7 +55,8 @@ export class TranslationsService {
       });
       if (existing.status !== status) {
         await tx.translationHistory.create({
-          data: { keyId, localeCode: locale, value: existing.value, status, changedById: userId },
+          data: { keyId, localeCode: locale, value: existing.value,
+            previousValue: existing.value, status, changedById: userId },
         });
       }
       return translation;
@@ -90,22 +93,41 @@ export class TranslationsService {
       throw new BadRequestException(`Locale ${locale} is not part of this project`);
     }
     const flat = flattenJson(entries);
+    const importId = randomUUID();
     let createdKeys = 0;
     let upserted = 0;
+    let skipped = 0;
     for (const [name, value] of Object.entries(flat)) {
-      const key = await this.prisma.key.upsert({
-        where: { projectId_name: { projectId, name } },
-        create: { projectId, name },
-        update: {},
+      await this.prisma.$transaction(async (tx) => {
+        const key = await tx.key.upsert({
+          where: { projectId_name: { projectId, name } },
+          create: { projectId, name },
+          update: {},
+        });
+        if (key.createdAt.getTime() === key.updatedAt.getTime()) createdKeys += 1;
+        const existing = await tx.translation.findUnique({
+          where: { keyId_localeCode: { keyId: key.id, localeCode: locale } },
+        });
+        if (existing && existing.value === value) {
+          skipped += 1;
+          return;
+        }
+        // Imported wording replaces the old one and has not been reviewed.
+        await tx.translation.upsert({
+          where: { keyId_localeCode: { keyId: key.id, localeCode: locale } },
+          create: { keyId: key.id, projectId, localeCode: locale, value },
+          update: { value, status: 'UNVERIFIED' },
+        });
+        await tx.translationHistory.create({
+          data: {
+            keyId: key.id, localeCode: locale, value,
+            previousValue: existing?.value ?? null,
+            status: 'UNVERIFIED', changedById: userId, importId,
+          },
+        });
+        upserted += 1;
       });
-      if (key.createdAt.getTime() === key.updatedAt.getTime()) createdKeys += 1;
-      await this.prisma.translation.upsert({
-        where: { keyId_localeCode: { keyId: key.id, localeCode: locale } },
-        create: { keyId: key.id, projectId, localeCode: locale, value },
-        update: { value },
-      });
-      upserted += 1;
     }
-    return { locale, keysCreated: createdKeys, translationsUpserted: upserted };
+    return { locale, keysCreated: createdKeys, translationsUpserted: upserted, unchangedSkipped: skipped, importId };
   }
 }

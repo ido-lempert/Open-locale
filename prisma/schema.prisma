@@ -126,8 +126,10 @@ model TranslationHistory {
   keyId         String            @db.Uuid
   localeCode    String
   value         String
+  previousValue String?
   status        TranslationStatus
   changedById   String?           @db.Uuid
+  importId      String?           @db.Uuid
   createdAt     DateTime          @default(now())
 
   translation Translation @relation(fields: [keyId, localeCode], references: [keyId, localeCode], onDelete: Cascade)

@@ -73,3 +73,48 @@ describe('EditorComponent input preservation', () => {
     expect(comp.newKey()).toBe('second.key');
   });
 });
+
+describe('EditorComponent save/status ordering', () => {
+  it('a review chosen mid-save is not clobbered by the late save response', async () => {
+    let resolveUpsert: (v: unknown) => void = () => undefined;
+    const setStatusCalls: string[] = [];
+    const mock = {
+      getProject: () => Promise.resolve({
+        id: 'p1', name: 'P', slug: 'p', description: '', baseLocale: 'en',
+        locales: [{ code: 'en' }], _count: { keys: 0 },
+      }),
+      listKeys: () => Promise.resolve([
+        { id: 'k1', name: 'a.b', description: '', isPlural: false, maxLength: null,
+          translations: [{ keyId: 'k1', localeCode: 'en', value: 'hi', status: 'UNVERIFIED' }] },
+      ]),
+      upsertTranslation: () => new Promise((r) => { resolveUpsert = r; }),
+      setStatus: (_p: string, _k: string, _l: string, st: string) => {
+        setStatusCalls.push(st);
+        return Promise.resolve({ keyId: 'k1', localeCode: 'en', value: 'hi!', status: st });
+      },
+    };
+    const { EditorComponent } = await import('./editor.component');
+    const { ActivatedRoute, convertToParamMap } = await import('@angular/router');
+    await TestBed.configureTestingModule({
+      imports: [EditorComponent],
+      providers: [
+        provideRouter([]),
+        { provide: ApiService, useValue: mock },
+        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ id: 'p1' }) } } },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(EditorComponent);
+    await fixture.whenStable();
+    const comp = fixture.componentInstance;
+    const key = comp.keys()[0];
+    comp.edit(key, 'en', 'hi!');
+    const saving = comp.save(key, 'en');
+    // While the save is in flight the reviewer marks it REVIEWED.
+    await comp.setReview(key, 'en', 'REVIEWED');
+    resolveUpsert({ keyId: 'k1', localeCode: 'en', value: 'hi!', status: 'UNVERIFIED' });
+    await saving;
+    expect(comp.cell('k1', 'en')().review).toBe('REVIEWED');
+    // The review was re-sent after the save landed so server state matches.
+    expect(setStatusCalls).toEqual(['REVIEWED', 'REVIEWED']);
+  });
+});

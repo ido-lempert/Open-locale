@@ -42,6 +42,8 @@ try {
     defaultViewport: { width: 1280, height: 800 },
   });
   const page = await browser.newPage();
+  page.on('pageerror', (err) => console.log('PAGEERROR:', String(err).slice(0, 300)));
+  page.on('console', (msg) => { if (msg.type() === 'error') console.log('CONSOLE:', msg.text().slice(0, 200)); });
   const shot = (n) => page.screenshot({ path: join(shots, n) });
 
   await page.goto(`${WEB}/login`, { waitUntil: 'networkidle0' });
@@ -155,8 +157,15 @@ try {
     console.log('DIAG name input:', JSON.stringify(val), 'error el:', JSON.stringify(err));
     check('project renamed via settings', false);
   }
+  const localeResponses = [];
+  const onRes = (r) => { if (r.url().includes('/locales')) localeResponses.push(`${r.request().method()} ${r.status()}`); };
+  page.on('response', onRes);
   await page.type('input[name=newLocale]', 'ar');
-  await page.click('.locale-list + .inline button, .panel .inline button');
+  await page.evaluate(() => {
+    const form = document.querySelector('input[name=newLocale]').closest('form');
+    form.requestSubmit();
+  });
+
   try {
     await page.waitForFunction(
       () => [...document.querySelectorAll('.locale-list code')].some((e) => e.textContent.trim() === 'ar'),
@@ -169,7 +178,14 @@ try {
       error: document.querySelector('.error')?.textContent ?? '',
       localeInput: document.querySelector('input[name=newLocale]')?.value ?? null,
     }));
-    console.log('DIAG locale add:', JSON.stringify(diag));
+    diag.form = await page.evaluate(() => {
+      const input = document.querySelector('input[name=newLocale]');
+      const form = input?.closest('form');
+      const btn = form?.querySelector('button');
+      return { formHtml: form?.outerHTML.slice(0, 300), btnDisabled: btn?.disabled, btnText: btn?.textContent };
+    });
+    console.log('DIAG locale add:', JSON.stringify(diag), 'network:', JSON.stringify(localeResponses));
+    page.off('response', onRes);
     check('locale ar added via settings', false);
   }
   // Base locale guard: base locale has no Remove button

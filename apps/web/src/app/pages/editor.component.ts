@@ -154,13 +154,21 @@ export class EditorComponent implements OnInit {
     const c = sig();
     if (!force && c.value === c.saved) return;
     if (c.status === 'saving') return;
+    const reviewAtSend = c.review;
     sig.set({ ...c, status: 'saving' });
     try {
       const res = await this.api.upsertTranslation(this.projectId, k.id, locale, c.value);
       const latest = sig();
+      const newerReview = latest.review !== reviewAtSend;
+      // A review the user chose while the save was in flight wins over the
+      // (older) save response, and is re-sent so the server ends consistent.
       sig.set({ value: latest.value, saved: c.value,
         status: latest.value === c.value ? 'saved' : 'idle',
-        review: res.status ?? 'UNVERIFIED' });
+        review: newerReview ? latest.review : (res.status ?? 'UNVERIFIED') });
+      if (newerReview) {
+        const st = await this.api.setStatus(this.projectId, k.id, locale, latest.review);
+        sig.update((cur) => ({ ...cur, review: st.status }));
+      }
     } catch {
       // Keep saved pointing at what the server actually holds so a retry re-sends.
       sig.update((cur) => ({ ...cur, status: 'error' }));

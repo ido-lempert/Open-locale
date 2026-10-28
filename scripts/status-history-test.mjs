@@ -65,6 +65,30 @@ try {
     hist.length === 3 && hist[0].value === 'Hello!' && hist[1].status === 'TRANSLATED' && hist[2].value === 'Hello',
     JSON.stringify(hist.map((h) => [h.value, h.status])));
 
+  // Import integrity: reviewed -> imported change must reset review and preserve lineage
+  const k2 = (await call(`/projects/${proj.id}/keys`, { token: a.accessToken, method: 'POST', body: { name: 'imp.a' } })).json;
+  await call(`/projects/${proj.id}/keys/${k2.id}/translations`, { token: a.accessToken, method: 'PUT', body: { locale: 'en', value: 'Old' } });
+  await call(`/projects/${proj.id}/keys/${k2.id}/translations/en/status`, { token: a.accessToken, method: 'PATCH', body: { status: 'REVIEWED' } });
+  const imp1 = (await call(`/projects/${proj.id}/import/en`, { token: a.accessToken, method: 'POST', body: { locale: 'en', entries: { imp: { a: 'New', b: 'Fresh' } } } })).json;
+  check('import reports counts and batch id', imp1.translationsUpserted === 2 && imp1.unchangedSkipped === 0 && Boolean(imp1.importId), JSON.stringify(imp1));
+  const afterImp = (await call(`/projects/${proj.id}/keys`, { token: a.accessToken })).json.find((x) => x.name === 'imp.a');
+  const impTx = afterImp.translations.find((x) => x.localeCode === 'en');
+  check('imported change resets REVIEWED to UNVERIFIED', impTx.status === 'UNVERIFIED', impTx.status);
+  const impHist = (await call(`/projects/${proj.id}/keys/${k2.id}/translations/en/history`, { token: a.accessToken })).json;
+  const top = impHist[0];
+  check('import history keeps old and new values with batch id',
+    top.value === 'New' && top.previousValue === 'Old' && top.importId === imp1.importId && top.status === 'UNVERIFIED',
+    JSON.stringify(top));
+  const newKeyHist = (await call(`/projects/${proj.id}/keys/${afterImp ? (await call(`/projects/${proj.id}/keys`, { token: a.accessToken })).json.find((x) => x.name === 'imp.b').id : ''}/translations/en/history`, { token: a.accessToken })).json;
+  check('import-created key has previousValue null', newKeyHist.length === 1 && newKeyHist[0].previousValue === null && newKeyHist[0].importId === imp1.importId);
+
+  const before2 = impHist.length;
+  const imp2 = (await call(`/projects/${proj.id}/import/en`, { token: a.accessToken, method: 'POST', body: { locale: 'en', entries: { imp: { a: 'New', b: 'Fresh' } } } })).json;
+  const after2 = (await call(`/projects/${proj.id}/keys/${k2.id}/translations/en/history`, { token: a.accessToken })).json;
+  check('identical re-import is a no-op (skipped, no new history)',
+    imp2.translationsUpserted === 0 && imp2.unchangedSkipped === 2 && after2.length === before2,
+    JSON.stringify(imp2));
+
   const bStatus = await call(`${t()}/translations/en/status`, { token: b.accessToken, method: 'PATCH', body: { status: 'REVIEWED' } });
   const bHist = await call(`${t()}/translations/en/history`, { token: b.accessToken });
   check('cross-team status change denied (404)', bStatus.status === 404, `got ${bStatus.status}`);
