@@ -223,3 +223,11 @@ span.review { font-size: 0.72rem; padding: 0.05rem 0.4rem; border: 1px solid var
 .progress-bar-col { min-width: 140px; }
 .progress-bar { display: inline-block; width: 100px; height: 10px; background: #e5e7eb; border-radius: 5px; overflow: hidden; vertical-align: middle; margin-right: 0.4rem; }
 .progress-fill { height: 100%; background: var(--ok, #16a34a); }
+.table-scroll { overflow-x: auto; }
+.progress-table { border-collapse: collapse; }
+.progress-table th, .progress-table td { padding: 0.45rem 0.9rem; text-align: left; white-space: nowrap; }
+.progress-table .group-row th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted, #6b7280); border-bottom: 1px solid var(--line, #e5e7eb); padding-bottom: 0.2rem; }
+.progress-table thead tr:last-child th { border-bottom: 2px solid var(--line, #e5e7eb); }
+.progress-table td { border-bottom: 1px solid var(--line, #e5e7eb); }
+.progress-table .status-group { border-left: 2px solid var(--line, #d1d5db); }
+.progress-table .row-head { vertical-align: bottom; }

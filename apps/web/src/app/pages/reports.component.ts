@@ -18,10 +18,18 @@ import { ApiService, BranchInfo, ProgressReport } from '../api.service';
       @if (error(); as e) { <p class="error" role="alert">{{ e }}</p> }
       @if (report(); as r) {
         <p class="muted">{{ r.totalKeys }} keys on {{ r.branch }}. A key counts as translated when its value is not empty; status counts cover non-empty values only.</p>
+        <div class="table-scroll">
         <table class="qa-table progress-table">
           <thead>
-            <tr><th>Locale</th><th class="progress-bar-col">Progress</th><th>Translated</th><th>Untranslated</th>
-              @for (s of statusColumns(); track s) { <th>{{ s.toLowerCase() }}</th> }
+            <tr class="group-row">
+              <th rowspan="2" class="row-head">Locale</th>
+              <th rowspan="2" class="progress-bar-col">Progress</th>
+              <th colspan="2" class="group-label">Filled values</th>
+              @if (statusColumns().length) { <th [attr.colspan]="statusColumns().length" class="group-label status-group">Workflow status</th> }
+            </tr>
+            <tr>
+              <th>Translated</th><th>Untranslated</th>
+              @for (s of statusColumns(); track s) { <th [class.status-group]="s === statusColumns()[0]">{{ s.toLowerCase() }}</th> }
             </tr>
           </thead>
           <tbody>
@@ -36,11 +44,12 @@ import { ApiService, BranchInfo, ProgressReport } from '../api.service';
                 </td>
                 <td>{{ l.translated }} / {{ l.total }}</td>
                 <td>{{ l.untranslated }}</td>
-                @for (s of statusColumns(); track s) { <td>{{ l.byStatus[s] ?? 0 }}</td> }
+                @for (s of statusColumns(); track s) { <td [class.status-group]="s === statusColumns()[0]">{{ l.byStatus[s] ?? 0 }}</td> }
               </tr>
             }
           </tbody>
         </table>
+        </div>
       } @else if (!error()) {
         <p class="muted">Loading…</p>
       }

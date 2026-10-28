@@ -570,7 +570,7 @@ try {
   await page.goto(`${WEB}/projects/${projId}/reports`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.progress-table tbody tr', { timeout: 10000 });
   const report = await page.evaluate(() => {
-    const note = (document.querySelector('.progress-table')?.parentElement?.querySelector('p.muted')?.textContent) || '';
+    const note = ([...document.querySelectorAll('p.muted')].find((el) => el.textContent.includes('keys on'))?.textContent) || '';
     const rows = [...document.querySelectorAll('.progress-table tbody tr')].map((tr) => {
       const tds = [...tr.querySelectorAll('td')].map((td) => td.textContent.trim());
       const nums = tds.slice(2).map((x) => parseInt(x, 10));
@@ -586,6 +586,21 @@ try {
   check('definition note visible next to the table', report.note.includes('not empty'), JSON.stringify(report.note.slice(0, 80)));
   check('branch selector defaults to main', report.branch === 'main', `got ${report.branch}`);
   await shot('editor-25-reports.png');
+
+  // Progress report, narrow viewport (480px): table must stay readable via horizontal scroll, groups intact.
+  await page.setViewport({ width: 480, height: 800 });
+  await page.reload({ waitUntil: 'networkidle0' });
+  await page.waitForSelector('.progress-table tbody tr', { timeout: 10000 });
+  const narrow = await page.evaluate(() => {
+    const scroller = document.querySelector('.table-scroll');
+    const groups = [...document.querySelectorAll('.group-row .group-label')].map((th) => th.textContent.trim());
+    const rows = document.querySelectorAll('.progress-table tbody tr').length;
+    return { scrolls: scroller ? scroller.scrollWidth > scroller.clientWidth : false, groups, rows, sw: scroller?.scrollWidth, cw: scroller?.clientWidth };
+  });
+  check('narrow viewport: table scrolls horizontally instead of crushing columns', narrow.scrolls, JSON.stringify({ sw: narrow.sw, cw: narrow.cw }));
+  check('narrow viewport: group labels and all rows still rendered', narrow.groups.join('|') === 'Filled values|Workflow status' && narrow.rows >= 2, JSON.stringify(narrow.groups));
+  await shot('editor-26-reports-narrow.png');
+  await page.setViewport({ width: 1280, height: 900 });
 
   // Mobile viewport evidence (390px)
   await page.goto(`${WEB}/projects/${projId}`, { waitUntil: 'networkidle0' });
