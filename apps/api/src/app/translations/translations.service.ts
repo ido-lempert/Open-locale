@@ -6,6 +6,7 @@ import { ProjectsService } from '../projects/projects.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { ActivityService, truncate } from '../activity/activity.service';
 import { SnapshotsService } from '../snapshots/snapshots.service';
+import { LocksService } from '../locks/locks.service';
 import { flattenJson, unflattenJson } from './json-flatten';
 import { parseCsv, toCsv } from './csv';
 import { parseAndroidXml, toAndroidXml } from './android-xml';
@@ -18,6 +19,7 @@ export class TranslationsService {
     private readonly projects: ProjectsService,
     private readonly activity: ActivityService,
     private readonly snapshots: SnapshotsService,
+    private readonly locks: LocksService,
     private readonly webhooks: WebhooksService,
   ) {}
 
@@ -214,30 +216,12 @@ export class TranslationsService {
       throw new BadRequestException(`Locale ${locale} is not part of this project`);
     }
     const { flat, rejected } = flattenJson(entries);
-    // Serialize imports per project with an in-process mutex: the auto
-    // snapshot below must capture the authoritative pre-import state. Without
-    // it, two concurrent imports could each snapshot the other's in-flight
-    // state and a later restore would silently drop one import's keys. A
-    // Postgres advisory lock was tried first and abandoned: lock-holding
-    // interactive transactions exhaust the Prisma connection pool against the
-    // import's own pool work. NOTE: this mutex covers a single API instance;
-    // a multi-instance deployment needs the lock moved to the database with a
-    // dedicated connection.
-    return this.withImportLock(projectId, () =>
+    // Serialize bulk mutations per project (imports and restores share the
+    // same lock) so automatic snapshots capture an authoritative pre-mutation
+    // state. Single-instance in-process mutex; see LocksService for why not a
+    // Postgres advisory lock and what multi-instance needs.
+    return this.locks.withProjectLock(projectId, () =>
       this.importJsonLocked(userId, projectId, locale, project.baseLocale, entries, flat, rejected));
-  }
-
-  private readonly importLocks = new Map<string, Promise<unknown>>();
-
-  private async withImportLock<T>(projectId: string, fn: () => Promise<T>): Promise<T> {
-    const prev = this.importLocks.get(projectId) ?? Promise.resolve();
-    const next = prev.catch(() => undefined).then(fn);
-    this.importLocks.set(projectId, next);
-    try {
-      return (await next) as T;
-    } finally {
-      if (this.importLocks.get(projectId) === next) this.importLocks.delete(projectId);
-    }
   }
 
   private async importJsonLocked(

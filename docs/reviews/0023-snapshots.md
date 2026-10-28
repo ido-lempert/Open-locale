@@ -23,7 +23,7 @@
 - Designer: page verified by headless-Chrome screenshot (list, badge, dates, restore buttons).
 - Security: membership via getFor; read-only API token gets 403 on create/restore; no new
   egress; webhook payload carries counts and snapshot id only.
-- QA/integration: scripts/snapshots-test.mjs - 23 checks on real PG + built API, incl. exact
+- QA/integration: scripts/snapshots-test.mjs - 28 checks on real PG + built API, incl. exact
   export equality after restore, deleted-key recovery, post-snapshot key removal, empty
   pre-import auto snapshot, history/activity rows, webhook delivery, scope checks.
 
@@ -37,6 +37,17 @@ recreated with new ids; their pre-delete comments/screenshots/history were
 destroyed by the earlier delete cascade and are NOT recovered. Tasks carry no
 key references and are unaffected. The web confirmation dialog states these
 consequences before restore.
+
+## Safety recovery and lock scope (verified)
+
+- Every restore first captures an automatic "before restore of <label>" snapshot
+  under the project lock; the suite proves the pre-restore state is fully
+  recoverable by restoring that capture in the suite.
+- Imports AND restores share one in-process per-project lock (LocksService,
+  global). Ordinary single-key edits and manual captures are NOT serialized:
+  they commit atomically, so any capture reflects a real committed state, but
+  not a globally serialized boundary. No multi-instance safety is claimed;
+  LocksService documents what a multi-instance deployment must add.
 
 ## Concurrency and retention (verified)
 
@@ -53,5 +64,5 @@ consequences before restore.
 
 ## Verified at this commit (exit 0)
 
-snapshots 23, e2e-visual 40, imports 15, formats 24, webhooks 11, activity 24, apitokens 34,
+snapshots 28, e2e-visual 40, imports 15, formats 24, webhooks 11, activity 24, apitokens 34,
 docs-consistency 4 (53 documented = 53 implemented), api unit 31/31, nx build api + web.

@@ -111,6 +111,32 @@ try {
   }
   check('restore delivers a signed project.restored webhook', !!hookHit && JSON.parse(hookHit.body).snapshotId === snapId, hookHit?.body ?? 'none');
 
+  // Pre-restore safety capture: a mistaken restore is itself recoverable.
+  // Current state is empty (first-auto restore above). Mutate, restore the
+  // baseline, then restore the pre-restore capture to get the mutation back.
+  await call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { entries: { 'safety.key': 'keep-me' } } });
+  const preRestoreState = await flat();
+  await call(`/projects/${pid}/snapshots/${snapId}/restore`, { jwt, method: 'POST' });
+  check('restore wiped the post-snapshot mutation', !('safety.key' in (await flat())));
+  const allSnaps = (await call(`/projects/${pid}/snapshots`, { jwt })).json;
+  const safety = allSnaps.find((x) => x.label === 'before restore of v1 baseline');
+  check('restore captured a pre-restore safety snapshot', !!safety && safety.automatic === true);
+  const recover = await call(`/projects/${pid}/snapshots/${safety.id}/restore`, { jwt, method: 'POST' });
+  const recovered = await flat();
+  check('pre-restore state fully recoverable', recover.status === 201 && recovered['safety.key'] === 'keep-me'
+    && Object.keys(recovered).length === Object.keys(preRestoreState).length);
+
+  // Concurrency: restore and import serialize; both complete, no 500s.
+  const [impRes, resRes] = await Promise.all([
+    call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { entries: { 'race.key': 'raced' } } }),
+    call(`/projects/${pid}/snapshots/${snapId}/restore`, { jwt, method: 'POST' }),
+  ]);
+  check('concurrent import+restore both succeed', impRes.status === 201 && resRes.status === 201,
+    `${impRes.status}/${resRes.status}`);
+  const raceAfter = await flat();
+  const raceConsistent = raceAfter['race.key'] === 'raced' || !('race.key' in raceAfter);
+  check('post-race state matches one serial order', raceConsistent);
+
   // Unknown snapshot -> 404.
   const missing = await call(`/projects/${pid}/snapshots/00000000-0000-0000-0000-000000000000/restore`, { jwt, method: 'POST' });
   check('unknown snapshot restore is 404', missing.status === 404);

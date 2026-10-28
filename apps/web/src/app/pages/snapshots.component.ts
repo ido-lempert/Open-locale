@@ -89,7 +89,8 @@ export class SnapshotsComponent implements OnInit {
       `Restore the project to "${s.label}"?\n\n` +
       `- Keys and translations return to the snapshot state.\n` +
       `- Keys added after this snapshot are permanently removed, with their comments and screenshots.\n` +
-      `- Keys deleted after this snapshot come back, but their old comments and screenshot links are not recovered.`,
+      `- Keys deleted after this snapshot come back, but their old comments and screenshot links are not recovered.\n` +
+      `- A snapshot of the current state is taken first, so this restore is itself recoverable.`,
     )) return;
     this.restoring.set(true);
     this.error.set('');

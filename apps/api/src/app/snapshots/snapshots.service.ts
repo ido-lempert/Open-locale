@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
 import { ActivityService } from '../activity/activity.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
+import { LocksService } from '../locks/locks.service';
 
 interface SnapshotKey {
   name: string;
@@ -31,6 +32,7 @@ export class SnapshotsService {
     private readonly projects: ProjectsService,
     private readonly activity: ActivityService,
     private readonly webhooks: WebhooksService,
+    private readonly locks: LocksService,
   ) {}
 
   private async capture(projectId: string, label: string, automatic: boolean, actorId: string | null) {
@@ -111,6 +113,24 @@ export class SnapshotsService {
     await this.projects.getFor(userId, projectId);
     const snapshot = await this.prisma.snapshot.findFirst({ where: { id: snapshotId, projectId } });
     if (!snapshot) throw new NotFoundException('Snapshot not found');
+    // Safety capture + restore run under the shared project lock, serialized
+    // with imports and other restores, so the pre-restore capture is the
+    // authoritative state and a mistaken restore is itself recoverable.
+    // Ordinary single-key edits are not locked; they commit atomically, so the
+    // capture still reflects a real committed state, just not a globally
+    // serialized boundary.
+    return this.locks.withProjectLock(projectId, async () => {
+      await this.captureAutomatic(projectId, `before restore of ${snapshot.label}`, userId);
+      return this.applyRestore(userId, projectId, snapshot);
+    });
+  }
+
+  private async applyRestore(
+    userId: string,
+    projectId: string,
+    snapshot: { id: string; label: string; keys: unknown; translations: unknown },
+  ) {
+    const snapshotId = snapshot.id;
     const snapKeys = snapshot.keys as unknown as SnapshotKey[];
     const snapTranslations = snapshot.translations as unknown as SnapshotTranslation[];
     const keepNames = new Set(snapKeys.map((k) => k.name));

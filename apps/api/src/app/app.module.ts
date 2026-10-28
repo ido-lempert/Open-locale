@@ -13,9 +13,10 @@ import { QaModule } from './qa/qa.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { DocsController } from './docs/docs.controller';
 import { SnapshotsModule } from './snapshots/snapshots.module';
+import { LocksModule } from './locks/locks.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, ProjectsModule, KeysModule, TranslationsModule, ActivityModule, TasksModule, GlossaryModule, QaModule, WebhooksModule, SnapshotsModule],
+  imports: [PrismaModule, AuthModule, ProjectsModule, KeysModule, TranslationsModule, ActivityModule, TasksModule, GlossaryModule, QaModule, WebhooksModule, SnapshotsModule, LocksModule],
   controllers: [AppController, DocsController],
   providers: [AppService],
 })
