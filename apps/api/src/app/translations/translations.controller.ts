@@ -37,6 +37,18 @@ export class TranslationsController {
     return this.translations.exportCsv(user.userId, projectId, locale, mode);
   }
 
+  @Get('export/:locale/android')
+  @Header('Content-Type', 'text/xml; charset=utf-8')
+  exportAndroid(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string) {
+    return this.translations.exportAndroid(user.userId, projectId, locale);
+  }
+
+  @Get('export/:locale/ios')
+  @Header('Content-Type', 'text/plain; charset=utf-8')
+  exportIos(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string) {
+    return this.translations.exportIos(user.userId, projectId, locale);
+  }
+
   @Get('tm/suggest')
   suggest(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string,
     @Query('locale') locale?: string, @Query('source') source?: string) {
@@ -51,7 +63,9 @@ export class TranslationsController {
   @Post('import/:locale')
   importJson(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Body() dto: ImportJsonDto) {
     if (dto.csv != null) return this.translations.importCsv(user.userId, projectId, locale, dto.csv);
+    if (dto.xml != null) return this.translations.importAndroid(user.userId, projectId, locale, dto.xml);
+    if (dto.strings != null) return this.translations.importIos(user.userId, projectId, locale, dto.strings);
     if (dto.entries != null) return this.translations.importJson(user.userId, projectId, locale, dto.entries);
-    throw new BadRequestException('Provide either entries (JSON) or csv');
+    throw new BadRequestException('Provide entries (JSON), csv, xml or strings');
   }
 }

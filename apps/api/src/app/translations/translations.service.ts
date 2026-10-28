@@ -6,6 +6,8 @@ import { ProjectsService } from '../projects/projects.service';
 import { ActivityService, truncate } from '../activity/activity.service';
 import { flattenJson, unflattenJson } from './json-flatten';
 import { parseCsv, toCsv } from './csv';
+import { parseAndroidXml, toAndroidXml } from './android-xml';
+import { parseIosStrings, toIosStrings } from './ios-strings';
 
 @Injectable()
 export class TranslationsService {
@@ -160,6 +162,32 @@ export class TranslationsService {
   async exportCsv(userId: string, projectId: string, locale: string, mode?: string) {
     const flat = (await this.exportJson(userId, projectId, locale, true)) as Record<string, string>;
     return toCsv(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)), { spreadsheetSafe: mode !== 'raw' });
+  }
+
+  async exportAndroid(userId: string, projectId: string, locale: string) {
+    const flat = (await this.exportJson(userId, projectId, locale, true)) as Record<string, string>;
+    return toAndroidXml(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)));
+  }
+
+  async exportIos(userId: string, projectId: string, locale: string) {
+    const flat = (await this.exportJson(userId, projectId, locale, true)) as Record<string, string>;
+    return toIosStrings(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)));
+  }
+
+  async importAndroid(userId: string, projectId: string, locale: string, xml: string) {
+    const { rows, rejected } = parseAndroidXml(xml);
+    if (rejected > 0) {
+      throw new BadRequestException(`${rejected} <string> element(s) could not be parsed (nested markup unsupported)`);
+    }
+    return this.importJson(userId, projectId, locale, Object.fromEntries(rows));
+  }
+
+  async importIos(userId: string, projectId: string, locale: string, strings: string) {
+    const { rows, rejected } = parseIosStrings(strings);
+    if (rejected > 0) {
+      throw new BadRequestException(`${rejected} line(s) are not valid "key" = "value"; entries`);
+    }
+    return this.importJson(userId, projectId, locale, Object.fromEntries(rows));
   }
 
   async importCsv(userId: string, projectId: string, locale: string, csv: string) {

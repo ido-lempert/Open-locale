@@ -76,6 +76,34 @@ try {
   const roundtrip = await (await fetch(`${API}${P}/export/en/csv?mode=raw`, { headers: { Authorization: `Bearer ${at}` } })).text();
   check('raw export-import roundtrip is lossless', roundtrip === rawText);
 
+  // Android XML round-trip + rejection
+  const xmlIn = [
+    '<?xml version="1.0" encoding="utf-8"?>',
+    '<resources>',
+    '  <string name="app.title">Rocks &amp; Co</string>',
+    '  <string name="msg.quote">say &quot;hi&quot;\nnext</string>',
+    '</resources>',
+  ].join('\n') + '\n';
+  const impXml = await call(`${P}/import/he`, { token: at, method: 'POST', body: { xml: xmlIn } });
+  check('Android XML import accepted', impXml.status === 201 && impXml.json.translationsUpserted === 2, JSON.stringify(impXml.json));
+  const xmlOut = await (await fetch(`${API}${P}/export/he/android`, { headers: { Authorization: `Bearer ${at}` } })).text();
+  check('Android XML export has entities + escapes', xmlOut.includes('<string name="app.title">Rocks &amp; Co</string>') && xmlOut.includes("say \\\"hi\\\"\\nnext"), xmlOut.split("\n").find((l) => l.includes("msg.quote")) ?? "");
+  const xmlRound = await call(`${P}/import/he`, { token: at, method: 'POST', body: { xml: xmlOut } });
+  check('Android export-import roundtrip stable', xmlRound.status === 201 && xmlRound.json.unchangedSkipped >= 2, JSON.stringify(xmlRound.json));
+  const nested = await call(`${P}/import/he`, { token: at, method: 'POST', body: { xml: '<resources><string name="x">a <b>bold</b></string></resources>' } });
+  check('nested markup rejected (400)', nested.status === 400, String(nested.status));
+
+  // iOS .strings round-trip + rejection
+  const iosIn = '"app.title" = "האפליקציה";\n"msg.esc" = "line1\\nline2";\n';
+  const impIos = await call(`${P}/import/he`, { token: at, method: 'POST', body: { strings: iosIn } });
+  check('iOS strings import accepted', impIos.status === 201, JSON.stringify(impIos.json));
+  const iosOut = await (await fetch(`${API}${P}/export/he/ios`, { headers: { Authorization: `Bearer ${at}` } })).text();
+  check('iOS export format', iosOut.includes('"app.title" = "האפליקציה";'), iosOut.split('\n')[0] ?? '');
+  const badLine = await call(`${P}/import/he`, { token: at, method: 'POST', body: { strings: 'not an entry\n' } });
+  check('malformed strings line rejected (400)', badLine.status === 400, String(badLine.status));
+  const crossXml = await fetch(`${API}${P}/export/he/android`, { headers: { Authorization: `Bearer ${bt}` } });
+  check('cross-team android export denied (404)', crossXml.status === 404, String(crossXml.status));
+
   const runs = (await call(`${P}/imports`, { token: at })).json;
   check('CSV imports recorded as import runs', Array.isArray(runs) ? runs.length >= 2 : (runs.items?.length ?? 0) >= 2, JSON.stringify(runs).slice(0, 120));
 

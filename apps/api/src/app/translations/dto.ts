@@ -11,6 +11,12 @@ export class UpsertTranslationDto {
 export class ImportJsonDto {
   @IsOptional() @IsString() @MaxLength(2_000_000)
   csv?: string;
+
+  @IsOptional() @IsString() @MaxLength(2_000_000)
+  xml?: string;
+
+  @IsOptional() @IsString() @MaxLength(2_000_000)
+  strings?: string;
   @IsOptional() @IsString()
   locale?: string;
 
