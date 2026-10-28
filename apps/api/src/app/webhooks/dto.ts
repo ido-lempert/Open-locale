@@ -1,6 +1,6 @@
 import { ArrayNotEmpty, IsArray, IsBoolean, IsIn, IsOptional, IsString, IsUrl, MaxLength } from 'class-validator';
 
-export const WEBHOOK_EVENTS = ['translation.updated'] as const;
+export const WEBHOOK_EVENTS = ['translation.updated', 'project.restored'] as const;
 
 export class CreateWebhookDto {
   @IsUrl({ protocols: ['http', 'https'], require_protocol: true })

@@ -14,6 +14,8 @@ const ACTION_LABELS: Record<string, string> = {
   'comment.deleted': 'deleted a comment on',
   'project.renamed': 'renamed the project',
   'project.import': 'imported translations',
+  'snapshot.created': 'captured a snapshot',
+  'snapshot.restored': 'restored a snapshot',
   'locale.added': 'added locale',
   'locale.removed': 'removed locale',
 };

@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { ActivityService, truncate } from '../activity/activity.service';
+import { SnapshotsService } from '../snapshots/snapshots.service';
 import { flattenJson, unflattenJson } from './json-flatten';
 import { parseCsv, toCsv } from './csv';
 import { parseAndroidXml, toAndroidXml } from './android-xml';
@@ -16,6 +17,7 @@ export class TranslationsService {
     private readonly prisma: PrismaService,
     private readonly projects: ProjectsService,
     private readonly activity: ActivityService,
+    private readonly snapshots: SnapshotsService,
     private readonly webhooks: WebhooksService,
   ) {}
 
@@ -212,6 +214,9 @@ export class TranslationsService {
       throw new BadRequestException(`Locale ${locale} is not part of this project`);
     }
     const { flat, rejected } = flattenJson(entries);
+    // Restorable auto snapshot BEFORE anything mutates: every import leaves the
+    // pre-import state recoverable from the snapshots list.
+    await this.snapshots.captureAutomatic(projectId, `before import ${locale}`, userId);
     // The run row is committed BEFORE any key is touched: a crash mid-import
     // always leaves a durable, audited record of what was attempted.
     const run = await this.prisma.importRun.create({

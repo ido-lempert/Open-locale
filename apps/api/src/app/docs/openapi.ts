@@ -123,6 +123,13 @@ export const OPENAPI = {
       patch: p('Update a webhook', 'webhooks', true),
       delete: p('Delete a webhook', 'webhooks'),
     },
+    '/api/projects/{projectId}/snapshots': {
+      get: p('List snapshots (manual and automatic pre-import)', 'snapshots'),
+      post: p('Capture a snapshot of all keys and translations', 'snapshots', true),
+    },
+    '/api/projects/{projectId}/snapshots/{snapshotId}/restore': {
+      post: p('Restore the project to a snapshot (atomic point-in-time recovery)', 'snapshots'),
+    },
     '/api/projects/{projectId}/activity': { get: p('Project activity feed', 'projects') },
     '/api/projects/{projectId}/qa': { get: p('Run QA checks over translations', 'qa') },
   },

@@ -8,6 +8,7 @@ import { ActivityComponent } from './pages/activity.component';
 import { TasksComponent } from './pages/tasks.component';
 import { GlossaryComponent } from './pages/glossary.component';
 import { QaComponent } from './pages/qa.component';
+import { SnapshotsComponent } from './pages/snapshots.component';
 
 export const appRoutes: Routes = [
   { path: 'login', component: LoginComponent },
@@ -18,6 +19,7 @@ export const appRoutes: Routes = [
   { path: 'projects/:id/tasks', component: TasksComponent, canActivate: [authGuard] },
   { path: 'projects/:id/glossary', component: GlossaryComponent, canActivate: [authGuard] },
   { path: 'projects/:id/qa', component: QaComponent, canActivate: [authGuard] },
+  { path: 'projects/:id/snapshots', component: SnapshotsComponent, canActivate: [authGuard] },
   { path: '', pathMatch: 'full', redirectTo: 'projects' },
   { path: '**', redirectTo: 'projects' },
 ];

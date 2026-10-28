@@ -23,6 +23,8 @@ export const ACTIVITY_ACTIONS = [
   'glossary.created',
   'glossary.updated',
   'glossary.deleted',
+  'snapshot.created',
+  'snapshot.restored',
 ] as const;
 
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];

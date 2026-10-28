@@ -22,6 +22,15 @@ export interface Key {
   translations: Translation[];
   _count?: { comments: number; screenshots?: number };
 }
+export interface SnapshotMeta {
+  id: string;
+  label: string;
+  automatic: boolean;
+  createdAt: string;
+  keyCount: number;
+  translationCount: number;
+}
+
 export interface ActivityEntry {
   id: string;
   action: string;
@@ -140,6 +149,16 @@ export class ApiService {
     for (const [k, v] of Object.entries(filters)) if (v) params.set(k, v);
     const q = params.toString();
     return this.request<Key[]>(`/projects/${projectId}/keys${q ? `?${q}` : ''}`);
+  }
+  listSnapshots(projectId: string) {
+    return this.request<SnapshotMeta[]>(`/projects/${projectId}/snapshots`);
+  }
+  createSnapshot(projectId: string, label: string) {
+    return this.request<SnapshotMeta>(`/projects/${projectId}/snapshots`, { method: 'POST', body: JSON.stringify({ label }) });
+  }
+  restoreSnapshot(projectId: string, snapshotId: string) {
+    return this.request<{ restored: boolean; keysRemoved: number; valuesChanged: number }>(
+      `/projects/${projectId}/snapshots/${snapshotId}/restore`, { method: 'POST' });
   }
   listActivity(projectId: string, opts: { action?: string; cursor?: string; limit?: number } = {}) {
     const params = new URLSearchParams();
