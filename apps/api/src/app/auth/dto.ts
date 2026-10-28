@@ -30,4 +30,8 @@ export class CreateApiTokenDto {
   @IsOptional()
   @IsString({ each: true })
   scopes?: string[];
+
+  @IsOptional()
+  @IsString()
+  expiresAt?: string;
 }

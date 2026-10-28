@@ -85,11 +85,11 @@ export class AuthService {
     return { revoked: tokenId };
   }
 
-  async createApiToken(userId: string, name: string, scopes: string[]) {
+  async createApiToken(userId: string, name: string, scopes: string[], expiresAt?: Date) {
     const raw = `ol_${randomBytes(24).toString('base64url')}`;
     const tokenHash = sha256(raw);
     const record = await this.prisma.apiToken.create({
-      data: { userId, name, tokenHash, scopes },
+      data: { userId, name, tokenHash, scopes, expiresAt },
     });
     return { id: record.id, name: record.name, token: raw };
   }

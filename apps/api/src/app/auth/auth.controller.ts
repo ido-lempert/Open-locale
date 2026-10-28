@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   NotFoundException,
@@ -33,26 +34,45 @@ export class AuthController {
     return result;
   }
 
+  // Token management is session-only: an API token must not be able to mint,
+  // enumerate or revoke other tokens, or a leaked read+write token could mint
+  // itself successors and persist beyond revocation of the leaked one alone.
+  private requireSession(user: AuthPrincipal) {
+    if (user.via !== 'jwt') {
+      throw new ForbiddenException('Token management requires a signed-in session');
+    }
+  }
+
   @Post('tokens')
   @UseGuards(JwtAuthGuard)
   async createToken(@CurrentUser() user: AuthPrincipal, @Body() dto: CreateApiTokenDto) {
+    this.requireSession(user);
     const scopes = dto.scopes?.length ? dto.scopes : ['read', 'write'];
     const valid = scopes.every((s) => s === 'read' || s === 'write');
     if (!valid || !scopes.includes('read')) {
       throw new BadRequestException('Scopes must be read and/or write');
     }
-    return this.auth.createApiToken(user.userId, dto.name, scopes);
+    let expiresAt: Date | undefined;
+    if (dto.expiresAt) {
+      expiresAt = new Date(dto.expiresAt);
+      if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= Date.now()) {
+        throw new BadRequestException('expiresAt must be a future ISO timestamp');
+      }
+    }
+    return this.auth.createApiToken(user.userId, dto.name, scopes, expiresAt);
   }
 
   @Get('tokens')
   @UseGuards(JwtAuthGuard)
   async listTokens(@CurrentUser() user: AuthPrincipal) {
+    this.requireSession(user);
     return this.auth.listApiTokens(user.userId);
   }
 
   @Delete('tokens/:id')
   @UseGuards(JwtAuthGuard)
   async revokeToken(@CurrentUser() user: AuthPrincipal, @Param('id') id: string) {
+    this.requireSession(user);
     const result = await this.auth.revokeApiToken(user.userId, id);
     if (!result) throw new NotFoundException('Token not found');
     return result;
