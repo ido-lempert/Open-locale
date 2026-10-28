@@ -10,7 +10,8 @@
     "test:activity": "node scripts/activity-test.mjs",
     "test:imports": "node scripts/import-runs-test.mjs",
     "test:screenshots": "node scripts/screenshots-test.mjs",
-    "test:tasks": "node scripts/tasks-test.mjs"
+    "test:tasks": "node scripts/tasks-test.mjs",
+    "test:tm": "node scripts/tm-test.mjs"
   },
   "private": true,
   "dependencies": {

@@ -30,6 +30,12 @@ export class TranslationsController {
     return this.translations.exportJson(user.userId, projectId, locale, flat === 'true');
   }
 
+  @Get('tm/suggest')
+  suggest(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string,
+    @Query('locale') locale?: string, @Query('source') source?: string) {
+    return this.translations.suggest(user.userId, projectId, locale ?? '', source ?? '');
+  }
+
   @Get('imports')
   listImportRuns(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string) {
     return this.translations.listImportRuns(user.userId, projectId);

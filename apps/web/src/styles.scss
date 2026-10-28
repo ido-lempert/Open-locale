@@ -185,3 +185,9 @@ span.review { font-size: 0.72rem; padding: 0.05rem 0.4rem; border: 1px solid var
 .task-status { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.1rem 0.5rem; border-radius: 999px; background: #e5e7eb; color: #374151; }
 .task-in-progress { background: #dbeafe; color: #1d4ed8; }
 .task-done { background: #dcfce7; color: #15803d; }
+
+/* Translation memory suggestions */
+.tm-suggest { display: flex; flex-direction: column; gap: 0.2rem; margin-top: 0.25rem; }
+.tm-pick { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; width: 100%;
+  padding: 0.3rem 0.5rem; font-size: 0.82rem; text-align: start; background: #f8fafc; }
+.tm-pick:hover { border-color: var(--accent); background: #eef2ff; }

@@ -32,6 +32,7 @@ export class TranslationsService {
         create: { keyId, projectId, localeCode: locale, value },
         update: { value, status },
       });
+      if (value) await this.rememberTx(tx, projectId, project.baseLocale, keyId, locale, value);
       if (!existing || existing.value !== value || existing.status !== status) {
         await tx.translationHistory.create({
           data: { keyId, localeCode: locale, value,
@@ -74,6 +75,61 @@ export class TranslationsService {
       }
       return translation;
     });
+  }
+
+  // Auto-populate translation memory from a saved target value. Empty sources
+  // or targets are never remembered; base-locale saves are their own source.
+  private async rememberTx(tx: Parameters<Parameters<PrismaService['$transaction']>[0]>[0],
+    projectId: string, baseLocale: string, keyId: string, locale: string, value: string) {
+    if (!value || locale === baseLocale) return;
+    const source = await tx.translation.findUnique({
+      where: { keyId_localeCode: { keyId, localeCode: baseLocale } },
+    });
+    if (!source?.value) return;
+    await tx.tmEntry.upsert({
+      where: {
+        projectId_localeCode_sourceLocaleCode_sourceText: {
+          projectId, localeCode: locale, sourceLocaleCode: baseLocale, sourceText: source.value,
+        },
+      },
+      create: { projectId, localeCode: locale, sourceLocaleCode: baseLocale, sourceText: source.value, targetText: value, keyId },
+      update: { targetText: value, keyId },
+    });
+  }
+
+  // Dice bigram similarity 0..1 - no extensions needed; pg_trgm is a Phase 2 scale item.
+  private static similarity(a: string, b: string): number {
+    const grams = (s: string) => {
+      const g = new Map<string, number>();
+      const t = s.toLowerCase();
+      for (let i = 0; i < t.length - 1; i++) g.set(t.slice(i, i + 2), (g.get(t.slice(i, i + 2)) ?? 0) + 1);
+      return g;
+    };
+    if (!a || !b) return 0;
+    if (a === b) return 1;
+    const ga = grams(a), gb = grams(b);
+    let overlap = 0;
+    for (const [g, n] of ga) overlap += Math.min(n, gb.get(g) ?? 0);
+    return (2 * overlap) / (a.length - 1 + (b.length - 1));
+  }
+
+  async suggest(userId: string, projectId: string, locale: string, source: string) {
+    const project = await this.projects.getFor(userId, projectId);
+    if (!project.locales.some((l) => l.code === locale) || locale === project.baseLocale) {
+      throw new BadRequestException(`Locale ${locale} is not a target locale of this project`);
+    }
+    if (!source.trim()) return { suggestions: [] };
+    const entries = await this.prisma.tmEntry.findMany({
+      where: { projectId, localeCode: locale, targetText: { not: '' } },
+      orderBy: { updatedAt: 'desc' },
+      take: 500,
+    });
+    const scored = entries
+      .map((e) => ({ sourceText: e.sourceText, targetText: e.targetText, score: TranslationsService.similarity(source, e.sourceText) }))
+      .filter((e) => e.score >= 0.5)
+      .sort((x, y) => y.score - x.score)
+      .slice(0, 5);
+    return { suggestions: scored };
   }
 
   async history(userId: string, projectId: string, keyId: string, locale: string) {
@@ -148,6 +204,7 @@ export class TranslationsService {
               status: 'UNVERIFIED', changedById: userId, importId: run.id,
             },
           });
+          if (value) await this.rememberTx(tx, projectId, project.baseLocale, key.id, locale, value);
           await tx.importRun.update({
             where: { id: run.id },
             data: {

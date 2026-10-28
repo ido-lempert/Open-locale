@@ -32,6 +32,8 @@ export interface ActivityEntry {
   actor: { displayName: string; email: string } | null;
 }
 
+export interface TmSuggestion { sourceText: string; targetText: string; score: number; }
+
 export interface TaskItem {
   id: string; title: string; description: string; status: 'OPEN' | 'IN_PROGRESS' | 'DONE';
   dueDate: string | null; createdAt: string;
@@ -136,6 +138,10 @@ export class ApiService {
     const q = params.toString();
     return this.request<{ items: ActivityEntry[]; nextCursor: string | null }>(
       `/projects/${projectId}/activity${q ? `?${q}` : ''}`);
+  }
+  suggestTm(projectId: string, locale: string, source: string) {
+    return this.request<{ suggestions: TmSuggestion[] }>(
+      `/projects/${projectId}/tm/suggest?locale=${encodeURIComponent(locale)}&source=${encodeURIComponent(source)}`);
   }
   listMembers(projectId: string) {
     return this.request<MemberInfo[]>(`/projects/${projectId}/members`);

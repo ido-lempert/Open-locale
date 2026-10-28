@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, OnInit, signal, WritableSignal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { ApiService, ScreenshotMeta, CommentEntry, HistoryEntry, Key, Project, TranslationStatus } from '../api.service';
+import { ApiService, ScreenshotMeta, TmSuggestion, CommentEntry, HistoryEntry, Key, Project, TranslationStatus } from '../api.service';
 
 interface CellState {
   value: string; saved: string;
@@ -77,8 +77,20 @@ interface CellState {
                     <textarea rows="1" [attr.dir]="isRtl(l.code) ? 'rtl' : 'ltr'"
                       [ngModel]="cell(k.id, l.code)().value"
                       (ngModelChange)="edit(k, l.code, $event)"
+                      (focus)="onCellFocus(k, l.code)"
                       (blur)="save(k, l.code)"
                       [attr.aria-label]="k.name + ' in ' + l.code"></textarea>
+                    @if (suggestFor() === k.id + ':' + l.code && suggestions().length > 0) {
+                      <div class="tm-suggest">
+                        @for (sg of suggestions(); track sg.targetText) {
+                          <button type="button" class="tm-pick"
+                            (mousedown)="applySuggestion(k, l.code, sg.targetText); $event.preventDefault()">
+                            <span [attr.dir]="isRtl(l.code) ? 'rtl' : 'ltr'">{{ sg.targetText }}</span>
+                            <span class="muted">memory {{ Math.round(sg.score * 100) }}%</span>
+                          </button>
+                        }
+                      </div>
+                    }
                     <div class="cell-foot">
                       <select class="review" [class]="'review review-' + cell(k.id, l.code)().review.toLowerCase()"
                         [ngModel]="cell(k.id, l.code)().review"
@@ -178,6 +190,9 @@ export class EditorComponent implements OnInit {
   tagEditFor = signal<string | null>(null);
   tagDraft = signal('');
   historyFor = signal<string | null>(null);
+  suggestFor = signal<string | null>(null);
+  suggestions = signal<TmSuggestion[]>([]);
+  Math = Math;
   shotsFor = signal<string | null>(null);
   shots = signal<ScreenshotMeta[]>([]);
   shotUrls = signal<Record<string, string>>({});
@@ -303,6 +318,29 @@ export class EditorComponent implements OnInit {
       this.comments.set(await this.api.listComments(this.projectId, k.id));
       this.commentDraft.set('');
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to add comment'); }
+  }
+  // Translation memory: only for empty cells with a base-locale source.
+  // Applying is an explicit click and saves through the normal path - the
+  // cell stays unverified until a human reviews it.
+  async onCellFocus(k: Key, locale: string) {
+    const base = this.project()?.baseLocale;
+    if (!base || locale === base || this.cell(k.id, locale)().value.trim()) {
+      this.suggestFor.set(null); this.suggestions.set([]);
+      return;
+    }
+    const source = this.cell(k.id, base)().value.trim();
+    if (!source) { this.suggestFor.set(null); this.suggestions.set([]); return; }
+    const id = `${k.id}:${locale}`;
+    this.suggestFor.set(id);
+    try {
+      const res = await this.api.suggestTm(this.projectId, locale, source);
+      if (this.suggestFor() === id) this.suggestions.set(res.suggestions.slice(0, 3));
+    } catch { if (this.suggestFor() === id) this.suggestions.set([]); }
+  }
+  async applySuggestion(k: Key, locale: string, text: string) {
+    this.cell(k.id, locale).update((c) => ({ ...c, value: text }));
+    this.suggestFor.set(null); this.suggestions.set([]);
+    await this.save(k, locale, true);
   }
   async toggleShots(k: Key) {
     if (this.shotsFor() === k.id) { this.shotsFor.set(null); return; }

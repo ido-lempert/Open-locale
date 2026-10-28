@@ -231,6 +231,32 @@ try {
   await page.click('.grid tbody tr:first-child .shots-toggle');
   await page.waitForSelector('.grid tbody tr', { timeout: 10000 });
 
+  // Translation memory via UI: new key reuses an existing source string
+  const keyInput2 = await page.$('input[name=newKey]');
+  await keyInput2.evaluate((el) => { el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.type('input[name=newKey]', 'cart.note');
+  await page.click('.inline button');
+  check('third key added', await waitText('cart.note'));
+  const noteCells = await page.$$('.grid tbody tr:nth-child(2) textarea');
+  await noteCells[0].type('Welcome to the shop');
+  await noteCells[0].evaluate((el) => el.blur());
+  await page.waitForFunction(
+    () => [...document.querySelectorAll('.grid tbody tr:nth-child(2) .cell-status')].some((e) => /saved/i.test(e.textContent)),
+    { timeout: 10000 },
+  );
+  const noteHe = (await page.$$('.grid tbody tr:nth-child(2) textarea'))[1];
+  await noteHe.click();
+  await page.waitForSelector('.grid tbody tr:nth-child(2) .tm-pick', { timeout: 10000 });
+  const sugText = await page.$eval('.grid tbody tr:nth-child(2) .tm-pick', (el) => el.textContent);
+  check('TM suggestion appears with score', sugText.includes('ברוכים הבאים') && sugText.includes('memory 100%'), sugText.slice(0, 60));
+  await shot('editor-17-tm.png');
+  await page.click('.grid tbody tr:nth-child(2) .tm-pick');
+  await page.waitForFunction(
+    () => document.querySelectorAll('.grid tbody tr:nth-child(2) textarea')[1]?.value.includes('ברוכים הבאים'),
+    { timeout: 10000 },
+  );
+  check('applying suggestion fills the cell and saves', true);
+
   // Tasks page
   await page.click('.tasks-link');
   await page.waitForSelector('.task-form', { timeout: 10000 });
