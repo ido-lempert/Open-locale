@@ -117,6 +117,19 @@ try {
 
   const badKey = await call(`/projects/${pid}/keys`, { apiKey: 'ol_nonexistent' });
   check('unknown token rejected with 401', badKey.status === 401);
+
+  // OpenAPI v1 docs.
+  const docs = await fetch(`${API}/openapi.json`);
+  const spec = await docs.json().catch(() => null);
+  check('openapi.json served without auth', docs.status === 200 && spec?.openapi === '3.0.3');
+  const docPaths = Object.keys(spec?.paths ?? {});
+  const ops = docPaths.reduce((n, k) => n + Object.keys(spec.paths[k]).length, 0);
+  check('spec covers the v1 surface (49+ operations)', ops >= 49, `${docPaths.length} paths, ${ops} operations`);
+  check('spec documents token auth schemes',
+    !!spec?.components?.securitySchemes?.bearerAuth && !!spec?.components?.securitySchemes?.apiKeyAuth);
+  check('spec documents webhooks + exports',
+    !!spec?.paths?.['/api/projects/{projectId}/webhooks'] &&
+    !!spec?.paths?.['/api/projects/{projectId}/export/{locale}/android']);
 } finally {
   if (api) api.kill('SIGTERM');
   await pg.stop();

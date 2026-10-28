@@ -11,10 +11,11 @@ import { TasksModule } from './tasks/tasks.module';
 import { GlossaryModule } from './glossary/glossary.module';
 import { QaModule } from './qa/qa.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
+import { DocsController } from './docs/docs.controller';
 
 @Module({
   imports: [PrismaModule, AuthModule, ProjectsModule, KeysModule, TranslationsModule, ActivityModule, TasksModule, GlossaryModule, QaModule, WebhooksModule],
-  controllers: [AppController],
+  controllers: [AppController, DocsController],
   providers: [AppService],
 })
 export class AppModule {}

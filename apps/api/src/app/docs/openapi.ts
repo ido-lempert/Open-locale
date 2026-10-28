@@ -1,0 +1,128 @@
+// Hand-maintained OpenAPI 3.0 spec for the public REST API v1.
+// Every route below mirrors a real controller route; docs checks assert the
+// count stays in sync with the implemented surface.
+const json = { schema: { type: 'object', additionalProperties: true } };
+const p = (summary: string, tag: string, body = false) => ({
+  summary,
+  tags: [tag],
+  security: [{ bearerAuth: [] }, { apiKeyAuth: [] }],
+  ...(body ? { requestBody: { required: true, content: { 'application/json': json } } } : {}),
+  responses: {
+    '2XX': { description: 'Success', content: { 'application/json': json } },
+    '401': { description: 'Missing or invalid credentials' },
+    '403': { description: 'Authenticated but not permitted (scope or role)' },
+  },
+});
+const pub = (summary: string, tag: string, body = false) => {
+  const d = p(summary, tag, body) as Record<string, unknown>;
+  delete d.security;
+  return d;
+};
+
+export const OPENAPI = {
+  openapi: '3.0.3',
+  info: {
+    title: 'Open-locale API',
+    version: '1.0.0',
+    description:
+      'REST API v1. Authenticate with a session JWT (`Authorization: Bearer ...`) ' +
+      'or a scoped API token (`X-Api-Key: ol_...`). API tokens carry read and/or write ' +
+      'scopes; read-only tokens are limited to GET/HEAD. Token management endpoints ' +
+      'require a session JWT.',
+  },
+  components: {
+    securitySchemes: {
+      bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      apiKeyAuth: { type: 'apiKey', in: 'header', name: 'X-Api-Key' },
+    },
+  },
+  paths: {
+    '/api/auth/signup': { post: pub('Create an account', 'auth', true) },
+    '/api/auth/login': { post: pub('Log in and receive a session JWT', 'auth', true) },
+    '/api/auth/tokens': {
+      post: p('Create a scoped API token (session only; raw token returned once)', 'auth', true),
+      get: p('List API token metadata (session only; never includes raw tokens)', 'auth'),
+    },
+    '/api/auth/tokens/{id}': { delete: p('Revoke an API token (session only)', 'auth') },
+    '/api/projects': {
+      get: p('List projects for the current user', 'projects'),
+      post: p('Create a project', 'projects', true),
+    },
+    '/api/projects/{id}': {
+      get: p('Get a project', 'projects'),
+      patch: p('Update a project', 'projects', true),
+      delete: p('Delete a project', 'projects'),
+    },
+    '/api/projects/{id}/members': { get: p('List project members', 'projects') },
+    '/api/projects/{id}/locales': { post: p('Add a target locale', 'projects', true) },
+    '/api/projects/{id}/locales/{code}': { delete: p('Remove a target locale', 'projects') },
+    '/api/projects/{projectId}/keys': {
+      get: p('List keys (supports search, tag and status filters)', 'keys'),
+      post: p('Create a key', 'keys', true),
+    },
+    '/api/projects/{projectId}/keys/{keyId}': {
+      patch: p('Update a key', 'keys', true),
+      delete: p('Delete a key', 'keys'),
+    },
+    '/api/projects/{projectId}/keys/{keyId}/tags': { patch: p('Replace key tags', 'keys', true) },
+    '/api/projects/{projectId}/keys/{keyId}/comments': {
+      get: p('List key comments', 'keys'),
+      post: p('Add a key comment', 'keys', true),
+    },
+    '/api/projects/{projectId}/keys/{keyId}/comments/{commentId}': {
+      delete: p('Delete a comment', 'keys'),
+    },
+    '/api/projects/{projectId}/keys/{keyId}/screenshots': {
+      get: p('List key screenshots', 'keys'),
+      post: p('Attach a screenshot', 'keys', true),
+    },
+    '/api/projects/{projectId}/keys/{keyId}/screenshots/{screenshotId}': {
+      get: p('Get a screenshot', 'keys'),
+      delete: p('Detach a screenshot', 'keys'),
+    },
+    '/api/projects/{projectId}/keys/{keyId}/translations': {
+      put: p('Upsert translations for a key', 'translations', true),
+    },
+    '/api/projects/{projectId}/keys/{keyId}/translations/{locale}/status': {
+      patch: p('Set the translation status for a locale', 'translations', true),
+    },
+    '/api/projects/{projectId}/keys/{keyId}/translations/{locale}/history': {
+      get: p('Translation history for a key and locale', 'translations'),
+    },
+    '/api/projects/{projectId}/export/{locale}': { get: p('Export a locale as JSON', 'import/export') },
+    '/api/projects/{projectId}/export/{locale}/csv': { get: p('Export a locale as CSV', 'import/export') },
+    '/api/projects/{projectId}/export/{locale}/android': { get: p('Export a locale as Android strings.xml', 'import/export') },
+    '/api/projects/{projectId}/export/{locale}/ios': { get: p('Export a locale as iOS .strings', 'import/export') },
+    '/api/projects/{projectId}/import/{locale}': {
+      post: p('Import translations (JSON, CSV, Android XML or iOS strings; atomic)', 'import/export', true),
+    },
+    '/api/projects/{projectId}/imports': { get: p('List import runs', 'import/export') },
+    '/api/projects/{projectId}/tm/suggest': { get: p('Translation memory suggestions', 'translations') },
+    '/api/projects/{projectId}/glossary': {
+      get: p('List glossary terms', 'glossary'),
+      post: p('Create a glossary term', 'glossary', true),
+    },
+    '/api/projects/{projectId}/glossary/{termId}': {
+      patch: p('Update a glossary term', 'glossary', true),
+      delete: p('Delete a glossary term', 'glossary'),
+    },
+    '/api/projects/{projectId}/tasks': {
+      get: p('List tasks', 'tasks'),
+      post: p('Create a task', 'tasks', true),
+    },
+    '/api/projects/{projectId}/tasks/{taskId}': {
+      patch: p('Update a task', 'tasks', true),
+      delete: p('Delete a task', 'tasks'),
+    },
+    '/api/projects/{projectId}/webhooks': {
+      get: p('List webhooks', 'webhooks'),
+      post: p('Create a webhook (signed HMAC delivery, pinned egress)', 'webhooks', true),
+    },
+    '/api/projects/{projectId}/webhooks/{hookId}': {
+      patch: p('Update a webhook', 'webhooks', true),
+      delete: p('Delete a webhook', 'webhooks'),
+    },
+    '/api/projects/{projectId}/activity': { get: p('Project activity feed', 'projects') },
+    '/api/projects/{projectId}/qa': { get: p('Run QA checks over translations', 'qa') },
+  },
+};
