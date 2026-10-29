@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Get, Header, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Header, Param, Patch, Post, Put, Query, Res, StreamableFile, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import { TranslationsService } from './translations.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -82,6 +83,14 @@ export class TranslationsController {
   @Header('Content-Type', 'text/yaml; charset=utf-8')
   exportYaml(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
     return this.translations.exportYaml(user.userId, projectId, locale, branch);
+  }
+
+  @Get('export-bundle/:format')
+  @Header('Content-Type', 'application/zip')
+  async exportBundle(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('format') format: string, @Query('branch') branch: string | undefined, @Res({ passthrough: true }) res: Response) {
+    const { zip, filename } = await this.translations.exportBundle(user.userId, projectId, format, branch);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return new StreamableFile(zip);
   }
 
   @Get('tm/suggest')

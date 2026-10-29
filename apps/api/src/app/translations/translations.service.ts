@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, PayloadTooLargeException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
@@ -20,6 +20,7 @@ import { parseProperties, toProperties } from './properties';
 import { parseArb, toArb } from './arb';
 import { parseYaml, toYaml } from './yaml';
 import { parseIosStrings, toIosStrings } from './ios-strings';
+import { buildZip, zipSafeName } from './zip';
 
 // Statuses every project supports; a project may extend this list with
 // customStatuses (validated in ProjectsService.updateFor).
@@ -362,6 +363,44 @@ export class TranslationsService {
   async exportYaml(userId: string, projectId: string, locale: string, branch?: string) {
     const flat = (await this.exportJson(userId, projectId, locale, true, branch)) as Record<string, string>;
     return toYaml(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)), locale);
+  }
+
+  // Export every project locale (base included) as one store-only zip with
+  // one entry per locale in the requested format. Same read boundary as the
+  // single-locale exports (team membership via projects.getFor); the branch
+  // query scopes entries the same way. Entry bytes reuse the per-locale
+  // exporters, so text formats are byte-equal to their single-locale
+  // endpoints; the json entry is the flat map pretty-printed (the flat
+  // endpoint body is the same map, serialized without whitespace).
+  async exportBundle(userId: string, projectId: string, format: string, branch?: string): Promise<{ zip: Buffer; filename: string }> {
+    const exporters: Record<string, { ext: string; run: (locale: string) => Promise<string> }> = {
+      json: { ext: '.json', run: async (l) => JSON.stringify(await this.exportJson(userId, projectId, l, true, branch), null, 2) + '\n' },
+      csv: { ext: '.csv', run: (l) => this.exportCsv(userId, projectId, l, 'raw', branch) },
+      android: { ext: '.xml', run: (l) => this.exportAndroid(userId, projectId, l, branch) },
+      ios: { ext: '.strings', run: (l) => this.exportIos(userId, projectId, l, branch) },
+      po: { ext: '.po', run: (l) => this.exportPo(userId, projectId, l, branch) },
+      xliff: { ext: '.xlf', run: (l) => this.exportXliff(userId, projectId, l, branch) },
+      properties: { ext: '.properties', run: (l) => this.exportProperties(userId, projectId, l, branch) },
+      arb: { ext: '.arb', run: (l) => this.exportArb(userId, projectId, l, branch) },
+      yaml: { ext: '.yaml', run: (l) => this.exportYaml(userId, projectId, l, branch) },
+    };
+    const exporter = exporters[format];
+    if (!exporter) throw new BadRequestException(`Unknown bundle format ${format}; expected one of ${Object.keys(exporters).join(', ')}`);
+    const project = await this.projects.getFor(userId, projectId);
+    const locales = project.locales.map((l) => l.code).sort((a, b) => a.localeCompare(b));
+    const entries = [] as { name: string; data: Buffer }[];
+    for (const locale of locales) {
+      entries.push({ name: zipSafeName(locale) + exporter.ext, data: Buffer.from(await exporter.run(locale), 'utf8') });
+    }
+    let zip: Buffer;
+    try {
+      zip = buildZip(entries);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.startsWith('zip size limit')) throw new PayloadTooLargeException(message);
+      throw new BadRequestException(`Cannot build bundle: ${message}`);
+    }
+    return { zip, filename: `${zipSafeName(project.slug)}-${format}.zip` };
   }
 
   // Single parse dispatch for every import format. The write path and the

@@ -462,6 +462,42 @@ try {
   const runs = (await call(`${P}/imports`, { token: at })).json;
   check('CSV imports recorded as import runs', Array.isArray(runs) ? runs.length >= 2 : (runs.items?.length ?? 0) >= 2, JSON.stringify(runs).slice(0, 120));
 
+  // Export bundle: one store-only zip, one entry per locale, per format.
+  const readZip = (buf) => {
+    if (buf.readUInt32LE(buf.length - 22) !== 0x06054b50) throw new Error('no EOCD');
+    const count = buf.readUInt16LE(buf.length - 12);
+    let off = buf.readUInt32LE(buf.length - 6);
+    const out = new Map();
+    for (let i = 0; i < count; i++) {
+      if (buf.readUInt32LE(off) !== 0x02014b50) throw new Error('no central header');
+      const nameLen = buf.readUInt16LE(off + 28);
+      const size = buf.readUInt32LE(off + 20);
+      const local = buf.readUInt32LE(off + 42);
+      const localNameLen = buf.readUInt16LE(local + 26);
+      out.set(buf.subarray(off + 46, off + 46 + nameLen).toString('utf8'), buf.subarray(local + 30 + localNameLen, local + 30 + localNameLen + size));
+      off += 46 + nameLen;
+    }
+    return out;
+  };
+  const extFor = { csv: '.csv', android: '.xml', ios: '.strings', po: '.po', xliff: '.xlf', properties: '.properties', arb: '.arb', yaml: '.yaml' };
+  const bundleJson = await fetch(`${API}${P}/export-bundle/json`, { headers: { Authorization: `Bearer ${at}` } });
+  const jsonEntries = readZip(Buffer.from(await bundleJson.arrayBuffer()));
+  check('json bundle: zip content-type, attachment disposition, one entry per locale', bundleJson.status === 200 && (bundleJson.headers.get('content-type') || '').includes('application/zip') && (bundleJson.headers.get('content-disposition') || '').includes('fmt-json.zip') && jsonEntries.size === 2 && jsonEntries.has('en.json') && jsonEntries.has('he.json'), `${bundleJson.status} ${bundleJson.headers.get('content-disposition')} ${[...jsonEntries.keys()].join(',')}`);
+  const heFlatForBundle = await (await fetch(`${API}${P}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('json bundle entry carries the same flat map as the flat endpoint', JSON.stringify(JSON.parse(jsonEntries.get('he.json').toString('utf8'))) === JSON.stringify(heFlatForBundle));
+  for (const f of Object.keys(extFor)) {
+    const single = await (await fetch(`${API}${P}/export/he/${f === 'csv' ? 'csv?mode=raw' : f}`, { headers: { Authorization: `Bearer ${at}` } })).text();
+    const bundleEntries = readZip(Buffer.from(await (await fetch(`${API}${P}/export-bundle/${f}`, { headers: { Authorization: `Bearer ${at}` } })).arrayBuffer()));
+    check(`${f} bundle entry byte-equals the single-locale export`, bundleEntries.get(`he${extFor[f]}`)?.toString('utf8') === single && bundleEntries.has(`en${extFor[f]}`), String(bundleEntries.get(`he${extFor[f]}`)?.length));
+  }
+  const badBundle = await call(`${P}/export-bundle/nope`, { token: at });
+  check('unknown bundle format rejected (400)', badBundle.status === 400, String(badBundle.status));
+  const memberBundle = await fetch(`${API}${P}/export-bundle/po`, { headers: { Authorization: `Bearer ${ct}` } });
+  check('bundle export not narrowed by locale write grants (member 200)', memberBundle.status === 200, String(memberBundle.status));
+  const mainBundle = readZip(Buffer.from(await (await fetch(`${API}${P}/export-bundle/json`, { headers: { Authorization: `Bearer ${at}` } })).arrayBuffer()));
+  const brBundle = readZip(Buffer.from(await (await fetch(`${API}${P}/export-bundle/json?branch=preview-branch`, { headers: { Authorization: `Bearer ${at}` } })).arrayBuffer()));
+  check('bundle respects the branch scope', !JSON.parse(mainBundle.get('en.json').toString('utf8'))['pv.scoped'] && JSON.parse(brBundle.get('en.json').toString('utf8'))['pv.scoped'] === 'on branch');
+
 } catch (err) {
   // embedded-postgres can reject with `undefined` when the postmaster dies at
   // startup; through an async finally that exception exits 0 SILENTLY. Catch

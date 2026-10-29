@@ -1,0 +1,74 @@
+import { buildZip, crc32, zipSafeName, ZIP_LIMITS } from './zip';
+
+// Structural parse of a store-only zip: local headers, central directory and
+// EOCD must agree; entry bytes must round-trip exactly.
+function parseZip(buf: Buffer) {
+  expect(buf.readUInt32LE(buf.length - 22)).toBe(0x06054b50);
+  const count = buf.readUInt16LE(buf.length - 12);
+  const cdOffset = buf.readUInt32LE(buf.length - 6);
+  const entries: { name: string; data: Buffer; crc: number }[] = [];
+  let base = cdOffset;
+  for (let i = 0; i < count; i++) {
+    expect(buf.readUInt32LE(base)).toBe(0x02014b50);
+    const nameLen = buf.readUInt16LE(base + 28);
+    const name = buf.subarray(base + 46, base + 46 + nameLen).toString('utf8');
+    const crc = buf.readUInt32LE(base + 16);
+    const size = buf.readUInt32LE(base + 20);
+    const localOffset = buf.readUInt32LE(base + 42);
+    expect(buf.readUInt32LE(localOffset)).toBe(0x04034b50);
+    const localNameLen = buf.readUInt16LE(localOffset + 26);
+    const data = buf.subarray(localOffset + 30 + localNameLen, localOffset + 30 + localNameLen + size);
+    entries.push({ name, data, crc });
+    // Next central record starts right after this name (no extra/comment).
+    expect(buf.readUInt32LE(base + 46 + nameLen)).toBe(i + 1 < count ? 0x02014b50 : 0x06054b50);
+    base = base + 46 + nameLen;
+  }
+  return entries;
+}
+
+describe('zip writer', () => {
+  it('crc32 matches the standard test vector', () => {
+    expect(crc32(Buffer.from('123456789'))).toBe(0xcbf43926);
+  });
+
+  it('round-trips entries byte-exactly with correct CRCs', () => {
+    const a = Buffer.from('{"a":"b"}\n', 'utf8');
+    const b = Buffer.from('msgid "x"\nmsgstr "y"\n', 'utf8');
+    const entries = parseZip(buildZip([{ name: 'he.json', data: a }, { name: 'ar.po', data: b }]));
+    expect(entries.map((e) => e.name)).toEqual(['he.json', 'ar.po']);
+    expect(entries[0].data.equals(a)).toBe(true);
+    expect(entries[1].data.equals(b)).toBe(true);
+    expect(entries[0].crc).toBe(crc32(a));
+    expect(entries[1].crc).toBe(crc32(b));
+  });
+
+  it('is deterministic: identical input produces identical bytes', () => {
+    const entries = [{ name: 'he.json', data: Buffer.from('{}') }];
+    expect(buildZip(entries).equals(buildZip(entries))).toBe(true);
+  });
+
+  it('handles UTF-8 names and empty entries', () => {
+    const entries = parseZip(buildZip([{ name: 'עברית.json', data: Buffer.alloc(0) }]));
+    expect(entries[0].name).toBe('עברית.json');
+    expect(entries[0].data.length).toBe(0);
+  });
+
+  it('rejects duplicate names and over-limit archives', () => {
+    expect(() => buildZip([{ name: 'a.json', data: Buffer.alloc(0) }, { name: 'a.json', data: Buffer.alloc(0) }])).toThrow('duplicate');
+    const many = Array.from({ length: ZIP_LIMITS.MAX_ENTRIES + 1 }, (_, i) => ({ name: `f${i}`, data: Buffer.alloc(0) }));
+    expect(() => buildZip(many)).toThrow('entry limit');
+    expect(() => buildZip([{ name: 'big', data: Buffer.alloc(ZIP_LIMITS.MAX_BYTES + 1) }])).toThrow('size limit');
+  });
+
+  it('zipSafeName strips traversal and collapses unsafe characters', () => {
+    expect(zipSafeName('../../etc/passwd')).toBe('etc-passwd');
+    expect(zipSafeName('../../etc/passwd')).not.toContain('/');
+    expect(zipSafeName('he')).toBe('he');
+    expect(zipSafeName('zh-Hans-CN')).toBe('zh-Hans-CN');
+    expect(zipSafeName('pt BR')).toBe('pt-BR');
+    expect(zipSafeName('a/b\\c')).toBe('a-b-c');
+    expect(zipSafeName('...')).toBe('file');
+    expect(zipSafeName('')).toBe('file');
+    expect(zipSafeName('/')).toBe('file');
+  });
+});
