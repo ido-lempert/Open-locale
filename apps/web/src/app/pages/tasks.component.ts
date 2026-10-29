@@ -1,7 +1,8 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service';
 
 @Component({
@@ -92,7 +93,7 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
     </main>
   `,
 })
-export class TasksComponent implements OnInit {
+export class TasksComponent implements OnInit, OnDestroy {
   projectId = '';
   tasks = signal<TaskItem[]>([]);
   members = signal<MemberInfo[]>([]);
@@ -110,10 +111,30 @@ export class TasksComponent implements OnInit {
   assigneeId = signal('');
   dependsOnId = signal('');
 
+  private routeSub?: Subscription;
+  private fetchSeq = 0;
+
   constructor(private route: ActivatedRoute, private api: ApiService) {}
 
   ngOnInit() {
-    this.projectId = this.route.snapshot.paramMap.get('id') ?? '';
+    // Subscribe rather than snapshot: the router reuses this component when
+    // only the project id changes, and each project needs its own restored
+    // filters and fresh lists.
+    this.routeSub = this.route.paramMap.subscribe((pm) => this.initForProject(pm.get('id') ?? ''));
+  }
+
+  ngOnDestroy() {
+    this.routeSub?.unsubscribe();
+  }
+
+  private initForProject(pid: string) {
+    this.projectId = pid;
+    this.fetchSeq++; // invalidate every in-flight fetch from the previous project
+    this.error.set('');
+    this.tasks.set([]); this.members.set([]); this.groups.set([]); this.keys.set([]);
+    this.title.set(''); this.description.set(''); this.dueDate.set('');
+    this.assigneeId.set(''); this.dependsOnId.set(''); this.selectedKeyIds.set([]); this.lockKeys.set(false);
+    this.statusFilter.set(''); this.mineFilter.set('');
     // Restore the assignee/status filters chosen on a previous visit to
     // this project's tasks page (best-effort; storage may be unavailable).
     try {
@@ -125,15 +146,15 @@ export class TasksComponent implements OnInit {
       }
     } catch { /* corrupt or unavailable storage: fall back to defaults */ }
     void this.fetch();
-    void this.api.listMembers(this.projectId)
-      .then((m) => this.members.set(m))
-      .catch(() => this.members.set([]));
-    void this.api.listGroups(this.projectId)
-      .then((g) => this.groups.set(g))
-      .catch(() => this.groups.set([]));
-    void this.api.listKeys(this.projectId)
-      .then((k) => this.keys.set(k))
-      .catch(() => this.keys.set([]));
+    void this.api.listMembers(pid)
+      .then((m) => { if (this.projectId === pid) this.members.set(m); })
+      .catch(() => { if (this.projectId === pid) this.members.set([]); });
+    void this.api.listGroups(pid)
+      .then((g) => { if (this.projectId === pid) this.groups.set(g); })
+      .catch(() => { if (this.projectId === pid) this.groups.set([]); });
+    void this.api.listKeys(pid)
+      .then((k) => { if (this.projectId === pid) this.keys.set(k); })
+      .catch(() => { if (this.projectId === pid) this.keys.set([]); });
   }
 
   setFilter(status: string) {
@@ -159,11 +180,20 @@ export class TasksComponent implements OnInit {
   }
 
   async fetch() {
+    // Latest-request-wins: rapid filter changes (or a project switch) fire
+    // overlapping fetches; only the newest response may touch the list,
+    // the error banner or the loading flag.
+    const seq = ++this.fetchSeq;
     this.loading.set(true);
     try {
-      this.tasks.set(await this.api.listTasks(this.projectId, this.statusFilter() || undefined, this.mineFilter() === 'me'));
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load tasks'); }
-    finally { this.loading.set(false); }
+      const list = await this.api.listTasks(this.projectId, this.statusFilter() || undefined, this.mineFilter() === 'me');
+      if (seq !== this.fetchSeq) return;
+      this.tasks.set(list);
+    } catch (e) {
+      if (seq === this.fetchSeq) this.error.set(e instanceof Error ? e.message : 'Failed to load tasks');
+    } finally {
+      if (seq === this.fetchSeq) this.loading.set(false);
+    }
   }
 
   assigneeValue(t: TaskItem): string {

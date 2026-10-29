@@ -122,3 +122,83 @@ describe('EditorComponent save/status ordering', () => {
     expect(setStatusCalls).toEqual(['REVIEWED', 'REVIEWED']);
   });
 });
+
+describe('TasksComponent latest-request-wins', () => {
+  const task = (id: string, title: string, status: 'OPEN' | 'IN_PROGRESS' | 'DONE') => ({
+    id, title, description: '', status, dueDate: null, createdAt: '2026-10-29T00:00:00Z',
+    assignee: null, assigneeGroup: null, dependsOn: null, lockKeys: false, keys: [], creator: null,
+  });
+
+  const setup = async () => {
+    const { BehaviorSubject } = await import('rxjs');
+    const { convertToParamMap, ActivatedRoute } = await import('@angular/router');
+    const { TasksComponent } = await import('./tasks.component');
+    const calls: { pid: string; status?: string; mine?: boolean; resolve: (v: unknown) => void; reject: (e: unknown) => void }[] = [];
+    const mock = {
+      listTasks: (pid: string, status?: string, mine?: boolean) =>
+        new Promise((res, rej) => { calls.push({ pid, status, mine, resolve: res, reject: rej }); }),
+      listMembers: () => Promise.resolve([]),
+      listGroups: () => Promise.resolve([]),
+      listKeys: () => Promise.resolve([]),
+    };
+    const paramMap$ = new BehaviorSubject(convertToParamMap({ id: 'p1' }));
+    await TestBed.configureTestingModule({
+      imports: [TasksComponent],
+      providers: [
+        provideRouter([]),
+        { provide: ApiService, useValue: mock },
+        { provide: ActivatedRoute, useValue: { paramMap: paramMap$.asObservable(), snapshot: { paramMap: convertToParamMap({ id: 'p1' }) } } },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(TasksComponent);
+    fixture.detectChanges();
+    return { fixture, cmp: fixture.componentInstance, calls, paramMap$, convertToParamMap };
+  };
+
+  it('applies only the newest fetch when filter-change responses arrive out of order', async () => {
+    const { fixture, cmp, calls } = await setup();
+    localStorage.clear();
+    expect(calls.length).toBe(1); // initial load
+    cmp.setFilter('OPEN');
+    cmp.setMine('me');
+    expect(calls.length).toBe(3);
+    expect(calls[2].status).toBe('OPEN');
+    expect(calls[2].mine).toBe(true);
+    // Newest resolves first; stale responses arrive afterwards in reverse.
+    calls[2].resolve([task('t3', 'Mine open', 'OPEN')]);
+    await fixture.whenStable();
+    calls[0].reject(new Error('stale failure'));
+    await fixture.whenStable();
+    calls[1].resolve([task('t1', 'Stale all-status', 'IN_PROGRESS')]);
+    await fixture.whenStable();
+    expect(cmp.tasks().map((t) => t.id)).toEqual(['t3']);
+    expect(cmp.error()).toBe('');
+    expect(cmp.loading()).toBe(false);
+    fixture.destroy();
+  });
+
+  it('re-initializes on project switch: new project id, own filters, stale p1 response ignored', async () => {
+    const { fixture, cmp, calls, paramMap$, convertToParamMap } = await setup();
+    localStorage.clear();
+    expect(calls.length).toBe(1);
+    expect(calls[0].pid).toBe('p1');
+    // Persist a filter choice for p2 only.
+    localStorage.setItem('ol.taskFilters.p2', JSON.stringify({ status: 'DONE', mine: 'me' }));
+    paramMap$.next(convertToParamMap({ id: 'p2' }));
+    fixture.detectChanges();
+    expect(cmp.projectId).toBe('p2');
+    expect(cmp.statusFilter()).toBe('DONE');
+    expect(cmp.mineFilter()).toBe('me');
+    expect(calls.length).toBe(2);
+    expect(calls[1].pid).toBe('p2');
+    expect(calls[1].status).toBe('DONE');
+    // The p1 response landing after the switch must not render p1 rows.
+    calls[0].resolve([task('old', 'From p1', 'OPEN')]);
+    await fixture.whenStable();
+    expect(cmp.tasks().map((t) => t.id)).toEqual([]);
+    calls[1].resolve([task('new', 'From p2', 'DONE')]);
+    await fixture.whenStable();
+    expect(cmp.tasks().map((t) => t.id)).toEqual(['new']);
+    fixture.destroy();
+  });
+});

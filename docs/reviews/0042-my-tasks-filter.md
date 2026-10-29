@@ -48,6 +48,14 @@ The assignee and status filters persist per project in localStorage
 next visit. Stored values are whitelisted on restore (OPEN/IN_PROGRESS/
 DONE, "me"); corrupt or unavailable storage falls back to the defaults.
 Persistence is best-effort (private mode/quota simply skips it). Scope
-stays a view filter - no server state, no notifications. Verified by
+stays a view filter - no server state, no notifications.
+
+Storage semantics (per review feedback): localStorage, not
+sessionStorage - choices survive browser restarts on this device and
+browser profile, are stored per project (`ol.taskFilters.<projectId>`),
+and are never synced to the server or other devices. They are visible
+to anyone using this browser profile, same as any localStorage value;
+the feature makes no privacy claim beyond "never sent anywhere except
+as the same query params the page already sends. Verified by
 e2e: both filters survive a full page reload with the list reflecting
 the persisted filter; filters are reset to defaults afterwards.

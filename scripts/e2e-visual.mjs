@@ -785,6 +785,32 @@ try {
   await page.select('select[aria-label="Filter by status"]', '');
   await page.waitForSelector('.task-row', { timeout: 10000 });
 
+  // Latest-request-wins in a real browser: delay the DONE-filter request
+  // 2s at the network layer, immediately change back to all statuses, and
+  // confirm the slow stale (empty) response does not render over the
+  // newer full list. Without sequencing, the late DONE response wins.
+  await page.setRequestInterception(true);
+  let doneDelayed = false;
+  page.on('request', (req) => {
+    if (!doneDelayed && req.url().includes('/tasks?') && req.url().includes('status=DONE')) {
+      doneDelayed = true;
+      setTimeout(() => req.continue(), 2000);
+    } else req.continue();
+  });
+  const staleLanded = page.waitForResponse(
+    (r) => r.url().includes('/tasks?') && r.url().includes('status=DONE'), { timeout: 20000 },
+  );
+  await page.select('select[aria-label="Filter by status"]', 'DONE');
+  await page.select('select[aria-label="Filter by status"]', '');
+  await page.waitForFunction(() => document.querySelectorAll('.task-row').length > 0, { timeout: 10000 });
+  await staleLanded; // the slow stale response has now arrived
+  await new Promise((r) => setTimeout(r, 300)); // allow any (wrong) re-render
+  check('slow stale filter response does not clobber the newest list', await page.evaluate(() =>
+    document.querySelectorAll('.task-row').length > 0
+    && document.querySelector('select[aria-label="Filter by status"]')?.value === ''));
+  page.removeAllListeners('request');
+  await page.setRequestInterception(false);
+
   // Task chaining: create a successor through the form, see the chip, and
   // confirm starting it while the predecessor is open shows the API error.
   await page.type('input[name=taskTitle]', 'Proofread after translation');
