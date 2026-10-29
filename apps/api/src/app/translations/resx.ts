@@ -4,7 +4,12 @@
 // <comment> children: neither survives a round trip, and that is explicit.
 // Typed or binary resources (type/mimetype attributes), <metadata> sections,
 // assembly references and inner markup inside <value> are rejected, never
-// silently dropped.
+// silently dropped. The reader is a lexical scan, not an XML parser: it has
+// no DTD or entity processing at all, so DOCTYPE declarations are inert and
+// entity references beyond the five predefined ones stay literal text; no
+// external resolution is possible. Whitespace inside <value> is preserved
+// verbatim on import regardless of xml:space, and export always emits
+// xml:space="preserve" so the round trip keeps it.
 
 const xmlEscape = (v: string) =>
   v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -40,9 +45,15 @@ const INNER_MARKUP_RE = /<[a-zA-Z/]/;
 export function parseResx(text: string): { rows: [string, string][]; rejected: number } {
   const rows: [string, string][] = [];
   let rejected = 0;
-  if (!/<root[\s>]/.test(text)) {
+  const rootMatch = /<root(\s[^>]*)?>/.exec(text);
+  if (!rootMatch) {
     // No RESX root element: not a RESX document at all. Reject instead of
     // silently importing zero keys (wrong-format file pick).
+    return { rows, rejected: 1 };
+  }
+  if (/\bxmlns[:=]/.test(rootMatch[1] ?? '')) {
+    // Namespaced root: outside the subset. Reject rather than guess at
+    // namespace semantics we do not implement.
     return { rows, rejected: 1 };
   }
   if (/<metadata[\s>]|<assembly[\s>]/.test(text)) {

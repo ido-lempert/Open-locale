@@ -354,6 +354,11 @@ try {
   const firstSel = await page.$eval('select[aria-label="Import/export format"]', (el) => el.value);
   const firstNoBanner = await page.evaluate(() => !document.querySelector('.import-conflict'));
   check('untouched format select auto-detects YAML from .yaml without a prompt', firstNotice && firstSel === 'yaml' && firstNoBanner, `select=${firstSel} notice=${firstNotice}`);
+  // RESX affordance: the format picker offers RESX, selecting it sticks, and the file input accepts .resx.
+  await page.select('select[aria-label="Import/export format"]', 'resx');
+  const resxSel = await page.$eval('select[aria-label="Import/export format"]', (el) => el.value);
+  const resxAccept = await page.$eval('input[type=file]', (el) => el.accept || '');
+  check('format picker offers RESX, selection sticks, file input accepts .resx', resxSel === 'resx' && resxAccept.includes('.resx'), `select=${resxSel} accept=${resxAccept}`);
   const csvFile = '/tmp/e2e-import.csv';
   writeFileSync(csvFile, 'key,value\napp.subtitle,"Welcome, friend"\n');
   // The IO toolbar has a format picker; select CSV first so the import input and the safe/raw note apply to CSV.

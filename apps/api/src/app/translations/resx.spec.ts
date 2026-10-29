@@ -46,6 +46,29 @@ describe('RESX (.NET) interchange', () => {
     expect(parseResx('<root><assembly alias="x" name="Lib"/><data name="k"><value>v</value></data></root>').rejected).toBe(1);
   });
 
+  it('treats DOCTYPE and entity declarations as inert: no resolution, entities stay literal', () => {
+    const xxe = `<?xml version="1.0"?>
+<!DOCTYPE root [ <!ENTITY xxe SYSTEM "file:///etc/passwd"> ]>
+<root><data name="k"><value>&xxe;</value></data><data name="ok"><value>fine</value></data></root>`;
+    const back = parseResx(xxe);
+    expect(back.rows).toContainEqual(['ok', 'fine']);
+    // The entity reference is never resolved or expanded; it stays literal text.
+    expect(back.rows).toContainEqual(['k', '&xxe;']);
+    const internal = `<!DOCTYPE root [ <!ENTITY brand "Acme"> ]><root><data name="k"><value>&brand;</value></data></root>`;
+    expect(parseResx(internal).rows).toEqual([['k', '&brand;']]);
+  });
+
+  it('rejects namespaced roots in both prefix and default-xmlns forms', () => {
+    expect(parseResx('<r:root xmlns:r="urn:x"><data name="k"><value>v</value></data></r:root>').rejected).toBe(1);
+    expect(parseResx('<root xmlns="urn:x"><data name="k"><value>v</value></data></root>').rejected).toBe(1);
+    expect(parseResx('<r:root xmlns:r="urn:x"><data name="k"><value>v</value></data></r:root>').rows).toEqual([]);
+  });
+
+  it('preserves value whitespace verbatim without xml:space, and empty values', () => {
+    const noSpace = `<root><data name="p"><value>  padded  </value></data><data name="e"><value></value></data></root>`;
+    expect(parseResx(noSpace).rows).toEqual([['p', '  padded  '], ['e', '']]);
+  });
+
   it('rejects duplicate names, missing values and inner markup', () => {
     const dup = `<root><data name="k"><value>1</value></data><data name="k"><value>2</value></data></root>`;
     const dupBack = parseResx(dup);
