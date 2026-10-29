@@ -52,8 +52,9 @@ running on the built-in development secret.
 
 The `open-locale` CLI uploads and downloads translation files from the terminal.
 It is zero-dependency (Node 20+) and talks to the REST API with a personal API
-token (create one in project settings). `npm install` exposes the bin through
-the workspace, so `npx open-locale <command>` works from the repo root.
+token (create one in project settings). The CLI is not published to npm; from a
+repo checkout, `npm install` links the workspace bin locally, so
+`npx open-locale <command>` works from the repo root.
 
 Config comes from `./open-locale.json` or environment variables
 (`OPENLOCALE_URL`, `OPENLOCALE_TOKEN`, `OPENLOCALE_PROJECT` override the file):
@@ -91,7 +92,8 @@ Every database-backed suite starts its own real PostgreSQL automatically; no Doc
 required. Each suite exits non-zero if any check fails.
 
 ```bash
-bash scripts/sweep.sh                       # everything: 32 database-backed suites,
+bash scripts/sweep.sh                       # everything: 31 suites that each start a
+                                            # real PostgreSQL, the OpenAPI docs check,
                                             # unit tests and production builds (36 legs)
 npx nx test api && npx nx test web          # unit tests only
 node scripts/e2e-visual.mjs                 # full UI pass in headless Chrome
