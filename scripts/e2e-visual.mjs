@@ -410,6 +410,22 @@ try {
   check('POT export via UI emits msgids with empty msgstr, blanking translated keys too',
     potExport.includes('translation template (POT)') && potExport.includes('msgid "pot.uikey"\nmsgstr ""') && potExport.includes('msgid "resx.uikey"\nmsgstr ""') && !/msgstr "[^"]/.test(potExport),
     potExport.split('\n').find((l) => l.includes('pot.uikey')) ?? '');
+  // TMX export through the UI: pick a target locale, capture the blob, verify pairs.
+  await page.select('select[aria-label="Import/export locale"]', 'he');
+  await page.evaluate(() => {
+    window.__tmxCapture = null;
+    const orig = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (b) => { window.__tmxCapture = b; return orig(b); };
+  });
+  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.startsWith('Export TM'))?.click());
+  await page.waitForFunction(() => !!window.__tmxCapture, { timeout: 10000 });
+  const tmxExport = await page.evaluate(() => window.__tmxCapture.text());
+  const tmxPairs = [...tmxExport.matchAll(/<tuv xml:lang="en"><seg>([^<]+)<\/seg><\/tuv>\s*<tuv xml:lang="he"><seg>([^<]+)<\/seg><\/tuv>/g)];
+  check('TMX export via UI emits 1.4 pairs for the he memory',
+    tmxExport.includes('<tmx version="1.4">') && tmxExport.includes('srclang="en"') && tmxPairs.length >= 1 && tmxPairs.every((m) => m[1] && m[2]),
+    `pairs=${tmxPairs.length}`);
+  await shot('editor-19c-tmx-export.png');
+  await page.select('select[aria-label="Import/export locale"]', 'en');
   const csvFile = '/tmp/e2e-import.csv';
   writeFileSync(csvFile, 'key,value\napp.subtitle,"Welcome, friend"\n');
   // The IO toolbar has a format picker; select CSV first so the import input and the safe/raw note apply to CSV.

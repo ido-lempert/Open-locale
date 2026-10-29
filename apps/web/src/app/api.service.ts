@@ -356,6 +356,14 @@ export class ApiService {
     if (!res.ok) throw new Error(`Export failed (HTTP ${res.status})`);
     return res.text();
   }
+  async exportTmx(projectId: string, locale: string) {
+    const res = await fetch(`${this.base}/projects/${projectId}/tm/${encodeURIComponent(locale)}/tmx`, {
+      headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.message ?? `Export failed (${res.status})`);
+    return res.text();
+  }
+
   importPayload(projectId: string, locale: string, payload: Record<string, unknown>, branch?: string, dryRun = false) {
     const q = [branch ? `branch=${encodeURIComponent(branch)}` : '', dryRun ? 'dryRun=true' : ''].filter(Boolean).join('&');
     return this.request<{ keysCreated: number; translationsUpserted: number; unchangedSkipped: number; failed: number; failures?: string[] }>(

@@ -15,6 +15,7 @@ import type { ImportJsonDto } from './dto';
 import { parseCsv, toCsv } from './csv';
 import { parseAndroidXml, toAndroidXml } from './android-xml';
 import { parsePo, toPo, toPot } from './po';
+import { toTmx } from './tmx';
 import { parseXliff, toXliff } from './xliff';
 import { parseResx, toResx } from './resx';
 import { parseProperties, toProperties } from './properties';
@@ -279,6 +280,18 @@ export class TranslationsService {
     let overlap = 0;
     for (const [g, n] of ga) overlap += Math.min(n, gb.get(g) ?? 0);
     return (2 * overlap) / (a.length - 1 + (b.length - 1));
+  }
+
+  async exportTmx(userId: string, projectId: string, locale: string) {
+    const project = await this.projects.getFor(userId, projectId);
+    if (!project.locales.some((l) => l.code === locale) || locale === project.baseLocale) {
+      throw new BadRequestException(`Locale ${locale} is not a target locale of this project`);
+    }
+    const entries = await this.prisma.tmEntry.findMany({
+      where: { projectId, localeCode: locale, sourceLocaleCode: project.baseLocale, targetText: { not: '' } },
+      orderBy: { sourceText: 'asc' },
+    });
+    return toTmx(entries.map((e): [string, string] => [e.sourceText, e.targetText]), project.baseLocale, locale);
   }
 
   async suggest(userId: string, projectId: string, locale: string, source: string) {

@@ -185,6 +185,7 @@ export const OPENAPI = {
     },
     '/api/projects/{projectId}/imports': { get: p('List import runs', 'import/export') },
     '/api/projects/{projectId}/tm/suggest': { get: p('Translation memory suggestions', 'translations') },
+    '/api/projects/{projectId}/tm/{locale}/tmx': { get: p('Export the translation memory for a locale as TMX 1.4 (export-only)', 'translations') },
     '/api/projects/{projectId}/glossary': {
       get: p('List glossary terms', 'glossary'),
       post: p('Create a glossary term', 'glossary', true),

@@ -105,6 +105,12 @@ export class TranslationsController {
     return new StreamableFile(zip);
   }
 
+  @Get('tm/:locale/tmx')
+  @Header('Content-Type', 'application/x-tmx+xml; charset=utf-8')
+  exportTmx(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string) {
+    return this.translations.exportTmx(user.userId, projectId, locale);
+  }
+
   @Get('tm/suggest')
   suggest(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string,
     @Query('locale') locale?: string, @Query('source') source?: string) {

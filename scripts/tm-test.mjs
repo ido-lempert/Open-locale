@@ -89,6 +89,25 @@ try {
   const ro = (await call('/auth/tokens', { token: at, method: 'POST', body: { name: 'ro', scopes: ['read'] } })).json;
   const roSug = await call(`/projects/${proj.id}/tm/suggest?locale=he&source=Welcome`, { apiKey: ro.token });
   check('read-only token may suggest (200)', roSug.status === 200, `got ${roSug.status}`);
+
+  // --- TMX export ---
+  const k3 = (await call(`/projects/${proj.id}/keys`, { token: at, method: 'POST', body: { name: 'special.chars' } })).json;
+  await put(k3.id, 'en', 'A & B <C>');
+  await put(k3.id, 'he', 'say "hi" & <b>');
+  const tmxRes = await fetch(`${API}/projects/${proj.id}/tm/he/tmx`, { headers: { Authorization: `Bearer ${at}` } });
+  const tmx = await tmxRes.text();
+  check('TMX export: 1.4 header, srclang and a known he pair', tmxRes.status === 200 && tmx.includes('<tmx version="1.4">') && tmx.includes('srclang="en"') && tmx.includes('<tuv xml:lang="en"><seg>Welcome to the shop</seg></tuv>') && tmx.includes('<tuv xml:lang="he"><seg>ברוכים הבאים לחנות!</seg></tuv>'), tmx.split('\n').find((l) => l.includes('ברוכים')) ?? '');
+  check('TMX export escapes markup and quotes in segments', tmx.includes('<seg>A &amp; B &lt;C&gt;</seg>') && tmx.includes('<seg>say "hi" &amp; &lt;b&gt;</seg>'), tmx.split('\n').find((l) => l.includes('amp')) ?? '');
+  const tmxDe = await (await fetch(`${API}/projects/${proj.id}/tm/de/tmx`, { headers: { Authorization: `Bearer ${at}` } })).text();
+  check('TMX export is per-locale (de pair only)', tmxDe.includes('Willkommen im Shop') && !tmxDe.includes('ברוכים הבאים'), '');
+  const tmxBase = await call(`/projects/${proj.id}/tm/en/tmx`, { token: at });
+  check('TMX export into the base locale rejected (400)', tmxBase.status === 400, `got ${tmxBase.status}`);
+  const tmxCross = await call(`/projects/${proj.id}/tm/he/tmx`, { token: bt });
+  check('cross-team TMX export denied (404)', tmxCross.status === 404, `got ${tmxCross.status}`);
+  const k4 = (await call(`/projects/${proj.id}/keys`, { token: at, method: 'POST', body: { name: 'untranslated.key' } })).json;
+  await put(k4.id, 'en', 'No target yet');
+  const tmxAfterK4 = await (await fetch(`${API}/projects/${proj.id}/tm/he/tmx`, { headers: { Authorization: `Bearer ${at}` } })).text();
+  check('TMX export excludes keys with no target-locale memory', !tmxAfterK4.includes('No target yet'), '');
 } catch (err) {
   // embedded-postgres can reject with `undefined` when the postmaster dies at
   // startup; through an async finally that exception exits 0 SILENTLY. Catch

@@ -80,6 +80,7 @@ interface CellState {
           </select>
           <button (click)="exportFile()">Export {{ formatLabel() }}</button>
           <button (click)="exportBundleFile()" title="Download every locale as one zip in the selected format">Export all (.zip)</button>
+          <button (click)="exportTmxFile()" title="Download the translation memory for the selected locale as TMX 1.4 (export-only)">Export TM (TMX)</button>
           <label class="import">Import {{ formatLabel() }} <input type="file" name="importFile" accept=".json,.csv,.xml,.strings,.po,.pot,.xlf,.xliff,.properties,.arb,.yaml,.yml,.resx" (change)="importFile($event)" hidden /></label>
           <label class="import">Preview import <input type="file" name="previewFile" accept=".json,.csv,.xml,.strings,.po,.pot,.xlf,.xliff,.properties,.arb,.yaml,.yml,.resx" (change)="previewFile($event)" hidden /></label>
           <label class="import" title="Upload a store-only zip from Export all (.zip); compressed zips from other tools are rejected. Each locale imports independently: skipped entries and failed locales are reported, not rolled back.">Import bundle (.zip) <input type="file" name="bundleFile" accept=".zip" (change)="bundleFile($event)" hidden /></label>
@@ -632,6 +633,19 @@ export class EditorComponent implements OnInit {
       this.error.set('');
     } catch (err) { this.error.set(err instanceof Error ? err.message : 'Bundle export failed'); }
   }
+  async exportTmxFile() {
+    const locale = this.ioLocale();
+    try {
+      const content = await this.api.exportTmx(this.projectId, locale);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([content], { type: 'application/x-tmx+xml' }));
+      a.download = `${this.project()?.slug ?? 'export'}-${locale}.tmx`;
+      a.click(); URL.revokeObjectURL(a.href);
+      this.notice.set(`Translation memory for ${locale} exported as TMX 1.4 (export-only; there is no TMX import).`);
+      this.error.set('');
+    } catch (err) { this.error.set(err instanceof Error ? err.message : 'TMX export failed'); }
+  }
+
   async exportFile() {
     const fmt = this.ioFormat();
     const locale = this.ioLocale();
