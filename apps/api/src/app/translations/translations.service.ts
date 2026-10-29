@@ -15,6 +15,7 @@ import { parseCsv, toCsv } from './csv';
 import { parseAndroidXml, toAndroidXml } from './android-xml';
 import { parsePo, toPo } from './po';
 import { parseXliff, toXliff } from './xliff';
+import { parseProperties, toProperties } from './properties';
 import { parseIosStrings, toIosStrings } from './ios-strings';
 
 // Statuses every project supports; a project may extend this list with
@@ -345,6 +346,11 @@ export class TranslationsService {
     return toXliff(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)), project.baseLocale, locale);
   }
 
+  async exportProperties(userId: string, projectId: string, locale: string, branch?: string) {
+    const flat = (await this.exportJson(userId, projectId, locale, true, branch)) as Record<string, string>;
+    return toProperties(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)));
+  }
+
   async importAndroid(userId: string, projectId: string, locale: string, xml: string, branch?: string) {
     const { rows, rejected } = parseAndroidXml(xml);
     if (rejected > 0) {
@@ -376,6 +382,14 @@ export class TranslationsService {
     }
     const res = await this.importJson(userId, projectId, locale, Object.fromEntries(rows), branch);
     return { ...res, untranslatedSkipped: skipped };
+  }
+
+  async importProperties(userId: string, projectId: string, locale: string, properties: string, branch?: string) {
+    const { rows, rejected } = parseProperties(properties);
+    if (rejected > 0) {
+      throw new BadRequestException(`${rejected} .properties line(s) rejected: separator-less lines, duplicate keys and malformed escapes are not supported`);
+    }
+    return this.importJson(userId, projectId, locale, Object.fromEntries(rows), branch);
   }
 
   async importCsv(userId: string, projectId: string, locale: string, csv: string, branch?: string) {

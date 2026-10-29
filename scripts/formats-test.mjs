@@ -228,6 +228,10 @@ try {
   check('XLIFF group nesting rejected (400) and leaves keys unchanged', xlGroup.status === 400 && JSON.stringify(xlBefore) === JSON.stringify(xlAfterGroup) && xlAfterGroup['xliff.grouped'] === undefined, String(xlGroup.status));
   const xlMarkup = await call(`${P}/import/he`, { token: at, method: 'POST', body: { xliff: '<xliff version="1.2"><file><body><trans-unit id="xliff.markup"><source>a<g id="1">bad</g></source><target>x</target></trans-unit></body></file></xliff>' } });
   check('XLIFF inline markup rejected (400)', xlMarkup.status === 400, String(xlMarkup.status));
+  const xlDupBefore = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  const xlDup = await call(`${P}/import/he`, { token: at, method: 'POST', body: { xliff: '<xliff version="1.2"><file><body><trans-unit id="xliff.dup"><source>s</source><target>1</target></trans-unit><trans-unit id="xliff.dup"><source>s</source><target>2</target></trans-unit><trans-unit id="xliff.dupother"><source>s</source><target>also not landing</target></trans-unit></body></file></xliff>' } });
+  const xlDupAfter = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('XLIFF duplicate id 400s the whole request, all keys byte-identical', xlDup.status === 400 && JSON.stringify(xlDupBefore) === JSON.stringify(xlDupAfter) && xlDupAfter['xliff.dup'] === undefined && xlDupAfter['xliff.dupother'] === undefined, String(xlDup.status));
 
   await call(`${P}/branches`, { token: at, method: 'POST', body: { name: 'xliff-branch' } });
   const impXlBr = await call(`${P}/import/en?branch=xliff-branch`, { token: at, method: 'POST', body: { xliff: '<xliff version="1.2"><file><body><trans-unit id="xliff.branchonly"><source>s</source><target>branch value</target></trans-unit></body></file></xliff>' } });
@@ -252,6 +256,59 @@ try {
   check('XLIFF import skips the locked key and reports it', xlLockImp.status === 201 && xlLockImp.json.failed === 1 && xlLockImp.json.translationsUpserted === 1, JSON.stringify(xlLockImp.json));
   const heAfterXlLock = await (await fetch(`${API}${P}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
   check('XLIFF locked key keeps its value, unlocked key imported', heAfterXlLock['xliff.title'] === 'My "App" ✓' && heAfterXlLock['xliff.unlocked'] === 'lands', JSON.stringify({ title: heAfterXlLock['xliff.title'], unlocked: heAfterXlLock['xliff.unlocked'] }));
+
+  // Java .properties round-trip, rejection and the shared boundaries.
+  const propIn = [
+    '# fixture comment',
+    'prop.title=My App ✓',
+    'prop.greeting=\\u05e9\\u05dc\\u05d5\\u05dd',
+    'prop.long=line one \\',
+    '  line two',
+    'prop.multi=a\\nb',
+    '',
+  ].join('\n');
+  const impProp = await call(`${P}/import/he`, { token: at, method: 'POST', body: { properties: propIn } });
+  check('PROPERTIES import accepted (comments, continuation, \\uXXXX)', impProp.status === 201 && impProp.json.translationsUpserted === 4, JSON.stringify(impProp.json));
+  const heAfterProp = await (await fetch(`${API}${P}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('PROPERTIES escapes and continuation decoded', heAfterProp['prop.greeting'] === 'שלום' && heAfterProp['prop.long'] === 'line one line two' && heAfterProp['prop.multi'] === 'a\nb', JSON.stringify({ g: heAfterProp['prop.greeting'], l: heAfterProp['prop.long'] }));
+  const propRes = await fetch(`${API}${P}/export/he/properties`, { headers: { Authorization: `Bearer ${at}` } });
+  const propOut = await propRes.text();
+  check('PROPERTIES export content-type', (propRes.headers.get('content-type') || '').includes('x-java-properties'), propRes.headers.get('content-type') ?? '');
+  check('PROPERTIES export escapes newlines, keeps UTF-8 literal', propOut.includes('prop.multi=a\\nb') && propOut.includes('prop.greeting=שלום'), propOut.split('\n').find((l) => l.startsWith('prop.greeting')) ?? '');
+  const propRound = await call(`${P}/import/he`, { token: at, method: 'POST', body: { properties: propOut } });
+  check('PROPERTIES export-import roundtrip stable', propRound.status === 201 && propRound.json.unchangedSkipped >= 4, JSON.stringify(propRound.json));
+  const propBefore = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  const propNoSep = await call(`${P}/import/he`, { token: at, method: 'POST', body: { properties: 'prop.noseparator\n\nprop.ok=should not land\n' } });
+  const propAfterNoSep = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('PROPERTIES separator-less line rejected (400) and leaves keys unchanged', propNoSep.status === 400 && JSON.stringify(propBefore) === JSON.stringify(propAfterNoSep) && propAfterNoSep['prop.ok'] === undefined, String(propNoSep.status));
+  const propDupBefore = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  const propDup = await call(`${P}/import/he`, { token: at, method: 'POST', body: { properties: 'prop.dup=1\nprop.dup=2\nprop.dupother=also not landing\n' } });
+  const propDupAfter = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('PROPERTIES duplicate key 400s the whole request, all keys byte-identical', propDup.status === 400 && JSON.stringify(propDupBefore) === JSON.stringify(propDupAfter) && propDupAfter['prop.dup'] === undefined && propDupAfter['prop.dupother'] === undefined, String(propDup.status));
+
+  await call(`${P}/branches`, { token: at, method: 'POST', body: { name: 'prop-branch' } });
+  const impPropBr = await call(`${P}/import/en?branch=prop-branch`, { token: at, method: 'POST', body: { properties: 'prop.branchonly=branch value\n' } });
+  check('PROPERTIES import scopes to the named branch', impPropBr.status === 201, JSON.stringify(impPropBr.json));
+  const mainAfterPropBr = await (await fetch(`${API}${P}/export/en?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  const brAfterPropBr = await (await fetch(`${API}${P}/export/en?flat=true&branch=prop-branch`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('PROPERTIES branch import invisible on main, present on the branch', mainAfterPropBr['prop.branchonly'] === undefined && brAfterPropBr['prop.branchonly'] === 'branch value');
+  const brPropOut = await (await fetch(`${API}${P}/export/en/properties?branch=prop-branch`, { headers: { Authorization: `Bearer ${at}` } })).text();
+  check('PROPERTIES export reads the named branch', brPropOut.includes('prop.branchonly=branch value'));
+
+  const cPropEn = await call(`${P}/import/en`, { token: ct, method: 'POST', body: { properties: 'prop.denied=x\n' } });
+  check('PROPERTIES import outside the member locale grant denied (403)', cPropEn.status === 403, String(cPropEn.status));
+  const cPropHe = await call(`${P}/import/he`, { token: ct, method: 'POST', body: { properties: 'prop.memberok=allowed\n' } });
+  check('PROPERTIES import inside the member locale grant accepted', cPropHe.status === 201, String(cPropHe.status));
+  const cPropExport = await fetch(`${API}${P}/export/en/properties`, { headers: { Authorization: `Bearer ${ct}` } });
+  check('PROPERTIES export not narrowed by locale write grants', cPropExport.status === 200, String(cPropExport.status));
+
+  const keysForPropLock = (await call(`${P}/keys`, { token: at })).json;
+  const lockPropKey = keysForPropLock.find((k) => k.name === 'prop.title');
+  await call(`${P}/tasks`, { token: at, method: 'POST', body: { title: 'Lock prop.title', lockKeys: true, keyIds: [lockPropKey.id] } });
+  const propLockImp = await call(`${P}/import/he`, { token: ct, method: 'POST', body: { properties: 'prop.title=changed under lock\nprop.unlocked=lands\n' } });
+  check('PROPERTIES import skips the locked key and reports it', propLockImp.status === 201 && propLockImp.json.failed === 1 && propLockImp.json.translationsUpserted === 1, JSON.stringify(propLockImp.json));
+  const heAfterPropLock = await (await fetch(`${API}${P}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('PROPERTIES locked key keeps its value, unlocked key imported', heAfterPropLock['prop.title'] === 'My App ✓' && heAfterPropLock['prop.unlocked'] === 'lands', JSON.stringify({ title: heAfterPropLock['prop.title'], unlocked: heAfterPropLock['prop.unlocked'] }));
 
   const runs = (await call(`${P}/imports`, { token: at })).json;
   check('CSV imports recorded as import runs', Array.isArray(runs) ? runs.length >= 2 : (runs.items?.length ?? 0) >= 2, JSON.stringify(runs).slice(0, 120));

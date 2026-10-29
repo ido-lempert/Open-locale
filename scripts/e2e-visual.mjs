@@ -434,6 +434,37 @@ try {
     window.scrollTo(0, 0);
   });
 
+  // --- Java .properties via UI: import a new key, export capture verifies content ---
+  const propFile = '/tmp/e2e-import.properties';
+  writeFileSync(propFile, '# fixture\nprop.demo=Proof of properties \\u2713\n');
+  await page.select('select[aria-label="Import/export format"]', 'properties');
+  const propInput = await page.$('input[type=file]');
+  await propInput.uploadFile(propFile);
+  const propNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('(Java properties,'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('PROPERTIES import via UI shows summary notice', propNotice);
+  check('PROPERTIES-imported key appears in grid', await waitText('prop.demo'));
+  await page.evaluate(() => {
+    window.__propCapture = null;
+    const orig = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (b) => { window.__propCapture = b; return orig(b); };
+  });
+  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.startsWith('Export'))?.click());
+  await page.waitForFunction(() => !!window.__propCapture, { timeout: 10000 });
+  const propExport = await page.evaluate(() => window.__propCapture.text());
+  check('PROPERTIES export via UI emits key=value for existing keys',
+    propExport.includes('prop.demo=Proof of properties ✓'),
+    propExport.split('\n').find((l) => l.includes('prop.demo')) ?? '');
+  await page.evaluate(() => {
+    document.body.style.paddingBottom = '60vh';
+    const cell = [...document.querySelectorAll('.grid td.key')].find((el) => el.textContent.includes('prop.demo'));
+    cell?.scrollIntoView({ block: 'center' });
+  });
+  await shot('editor-37-properties.png');
+  await page.evaluate(() => {
+    document.body.style.paddingBottom = '';
+    window.scrollTo(0, 0);
+  });
+
   // Settings screen: rename, add locale, verify grid column appears (on the editor)
   await page.click('.settings-link');
   await page.waitForSelector('.panel', { timeout: 10000 });
