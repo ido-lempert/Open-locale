@@ -486,6 +486,97 @@ try {
   check('groups panel fits narrow viewport without horizontal overflow', narrowOk === true);
   await page.setViewport({ width: 1280, height: 800 });
 
+  // --- Groups click-through: member add/remove, promote/demote with
+  // inherited display, cancel+confirm delete, failed mutation, low-role ---
+  const user2 = await (await fetch(`http://127.0.0.1:${API_PORT}/api/auth/signup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: `member${Date.now()}@t.dev`, password: 'member-pass-1', displayName: 'Second Member' }) })).json();
+  const ownerJwt = await page.evaluate(() => localStorage.getItem('ol_token'));
+  const added2 = await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/members`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ownerJwt}` }, body: JSON.stringify({ email: user2.user.email, role: 'MEMBER', allowedLocales: ['ar'] }) });
+  check('second member added to team (setup)', added2.status === 201, String(added2.status));
+  await page.goto(`${WEB}/projects/${projId}/settings`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('select[aria-label="Add member to group"]', { timeout: 10000 });
+
+  // Add member via the UI dropdown.
+  await page.select('select[aria-label="Add member to group"]', user2.user.id);
+  // Wait for the actual chip (its remove button), not the dropdown option,
+  // which already contains the member's name before the add completes.
+  const chipShown = await page.waitForFunction(() => !!document.querySelector('button[aria-label="Remove from group"]'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('member added to group via UI, chip visible', chipShown);
+  const unionShown = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('.locale-list li')].map((li) => li.textContent);
+    return rows.some((t) => t.includes('Second Member') && t.includes('effective locales: ar, he'));
+  });
+  check('Members panel shows inherited union (ar, he)', unionShown);
+
+  // Promote group to ADMIN via UI: inherited role becomes visible.
+  await page.select('select[aria-label="Group role"]', 'ADMIN');
+  const promoted = await page.waitForFunction(() => (document.body.textContent || '').includes('effective: admin via group'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('promotion via UI shows inherited admin on member', promoted);
+  await page.select('select[aria-label="Group role"]', 'MEMBER');
+  const demoted = await page.waitForFunction(() => (document.body.textContent || '').includes('effective locales: ar, he'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('demotion via UI restores locale-scoped effective grant', demoted);
+
+  // Remove member via the UI chip button; inherited note disappears.
+  await page.evaluate(() => { [...document.querySelectorAll('button[aria-label="Remove from group"]')][0].click(); });
+  const chipGone = await page.waitForFunction(() => !(document.body.textContent || '').includes('Second Member') || !document.body.textContent.includes('effective locales'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('member removed from group via UI', chipGone);
+
+  // Delete: cancel keeps the group, confirm removes it.
+  let dialogAction = 'dismiss';
+  page.on('dialog', (d) => (dialogAction === 'accept' ? d.accept() : d.dismiss()));
+  await page.evaluate(() => { [...document.querySelectorAll('button.danger')].find((b) => b.textContent === 'Delete').click(); });
+  await new Promise((r) => setTimeout(r, 600));
+  check('cancel delete keeps the group', await page.evaluate(() => (document.body.textContent || '').includes('reviewers')));
+  dialogAction = 'accept';
+  await page.evaluate(() => { [...document.querySelectorAll('button.danger')].find((b) => b.textContent === 'Delete').click(); });
+  const groupGone = await page.waitForFunction(() => !(document.body.textContent || '').includes('reviewers'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('confirm delete removes the group', groupGone);
+
+  // Failed mutation surfaces a visible error and changes nothing.
+  await page.type('input[aria-label="Group name"]', 'dup');
+  await page.evaluate(() => { document.querySelector('input[aria-label="Group name"]').closest('form').requestSubmit(); });
+  await page.waitForFunction(() => (document.body.textContent || '').includes('dup'), { timeout: 10000 });
+  await page.type('input[aria-label="Group name"]', 'dup');
+  await page.evaluate(() => { document.querySelector('input[aria-label="Group name"]').closest('form').requestSubmit(); });
+  const dupErr = await page.waitForFunction(() => {
+    const el = document.querySelector('.error[role="alert"], .error');
+    return !!el && el.textContent.trim().length > 0;
+  }, { timeout: 10000 }).then(() => true).catch(() => false);
+  check('duplicate group shows visible error', dupErr);
+  const dupCount = await page.evaluate(() => [...document.querySelectorAll('.locale-list li strong')].filter((el) => el.textContent === 'dup').length);
+  check('failed mutation changed nothing (one dup group)', dupCount === 1, `count=${dupCount}`);
+
+  // Low-role session: a plain member sees groups but no mutation controls.
+  await page.evaluate(() => localStorage.removeItem('ol_token'));
+  await page.goto(`${WEB}/login`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('input[name=email]');
+  await page.type('input[name=email]', user2.user.email);
+  await page.type('input[name=password]', 'member-pass-1');
+  await page.click('button.primary');
+  await page.waitForFunction(() => location.pathname.includes('/projects') && !location.pathname.includes('/login'), { timeout: 15000 });
+  await page.goto(`${WEB}/projects/${projId}/settings`, { waitUntil: 'networkidle0' });
+  await page.waitForFunction(() => (document.body.textContent || '').includes('Groups'), { timeout: 10000 });
+  const memberSeesList = await page.evaluate(() => (document.body.textContent || '').includes('dup'));
+  const memberControls = await page.evaluate(() => ({
+    create: !!document.querySelector('input[aria-label="Group name"]'),
+    del: [...document.querySelectorAll('button')].some((b) => b.textContent === 'Delete'),
+    add: !!document.querySelector('select[aria-label="Add member to group"]'),
+  }));
+  check('member session can view the groups list', memberSeesList);
+  check('member session has NO group mutation controls', !memberControls.create && !memberControls.del && !memberControls.add, JSON.stringify(memberControls));
+  await page.evaluate(() => {
+    const h = [...document.querySelectorAll('h2')].find((x) => x.textContent === 'Groups');
+    h.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70);
+  });
+  await shot('editor-24c-groups-member-view.png');
+  await page.evaluate(() => localStorage.removeItem('ol_token'));
+  await page.goto(`${WEB}/login`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('input[name=email]');
+  await page.type('input[name=email]', 'demo@open-locale.dev');
+  await page.type('input[name=password]', 'demo-password-1');
+  await page.click('button.primary');
+  await page.waitForFunction(() => location.pathname.includes('/projects') && !location.pathname.includes('/login'), { timeout: 15000 });
+
+
 
   // --- Branches: create via UI, isolation, merge into main ---
   await page.goto(`${WEB}/projects/${projId}`, { waitUntil: 'networkidle0' });

@@ -222,31 +222,36 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           <p class="muted">Groups are team-wide grant templates: every member sees all groups and their members (there is no per-project hiding), and a group grant applies to every project in the team. A member's effective access is the UNION of their direct membership and every group they belong to: the strongest role wins, locale lists combine, and a restrictive group never reduces an unrestricted direct grant. Changes apply immediately - promoting or demoting a group changes its members' effective access on their next action.</p>
           <ul class="locale-list">
             @for (g of groups(); track g.id) {
-              <li>
+              <li class="group-row">
                 <span><strong>{{ g.name }}</strong></span>
                 <span class="role-badge">{{ g.role.toLowerCase() }}</span>
                 <span class="muted">{{ g.role === 'MEMBER' && g.allowedLocales.length ? 'locales: ' + g.allowedLocales.join(', ') : 'all locales' }}</span>
-                <select aria-label="Group role" [ngModel]="g.role" (ngModelChange)="setGroupRole(g, $event)" name="grole-{{g.id}}">
-                  <option value="MEMBER">member</option>
-                  <option value="ADMIN">admin</option>
-                </select>
-                <button class="danger" (click)="removeGroup(g)">Delete</button>
+                @if (isTeamAdmin()) {
+                  <select aria-label="Group role" [ngModel]="g.role" (ngModelChange)="setGroupRole(g, $event)" name="grole-{{g.id}}">
+                    <option value="MEMBER">member</option>
+                    <option value="ADMIN">admin</option>
+                  </select>
+                  <button class="danger" (click)="removeGroup(g)">Delete</button>
+                }
               </li>
-              <li class="muted" style="padding-left: 1rem;">
+              <li class="muted group-members" style="padding-left: 1rem;">
                 Members: {{ g.members.length ? '' : 'none' }}
                 @for (gm of g.members; track gm.userId) {
-                  <span>{{ gm.user.displayName }} <button class="danger" aria-label="Remove from group" (click)="removeGroupMember(g, gm.userId)">x</button></span>
+                  <span>{{ gm.user.displayName }} @if (isTeamAdmin()) { <button class="danger" aria-label="Remove from group" (click)="removeGroupMember(g, gm.userId)">x</button> }</span>
                 }
-                <select aria-label="Add member to group" name="gadd-{{g.id}}" [ngModel]="groupPick()[g.id] ?? ''" (ngModelChange)="addGroupMember(g, $event)">
-                  <option value="">add member…</option>
-                  @for (m of members(); track m.id) {
-                    @if (!g.members.some((gm) => gm.userId === m.id)) { <option [value]="m.id">{{ m.displayName }}</option> }
-                  }
-                </select>
+                @if (isTeamAdmin()) {
+                  <select aria-label="Add member to group" name="gadd-{{g.id}}" [ngModel]="groupPick()[g.id] ?? ''" (ngModelChange)="addGroupMember(g, $event)">
+                    <option value="">add member…</option>
+                    @for (m of members(); track m.id) {
+                      @if (!g.members.some((gm) => gm.userId === m.id)) { <option [value]="m.id">{{ m.displayName }}</option> }
+                    }
+                  </select>
+                }
               </li>
             }
             @if (!groups().length) { <li class="muted">No groups yet.</li> }
           </ul>
+          @if (isTeamAdmin()) {
           <form class="inline" (ngSubmit)="addGroup()">
             <input aria-label="Group name" placeholder="Group name" [ngModel]="groupName()" (ngModelChange)="groupName.set($event)" name="groupName" required />
             <select aria-label="New group role" [ngModel]="groupRole()" (ngModelChange)="groupRole.set($event)" name="groupRole">
@@ -256,6 +261,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             <input aria-label="Group locales" placeholder="Locales (e.g. he,fr) - blank = all" [ngModel]="groupLocales()" (ngModelChange)="groupLocales.set($event)" name="groupLocales" />
             <button type="submit" [disabled]="busy()">Add group</button>
           </form>
+          }
         </section>
         <section class="panel">
           <h2>OTA publications</h2>
@@ -545,6 +551,17 @@ export class SettingsComponent implements OnInit {
   // strongest role wins across direct + group grants; a MEMBER-level
   // effective role unions the locale lists (empty list from any grant =
   // unrestricted). A restrictive group never shrinks a wider direct grant.
+  myEmail(): string {
+    try { return JSON.parse(atob((this.api.token ?? '').split('.')[1])).email ?? ''; } catch { return ''; }
+  }
+  // Management controls are shown only to team admins/owners. A read-only
+  // member can see groups (the API allows listing) but gets no mutation
+  // controls; the server still enforces every rule on its own.
+  isTeamAdmin(): boolean {
+    const me = this.members().find((m) => m.email.toLowerCase() === this.myEmail().toLowerCase());
+    return !!me && me.role !== 'MEMBER';
+  }
+
   effectiveNote(m: MemberInfo): string | null {
     const rank: Record<string, number> = { OWNER: 3, ADMIN: 2, MEMBER: 1 };
     const grants = [{ role: m.role, allowedLocales: m.allowedLocales },
