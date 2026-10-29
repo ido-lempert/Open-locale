@@ -68,7 +68,7 @@ async function push() {
     console.error('note: bundle import accepts store-only zips from `pull --all` (compressed zips are rejected); each locale imports independently - skipped entries and failed locales are reported, not rolled back.');
     const result = await api(`/projects/${project}/import-bundle/${format}`, { method: 'POST', body: readFileSync(file), zip: true });
     for (const r of result.imported) console.log(`${r.locale}: ${r.translationsUpserted} upserted, ${r.keysCreated} key(s) created, ${r.unchangedSkipped} unchanged, ${r.failed} failed`);
-    for (const x of result.skipped) console.error(`skipped ${x.name}: ${x.reason}`);
+    for (const x of result.skipped) console.error(`skipped entry ${x.name} (not imported; exit stays 0 for skips alone): ${x.reason}`);
     for (const x of result.failedLocales) console.error(`${x.locale} failed (${x.status}): ${x.error}`);
     if (result.failedLocales.length > 0 || result.imported.some((r) => r.failed > 0)) process.exit(1);
     return;
@@ -123,11 +123,15 @@ async function keys() {
 
 const usage = `open-locale <command>
   push <file> --locale <code>            import a translations file (json/xml/strings/csv/po/xlf/properties/arb/yaml)
-  push <file.zip> [--format f]           import a bundle zip (store-only, from pull --all; per-locale partial)
+  push <file.zip> [--format f]           import a bundle zip: STORE-ONLY, as written by pull --all
+                                         (compressed zips are rejected before any write; each locale
+                                         imports independently, no rollback across locales)
   pull --locale <code> [--format f] [-o file]   export translations (json|csv|android|ios|po|xliff|properties|arb|yaml)
   pull --all [--format f] -o <file.zip>  export every locale as one store-only zip
   keys [--search term]                   list keys
-  docs                                   print the OpenAPI docs URL`;
+  docs                                   print the OpenAPI docs URL
+exit codes: 0 = success (bundle entries with no matching locale are skipped and listed
+  on stderr; skips alone keep exit 0); 1 = any failed key or locale, details on stderr`;
 if (!cmd || cmd === 'help' || cmd === '--help') { console.log(usage); process.exit(cmd ? 0 : 1); }
 if (cmd === 'docs') { const { url } = config(); console.log(`${url}/api/openapi.json`); process.exit(0); }
 if (cmd === 'push') await push();

@@ -105,7 +105,32 @@ try {
   mixZip.fill(0x72, heLocal + 31, heLocal + 32);
   writeFileSync(join(workDir, 'mix.zip'), mixZip);
   const pushMix = cli(['push', 'mix.zip'], workDir);
-  check('cli push bundle reports an unmatched entry as skipped, exit 0', pushMix.status === 0 && pushMix.out.includes('skipped fr.json') && pushMix.out.includes('en:'), pushMix.out.trim().slice(0, 200));
+  check('cli push bundle reports an unmatched entry as skipped, exit 0', pushMix.status === 0 && pushMix.out.includes('skipped entry fr.json') && pushMix.out.includes('exit stays 0') && pushMix.out.includes('en:'), pushMix.out.trim().slice(0, 200));
+
+  // Partial key failure through the CLI: a task-locked key fails inside an
+  // HTTP-200 locale import, and the CLI must still exit 1. Lock skips apply to
+  // MEMBERs (ADMIN/OWNER override), so this leg runs as a member token.
+  const memEmail = `clim${Date.now()}@t.dev`;
+  const memSignup = (await call('/auth/signup', { method: 'POST', body: { email: memEmail, password: 'pass1234', displayName: 'Cli Member' } })).json;
+  const memJwt = memSignup.accessToken;
+  const memUserId = memSignup.user.id;
+  await call(`/projects/${proj.json.id}/members`, { jwt, method: 'POST', body: { email: memEmail, role: 'MEMBER', allowedLocales: ['en', 'he'] } });
+  const memTok = (await call('/auth/tokens', { jwt: memJwt, method: 'POST', body: { name: 'cli-member', scopes: ['read', 'write'] } })).json.token;
+  // Diverge the live value so the bundle's older value would be a real write,
+  // then lock the key before the member pushes the bundle.
+  await call(`/projects/${proj.json.id}/import/he`, { jwt, method: 'POST', body: { entries: { 'app.title': 'שונה' } } });
+  const cliKeys = (await call(`/projects/${proj.json.id}/keys`, { jwt })).json;
+  const lockTask = (await call(`/projects/${proj.json.id}/tasks`, { jwt, method: 'POST', body: { title: 'lock app.title', lockKeys: true, keyIds: [cliKeys.find((k) => k.name === 'app.title').id] } })).json;
+  writeFileSync(join(workDir, 'open-locale.json'), JSON.stringify({ url: `http://127.0.0.1:${API_PORT}`, token: memTok, project: proj.json.id }));
+  const pushLocked = cli(['push', 'bundle.zip'], workDir);
+  check('cli push bundle exits nonzero when a key is locked, locale HTTP still succeeds', pushLocked.status === 1 && pushLocked.out.includes('he:') && pushLocked.out.includes('1 failed') && !pushLocked.out.includes('(403)'), pushLocked.out.trim().slice(0, 200));
+  await call(`/projects/${proj.json.id}/tasks/${lockTask.id}`, { jwt, method: 'PATCH', body: { status: 'DONE' } });
+
+  // Grant-denied locale through the CLI: member loses en, so en lands in
+  // failedLocales (403) and the CLI must exit 1 while he still imports.
+  await call(`/projects/${proj.json.id}/members/${memUserId}`, { jwt, method: 'PATCH', body: { allowedLocales: ['he'] } });
+  const pushDenied = cli(['push', 'bundle.zip'], workDir);
+  check('cli push bundle exits nonzero when a locale is grant-denied', pushDenied.status === 1 && pushDenied.out.includes('en failed (403)') && pushDenied.out.includes('he:'), pushDenied.out.trim().slice(0, 200));
 
   // read-only enforcement through the CLI
   const roTok = await call('/auth/tokens', { jwt, method: 'POST', body: { name: 'cli-ro', scopes: ['read'] } });
