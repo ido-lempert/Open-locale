@@ -28,20 +28,30 @@ export class TasksService {
 
   // Validates the dependency target: same project, and no cycle when
   // attached under taskId (null when creating). Walks the chain with a
-  // visited set so a corrupted cycle can never loop the query.
-  private async assertDependency(projectId: string, dependsOnId: string, taskId: string | null) {
+  // visited set so a corrupted cycle can never loop the query. Must be
+  // called inside a transaction that already holds the per-project graph
+  // lock (graphLock), so concurrent opposing updates serialize and the
+  // second walk observes the first's committed edge.
+  private async assertDependency(db: Prisma.TransactionClient, projectId: string, dependsOnId: string, taskId: string | null) {
     const visited = new Set<string>(taskId ? [taskId] : []);
     let cursor: string | null = dependsOnId;
     while (cursor) {
       if (visited.has(cursor)) throw new BadRequestException('Task dependency would create a cycle');
       visited.add(cursor);
-      const pred: { id: string; dependsOnId: string | null } | null = await this.prisma.task.findFirst({
+      const pred: { id: string; dependsOnId: string | null } | null = await db.task.findFirst({
         where: { id: cursor, projectId },
         select: { id: true, dependsOnId: true },
       });
       if (!pred) throw new BadRequestException('Dependency task is not part of this project');
       cursor = pred.dependsOnId;
     }
+  }
+
+  // Per-project advisory lock serializing dependency-graph mutations
+  // (dependency writes and status transitions gated on them). Without it
+  // two opposing PATCHes (A->B, B->A) could both pass their cycle walks.
+  private async graphLock(tx: Prisma.TransactionClient, projectId: string) {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${projectId + '::task-graph'}))`;
   }
 
   private assertSingleAssignee(assigneeId?: string | null, assigneeGroupId?: string | null) {
@@ -80,8 +90,13 @@ export class TasksService {
     this.assertSingleAssignee(input.assigneeId, input.assigneeGroupId);
     if (input.assigneeId) await this.assertAssigneeMember(project.teamId, input.assigneeId);
     if (input.assigneeGroupId) await this.assertAssigneeGroup(project.teamId, input.assigneeGroupId);
-    if (input.dependsOnId) await this.assertDependency(projectId, input.dependsOnId, null);
-    return this.prisma.$transaction((tx) => this.createIn(tx, userId, projectId, input));
+    return this.prisma.$transaction(async (tx) => {
+      if (input.dependsOnId) {
+        await this.graphLock(tx, projectId);
+        await this.assertDependency(tx, projectId, input.dependsOnId, null);
+      }
+      return this.createIn(tx, userId, projectId, input);
+    });
   }
 
   // Creates the task inside a caller-owned transaction (used by automations
@@ -126,17 +141,27 @@ export class TasksService {
     this.assertSingleAssignee(input.assigneeId, input.assigneeGroupId);
     if (input.assigneeId) await this.assertAssigneeMember(project.teamId, input.assigneeId);
     if (input.assigneeGroupId) await this.assertAssigneeGroup(project.teamId, input.assigneeGroupId);
-    if (input.dependsOnId) await this.assertDependency(projectId, input.dependsOnId, taskId);
     return this.prisma.$transaction(async (tx) => {
       if (input.title !== undefined && !input.title.trim()) {
         throw new BadRequestException('Title cannot be empty');
       }
-      // A chained task can only start once its predecessor is DONE. The
-      // predecessor's status is read inside the same transaction as the
-      // status update.
+      // Serialize graph mutations: dependency writes and status
+      // transitions (which the chain gate reads) take the per-project
+      // lock before any check, so concurrent updates see each other's
+      // committed state.
+      const touchesGraph = input.dependsOnId !== undefined || (input.status !== undefined && input.status !== existing.status);
+      if (touchesGraph) await this.graphLock(tx, projectId);
+      if (input.dependsOnId) await this.assertDependency(tx, projectId, input.dependsOnId, taskId);
+      // The chain gates every forward transition out of OPEN (starting OR
+      // completing), and also attaching/changing the predecessor on a
+      // task already past OPEN: in both cases the new predecessor must be
+      // DONE. The predecessor's status is read inside the same
+      // transaction as the update. Reopening (any -> OPEN) stays allowed.
       const targetStatus = input.status ?? existing.status;
       const targetDependsOn = input.dependsOnId !== undefined ? input.dependsOnId : existing.dependsOnId;
-      if (targetStatus === 'IN_PROGRESS' && existing.status !== 'IN_PROGRESS' && targetDependsOn) {
+      const changingDependency = input.dependsOnId !== undefined && input.dependsOnId !== existing.dependsOnId;
+      const movingForward = targetStatus !== existing.status && targetStatus !== 'OPEN';
+      if (targetDependsOn && (movingForward || (changingDependency && existing.status !== 'OPEN'))) {
         const blocked = await tx.task.findFirst({
           where: { id: targetDependsOn, status: { not: 'DONE' } },
           select: { id: true },

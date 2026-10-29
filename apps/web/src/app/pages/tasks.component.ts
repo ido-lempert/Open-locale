@@ -55,13 +55,13 @@ import { ApiService, MemberInfo, TaskItem, GroupInfo } from '../api.service';
               @if (t.dependsOn) { <span class="muted">waits on: {{ t.dependsOn.title }} ({{ t.dependsOn.status.toLowerCase().replace('_', ' ') }})</span> }
             </div>
             <select [attr.aria-label]="'Status for ' + t.title" [ngModel]="t.status"
-              (ngModelChange)="update(t, { status: $event })">
+              (change)="update(t, { status: $any($event.target).value }, $any($event.target), t.status)">
               <option value="OPEN">open</option>
               <option value="IN_PROGRESS">in progress</option>
               <option value="DONE">done</option>
             </select>
             <select [attr.aria-label]="'Assignee for ' + t.title" [ngModel]="assigneeValue(t)"
-              (ngModelChange)="update(t, assigneePatch($event))">
+              (change)="update(t, assigneePatch($any($event.target).value), $any($event.target), assigneeValue(t))">
               <option value="">unassigned</option>
               @for (m of members(); track m.id) { <option [value]="m.id">{{ m.displayName }}</option> }
               @for (g of groups(); track g.id) { <option [value]="'g:' + g.id">Group: {{ g.name }}</option> }
@@ -148,11 +148,17 @@ export class TasksComponent implements OnInit {
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to create task'); }
   }
 
-  async update(t: TaskItem, patch: Record<string, unknown>) {
+  async update(t: TaskItem, patch: Record<string, unknown>, el?: HTMLSelectElement, revertValue?: string) {
     try {
       await this.api.updateTask(this.projectId, t.id, patch);
       await this.fetch();
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to update task'); }
+    } catch (e) {
+      this.error.set(e instanceof Error ? e.message : 'Failed to update task');
+      // Revert the control to the last server-known value (the model never
+      // drifted, so a binding alone would not push the old value back).
+      if (el && revertValue !== undefined) el.value = revertValue;
+      await this.fetch();
+    }
   }
 
   async remove(t: TaskItem) {

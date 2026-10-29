@@ -10,9 +10,15 @@ capability map's "tasks with locks and chaining".
   FK ON DELETE SET NULL, CHECK forbidding self-dependency.
 - API: create/update accept `dependsOnId`. Validation: predecessor must
   be in the same project (400) and adding the link must not create a
-  cycle (walked with a visited set, 400). Transition into IN_PROGRESS
-  is rejected (400) while the predecessor is not DONE; the predecessor
-  status is read inside the same transaction as the status update.
+  cycle (walked with a visited set, 400). The chain gates every forward
+  transition out of OPEN - both starting (IN_PROGRESS) and completing
+  (DONE) - and attaching or changing the predecessor on a task already
+  past OPEN: in all cases the (new) predecessor must be DONE (400
+  otherwise), read inside the same transaction as the update.
+  Reopening (any -> OPEN) stays allowed, so a completed chain can be
+  walked back deliberately. Create cannot smuggle a status: the
+  ValidationPipe whitelist strips unknown DTO fields, so every task is
+  born OPEN regardless of a `status` key in the body (tested).
 - Responses include `dependsOn { id, title, status }`; task.updated
   audit events record dependency changes by title.
 - Tasks UI: new-task form gains a "Depends on (optional)" select;
@@ -32,11 +38,31 @@ capability map's "tasks with locks and chaining".
 - Security: cross-project predecessor ids rejected (400); dependency
   info is project-scoped data already visible to every member. No new
   query surface - dependsOn rides the existing list response.
-- QA: tasks-test +7 checks (chain create, blocked start, start after
-  done, cycle + self rejected, foreign rejected, delete-predecessor
-  clears via SET NULL, audit by title); e2e-visual +2 checks (chip
-  renders after form creation, blocked start surfaces the server
-  message in the UI).
+- QA: tasks-test +13 checks over the pre-chain baseline (chain create,
+  blocked start, start after done, cycle + self rejected, foreign
+  rejected, delete-predecessor clears via SET NULL, audit by title,
+  status smuggling on create stripped, OPEN->DONE bypass rejected,
+  unfinished predecessor attach on a running task rejected, done
+  predecessor attach allowed, simultaneous cycle creation yields
+  exactly one winner, final graph verified acyclic); e2e-visual +2
+  checks (chip renders after form creation, blocked start surfaces the
+  server message in the UI). A failed row edit reverts the control to
+  the last server-known value (ngModel alone cannot push back an
+  unchanged model; verified live that the select reads the server
+  value after a 400).
+- Concurrency: dependency writes and chain-gated status transitions
+  take a per-project advisory lock (`pg_advisory_xact_lock` on
+  hashtext(projectId || '::task-graph'), the same pattern the
+  automations slice uses) inside the writing transaction, before the
+  cycle walk and the predecessor-status read. Two simultaneous opposing
+  updates (A->B, B->A) serialize: the second walk observes the first's
+  committed edge and is rejected. Tested: parallel opposing PATCHes
+  yield exactly one 200 and one 400, and the resulting graph is
+  verified acyclic by walking the final state. Reopening a predecessor
+  concurrent with a dependent starting also serializes on the same
+  lock: either the reopen lands first (start rejected) or the start
+  lands first (reopen proceeds; the documented no-retroactive-pause
+  product limit applies).
 
 ## Limits
 

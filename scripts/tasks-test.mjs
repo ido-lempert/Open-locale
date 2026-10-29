@@ -153,6 +153,22 @@ try {
   // Exercise dependency updates both ways so the audit trail has update events.
   await call(`${base}/${chainC.id}`, { token: at, method: 'PATCH', body: { dependsOnId: chainA.id } });
   await call(`${base}/${chainC.id}`, { token: at, method: 'PATCH', body: { dependsOnId: chainB.id } });
+
+  // Enforcement at every entry path
+  const smuggle = (await call(base, { token: at, method: 'POST', body: { title: 'Status smuggle', status: 'IN_PROGRESS', dependsOnId: chainB.id } })).json;
+  check('create cannot smuggle a status (stays OPEN)', smuggle.status === 'OPEN', smuggle.status);
+
+  const chainD = (await call(base, { token: at, method: 'POST', body: { title: 'Jump straight to done', dependsOnId: chainB.id } })).json;
+  const jumpDone = await call(`${base}/${chainD.id}`, { token: at, method: 'PATCH', body: { status: 'DONE' } });
+  const jumpStart = await call(`${base}/${chainD.id}`, { token: at, method: 'PATCH', body: { status: 'IN_PROGRESS' } });
+  check('OPEN->DONE bypass rejected while predecessor unfinished (400)', jumpDone.status === 400 && jumpStart.status === 400, `${jumpDone.status}/${jumpStart.status}`);
+
+  const chainE = (await call(base, { token: at, method: 'POST', body: { title: 'Unrelated open task' } })).json;
+  const attachBad = await call(`${base}/${chainB.id}`, { token: at, method: 'PATCH', body: { dependsOnId: chainE.id } });
+  check('attaching an unfinished predecessor to a running task rejected (400)', attachBad.status === 400, `got ${attachBad.status}`);
+  const attachOk = await call(`${base}/${chainB.id}`, { token: at, method: 'PATCH', body: { dependsOnId: chainA.id } });
+  check('attaching a done predecessor to a running task allowed', attachOk.status === 200, `got ${attachOk.status}`);
+
   await call(`${base}/${chainB.id}`, { token: at, method: 'DELETE' });
   const chainCAfter = (await call(base, { token: at })).json.find((t) => t.id === chainC.id);
   check('deleting predecessor clears the link', chainCAfter && chainCAfter.dependsOn === null, JSON.stringify(chainCAfter?.dependsOn));
@@ -161,7 +177,26 @@ try {
     .find((e) => e.detail?.changes?.dependsOn);
   check('audit records dependency changes by title', depUpd?.detail?.changes?.dependsOn?.to === 'Translate reviewed keys', JSON.stringify(depUpd?.detail?.changes));
 
-  for (const id of [chainA.id, chainC.id]) await call(`${base}/${id}`, { token: at, method: 'DELETE' });
+  // Concurrent opposing dependency writes must not both succeed (cycle).
+  const p1 = (await call(base, { token: at, method: 'POST', body: { title: 'Race one' } })).json;
+  const p2 = (await call(base, { token: at, method: 'POST', body: { title: 'Race two' } })).json;
+  const raceAttempts = await Promise.all([
+    call(`${base}/${p1.id}`, { token: at, method: 'PATCH', body: { dependsOnId: p2.id } }),
+    call(`${base}/${p2.id}`, { token: at, method: 'PATCH', body: { dependsOnId: p1.id } }),
+  ]);
+  const raceWins = raceAttempts.filter((r) => r.status === 200).length;
+  check('simultaneous cycle creation: exactly one write wins', raceWins === 1 && raceAttempts.some((r) => r.status === 400), raceAttempts.map((r) => r.status).join('/'));
+  const finalTasks = (await call(base, { token: at })).json;
+  const depOf = Object.fromEntries(finalTasks.map((t) => [t.id, t.dependsOn?.id ?? null]));
+  let acyclic = true;
+  for (const start of [p1.id, p2.id]) {
+    const seen = new Set(); let c = start;
+    while (c) { if (seen.has(c)) { acyclic = false; break; } seen.add(c); c = depOf[c]; }
+  }
+  check('graph is acyclic after the race', acyclic);
+  for (const id of [p1.id, p2.id]) await call(`${base}/${id}`, { token: at, method: 'DELETE' });
+
+  for (const id of [chainA.id, chainC.id, chainD.id, chainE.id, smuggle.id]) await call(`${base}/${id}`, { token: at, method: 'DELETE' });
 
   const ro = (await call('/auth/tokens', { token: at, method: 'POST', body: { name: 'ro', scopes: ['read'] } })).json;
   const roRead = await call(base, { apiKey: ro.token });
