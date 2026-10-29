@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActivityService } from '../activity/activity.service';
 
@@ -125,6 +125,15 @@ export class ProjectsService {
   }
 
   // Role + locale access helpers (granular permissions).
+  private static readonly ROLE_RANK: Record<string, number> = { OWNER: 3, ADMIN: 2, MEMBER: 1 };
+
+  // Resolves the caller's EFFECTIVE grant: the union of their direct team
+  // membership and every group grant in the project's team. The strongest
+  // role wins; a MEMBER-level effective role is unrestricted when any
+  // winning grant has an empty allowedLocales list, otherwise restricted to
+  // the union of the winning grants' lists (an ADMIN/OWNER grant is always
+  // unrestricted). Teamwide membership stays the outer boundary: a removed
+  // team member gets no access from stale group rows.
   private async memberFor(userId: string, projectId: string) {
     const project = await this.prisma.project.findUnique({ where: { id: projectId }, select: { teamId: true } });
     if (!project) throw new NotFoundException('Project not found');
@@ -132,7 +141,110 @@ export class ProjectsService {
       where: { teamId_userId: { teamId: project.teamId, userId } },
     });
     if (!member) throw new NotFoundException('Project not found'); // no existence leak
-    return member;
+    const groupGrants = await this.prisma.groupMember.findMany({
+      where: { userId, group: { teamId: project.teamId } },
+      include: { group: { select: { role: true, allowedLocales: true } } },
+    });
+    let role = member.role;
+    for (const gm of groupGrants) {
+      if (ProjectsService.ROLE_RANK[gm.group.role] > ProjectsService.ROLE_RANK[role]) role = gm.group.role;
+    }
+    if (role !== 'MEMBER') return { role, allowedLocales: [] as string[] };
+    const grants = [{ allowedLocales: member.allowedLocales }, ...groupGrants.filter((gm) => gm.group.role === 'MEMBER').map((gm) => ({ allowedLocales: gm.group.allowedLocales }))];
+    if (grants.some((g) => g.allowedLocales.length === 0)) return { role, allowedLocales: [] as string[] };
+    return { role, allowedLocales: [...new Set(grants.flatMap((g) => g.allowedLocales))] };
+  }
+
+  private async groupFor(userId: string, projectId: string, groupId: string) {
+    const member = await this.requireAdmin(userId, projectId);
+    const project = await this.prisma.project.findUniqueOrThrow({ where: { id: projectId }, select: { teamId: true } });
+    const group = await this.prisma.group.findUnique({ where: { id: groupId }, include: { members: { include: { user: { select: { id: true, email: true, displayName: true } } } } } });
+    if (!group || group.teamId !== project.teamId) throw new NotFoundException('Group not found');
+    // An admin may not manage a group whose role is not strictly below their
+    // own effective role, so power cannot be escalated or seized sideways.
+    if (ProjectsService.ROLE_RANK[member.role] <= ProjectsService.ROLE_RANK[group.role]) {
+      throw new ForbiddenException('Requires a role above the group role');
+    }
+    return { group, actorRole: member.role };
+  }
+
+  private assertGroupRole(actorRole: string, role: string) {
+    if (role === 'OWNER') throw new BadRequestException('A group cannot grant the owner role');
+    if (role !== 'ADMIN' && role !== 'MEMBER') throw new BadRequestException('Role must be MEMBER or ADMIN');
+    if (ProjectsService.ROLE_RANK[actorRole] <= ProjectsService.ROLE_RANK[role]) {
+      throw new ForbiddenException('Cannot grant a role at or above your own');
+    }
+  }
+
+  async listGroups(userId: string, projectId: string) {
+    await this.memberFor(userId, projectId);
+    const project = await this.prisma.project.findUniqueOrThrow({ where: { id: projectId }, select: { teamId: true } });
+    return this.prisma.group.findMany({
+      where: { teamId: project.teamId },
+      include: { members: { include: { user: { select: { id: true, email: true, displayName: true } } } } },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  async createGroup(userId: string, projectId: string, name: string, role: string, allowedLocales: string[]) {
+    const actor = await this.requireAdmin(userId, projectId);
+    this.assertGroupRole(actor.role, role);
+    const project = await this.prisma.project.findUniqueOrThrow({ where: { id: projectId }, select: { teamId: true } });
+    try {
+      return await this.prisma.group.create({
+        data: { teamId: project.teamId, name: name.trim(), role: role as any, allowedLocales },
+        include: { members: true },
+      });
+    } catch (e: any) {
+      if (e?.code === 'P2002') throw new ConflictException('A group with this name already exists');
+      throw e;
+    }
+  }
+
+  async updateGroup(userId: string, projectId: string, groupId: string, patch: { name?: string; role?: string; allowedLocales?: string[] }) {
+    const { group, actorRole } = await this.groupFor(userId, projectId, groupId);
+    if (patch.role !== undefined) this.assertGroupRole(actorRole, patch.role);
+    try {
+      return await this.prisma.group.update({
+        where: { id: group.id },
+        data: {
+          ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
+          ...(patch.role !== undefined ? { role: patch.role as any } : {}),
+          ...(patch.allowedLocales !== undefined ? { allowedLocales: patch.allowedLocales } : {}),
+        },
+      });
+    } catch (e: any) {
+      if (e?.code === 'P2002') throw new ConflictException('A group with this name already exists');
+      throw e;
+    }
+  }
+
+  async deleteGroup(userId: string, projectId: string, groupId: string) {
+    const { group } = await this.groupFor(userId, projectId, groupId);
+    await this.prisma.group.delete({ where: { id: group.id } });
+    return { ok: true };
+  }
+
+  // Group membership presupposes team membership: a group organizes people
+  // already in the team, it never extends team access by itself.
+  async addGroupMember(userId: string, projectId: string, groupId: string, targetUserId: string) {
+    const { group } = await this.groupFor(userId, projectId, groupId);
+    const target = await this.prisma.teamMember.findUnique({ where: { teamId_userId: { teamId: group.teamId, userId: targetUserId } } });
+    if (!target) throw new BadRequestException('User is not a member of this team');
+    try {
+      return await this.prisma.groupMember.create({ data: { groupId: group.id, userId: targetUserId } });
+    } catch (e: any) {
+      if (e?.code === 'P2002') throw new ConflictException('User is already in this group');
+      throw e;
+    }
+  }
+
+  async removeGroupMember(userId: string, projectId: string, groupId: string, targetUserId: string) {
+    const { group } = await this.groupFor(userId, projectId, groupId);
+    const existing = await this.prisma.groupMember.findUnique({ where: { groupId_userId: { groupId: group.id, userId: targetUserId } } });
+    if (!existing) throw new NotFoundException('Group membership not found');
+    await this.prisma.groupMember.delete({ where: { groupId_userId: { groupId: group.id, userId: targetUserId } } });
+    return { ok: true };
   }
 
   async roleFor(userId: string, projectId: string) {

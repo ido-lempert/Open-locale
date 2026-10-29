@@ -1,9 +1,9 @@
-import { Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, Put, UseGuards } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthPrincipal } from '../auth/auth.service';
-import { AddLocaleDto, AddMemberDto, CreateProjectDto, UpdateMemberDto, UpdateProjectDto } from './dto';
+import { AddLocaleDto, AddMemberDto, CreateGroupDto, CreateProjectDto, UpdateGroupDto, UpdateMemberDto, UpdateProjectDto } from './dto';
 
 @Controller('projects')
 @UseGuards(JwtAuthGuard)
@@ -38,6 +38,36 @@ export class ProjectsController {
   @Delete(':id/members/:userId')
   removeMember(@CurrentUser() user: AuthPrincipal, @Param('id') id: string, @Param('userId') userId: string) {
     return this.projects.removeMember(user.userId, id, userId);
+  }
+
+  @Get(':id/groups')
+  listGroups(@CurrentUser() user: AuthPrincipal, @Param('id') id: string) {
+    return this.projects.listGroups(user.userId, id);
+  }
+
+  @Post(':id/groups')
+  createGroup(@CurrentUser() user: AuthPrincipal, @Param('id') id: string, @Body() dto: CreateGroupDto) {
+    return this.projects.createGroup(user.userId, id, dto.name, dto.role, dto.allowedLocales ?? []);
+  }
+
+  @Patch(':id/groups/:groupId')
+  updateGroup(@CurrentUser() user: AuthPrincipal, @Param('id') id: string, @Param('groupId') groupId: string, @Body() dto: UpdateGroupDto) {
+    return this.projects.updateGroup(user.userId, id, groupId, dto);
+  }
+
+  @Delete(':id/groups/:groupId')
+  deleteGroup(@CurrentUser() user: AuthPrincipal, @Param('id') id: string, @Param('groupId') groupId: string) {
+    return this.projects.deleteGroup(user.userId, id, groupId);
+  }
+
+  @Put(':id/groups/:groupId/members/:userId')
+  addGroupMember(@CurrentUser() user: AuthPrincipal, @Param('id') id: string, @Param('groupId') groupId: string, @Param('userId') targetUserId: string) {
+    return this.projects.addGroupMember(user.userId, id, groupId, targetUserId);
+  }
+
+  @Delete(':id/groups/:groupId/members/:userId')
+  removeGroupMember(@CurrentUser() user: AuthPrincipal, @Param('id') id: string, @Param('groupId') groupId: string, @Param('userId') targetUserId: string) {
+    return this.projects.removeGroupMember(user.userId, id, groupId, targetUserId);
   }
 
   @Get(':id')

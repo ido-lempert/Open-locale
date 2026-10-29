@@ -1,4 +1,5 @@
-import { ArrayMinSize, IsArray, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { ArrayMinSize, IsArray, IsIn, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { TeamRole } from '@prisma/client';
 
 export class CreateProjectDto {
   @IsString()
@@ -76,4 +77,16 @@ export class UpdateMemberDto {
   @IsArray()
   @IsString({ each: true })
   allowedLocales?: string[];
+}
+
+export class CreateGroupDto {
+  @IsString() @IsNotEmpty() @MaxLength(100) name!: string;
+  @IsIn(['MEMBER', 'ADMIN']) role!: TeamRole;
+  @IsOptional() @IsArray() @IsString({ each: true }) allowedLocales?: string[];
+}
+
+export class UpdateGroupDto {
+  @IsOptional() @IsString() @IsNotEmpty() @MaxLength(100) name?: string;
+  @IsOptional() @IsIn(['MEMBER', 'ADMIN']) role?: TeamRole;
+  @IsOptional() @IsArray() @IsString({ each: true }) allowedLocales?: string[];
 }

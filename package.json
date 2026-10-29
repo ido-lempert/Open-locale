@@ -34,7 +34,8 @@
     "test:incontext": "node scripts/incontext-test.mjs",
     "test:incontext-edit": "node scripts/incontext-edit-test.mjs",
     "test:2fa": "node scripts/2fa-test.mjs",
-    "test:oidc": "node scripts/oidc-test.mjs"
+    "test:oidc": "node scripts/oidc-test.mjs",
+    "test:groups": "node scripts/groups-test.mjs"
   },
   "private": true,
   "dependencies": {

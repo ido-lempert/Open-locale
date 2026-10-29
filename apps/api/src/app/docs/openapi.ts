@@ -70,6 +70,18 @@ export const OPENAPI = {
       patch: p('Change a member role or locale access (admin; owner immutable)', 'projects', true),
       delete: p('Remove a member (admin; owner cannot be removed)', 'projects'),
     },
+    '/api/projects/{id}/groups': {
+      get: p('List team groups with their members', 'projects'),
+      post: p('Create a group granting a role and locale access (admin; cannot grant at or above own role)', 'projects', true),
+    },
+    '/api/projects/{id}/groups/{groupId}': {
+      patch: p('Update a group name, role or locale access (admin above the group role; applies immediately)', 'projects', true),
+      delete: p('Delete a group (admin above the group role)', 'projects'),
+    },
+    '/api/projects/{id}/groups/{groupId}/members/{userId}': {
+      put: p('Add a team member to a group (admin above the group role)', 'projects', true),
+      delete: p('Remove a user from a group; access loss applies immediately (admin above the group role)', 'projects'),
+    },
     '/api/projects/{id}/locales': { post: p('Add a target locale', 'projects', true) },
     '/api/projects/{id}/locales/{code}': { delete: p('Remove a target locale', 'projects') },
     '/api/projects/{projectId}/branches': {
