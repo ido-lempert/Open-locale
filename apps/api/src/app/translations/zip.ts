@@ -128,9 +128,14 @@ export function readZip(buf: Buffer): ZipEntry[] {
   const cdOffset = buf.readUInt32LE(eocd + 16);
   if (cdOffset === 0xffffffff || cdSize === 0xffffffff) fail('ZIP64');
   if (cdOffset + cdSize !== eocd) fail('central directory does not abut the EOCD');
-  let total = 22;
-  const out: ZipEntry[] = [];
+  // Pass 1: validate every central record AND its local header, and require
+  // them to agree on flags, method, CRC, sizes and the name bytes - a
+  // central/local disagreement is a hostile-construction signal, so the
+  // archive is rejected rather than resolved in either direction's favor.
+  interface Pending { name: string; start: number; end: number; crc: number }
+  const pending: Pending[] = [];
   const names = new Set<string>();
+  let total = 22;
   let off = cdOffset;
   for (let i = 0; i < count; i++) {
     if (buf.readUInt32LE(off) !== 0x02014b50) fail('bad central record');
@@ -147,21 +152,35 @@ export function readZip(buf: Buffer): ZipEntry[] {
     const extraLen = buf.readUInt16LE(off + 30);
     const commentLen = buf.readUInt16LE(off + 32);
     const local = buf.readUInt32LE(off + 42);
-    if (buf.readUInt32LE(local) !== 0x04034b50) fail('bad local header');
+    if (local + 30 > cdOffset || buf.readUInt32LE(local) !== 0x04034b50) fail('bad local header');
     const localNameLen = buf.readUInt16LE(local + 26);
     const localExtraLen = buf.readUInt16LE(local + 28);
+    if (buf.readUInt16LE(local + 6) !== flags || buf.readUInt16LE(local + 8) !== method) fail('central/local header disagree (flags/method)');
+    if (buf.readUInt32LE(local + 14) !== crc || buf.readUInt32LE(local + 18) !== compressed || buf.readUInt32LE(local + 22) !== size) fail('central/local header disagree (crc/sizes)');
+    if (localNameLen !== nameLen || !buf.subarray(local + 30, local + 30 + nameLen).equals(buf.subarray(off + 46, off + 46 + nameLen))) fail('central/local header disagree (name)');
     const name = buf.subarray(off + 46, off + 46 + nameLen).toString('utf8');
     if (name.length === 0 || name.includes('\\') || name.split('/').some((seg) => seg === '..')) fail(`unsafe entry name ${JSON.stringify(name)}`);
     if (names.has(name)) fail(`duplicate entry name ${JSON.stringify(name)}`);
     names.add(name);
     const dataStart = local + 30 + localNameLen + localExtraLen;
     if (dataStart + size > cdOffset) fail('entry data overlaps the central directory');
-    const data = buf.subarray(dataStart, dataStart + size);
-    if (crc32(data) !== crc) fail(`CRC mismatch on ${JSON.stringify(name)}`);
     total += size + 76 + 2 * nameLen;
     if (total > MAX_BYTES) fail(`size limit exceeded (${MAX_BYTES} bytes including overhead)`);
-    out.push({ name, data: Buffer.from(data) });
+    pending.push({ name, start: dataStart, end: dataStart + size, crc });
     off += 46 + nameLen + extraLen + commentLen;
+  }
+  // Entry data ranges must be pairwise disjoint: an overlapping offset would
+  // let one payload masquerade as two entries.
+  const byStart = [...pending].sort((a, b) => a.start - b.start);
+  for (let i = 1; i < byStart.length; i++) {
+    if (byStart[i].start < byStart[i - 1].end) fail(`entry data ranges overlap (${JSON.stringify(byStart[i - 1].name)} / ${JSON.stringify(byStart[i].name)})`);
+  }
+  // Pass 2: extract and verify.
+  const out: ZipEntry[] = [];
+  for (const e of pending) {
+    const data = buf.subarray(e.start, e.end);
+    if (crc32(data) !== e.crc) fail(`CRC mismatch on ${JSON.stringify(e.name)}`);
+    out.push({ name: e.name, data: Buffer.from(data) });
   }
   return out;
 }

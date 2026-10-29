@@ -530,6 +530,40 @@ try {
   const ctBundle = await (await fetch(`${API}${P2}/import-bundle/json`, { method: 'POST', headers: { 'Content-Type': 'application/zip', Authorization: `Bearer ${ct}` }, body: expZip })).json();
   check('member bundle import: granted locale imports, other locale reported 403', ctBundle.imported.some((x) => x.locale === 'he') && ctBundle.failedLocales.some((x) => x.locale === 'en' && x.status === 403), JSON.stringify(ctBundle.failedLocales));
 
+  // Hostile archives fail closed with zero writes.
+  const p2Before = await (await fetch(`${API}${P2}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  const disagree = Buffer.from(expZip);
+  disagree.writeUInt16LE(8, 8); // local says deflate, central says store
+  const disagreeRes = await fetch(`${API}${P2}/import-bundle/json`, { method: 'POST', headers: { 'Content-Type': 'application/zip', Authorization: `Bearer ${at}` }, body: disagree });
+  const cdBase = expZip.length - 22 - (46 + 'en.json'.length) - (46 + 'he.json'.length);
+  const overlap = Buffer.from(expZip);
+  overlap.writeUInt32LE(expZip.length, cdBase + 24); // first entry size reaches into the central directory
+  const overlapRes = await fetch(`${API}${P2}/import-bundle/json`, { method: 'POST', headers: { 'Content-Type': 'application/zip', Authorization: `Bearer ${at}` }, body: overlap });
+  const p2After = await (await fetch(`${API}${P2}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('central/local disagreement and overlapping range rejected (400), zero writes', disagreeRes.status === 400 && overlapRes.status === 400 && JSON.stringify(p2Before) === JSON.stringify(p2After), `${disagreeRes.status}/${overlapRes.status}`);
+
+  // Lock boundary through the bundle path: locked key skipped, others land.
+  await call(`${P}/import/he`, { token: at, method: 'POST', body: { entries: { plain: 'changed for bundle legs', 'yaml.title': 'changed under lock attempt' } } });
+  const zip2 = Buffer.from(await (await fetch(`${API}${P}/export-bundle/json`, { headers: { Authorization: `Bearer ${at}` } })).arrayBuffer());
+  const p2Keys = (await call(`${P2}/keys`, { token: at })).json;
+  const p2LockKey = p2Keys.find((k) => k.name === 'yaml.title');
+  const p2LockTask = await call(`${P2}/tasks`, { token: at, method: 'POST', body: { title: 'Bundle lock', lockKeys: true, keyIds: [p2LockKey.id] } });
+  // Locked-key skips apply to MEMBERs (ADMIN/OWNER override locks), so the
+  // lock leg runs as ct; en lands in failedLocales (403), he is partial.
+  const lockBundle = await (await fetch(`${API}${P2}/import-bundle/json`, { method: 'POST', headers: { 'Content-Type': 'application/zip', Authorization: `Bearer ${ct}` }, body: zip2 })).json();
+  const p2HeLocked = await (await fetch(`${API}${P2}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  const heImp = lockBundle.imported.find((x) => x.locale === 'he') ?? {};
+  check('bundle import skips the locked key per locale, others land', heImp.failed === 1 && p2HeLocked['yaml.title'] === 'My App ✓' /* the write path reports counts only; the reason text is covered by the dry-run preview legs */ && p2HeLocked['plain'] === 'changed for bundle legs', JSON.stringify({ failed: heImp.failed, title: p2HeLocked['yaml.title'], plain: p2HeLocked['plain'] }));
+  await call(`${P2}/tasks/${p2LockTask.json.id}`, { token: at, method: 'PATCH', body: { status: 'DONE' } });
+
+  // Branch boundary: bundle import scopes to the named branch, main untouched.
+  await call(`${P2}/branches`, { token: at, method: 'POST', body: { name: 'bundle-imp-br' } });
+  const p2MainPre = await (await fetch(`${API}${P2}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  const brBundleRes = await (await fetch(`${API}${P2}/import-bundle/json?branch=bundle-imp-br`, { method: 'POST', headers: { 'Content-Type': 'application/zip', Authorization: `Bearer ${at}` }, body: zip2 })).json();
+  const p2BrHe = await (await fetch(`${API}${P2}/export/he?flat=true&branch=bundle-imp-br`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  const p2MainPost = await (await fetch(`${API}${P2}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('bundle import on a branch lands there and leaves main untouched', brBundleRes.branch === 'bundle-imp-br' && p2BrHe['yaml.title'] === 'changed under lock attempt' && JSON.stringify(p2MainPre) === JSON.stringify(p2MainPost), JSON.stringify({ br: p2BrHe['yaml.title'] }));
+
 } catch (err) {
   // embedded-postgres can reject with `undefined` when the postmaster dies at
   // startup; through an async finally that exception exits 0 SILENTLY. Catch

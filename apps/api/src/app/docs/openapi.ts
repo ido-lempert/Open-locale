@@ -177,7 +177,7 @@ export const OPENAPI = {
     '/api/projects/{projectId}/export/{locale}/arb': { get: p('Export a locale as Flutter ARB', 'import/export') },
     '/api/projects/{projectId}/export/{locale}/yaml': { get: p('Export a locale as YAML (Rails-style subset)', 'import/export') },
     '/api/projects/{projectId}/export-bundle/{format}': { get: p('Export all locales as one store-only zip (one entry per locale; same read boundary as single-locale exports)', 'import/export') },
-    '/api/projects/{projectId}/import-bundle/{format}': { post: p('Import a bundle zip (application/zip body): one entry per locale, per-locale partial results with skips and failures reported', 'import/export', true) },
+    '/api/projects/{projectId}/import-bundle/{format}': { post: p('Import a bundle zip (application/zip body; STORE-ONLY subset - compressed/deflated archives are rejected, not decompressed): one entry per locale, per-locale partial results with skips and failures reported', 'import/export', true) },
     '/api/projects/{projectId}/import/{locale}': {
       post: p('Import translations (JSON, CSV, Android XML, iOS strings, PO, XLIFF, .properties, ARB or YAML; atomic). ?dryRun=true returns the same counters without writing (no snapshot, no import run)', 'import/export', true),
     },

@@ -122,4 +122,43 @@ describe('zip reader (store-only subset)', () => {
     expect(() => readZip(renamed)).toThrow('unsafe entry name');
     expect(() => readZip(buildZip([{ name: 'a.json', data: Buffer.alloc(0) }, { name: 'a.json', data: Buffer.alloc(0) }]))).toThrow();
   });
+
+  it('rejects central/local header disagreement', () => {
+    const zip = buildZip([{ name: 'he.json', data: Buffer.from('payload') }]);
+    const cdOff = zip.length - 22 - (46 + 'he.json'.length);
+    // Local says deflate, central says store.
+    const m = Buffer.from(zip); m.writeUInt16LE(8, 8);
+    expect(() => readZip(m)).toThrow('disagree (flags/method)');
+    // Local CRC differs from central.
+    const c = Buffer.from(zip); c.writeUInt32LE(0xdeadbeef, 14);
+    expect(() => readZip(c)).toThrow('disagree (crc/sizes)');
+    // Central name bytes differ from local name bytes.
+    const n = Buffer.from(zip); n[cdOff + 46] = 0x58; // 'X' in central only
+    expect(() => readZip(n)).toThrow('disagree (name)');
+  });
+
+  it('rejects overlapping entry data ranges', () => {
+    const zip = buildZip([{ name: 'a.json', data: Buffer.from('AAAA') }, { name: 'b.json', data: Buffer.from('BBBB') }]);
+    const cdOff = zip.length - 22 - (46 + 'a.json'.length) - (46 + 'b.json'.length);
+    const second = cdOff + 46 + 'a.json'.length;
+    // Point b.json's central record at a.json's local header; rename central
+    // + local views agree (both read a.json's local name 'a.json') -> caught
+    // as a duplicate or overlap, never silently read.
+    const o = Buffer.from(zip);
+    o.writeUInt32LE(0, second + 42); // b.json local offset = 0 (a.json's)
+    expect(() => readZip(o)).toThrow();
+    // A central size that reaches into the central directory is rejected.
+    const big = Buffer.from(zip);
+    big.writeUInt32LE(zip.length, cdOff + 24);
+    expect(() => readZip(big)).toThrow();
+    // True range overlap: extend a.json's size (local+central agree) until
+    // its data range swallows b.json's local header and data start.
+    // a.json: local at 0, data at 36..40; b.json: local at 40, data at 76..80.
+    const ov = Buffer.from(zip);
+    ov.writeUInt32LE(42, 22); // local uncompressed size
+    ov.writeUInt32LE(42, 18); // local compressed size
+    ov.writeUInt32LE(42, cdOff + 20); // central compressed
+    ov.writeUInt32LE(42, cdOff + 24); // central uncompressed
+    expect(() => readZip(ov)).toThrow('ranges overlap');
+  });
 });

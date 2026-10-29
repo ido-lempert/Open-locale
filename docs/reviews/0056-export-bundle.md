@@ -39,6 +39,11 @@ exports.
 - zip.spec.ts: CRC32 vector, byte-exact round-trip, determinism, UTF-8 names,
   duplicate/limit rejections, zipSafeName cases (unit-api).
 - Python zipfile parse: testzip clean, entries byte-exact, UTF-8 name intact.
+- Round-trip lossiness is per format, unchanged from single-file behavior:
+  JSON (flat-map subset) and the other seven text formats round-trip their
+  documented subsets; spreadsheet-safe CSV does NOT restore formula-leading
+  values exactly on re-import (the protective prefix becomes part of the
+  value) - use mode=raw for a lossless CSV round-trip.
 - formats-test legs: disposition + one entry per locale, json flat-map
   equality, byte-equality for the eight text formats under shared defaults,
   csv safe-by-default vs explicit mode=raw (formula-injection fixture), unknown
