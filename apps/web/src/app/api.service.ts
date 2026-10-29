@@ -332,6 +332,16 @@ export class ApiService {
     return this.request<{ keysCreated: number; translationsUpserted: number }>(
       `/projects/${projectId}/import/${locale}${branch ? `?branch=${encodeURIComponent(branch)}` : ''}`, { method: 'POST', body: JSON.stringify({ csv }) });
   }
+  async importBundle(projectId: string, format: string, zip: Blob, branch?: string) {
+    const res = await fetch(`${this.base}/projects/${projectId}/import-bundle/${format}${branch ? `?branch=${encodeURIComponent(branch)}` : ''}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/zip', ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}) },
+      body: zip,
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(body?.message ?? `Bundle import failed (HTTP ${res.status})`);
+    return body as { format: string; branch: string; imported: Array<{ locale: string; keysCreated: number; translationsUpserted: number; unchangedSkipped: number; failed: number }>; skipped: Array<{ name: string; reason: string }>; failedLocales: Array<{ locale: string; status: number; error: string }> };
+  }
   async exportBundle(projectId: string, format: string, branch?: string) {
     const res = await fetch(`${this.base}/projects/${projectId}/export-bundle/${format}${branch ? `?branch=${encodeURIComponent(branch)}` : ''}`, {
       headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},

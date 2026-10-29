@@ -64,3 +64,9 @@ Two things this endpoint is NOT, stated plainly:
   (failed count, others land; the write path reports counts, the reason text
   is covered by the preview legs). Branch boundary: ?branch= import lands on
   the branch and leaves main byte-identical.
+- e2e-visual legs: Import bundle (.zip) upload of a real export-bundle zip
+  summarizes every locale in the notice with explicit per-locale-independent
+  wording; a CRC-tampered upload shows the rejection reason; the label fits
+  the 480px viewport (editor-44-export-bundle-480.png). The label's title
+  states the store-only restriction and the partial outcome at the choice
+  point.

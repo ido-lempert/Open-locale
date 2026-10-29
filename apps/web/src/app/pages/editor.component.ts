@@ -80,6 +80,7 @@ interface CellState {
           <button (click)="exportBundleFile()" title="Download every locale as one zip in the selected format">Export all (.zip)</button>
           <label class="import">Import {{ formatLabel() }} <input type="file" name="importFile" accept=".json,.csv,.xml,.strings,.po,.xlf,.xliff,.properties,.arb,.yaml,.yml" (change)="importFile($event)" hidden /></label>
           <label class="import">Preview import <input type="file" name="previewFile" accept=".json,.csv,.xml,.strings,.po,.xlf,.xliff,.properties,.arb,.yaml,.yml" (change)="previewFile($event)" hidden /></label>
+          <label class="import" title="Upload a store-only zip from Export all (.zip); compressed zips from other tools are rejected. Each locale imports independently: skipped entries and failed locales are reported, not rolled back.">Import bundle (.zip) <input type="file" name="bundleFile" accept=".zip" (change)="bundleFile($event)" hidden /></label>
           @if (ioFormat() === 'csv') {
             <div class="muted csv-note">CSV exports are spreadsheet-safe: values starting with formula characters get a protective prefix, so re-importing a safe export keeps those prefixes and changes stored values. For a lossless roundtrip use the API with <code>mode=raw</code>.</div>
           }
@@ -599,6 +600,22 @@ export class EditorComponent implements OnInit {
       this.notice.set(`Marked ${res.updated} translations in ${scope.locale} as ${scope.status.toLowerCase()}.`);
       await this.reload();
     } catch (err) { this.error.set(err instanceof Error ? err.message : 'Bulk update failed'); }
+  }
+  async bundleFile(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    this.notice.set(''); this.error.set('');
+    try {
+      const res = await this.api.importBundle(this.projectId, this.ioFormat(), file, this.branch());
+      const parts = res.imported.map((r) => `${r.locale}: ${r.keysCreated} created, ${r.translationsUpserted} updated, ${r.unchangedSkipped} unchanged${r.failed ? `, ${r.failed} failed` : ''}`);
+      const skips = res.skipped.map((x) => `skipped ${x.name} (${x.reason})`);
+      const fails = res.failedLocales.map((x) => `${x.locale} failed (${x.error})`);
+      const summary = [...parts, ...skips, ...fails].join('; ');
+      this.notice.set(`Bundle import (${this.formatLabel()}, ${res.branch}): ${summary || 'no entries'}. Each locale imported independently - skipped/failed entries above were not rolled back.`);
+      await this.reload();
+    } catch (err) { this.error.set(err instanceof Error ? err.message : 'Bundle import failed'); }
   }
   async exportBundleFile() {
     const fmt = this.ioFormat();

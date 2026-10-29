@@ -426,9 +426,34 @@ try {
     const r = btn.getBoundingClientRect();
     return r.width > 0 && r.right <= 480 && document.documentElement.scrollWidth <= window.innerWidth ? 'fits' : `overflow right=${r.right} sw=${document.documentElement.scrollWidth}`;
   });
+  const bundleImp480 = await page.evaluate(() => {
+    const lbl = [...document.querySelectorAll('label.import')].find((l) => l.textContent.includes('Import bundle'));
+    if (!lbl) return 'missing';
+    const r = lbl.getBoundingClientRect();
+    return r.width > 0 && r.right <= 480 && document.documentElement.scrollWidth <= window.innerWidth ? 'fits' : `overflow right=${r.right} sw=${document.documentElement.scrollWidth}`;
+  });
   check('Export all (.zip) button fits the 480px viewport', bundle480 === 'fits', bundle480);
+  check('Import bundle (.zip) label fits the 480px viewport', bundleImp480 === 'fits', bundleImp480);
   await shot('editor-44-export-bundle-480.png');
   await page.setViewport({ width: 1280, height: 800 });
+
+  // Import bundle through the UI: upload the just-exported po zip back.
+  writeFileSync('/tmp/e2e-bundle-po.zip', bundleBuf);
+  const bundleUpInput = await page.$('input[name=bundleFile]');
+  await bundleUpInput.uploadFile('/tmp/e2e-bundle-po.zip');
+  const bundleNotice = await page.waitForFunction(() => {
+    const t = document.querySelector('p.notice')?.textContent || '';
+    return t.includes('Bundle import (PO (gettext), main)') && t.includes('he:') && t.includes('unchanged') && t.includes('independently');
+  }, { timeout: 10000 }).then(() => true).catch(() => false);
+  check('bundle import via UI summarizes every locale with partial-outcome wording', bundleNotice);
+  // Hostile upload: a CRC-tampered zip is rejected with the reason shown.
+  const badZip = Buffer.from(bundleBuf);
+  badZip[30 + 'en.po'.length] ^= 0xff;
+  writeFileSync('/tmp/e2e-bundle-bad.zip', badZip);
+  const badUpInput = await page.$('input[name=bundleFile]');
+  await badUpInput.uploadFile('/tmp/e2e-bundle-bad.zip');
+  const badNotice = await page.waitForFunction(() => (document.querySelector('p.error')?.textContent || '').includes('CRC mismatch'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('CRC-tampered bundle upload rejected with the reason shown', badNotice);
   await page.evaluate(() => window.scrollTo(0, 0));
   await shot('editor-35-po.png');
   // Frame the imported PO row fully (it is the grid's last row).
