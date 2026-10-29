@@ -16,7 +16,10 @@ contract (name/type/config/enabled per project) is where they plug in.
   hard-coded strings and layout breakage.
 - API (`/projects/:id/mt/...`): provider CRUD (admin-only; duplicate name
   409, unknown type 400) and `POST /pretranslate {providerId, locale,
-  sourceLocale?, keyIds?}`.
+  sourceLocale?, branch?, keyIds?}`. Runs are branch-scoped: `branch`
+  defaults to 'main' explicitly (never "wherever the key lives"), an unknown
+  branch is 400, and same-named keys on other branches are invisible to the
+  run. keyIds from another project select nothing.
 - Pre-translate semantics: fills EMPTY target cells only, from the source
   locale (default base). Never overwrites a non-empty value - the write is
   conditional in the statement itself (INSERT .. ON CONFLICT DO UPDATE ..
@@ -31,7 +34,7 @@ contract (name/type/config/enabled per project) is where they plug in.
   reporting filled/already-translated/no-source counts.
 
 ## Verified
-scripts/mt-test.mjs - 24 checks, real PG + HTTP:
+scripts/mt-test.mjs - 35 checks, real PG + HTTP:
 - admin-only provider management (member 403), type whitelist, 409 on
   duplicate name, cross-project provider id 404, delete -> 404 on use.
 - Fill-empty-only: run fills 2 empty rows, skips 1 existing (value AND
@@ -42,6 +45,17 @@ scripts/mt-test.mjs - 24 checks, real PG + HTTP:
 - Permissions: locale-restricted member 403 on he, allowed on fr.
 - Cap: 201 keys 400; scoped run via keyIds works.
 - Activity log records the runs with provider, locale and counts.
+- Branch isolation: default main run leaves a same-named feat-branch key
+  untouched; explicit branch run fills only that branch; unknown branch 400;
+  foreign-project keyIds select nothing.
+- Identity: MT-filled rows expose a rowId; a human overwrite (version 2)
+  keeps the same rowId; a following run leaves value/version/rowId and the
+  2-row history (MT fill, human edit) untouched.
+- Semantics: whitespace-only values count as human content (skipped, never
+  filled over); a REVIEWED row keeps value, status and version.
+- Copy: the panel and result line state the output is pseudo-localization
+  TEST DATA, not real translation, and that external engines are not
+  available in this slice; the UI runner passes the branch explicitly.
 scripts/e2e-visual.mjs: provider added and run through the settings UI in
 real Chrome; result line shows 2 filled / 3 untouched / 1 without source
 (editor-28-mt.png, pixel-inspected).

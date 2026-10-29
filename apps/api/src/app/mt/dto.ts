@@ -20,5 +20,8 @@ export class PretranslateDto {
   @IsUUID() providerId!: string;
   @IsString() locale!: string;
   @IsOptional() @IsString() sourceLocale?: string;
+  // Branch the run operates on; defaults to 'main' explicitly, never to
+  // "whatever branch the key happens to be on".
+  @IsOptional() @IsString() branch?: string;
   @IsOptional() @IsArray() @ArrayMaxSize(MT_BATCH_CAP) @IsUUID(undefined, { each: true }) keyIds?: string[];
 }

@@ -193,8 +193,8 @@ export class ApiService {
   deleteMtProvider(projectId: string, providerId: string) {
     return this.request<{ deleted: boolean }>(`/projects/${projectId}/mt/providers/${providerId}`, { method: 'DELETE' });
   }
-  pretranslate(projectId: string, providerId: string, locale: string) {
-    return this.request<MtPretranslateResult>(`/projects/${projectId}/mt/pretranslate`, { method: 'POST', body: JSON.stringify({ providerId, locale }) });
+  pretranslate(projectId: string, providerId: string, locale: string, branch?: string) {
+    return this.request<MtPretranslateResult>(`/projects/${projectId}/mt/pretranslate`, { method: 'POST', body: JSON.stringify({ providerId, locale, ...(branch ? { branch } : {}) }) });
   }
   listOtaPublications(projectId: string) {
     return this.request<OtaPublicationInfo[]>(`/projects/${projectId}/ota`);

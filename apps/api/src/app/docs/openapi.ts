@@ -86,7 +86,7 @@ export const OPENAPI = {
       delete: p('Delete an MT provider (admin)', 'mt', true),
     },
     '/api/projects/{projectId}/mt/pretranslate': {
-      post: p('Pre-translate EMPTY target cells via a provider (fill-empty-only, max 200 keys, rows start UNVERIFIED)', 'mt', true),
+      post: p('Fill EMPTY target cells with pseudo-localization TEST DATA (not real translation; branch-scoped, fill-empty-only, max 200 keys, rows start UNVERIFIED)', 'mt', true),
     },
     '/api/projects/{projectId}/ota': {
       get: p('List OTA publications (version, branch, locales, counts)', 'ota'),

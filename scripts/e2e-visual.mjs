@@ -598,11 +598,12 @@ try {
     }
     sel.closest('form').requestSubmit();
   });
-  const mtDone = await page.waitForFunction(() => (document.body.textContent || '').includes('Pre-translate (he):'), { timeout: 10000 }).then(() => true).catch(() => false);
+  const mtDone = await page.waitForFunction(() => (document.body.textContent || '').includes('Pseudo test data (he on main):'), { timeout: 10000 }).then(() => true).catch(() => false);
   check('pre-translate run reports fill/skip counts', mtDone);
+  check('panel labels the output as TEST DATA, not translation', await page.evaluate(() => (document.body.textContent || '').includes('TEST DATA') && (document.body.textContent || '').includes('NOT available in this slice')));
   const mtLine = await page.evaluate(() => document.querySelector('p[role=status]')?.textContent || '');
   check('pre-translate filled at least one empty cell', /: ([1-9]\d*) filled/.test(mtLine), mtLine);
-  await page.evaluate(() => { [...document.querySelectorAll('h2')].find((h) => h.textContent === 'Machine translation')?.scrollIntoView({ block: 'center' }); window.scrollBy(0, 140); });
+  await page.evaluate(() => document.querySelector('p[role=status]')?.scrollIntoView({ block: 'center' }));
   await new Promise((r) => setTimeout(r, 300));
   await shot('editor-28-mt.png');
 

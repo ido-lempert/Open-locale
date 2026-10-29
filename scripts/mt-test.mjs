@@ -125,6 +125,50 @@ try {
   const withinCap = await call(`/projects/${pidB}/mt/pretranslate`, { jwt, method: 'POST', body: { providerId: over.json ? (await call(`/projects/${pidB}/mt/providers`, { jwt })).json[0].id : '', locale: 'he', keyIds: [] } });
   check('empty keyIds list selects nothing, not everything', withinCap.json && withinCap.json.totalKeys === 0 && withinCap.json.translated === 0, JSON.stringify(withinCap.json));
 
+  // Branch isolation: same-named key on another branch is invisible to a
+  // main run, and an explicit branch run touches only that branch.
+  await call(`/projects/${pid}/branches`, { jwt, method: 'POST', body: { name: 'feat-mt' } });
+  const kf = (await call(`/projects/${pid}/keys`, { jwt, method: 'POST', body: { name: 'a.hello', branch: 'feat-mt' } })).json;
+  await call(`/projects/${pid}/keys/${kf.id}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value: 'Feat only' } });
+  const mainRun = await call(`/projects/${pid}/mt/pretranslate`, { jwt, method: 'POST', body: { providerId: provider.id, locale: 'he' } });
+  const featKeysAfterMain = (await call(`/projects/${pid}/keys?branch=feat-mt`, { jwt })).json;
+  const featTrAfterMain = featKeysAfterMain.find((k) => k.id === kf.id).translations.find((t) => t.localeCode === 'he');
+  check('default main run does NOT touch the other branch', mainRun.json.translated === 0 && !featTrAfterMain, JSON.stringify({ run: mainRun.json, featTr: !!featTrAfterMain }));
+  const featRun = await call(`/projects/${pid}/mt/pretranslate`, { jwt, method: 'POST', body: { providerId: provider.id, locale: 'he', branch: 'feat-mt' } });
+  const featTr = (await call(`/projects/${pid}/keys?branch=feat-mt`, { jwt })).json.find((k) => k.id === kf.id).translations.find((t) => t.localeCode === 'he');
+  check('explicit branch run fills only that branch', featRun.json.translated === 1 && featRun.json.totalKeys === 1 && featTr && featTr.value.includes('·he]'), JSON.stringify(featRun.json));
+  const mainK1AfterFeat = (await call(`/projects/${pid}/keys?branch=main`, { jwt })).json.find((k) => k.id === k1.id).translations.find((t) => t.localeCode === 'he');
+  check('feat run left the main row byte-identical', mainK1AfterFeat.value === t1.value && mainK1AfterFeat.version === 1);
+  const noBranch = await call(`/projects/${pid}/mt/pretranslate`, { jwt, method: 'POST', body: { providerId: provider.id, locale: 'he', branch: 'nope' } });
+  check('unknown branch rejected (400)', noBranch.status === 400, `got ${noBranch.status}`);
+
+  // Project isolation: a foreign project's key id is invisible, not an error.
+  const foreignKey = (await call(`/projects/${pidB}/keys`, { jwt, method: 'POST', body: { name: 'a.foreign' } })).json;
+  const foreignRun = await call(`/projects/${pid}/mt/pretranslate`, { jwt, method: 'POST', body: { providerId: provider.id, locale: 'he', keyIds: [foreignKey.id] } });
+  check('keyIds from another project select nothing', foreignRun.json.totalKeys === 0 && foreignRun.json.translated === 0, JSON.stringify(foreignRun.json));
+
+  // Row identity + human overwrite: MT fill keeps rowId; a later human write
+  // bumps version and keeps the SAME rowId; a following run touches neither.
+  const k1heBefore = (await call(`/projects/${pid}/keys?branch=main`, { jwt })).json.find((k) => k.id === k1.id).translations.find((t) => t.localeCode === 'he');
+  check('MT-filled row exposes a rowId', typeof k1heBefore.rowId === 'string' && k1heBefore.rowId.length === 36);
+  const human = await call(`/projects/${pid}/keys/${k1.id}/translations`, { jwt, method: 'PUT', body: { locale: 'he', value: 'תרגום אנושי', expectedVersion: 1, expectedRowId: k1heBefore.rowId } });
+  check('human overwrite of MT data commits with identity', human.status === 200 && human.json.version === 2, `got ${human.status}`);
+  const runAfterHuman = await call(`/projects/${pid}/mt/pretranslate`, { jwt, method: 'POST', body: { providerId: provider.id, locale: 'he' } });
+  const k1heAfter = (await call(`/projects/${pid}/keys?branch=main`, { jwt })).json.find((k) => k.id === k1.id).translations.find((t) => t.localeCode === 'he');
+  check('run after human write keeps value, version and rowId', runAfterHuman.json.translated === 0 && k1heAfter.value === 'תרגום אנושי' && k1heAfter.version === 2 && k1heAfter.rowId === k1heBefore.rowId, JSON.stringify({ v: k1heAfter.version, sameRow: k1heAfter.rowId === k1heBefore.rowId }));
+  const h1b = (await call(`/projects/${pid}/keys/${k1.id}/translations/he/history`, { jwt })).json;
+  check('history shows exactly MT fill then human edit, in order', h1b.length === 2 && h1b[0].value === 'תרגום אנושי' && h1b[1].value === t1.value, JSON.stringify(h1b.map((h) => h.value)));
+
+  // Whitespace-only and REVIEWED values are human content: never filled over.
+  await call(`/projects/${pid}/keys/${k3.id}/translations`, { jwt, method: 'PUT', body: { locale: 'he', value: ' ' } });
+  await call(`/projects/${pid}/keys/${k5.id}/translations/he/status`, { jwt, method: 'PATCH', body: { status: 'REVIEWED' } });
+  const wsRun = await call(`/projects/${pid}/mt/pretranslate`, { jwt, method: 'POST', body: { providerId: provider.id, locale: 'he', keyIds: [k3.id, k5.id] } });
+  const afterWs = (await call(`/projects/${pid}/keys?branch=main`, { jwt })).json;
+  const t3 = afterWs.find((k) => k.id === k3.id).translations.find((t) => t.localeCode === 'he');
+  const t5 = afterWs.find((k) => k.id === k5.id).translations.find((t) => t.localeCode === 'he');
+  check('whitespace-only value preserved (skipped, not filled)', wsRun.json.translated === 0 && t3.value === ' ' && t3.version === 1, JSON.stringify({ run: wsRun.json, v: t3.version }));
+  check('REVIEWED value and status preserved', t5.value.includes('·he]') && t5.status === 'REVIEWED' && t5.version === 2, JSON.stringify({ s: t5.status, v: t5.version }));
+
   // Activity trail.
   const acts = (await call(`/projects/${pid}/activity`, { jwt })).json;
   const mtActs = (acts.items || []).filter((a) => a.action === 'mt.pretranslate');

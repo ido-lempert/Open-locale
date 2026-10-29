@@ -84,9 +84,11 @@ export class MtService {
     const driver = driverFor(provider.type);
     if (!driver) throw new BadRequestException(`Provider type '${provider.type}' has no installed driver`);
 
-    const mainBranch = await this.prisma.branch.findFirst({ where: { projectId, name: 'main' } });
+    const branchName = dto.branch ?? 'main';
+    const branch = await this.prisma.branch.findFirst({ where: { projectId, name: branchName } });
+    if (!branch) throw new BadRequestException(`Branch '${branchName}' does not exist in this project`);
     const keys = await this.prisma.key.findMany({
-      where: { projectId, ...(mainBranch ? { branchId: mainBranch.id } : {}), ...(dto.keyIds ? { id: { in: dto.keyIds } } : {}) },
+      where: { projectId, branchId: branch.id, ...(dto.keyIds ? { id: { in: dto.keyIds } } : {}) },
       include: { translations: true },
       orderBy: { name: 'asc' },
     });
@@ -129,12 +131,12 @@ export class MtService {
       }
       await this.activity.record(tx, {
         projectId, actorId: userId, action: 'mt.pretranslate', localeCode: dto.locale,
-        detail: { provider: provider.name, type: provider.type, sourceLocale, translated: written, skippedExisting, skippedNoSource },
+        detail: { provider: provider.name, type: provider.type, sourceLocale, branch: branchName, translated: written, skippedExisting, skippedNoSource },
       });
     });
 
     this.webhooks.deliver(projectId, 'mt.pretranslated', {
-      provider: provider.name, locale: dto.locale, sourceLocale, translated: written,
+      provider: provider.name, locale: dto.locale, sourceLocale, branch: branchName, translated: written,
     }).catch(() => {});
 
     return { translated: written, skippedExisting, skippedNoSource, totalKeys: keys.length };

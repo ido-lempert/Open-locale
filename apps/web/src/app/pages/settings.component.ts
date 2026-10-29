@@ -112,8 +112,8 @@ import { ApiService, BranchInfo, MtProviderInfo, OtaPublicationInfo, ApiTokenInf
           </form>
         </section>
         <section class="panel">
-          <h2>Machine translation</h2>
-          <p class="muted">Providers pre-translate EMPTY target cells only - existing human or reviewed values are never touched. Runs are attributed to you in the activity log and each filled row starts UNVERIFIED so it still goes through review. The built-in pseudo provider is deterministic and offline; external MT engines plug into the same provider contract once configured.</p>
+          <h2>Machine translation (pseudo test data)</h2>
+          <p class="muted"><strong>This slice ships pseudo-localization TEST DATA only - not real language translation.</strong> The pseudo provider wraps source text in brackets with accented characters so you can spot hard-coded strings and layout breakage. External MT/AI engines are NOT available in this slice; no provider configuration enables them yet. Runs fill EMPTY target cells only - existing human or reviewed values are never touched - and every filled row starts UNVERIFIED and is attributed to you in the activity log.</p>
           <ul class="locale-list">
             @for (p of mtProviders(); track p.id) {
               <li>
@@ -141,7 +141,10 @@ import { ApiService, BranchInfo, MtProviderInfo, OtaPublicationInfo, ApiTokenInf
                   @if (l.code !== project()?.baseLocale) { <option [value]="l.code">{{ l.code }}</option> }
                 }
               </select>
-              <button type="submit" [disabled]="busy()">Pre-translate empty cells</button>
+              <select aria-label="Branch" [ngModel]="mtBranch()" (ngModelChange)="mtBranch.set($event)" name="mtBranch">
+                @for (b of branches(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }
+              </select>
+              <button type="submit" [disabled]="busy()" title="Fill empty cells with pseudo test data">Fill empty</button>
             </form>
             @if (mtResult()) { <p class="muted" role="status">{{ mtResult() }}</p> }
           }
@@ -316,7 +319,7 @@ export class SettingsComponent implements OnInit {
   readonly newOrigin = signal('');
   mtProviders = signal<MtProviderInfo[]>([]);
   newMtName = signal(''); newMtType = signal('pseudo');
-  mtProviderId = signal(''); mtLocale = signal(''); mtResult = signal('');
+  mtProviderId = signal(''); mtLocale = signal(''); mtBranch = signal('main'); mtResult = signal('');
 
   async addOrigin() {
     const origin = this.newOrigin().trim();
@@ -371,8 +374,8 @@ export class SettingsComponent implements OnInit {
   async runPretranslate() {
     this.busy.set(true); this.error.set(''); this.mtResult.set('');
     try {
-      const r = await this.api.pretranslate(this.projectId, this.mtProviderId(), this.mtLocale());
-      this.mtResult.set(`Pre-translate (${this.mtLocale()}): ${r.translated} filled, ${r.skippedExisting} already translated (untouched), ${r.skippedNoSource} without source text. Filled rows are UNVERIFIED and attributed to you.`);
+      const r = await this.api.pretranslate(this.projectId, this.mtProviderId(), this.mtLocale(), this.mtBranch());
+      this.mtResult.set(`Pseudo test data (${this.mtLocale()} on ${this.mtBranch()}): ${r.translated} filled, ${r.skippedExisting} already translated (untouched), ${r.skippedNoSource} without source text. Filled rows are UNVERIFIED pseudo-localization TEST DATA, not real translations.`);
     } catch (e) { this.error.set(e instanceof Error ? e.message : String(e)); } finally { this.busy.set(false); }
   }
 
