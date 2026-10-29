@@ -643,6 +643,8 @@ try {
   check('lock chip lists the locked key on the task row', chipOk);
   const caveatOk = await page.evaluate(() => (document.body.textContent || '').includes('branch merges, snapshot restores and key deletion'));
   check('lock toggle shows the full enforcement scope note', caveatOk);
+  const caveatImportOk = await page.evaluate(() => (document.body.textContent || '').includes('Imports skip locked keys and report them'));
+  check('lock scope note spells out partial-import behavior', caveatImportOk);
   await page.evaluate(() => {
     const chip = document.querySelector('.lock-chip');
     if (chip) { chip.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70); }

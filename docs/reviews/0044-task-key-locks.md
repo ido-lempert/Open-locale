@@ -48,7 +48,25 @@ capability map's "tasks with locks and chaining".
 - Tasks UI: new-task form gains a key multi-select plus a
   "lock the selected keys while this task is open" checkbox; rows show
   a "locks N key(s): a, b, c, …" chip. The editor surfaces a rejected
-  save through the existing per-cell "save failed" status.
+  save with the server's reason under "save failed - retry", keeping
+  the unsaved text in the cell.
+
+## Limits
+
+- Key rename: no rename capability exists anywhere in the API.
+  `UpdateKeyDto` excludes `name`, and no code path writes `key.name`
+  (verified against every `key.update` call site: PATCH :keyId is
+  metadata-only, PATCH :keyId/tags is tags-only, branch merge writes
+  only description/isPlural/maxLength/tags). Nothing to guard; delete
+  coverage does not imply rename coverage because rename is
+  impossible. The metadata PATCH (description/isPlural/maxLength) and
+  tags PATCH are outside the enumerated lock writers - they do not
+  write translations.
+- Import behavior is intentionally partial: a locked key fails its
+  own per-key transaction and is recorded in the import run; other
+  keys still import. The tasks-page scope note says this explicitly
+  ("Imports skip locked keys and report them in the run; other keys
+  still import.").
 
 ## Review pass notes
 
@@ -73,15 +91,17 @@ capability map's "tasks with locks and chaining".
   membership changes take effect on the next request (live query, no
   cached grant); ADMIN/OWNER override is explicit and matches the
   existing admin-bypass convention. Lock state is checked at request
-  time; a lock created concurrently with an in-flight bulk write can
-  be missed by that write (accepted check-then-act limit, same class
-  as the other permission checks).
-- QA/integration: tasks-test.mjs +25 checks (adds MT 403/200, import
-  per-key failure with locked value untouched, key delete 403/200,
-  lock-vs-write race with post-settle denial) (create, non-assignee
-  403, assignee 200, status 403, bulk 403 + rollback probe, group
-  member 200, group leave immediate 403, owner override 200, set
-  empty/re-add, audit event, DONE release, reopen re-lock,
-  cross-project 400, delete release). e2e-visual +5 checks (UI create
-  with chip, narrow viewport, member editor save failed, DONE release
-  save).
+  time inside the writer's transaction under the shared advisory
+  lock, so a lock committed concurrently with an in-flight write
+  either blocks the writer's guard (denied) or commits after it
+  (valid ordering); it is never silently missed after both settle.
+- QA/integration: tasks-test.mjs 66 checks total (create,
+  non-assignee 403, assignee 200, status 403, bulk 403 + rollback
+  probe, group member 200, group leave immediate 403, owner override
+  200, set empty/re-add, audit event, DONE release, reopen re-lock,
+  cross-project 400, delete release, MT 403/200, import per-key
+  failure with locked value untouched, key delete 403/200,
+  lock-vs-write race both orderings with post-settle denial).
+  e2e-visual 118 checks total (incl. UI create with chip, narrow
+  viewport, member editor save failed with server reason, DONE
+  release save, scope note + partial-import copy).

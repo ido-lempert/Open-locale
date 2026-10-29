@@ -50,7 +50,7 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
             <input type="checkbox" [ngModel]="lockKeys()" (ngModelChange)="lockKeys.set($event)" name="taskLockToggle" />
             lock the selected keys while this task is open
           </label>
-          <span class="muted lock-scope-note">A lock blocks editor saves, status changes, imports, MT fills, branch merges, snapshot restores and key deletion for everyone except the assignee and team admins.</span>
+          <span class="muted lock-scope-note">A lock blocks editor saves, status changes, MT fills, branch merges, snapshot restores and key deletion for everyone except the assignee and team admins. Imports skip locked keys and report them in the run; other keys still import.</span>
           <button class="primary" type="submit">Create task</button>
         </form>
       </section>
