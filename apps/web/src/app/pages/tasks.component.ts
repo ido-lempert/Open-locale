@@ -61,7 +61,13 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
             <div class="task-body">
               <strong>{{ t.title }}</strong>
               @if (t.description) { <span class="muted">{{ t.description }}</span> }
-              @if (t.dependsOn) { <span class="muted">waits on: {{ t.dependsOn.title }} ({{ t.dependsOn.status.toLowerCase().replace('_', ' ') }})</span> }
+              <span class="muted">waits on:
+                <select class="depends-select" [attr.aria-label]="'Depends on for ' + t.title" [ngModel]="t.dependsOn?.id ?? ''"
+                  (change)="update(t, { dependsOnId: $any($event.target).value || null }, $any($event.target), t.dependsOn?.id ?? '')">
+                  <option value="">no predecessor</option>
+                  @for (p of tasks(); track p.id) { @if (p.id !== t.id) { <option [value]="p.id">{{ p.title }} ({{ p.status.toLowerCase().replace('_', ' ') }})</option> } }
+                </select>
+              </span>
               @if (t.lockKeys && t.keys.length) { <span class="muted lock-chip">locks {{ t.keys.length }} key(s): {{ lockedNames(t) }}</span> }
             </div>
             <select [attr.aria-label]="'Status for ' + t.title" [ngModel]="t.status"

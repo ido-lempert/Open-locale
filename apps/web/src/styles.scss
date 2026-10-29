@@ -192,6 +192,7 @@ span.review { font-size: 0.72rem; padding: 0.05rem 0.4rem; border: 1px solid var
 .task-form input[name=taskTitle] { flex: 2 1 16rem; }
 .task-form input[name=taskDescription] { flex: 3 1 20rem; }
 .task-row select { width: auto; }
+.depends-select { max-width: 16rem; font: inherit; color: inherit; }
 .task-list { list-style: none; margin: 1rem 0 0; padding: 0; max-width: 70rem; }
 .task-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; padding: 0.6rem 0.25rem; border-bottom: 1px solid #e5e7eb; }
 .task-body { display: flex; flex-direction: column; flex: 1 1 16rem; }

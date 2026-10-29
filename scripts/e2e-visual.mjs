@@ -747,11 +747,15 @@ try {
     sel.dispatchEvent(new Event('change', { bubbles: true }));
   });
   await page.evaluate(() => { document.querySelector('.task-form').requestSubmit(); });
-  await page.waitForFunction(
-    () => document.body.textContent.includes('waits on: Translate checkout to Hebrew'),
-    { timeout: 10000 },
-  );
-  check('chained task shows its predecessor chip', true);
+  // Row lookups must key on the row's own title (<strong>), never full
+  // textContent: every row's depends-on select lists the other task titles
+  // as options, so a textContent match can return the wrong row.
+  await page.waitForFunction(() => {
+    const row = [...document.querySelectorAll('.task-row')].find((r) => (r.querySelector('.task-body strong')?.textContent || '').includes('Proofread after translation'));
+    const sel = row?.querySelector('select[aria-label^="Depends on for"]');
+    return !!sel && (sel.options[sel.selectedIndex]?.textContent || '').startsWith('Translate checkout to Hebrew');
+  }, { timeout: 10000 });
+  check('chained task row shows its predecessor in the depends-on select', true);
   await page.evaluate(() => {
     const row = [...document.querySelectorAll('.task-row')].find((r) => r.textContent.includes('Proofread after translation'));
     const sel = row.querySelector('select[aria-label^="Status for"]');
@@ -763,6 +767,59 @@ try {
     { timeout: 10000 },
   );
   check('starting a blocked chain task surfaces the error', true);
+
+  // Row-level dependency editing: re-point, clear, and a rejected cycle
+  // (server 400, and the select reverts to the last server-known value).
+  // Each mutation first waits for the target option to exist in the
+  // title-scoped row's select, so it never fires mid-refetch.
+  const setDepends = async (rowTitle, optionPrefix) => {
+    await page.waitForFunction((rt, op) => {
+      const row = [...document.querySelectorAll('.task-row')].find((r) => (r.querySelector('.task-body strong')?.textContent || '').includes(rt));
+      const sel = row?.querySelector('select[aria-label^="Depends on for"]');
+      return !!sel && [...sel.options].some((o) => o.textContent.startsWith(op));
+    }, { timeout: 10000 }, rowTitle, optionPrefix);
+    await page.evaluate((rt, op) => {
+      const row = [...document.querySelectorAll('.task-row')].find((r) => (r.querySelector('.task-body strong')?.textContent || '').includes(rt));
+      const sel = row.querySelector('select[aria-label^="Depends on for"]');
+      const opt = [...sel.options].find((o) => o.textContent.startsWith(op));
+      sel.value = opt.value;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    }, rowTitle, optionPrefix);
+  };
+  const selectedDepends = (rowTitle) => page.evaluate((rt) => {
+    const row = [...document.querySelectorAll('.task-row')].find((r) => (r.querySelector('.task-body strong')?.textContent || '').includes(rt));
+    const sel = row?.querySelector('select[aria-label^="Depends on for"]');
+    return sel ? (sel.options[sel.selectedIndex]?.textContent || '') : null;
+  }, rowTitle);
+
+  await setDepends('Proofread after translation', 'Lock home.title');
+  await page.waitForFunction(() => {
+    const row = [...document.querySelectorAll('.task-row')].find((r) => (r.querySelector('.task-body strong')?.textContent || '').includes('Proofread after translation'));
+    const sel = row?.querySelector('select[aria-label^="Depends on for"]');
+    return !!sel && (sel.options[sel.selectedIndex]?.textContent || '').startsWith('Lock home.title');
+  }, { timeout: 10000 });
+  check('row depends-on select re-points the dependency', true);
+
+  await setDepends('Proofread after translation', 'no predecessor');
+  await new Promise((r) => setTimeout(r, 1500));
+  check('row depends-on select clears the dependency', (await selectedDepends('Proofread after translation')) === 'no predecessor');
+
+  await setDepends('Proofread after translation', 'Lock home.title');
+  await page.waitForFunction(() => {
+    const row = [...document.querySelectorAll('.task-row')].find((r) => (r.querySelector('.task-body strong')?.textContent || '').includes('Proofread after translation'));
+    const sel = row?.querySelector('select[aria-label^="Depends on for"]');
+    return !!sel && (sel.options[sel.selectedIndex]?.textContent || '').startsWith('Lock home.title');
+  }, { timeout: 10000 });
+  check('dependency re-pointed again before the cycle attempt', true);
+
+  await setDepends('Lock home.title', 'Proofread after translation');
+  await page.waitForFunction(
+    () => (document.querySelector('[role=alert]')?.textContent || '').includes('would create a cycle'),
+    { timeout: 10000 },
+  );
+  check('cycle attempt through the row select shows the server error', true);
+  await new Promise((r) => setTimeout(r, 1500));
+  check('rejected cycle change reverts the select', (await selectedDepends('Lock home.title')) === 'no predecessor');
 
 
   // --- Branches: create via UI, isolation, merge into main ---

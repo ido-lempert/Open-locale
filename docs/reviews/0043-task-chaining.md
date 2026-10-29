@@ -64,11 +64,19 @@ capability map's "tasks with locks and chaining".
   lands first (reopen proceeds; the documented no-retroactive-pause
   product limit applies).
 
+## Follow-up: row-level dependency editing
+
+Each task row now carries a "waits on" select listing every other task
+in the project with its status, plus "no predecessor" to clear. It uses
+the existing PATCH /tasks/:id dependsOnId support - same-project and
+cycle validation apply unchanged. A rejected change (e.g. a cycle)
+reverts the select to the last server-known value and shows the API
+error in the page banner. Verified by e2e: create-time predecessor
+rendering, re-point, clear, and cycle rejection + revert.
+
 ## Limits
 
 - Single predecessor only; no multi-dependency DAG.
 - Reopening a DONE predecessor does not revert started dependents.
-- Dependency cannot be edited from the task row (only at creation or
-  via the API); row editing is a future UI slice.
 - Task locks (preventing edits to keys in a task's scope) are the
   remaining half of the capability-map item and are not in this slice.
