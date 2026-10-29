@@ -4,6 +4,7 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { SessionOnlyGuard } from './session-only.guard';
+import { OidcService } from './oidc.service';
 import { DEV_FALLBACK_JWT_SECRET } from './dev-secret';
 
 @Module({
@@ -15,7 +16,7 @@ import { DEV_FALLBACK_JWT_SECRET } from './dev-secret';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtAuthGuard, SessionOnlyGuard],
+  providers: [AuthService, OidcService, JwtAuthGuard, SessionOnlyGuard],
   exports: [AuthService, JwtAuthGuard, SessionOnlyGuard],
 })
 export class AuthModule {}

@@ -62,6 +62,9 @@ export class AuthService {
       where: { email: email.trim().toLowerCase() },
     });
     if (!user) return null;
+    // SSO-provisioned accounts have no password (empty hash) - password
+    // login must never succeed for them.
+    if (!user.passwordHash) return null;
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return null;
     if (user.totpEnabled) {
@@ -126,6 +129,13 @@ export class AuthService {
   // Generates and encrypts a pending secret; does NOT enable 2FA until a
   // valid code proves the authenticator was configured.
   private async requirePassword(user: { passwordHash: string }, password: string) {
+    // Passwordless (SSO-provisioned) accounts cannot pass a password
+    // step-up - say so plainly instead of trapping the user in a prompt
+    // they can never satisfy. A password-set flow is future work; until
+    // then password-gated management is visibly unavailable to them.
+    if (!user.passwordHash) {
+      throw new ForbiddenException('This account has no password (SSO-only). Password-confirmed actions are unavailable until a password is set.');
+    }
     if (!password || !(await bcrypt.compare(password, user.passwordHash))) {
       throw new UnauthorizedException('Current password required');
     }
@@ -196,6 +206,35 @@ export class AuthService {
   // enabled, sessions issued before (or without) completing the second
   // factor must not mint API tokens or manage 2FA. Checked live so
   // enabling 2FA takes effect on the very next request.
+  // OIDC support: issue a session after an SSO login. mfaPassed must be
+  // true only when the account's second factor was completed in this flow.
+  async issueOidcTokens(userId: string, mfaPassed: boolean) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException();
+    return this.issueTokens(user.id, user.email, mfaPassed && user.totpEnabled, user.authEpoch);
+  }
+
+  async sessionEpoch(userId: string): Promise<number> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { authEpoch: true } });
+    if (!user) throw new UnauthorizedException();
+    return user.authEpoch;
+  }
+
+  // OIDC support: fresh-auth step-up for identity linking.
+  async requirePasswordForUser(userId: string, password: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { passwordHash: true } });
+    if (!user) throw new UnauthorizedException();
+    await this.requirePassword(user, password);
+  }
+
+  // OIDC support: run the account's existing second-factor check (TOTP or
+  // recovery code, with replay/lockout handling) for an SSO-completed login.
+  async verifySecondFactorForUser(userId: string, code: string): Promise<boolean> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.totpEnabled) return false;
+    return this.checkSecondFactor(user, code);
+  }
+
   async requireStepUp(userId: string, principal: AuthPrincipal) {
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { totpEnabled: true } });
     if (user?.totpEnabled && principal.mfa !== true) {

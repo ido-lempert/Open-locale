@@ -13,13 +13,14 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthService, AuthPrincipal } from './auth.service';
-import { CreateApiTokenDto, LoginDto, SignupDto, TotpCodeDto, TotpSetupDto } from './dto';
+import { CreateApiTokenDto, LoginDto, OidcCallbackDto, OidcCompleteDto, SignupDto, TotpCodeDto, TotpSetupDto } from './dto';
+import { OidcService } from './oidc.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './current-user.decorator';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(private readonly auth: AuthService, private readonly oidc: OidcService) {}
 
   @Post('signup')
   async signup(@Body() dto: SignupDto) {
@@ -32,6 +33,38 @@ export class AuthController {
     const result = await this.auth.login(dto.email, dto.password, dto.totpCode);
     if (!result) throw new UnauthorizedException('Invalid email or password');
     return result;
+  }
+
+  // OIDC groundwork (local mock issuer only - no external IdP enrolled).
+  // start returns the authorization URL; start-link binds an identity to the
+  // signed-in account (session-only). callback exchanges code+state; complete
+  // finishes the local-2FA step for accounts that have TOTP enabled.
+  @Get('oidc/start')
+  async oidcStart() {
+    return this.oidc.start(null);
+  }
+
+  // Linking requires fresh auth: the current password, and the resulting
+  // state is bound to this account AND its current authEpoch.
+  @Post('oidc/start-link')
+  @UseGuards(JwtAuthGuard)
+  async oidcStartLink(@CurrentUser() user: AuthPrincipal, @Body() dto: TotpSetupDto) {
+    this.requireSession(user);
+    await this.auth.requirePasswordForUser(user.userId, dto.password);
+    const epoch = await this.auth.sessionEpoch(user.userId);
+    return this.oidc.start(user.userId, epoch);
+  }
+
+  @Post('oidc/callback')
+  @HttpCode(200)
+  async oidcCallback(@Body() dto: OidcCallbackDto) {
+    return this.oidc.callback(dto.code, dto.state);
+  }
+
+  @Post('oidc/complete')
+  @HttpCode(200)
+  async oidcComplete(@Body() dto: OidcCompleteDto) {
+    return this.oidc.complete(dto.pendingToken, dto.totpCode);
   }
 
   // 2FA management is session-only, like token management: an API token must

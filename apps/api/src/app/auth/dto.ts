@@ -58,3 +58,13 @@ export class CreateApiTokenDto {
   @IsString()
   expiresAt?: string;
 }
+
+export class OidcCallbackDto {
+  @IsString() @MinLength(1) code!: string;
+  @IsString() @MinLength(1) state!: string;
+}
+
+export class OidcCompleteDto {
+  @IsString() @MinLength(1) pendingToken!: string;
+  @IsString() @MinLength(1) totpCode!: string;
+}

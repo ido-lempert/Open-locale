@@ -1,0 +1,304 @@
+// OIDC groundwork: authorization-code + PKCE login against a configured
+// issuer. Local development and tests target the mock issuer in
+// scripts/mock-oidc.mjs; no external IdP is enrolled, no provider account
+// exists, and no real user is involved.
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { createHash, createPublicKey, randomBytes, verify as cryptoVerify } from 'node:crypto';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
+import { PrismaService } from '../prisma/prisma.service';
+import { AuthService } from './auth.service';
+
+interface OidcState {
+  nonce: string;
+  verifier: string; // server-side only; never leaves the API
+  linkUserId: string | null;
+  linkEpoch: number | null; // authEpoch at start-link; stale linker state fails
+  expiresAt: number;
+}
+
+interface OidcMetadata {
+  issuer: string;
+  authorization_endpoint: string;
+  token_endpoint: string;
+  jwks_uri: string;
+}
+
+const b64url = (b: Buffer) => b.toString('base64url');
+const LOOPBACK = ['127.0.0.1', '::1', 'localhost'];
+
+// Public-IP check for the DNS guard: rejects loopback, private (RFC1918),
+// link-local, CGNAT, multicast, unspecified and documentation ranges.
+function isPublicIp(addr: string): boolean {
+  const v4 = addr.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    if (a === 0 || a === 10 || a === 127 || a >= 224) return false;
+    if (a === 100 && b >= 64 && b <= 127) return false;
+    if (a === 169 && b === 254) return false;
+    if (a === 172 && b >= 16 && b <= 31) return false;
+    if (a === 192 && b === 168) return false;
+    if (a === 192 && b === 0) return false;
+    if (a === 192 && b === 0 && Number(v4[3]) === 2) return false;
+    if (a === 198 && (b === 18 || b === 19)) return false;
+    if (a === 198 && b === 51 && Number(v4[3]) === 100) return false;
+    if (a === 203 && b === 0 && Number(v4[3]) === 113) return false;
+    return true;
+  }
+  const a = addr.toLowerCase();
+  if (a === '::1' || a === '::') return false;
+  if (a.startsWith('fc') || a.startsWith('fd') || a.startsWith('fe80')) return false;
+  if (a.startsWith('::ffff:')) return isPublicIp(a.slice(7));
+  return true;
+}
+
+@Injectable()
+export class OidcService {
+  // In-memory state/pending stores: an API restart invalidates in-flight
+  // logins (fail closed - users simply restart the flow). Documented limit.
+  private states = new Map<string, OidcState>();
+  private pending = new Map<string, { userId: string; expiresAt: number }>();
+  private metadata: Promise<OidcMetadata> | null = null;
+
+  constructor(private readonly prisma: PrismaService, private readonly auth: AuthService) {}
+
+  private config() {
+    const issuerRaw = process.env.OIDC_ISSUER;
+    if (!issuerRaw) throw new NotFoundException('OIDC is not configured');
+    return {
+      issuer: issuerRaw.replace(/\/+$/, ''),
+      clientId: process.env.OIDC_CLIENT_ID || 'open-locale',
+      redirectUri: process.env.OIDC_REDIRECT_URI || 'http://127.0.0.1:4200/auth/oidc/callback',
+    };
+  }
+
+  // Connection-level network guard, re-checked before EVERY outbound call
+  // (not just at startup): https everywhere; http+loopback is a development
+  // exception that cannot exist in production; non-loopback hostnames must
+  // resolve to public IPs only. Note: resolution is checked, not pinned -
+  // documented limit, see docs/reviews/0037.
+  private async assertIssuerAllowed(): Promise<void> {
+    const u = new URL(this.config().issuer);
+    const loopbackHost = LOOPBACK.includes(u.hostname);
+    if (process.env.NODE_ENV === 'production') {
+      if (u.protocol !== 'https:' || loopbackHost) {
+        throw new BadRequestException('OIDC_ISSUER must be a public https origin in production');
+      }
+    } else if (u.protocol !== 'https:' && !(u.protocol === 'http:' && loopbackHost)) {
+      throw new BadRequestException('OIDC_ISSUER must be https (http allowed only for loopback development)');
+    }
+    if (!loopbackHost) {
+      const addrs = isIP(u.hostname) ? [u.hostname] : (await lookup(u.hostname, { all: true })).map((r) => r.address);
+      if (addrs.length === 0 || addrs.some((a) => !isPublicIp(a))) {
+        throw new BadRequestException('OIDC issuer host resolves to a non-public address');
+      }
+    }
+  }
+
+  // Guarded fetch: DNS re-check, no redirects, 5s timeout, 64KB response cap.
+  private async guardedJson(url: string, init?: { method?: string; body?: string }) {
+    await this.assertIssuerAllowed();
+    const res = await fetch(url, {
+      ...init,
+      headers: init?.body ? { 'content-type': 'application/x-www-form-urlencoded' } : undefined,
+      redirect: 'error',
+      signal: AbortSignal.timeout(5000),
+    });
+    const text = await res.text();
+    if (text.length > 65536) throw new Error('OIDC response exceeds size limit');
+    return { ok: res.ok, status: res.status, json: () => JSON.parse(text) as Record<string, unknown> };
+  }
+
+  private async meta(): Promise<OidcMetadata> {
+    if (!this.metadata) {
+      const { issuer } = this.config();
+      const pending = (async (): Promise<OidcMetadata> => {
+        const res = await this.guardedJson(`${issuer}/.well-known/openid-configuration`);
+        if (!res.ok) throw new Error(`OIDC metadata fetch failed: ${res.status}`);
+        const m = res.json();
+        // The metadata's issuer must match the configured issuer, and every
+        // endpoint we will call must live on the issuer's origin - no
+        // cross-origin redirect of token/JWKS traffic.
+        if (m.issuer !== issuer) throw new Error('OIDC metadata issuer mismatch');
+        const origin = new URL(issuer).origin;
+        for (const k of ['authorization_endpoint', 'token_endpoint', 'jwks_uri'] as const) {
+          const v = m[k];
+          if (typeof v !== 'string' || new URL(v).origin !== origin) {
+            throw new Error(`OIDC metadata ${k} missing or outside issuer origin`);
+          }
+        }
+        return m as unknown as OidcMetadata;
+      })();
+      this.metadata = pending;
+      pending.catch(() => { this.metadata = null; });
+    }
+    return this.metadata;
+  }
+
+  private sweep() {
+    const now = Date.now();
+    for (const [k, v] of this.states) if (v.expiresAt < now) this.states.delete(k);
+    for (const [k, v] of this.pending) if (v.expiresAt < now) this.pending.delete(k);
+  }
+
+  async start(linkUserId: string | null, linkEpoch: number | null = null) {
+    const { clientId, redirectUri } = this.config();
+    const m = await this.meta();
+    const state = b64url(randomBytes(16));
+    const nonce = b64url(randomBytes(16));
+    const verifier = b64url(randomBytes(32));
+    const ttlMs = Number(process.env.OIDC_STATE_TTL_MS || 10 * 60 * 1000);
+    this.states.set(state, { nonce, verifier, linkUserId, linkEpoch, expiresAt: Date.now() + ttlMs });
+    this.sweep();
+    const challenge = b64url(createHash('sha256').update(verifier).digest());
+    const url = new URL(m.authorization_endpoint);
+    url.search = new URLSearchParams({
+      response_type: 'code',
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      scope: 'openid email profile',
+      state,
+      nonce,
+      code_challenge: challenge,
+      code_challenge_method: 'S256',
+    }).toString();
+    // Never returns the verifier - only the derived challenge leaves the API.
+    return { url: url.toString() };
+  }
+
+  private async verifyIdToken(token: string, jwksUri: string): Promise<Record<string, unknown>> {
+    const parts = token.split('.');
+    if (parts.length !== 3) throw new UnauthorizedException('Malformed id_token');
+    const header = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8'));
+    if (header.alg !== 'RS256') throw new UnauthorizedException('Unexpected id_token alg');
+    const jwksRes = await this.guardedJson(jwksUri);
+    if (!jwksRes.ok) throw new UnauthorizedException('JWKS fetch failed');
+    const { keys } = jwksRes.json() as unknown as { keys: (JsonWebKey & { kid?: string })[] };
+    const jwk = keys.find((k) => k.kid === header.kid && k.kty === 'RSA');
+    if (!jwk) throw new UnauthorizedException('No matching JWKS key');
+    const key = createPublicKey({ key: jwk as unknown as import('node:crypto').JsonWebKey, format: 'jwk' });
+    const ok = cryptoVerify('RSA-SHA256', Buffer.from(`${parts[0]}.${parts[1]}`), key, Buffer.from(parts[2], 'base64url'));
+    if (!ok) throw new UnauthorizedException('id_token signature invalid');
+    const claims = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+    const { issuer, clientId } = this.config();
+    if (claims.iss !== issuer) throw new UnauthorizedException('id_token issuer mismatch');
+    const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+    if (!aud.includes(clientId)) throw new UnauthorizedException('id_token audience mismatch');
+    if (typeof claims.exp !== 'number' || claims.exp * 1000 < Date.now()) throw new UnauthorizedException('id_token expired');
+    if (typeof claims.sub !== 'string' || !claims.sub) throw new UnauthorizedException('id_token missing sub');
+    return claims;
+  }
+
+  async callback(code: string, state: string) {
+    // State is consumed up front: single-use whatever happens next; the
+    // check-and-delete is synchronous, so concurrent submissions have
+    // exactly one winner.
+    const s = this.states.get(state);
+    this.states.delete(state);
+    if (!s || s.expiresAt < Date.now()) throw new UnauthorizedException('Invalid or expired state');
+    const { issuer, clientId, redirectUri } = this.config();
+    const m = await this.meta();
+    const tokenRes = await this.guardedJson(m.token_endpoint, {
+      method: 'POST',
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: redirectUri,
+        client_id: clientId,
+        code_verifier: s.verifier,
+      }).toString(),
+    });
+    if (!tokenRes.ok) throw new UnauthorizedException('Authorization code exchange failed');
+    const body = tokenRes.json() as { id_token?: string };
+    if (!body.id_token) throw new UnauthorizedException('Token response missing id_token');
+    const claims = await this.verifyIdToken(body.id_token, m.jwks_uri);
+    if (claims.nonce !== s.nonce) throw new UnauthorizedException('Nonce mismatch');
+    const sub = claims.sub as string;
+    const email = typeof claims.email === 'string' ? claims.email.toLowerCase() : '';
+    const displayName = typeof claims.name === 'string' && claims.name ? claims.name : email.split('@')[0] || 'sso-user';
+
+    const identity = await this.prisma.externalIdentity.findUnique({
+      where: { issuer_subject: { issuer, subject: sub } },
+    });
+    if (s.linkUserId) {
+      // Linking flow: the state is bound to the account that started it AND
+      // its authEpoch at that moment - a stale or revoked linker state fails.
+      const linker = await this.prisma.user.findUnique({ where: { id: s.linkUserId }, select: { authEpoch: true } });
+      if (!linker || linker.authEpoch !== s.linkEpoch) {
+        throw new UnauthorizedException('Link state is stale - restart the linking flow');
+      }
+      if (identity && identity.userId !== s.linkUserId) {
+        throw new ConflictException('This identity is already linked to a different account');
+      }
+      // The email we store on a new binding must be provider-verified.
+      if (claims.email_verified !== true) {
+        throw new BadRequestException('OIDC email claim is not verified by the provider');
+      }
+      if (!identity) {
+        await this.prisma.externalIdentity.create({ data: { userId: s.linkUserId, issuer, subject: sub, email } });
+      }
+      return this.finish(s.linkUserId);
+    }
+    if (identity) return this.finish(identity.userId);
+
+    // First login with this identity: never auto-link by email - that is
+    // account takeover. An email collision requires the authenticated
+    // linking flow instead.
+    if (!email) throw new BadRequestException('OIDC identity has no email claim');
+    if (claims.email_verified !== true) {
+      throw new BadRequestException('OIDC email claim is not verified by the provider');
+    }
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      throw new ConflictException('An account with this email exists - sign in and link the identity from your account settings');
+    }
+    // Provision a new account. Empty passwordHash: password login is
+    // impossible for this account (bcrypt never matches an empty hash).
+    const user = await this.prisma.user.create({
+      data: {
+        email,
+        passwordHash: '',
+        displayName,
+        memberships: { create: { role: 'OWNER', team: { create: { name: `${displayName}'s team` } } } },
+      },
+    });
+    try {
+      await this.prisma.externalIdentity.create({ data: { userId: user.id, issuer, subject: sub, email } });
+    } catch {
+      // Concurrent first login for the same identity: re-read the winner.
+      const winner = await this.prisma.externalIdentity.findUnique({ where: { issuer_subject: { issuer, subject: sub } } });
+      if (!winner) throw new UnauthorizedException('Identity binding failed');
+      return this.finish(winner.userId);
+    }
+    return this.finish(user.id);
+  }
+
+  // Local 2FA still applies after SSO: an account with TOTP enabled must
+  // pass the second factor before a session is issued.
+  private async finish(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException();
+    if (user.totpEnabled) {
+      const pendingToken = b64url(randomBytes(16));
+      this.pending.set(pendingToken, { userId, expiresAt: Date.now() + 5 * 60 * 1000 });
+      return { requiresTwoFactor: true as const, pendingToken };
+    }
+    return this.auth.issueOidcTokens(userId, false);
+  }
+
+  async complete(pendingToken: string, totpCode: string) {
+    // Synchronous consume-before-verify: concurrent completes have one winner.
+    const p = this.pending.get(pendingToken);
+    this.pending.delete(pendingToken);
+    if (!p || p.expiresAt < Date.now()) throw new UnauthorizedException('Invalid or expired pending login');
+    const passed = await this.auth.verifySecondFactorForUser(p.userId, totpCode);
+    if (!passed) throw new UnauthorizedException('Invalid two-factor code');
+    return this.auth.issueOidcTokens(p.userId, true);
+  }
+}
