@@ -21,12 +21,17 @@ panel. Follows review 0038 (groups API).
   grant, so a group promote/demote visibly changes the Members list.
 
 ## Designer
+- Group header controls wrap to separate rows (flex-wrap) and the role
+  select has min-width 8rem: at 480px it renders the full word, no
+  truncation. An earlier version truncated to "men" at 480px - reviewer
+  rejected, fixed.
 - Desktop (1280) and narrow (480) screenshots captured and pixel-inspected:
   heading fully visible, form wraps, no horizontal overflow; group rows
   show name, role badge, locale scope, role select, delete; member chips
   have remove buttons; the add-member dropdown excludes current members.
-- Native select truncation ("men") at 480px matches the app's other narrow
-  selects; accepted.
+- Member (low-role) session: groups list is visible but every mutation
+  control is absent (create form, role select, delete, add/remove member) -
+  captured in editor-24c-groups-member-view.png.
 
 ## Security
 - UI only surfaces what the API enforces: rank rules, cross-team 404s and
@@ -38,8 +43,14 @@ panel. Follows review 0038 (groups API).
   not a silent widen).
 
 ## QA / integration
-- e2e-visual extended with 5 groups-UI checks (copy lines x3, create via
-  UI + listed, narrow viewport fit with corrected measurement - an earlier
-  version of the check had an operator-precedence bug, fixed and rerun):
-  80 PASS / 0 FAIL, rc=0. unit-web rc=0, build-web rc=0. Full sweep at
+- e2e-visual extended with 17 groups-UI checks: copy lines x3, create via
+  UI + listed, narrow viewport fit (an earlier check version had an
+  operator-precedence bug, fixed and rerun), member add/remove via UI,
+  promote/demote with the inherited Members annotation updating live,
+  cancel-then-confirm delete (native dialog both ways), duplicate-name
+  failure showing a visible error with no state change, and a member
+  session verifying the read-only view. A wait-for-chip race (dropdown
+  option text matched the member name before the add landed) was caught
+  by a failing check and fixed to wait for the remove button.
+  92 PASS / 0 FAIL, rc=0. unit-web rc=0, build-web rc=0. Full sweep at
   final tree separately.
