@@ -162,8 +162,31 @@ try {
   const memCreate = await fetch(`${API}/projects/${pid}/groups`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Api-Key': memberToken.token }, body: JSON.stringify({ name: 'tk2', role: 'MEMBER' }) });
   check('write token of a MEMBER cannot create a group', memCreate.status === 403, String(memCreate.status));
 
+  // Audit trail: grant changes are recorded in the activity log.
+  const act = async (action) => ((await call(`/projects/${pid}/activity?action=${action}&limit=100`, { jwt: O })).json).items;
+  const updMember = await call(`/projects/${pid}/members/${memberA.user.id}`, { jwt: O, method: 'PATCH', body: { allowedLocales: ['ar', 'he'] } });
+  check('member locale update succeeds (setup for audit check)', updMember.status === 200, String(updMember.status));
+  const memberAdded = await act('member.added');
+  check('audit: member.added recorded with grant detail', memberAdded.some((e) => e.detail?.email === memberA.user.email && e.detail?.role === 'MEMBER' && JSON.stringify(e.detail?.allowedLocales) === '["ar"]'));
+  const memberUpdated = await act('member.updated');
+  check('audit: member.updated recorded with from/to', memberUpdated.some((e) => e.detail?.email === memberA.user.email && JSON.stringify(e.detail?.from?.allowedLocales) === '["ar"]' && JSON.stringify(e.detail?.to?.allowedLocales) === '["ar","he"]'));
+  const memberRemoved = await act('member.removed');
+  check('audit: member.removed recorded with prior role', memberRemoved.some((e) => e.detail?.email === memberB.user.email && e.detail?.role === 'MEMBER'));
+  const groupCreated = await act('group.created');
+  check('audit: group.created recorded with grant', groupCreated.some((e) => e.detail?.name === 'translators' && e.detail?.role === 'MEMBER' && JSON.stringify(e.detail?.allowedLocales) === '["he"]'), JSON.stringify(groupCreated[0]?.detail));
+  const groupUpdated = await act('group.updated');
+  check('audit: group.updated recorded with role from/to', groupUpdated.some((e) => e.detail?.from?.role === 'MEMBER' && e.detail?.to?.role === 'ADMIN'));
+  const gmAdded = await act('group.member.added');
+  check('audit: group.member.added recorded with group + member', gmAdded.some((e) => e.detail?.group === 'translators' && e.detail?.member === memberA.user.email));
+  const gmRemoved = await act('group.member.removed');
+  check('audit: group.member.removed recorded', gmRemoved.some((e) => e.detail?.member === memberA.user.email));
+  const auditActor = groupCreated[0]?.actor?.email ?? groupCreated[0]?.actorId;
+  check('audit: events carry the acting user', !!auditActor);
+
   const del = await call(`/projects/${pid}/groups/${group.id}`, { jwt: O, method: 'DELETE' });
   check('owner deletes the group', del.status === 200, String(del.status));
+  const groupDeleted = await act('group.deleted');
+  check('audit: group.deleted recorded with final state', groupDeleted.some((e) => e.detail?.name === 'translators-2' && e.detail?.role === 'ADMIN'));
 } finally {
   if (api) api.kill();
   await pg.stop().catch(() => {});

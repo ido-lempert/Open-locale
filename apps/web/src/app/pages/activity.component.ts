@@ -22,6 +22,14 @@ const ACTION_LABELS: Record<string, string> = {
   'branch.deleted': 'deleted branch',
   'branch.merged': 'merged branch',
   'ota.published': 'published an OTA bundle',
+  'member.added': 'added member',
+  'member.updated': 'updated member',
+  'member.removed': 'removed member',
+  'group.created': 'created group',
+  'group.updated': 'updated group',
+  'group.deleted': 'deleted group',
+  'group.member.added': 'added a member to group',
+  'group.member.removed': 'removed a member from group',
 };
 
 @Component({
@@ -91,6 +99,25 @@ export class ActivityComponent implements OnInit {
         return `${d['translationsUpserted']} updated, ${d['unchangedSkipped']} unchanged, ${d['keysCreated']} new keys`;
       case 'comment.deleted':
         return d['excerpt'] ? `"${d['excerpt']}"` : '';
+      case 'member.added':
+        return `${d['email']} (${String(d['role']).toLowerCase()}${Array.isArray(d['allowedLocales']) && (d['allowedLocales'] as string[]).length ? ': ' + (d['allowedLocales'] as string[]).join(', ') : ''})`;
+      case 'member.updated': {
+        const f = d['from'] as { role: string; allowedLocales: string[] }; const t = d['to'] as { role: string; allowedLocales: string[] };
+        return `${d['email']}: ${f.role.toLowerCase()} → ${t.role.toLowerCase()}${JSON.stringify(f.allowedLocales) !== JSON.stringify(t.allowedLocales) ? `, locales ${f.allowedLocales.join(',') || 'all'} → ${t.allowedLocales.join(',') || 'all'}` : ''}`;
+      }
+      case 'member.removed':
+        return `${d['email']} (was ${String(d['role']).toLowerCase()})`;
+      case 'group.created':
+        return `${String(d['role']).toLowerCase()}${Array.isArray(d['allowedLocales']) && (d['allowedLocales'] as string[]).length ? ': ' + (d['allowedLocales'] as string[]).join(', ') : ''}`;
+      case 'group.updated': {
+        const f = d['from'] as { role: string }; const t = d['to'] as { role: string };
+        return f.role !== t.role ? `${f.role.toLowerCase()} → ${t.role.toLowerCase()}` : '';
+      }
+      case 'group.deleted':
+        return `was ${String(d['role']).toLowerCase()}, ${d['members']} member(s)`;
+      case 'group.member.added':
+      case 'group.member.removed':
+        return `${d['member']} ${ev.action === 'group.member.added' ? '→' : '←'} ${d['group']}`;
       default:
         return '';
     }

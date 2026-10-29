@@ -32,6 +32,14 @@ export const ACTIVITY_ACTIONS = [
   'project.embedOrigins.updated',
   'mt.pretranslate',
   'automation.run',
+  'member.added',
+  'member.updated',
+  'member.removed',
+  'group.created',
+  'group.updated',
+  'group.deleted',
+  'group.member.added',
+  'group.member.removed',
 ] as const;
 
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];

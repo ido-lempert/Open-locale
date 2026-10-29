@@ -191,9 +191,16 @@ export class ProjectsService {
     this.assertGroupRole(actor.role, role);
     const project = await this.prisma.project.findUniqueOrThrow({ where: { id: projectId }, select: { teamId: true } });
     try {
-      return await this.prisma.group.create({
-        data: { teamId: project.teamId, name: name.trim(), role: role as any, allowedLocales },
-        include: { members: true },
+      return await this.prisma.$transaction(async (tx) => {
+        const g = await tx.group.create({
+          data: { teamId: project.teamId, name: name.trim(), role: role as any, allowedLocales },
+          include: { members: true },
+        });
+        await this.activity.record(tx, {
+          projectId, actorId: userId, action: 'group.created',
+          detail: { name: g.name, role: g.role, allowedLocales: g.allowedLocales },
+        });
+        return g;
       });
     } catch (e: any) {
       if (e?.code === 'P2002') throw new ConflictException('A group with this name already exists');
@@ -205,13 +212,20 @@ export class ProjectsService {
     const { group, actorRole } = await this.groupFor(userId, projectId, groupId);
     if (patch.role !== undefined) this.assertGroupRole(actorRole, patch.role);
     try {
-      return await this.prisma.group.update({
-        where: { id: group.id },
-        data: {
-          ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
-          ...(patch.role !== undefined ? { role: patch.role as any } : {}),
-          ...(patch.allowedLocales !== undefined ? { allowedLocales: patch.allowedLocales } : {}),
-        },
+      return await this.prisma.$transaction(async (tx) => {
+        const g = await tx.group.update({
+          where: { id: group.id },
+          data: {
+            ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
+            ...(patch.role !== undefined ? { role: patch.role as any } : {}),
+            ...(patch.allowedLocales !== undefined ? { allowedLocales: patch.allowedLocales } : {}),
+          },
+        });
+        await this.activity.record(tx, {
+          projectId, actorId: userId, action: 'group.updated',
+          detail: { name: g.name, from: { name: group.name, role: group.role, allowedLocales: group.allowedLocales }, to: { name: g.name, role: g.role, allowedLocales: g.allowedLocales } },
+        });
+        return g;
       });
     } catch (e: any) {
       if (e?.code === 'P2002') throw new ConflictException('A group with this name already exists');
@@ -221,7 +235,13 @@ export class ProjectsService {
 
   async deleteGroup(userId: string, projectId: string, groupId: string) {
     const { group } = await this.groupFor(userId, projectId, groupId);
-    await this.prisma.group.delete({ where: { id: group.id } });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.group.delete({ where: { id: group.id } });
+      await this.activity.record(tx, {
+        projectId, actorId: userId, action: 'group.deleted',
+        detail: { name: group.name, role: group.role, members: group.members.length },
+      });
+    });
     return { ok: true };
   }
 
@@ -232,7 +252,15 @@ export class ProjectsService {
     const target = await this.prisma.teamMember.findUnique({ where: { teamId_userId: { teamId: group.teamId, userId: targetUserId } } });
     if (!target) throw new BadRequestException('User is not a member of this team');
     try {
-      return await this.prisma.groupMember.create({ data: { groupId: group.id, userId: targetUserId } });
+      return await this.prisma.$transaction(async (tx) => {
+        const gm = await tx.groupMember.create({ data: { groupId: group.id, userId: targetUserId } });
+        const user = await tx.user.findUnique({ where: { id: targetUserId }, select: { email: true } });
+        await this.activity.record(tx, {
+          projectId, actorId: userId, action: 'group.member.added',
+          detail: { group: group.name, member: user?.email },
+        });
+        return gm;
+      });
     } catch (e: any) {
       if (e?.code === 'P2002') throw new ConflictException('User is already in this group');
       throw e;
@@ -243,7 +271,14 @@ export class ProjectsService {
     const { group } = await this.groupFor(userId, projectId, groupId);
     const existing = await this.prisma.groupMember.findUnique({ where: { groupId_userId: { groupId: group.id, userId: targetUserId } } });
     if (!existing) throw new NotFoundException('Group membership not found');
-    await this.prisma.groupMember.delete({ where: { groupId_userId: { groupId: group.id, userId: targetUserId } } });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.groupMember.delete({ where: { groupId_userId: { groupId: group.id, userId: targetUserId } } });
+      const user = await tx.user.findUnique({ where: { id: targetUserId }, select: { email: true } });
+      await this.activity.record(tx, {
+        projectId, actorId: userId, action: 'group.member.removed',
+        detail: { group: group.name, member: user?.email },
+      });
+    });
     return { ok: true };
   }
 
@@ -280,10 +315,17 @@ export class ProjectsService {
     const codes = new Set(project!.locales.map((l) => l.code));
     const bad = allowedLocales.filter((l) => !codes.has(l));
     if (bad.length) throw new BadRequestException(`Unknown locale(s) for this project: ${bad.join(', ')}`);
-    const member = await this.prisma.teamMember.upsert({
-      where: { teamId_userId: { teamId: project!.teamId, userId: target.id } },
-      create: { teamId: project!.teamId, userId: target.id, role: role as never, allowedLocales },
-      update: { role: role as never, allowedLocales },
+    const member = await this.prisma.$transaction(async (tx) => {
+      const prior = await tx.teamMember.findUnique({ where: { teamId_userId: { teamId: project!.teamId, userId: target.id } } });
+      const m = await tx.teamMember.upsert({
+        where: { teamId_userId: { teamId: project!.teamId, userId: target.id } },
+        create: { teamId: project!.teamId, userId: target.id, role: role as never, allowedLocales },
+        update: { role: role as never, allowedLocales },
+      });
+      await this.activity.record(tx, prior
+        ? { projectId, actorId: userId, action: 'member.updated', detail: { email: target.email, from: { role: prior.role, allowedLocales: prior.allowedLocales }, to: { role: m.role, allowedLocales: m.allowedLocales } } }
+        : { projectId, actorId: userId, action: 'member.added', detail: { email: target.email, role: m.role, allowedLocales: m.allowedLocales } });
+      return m;
     });
     return { userId: target.id, email: target.email, role: member.role, allowedLocales: member.allowedLocales };
   }
@@ -305,12 +347,20 @@ export class ProjectsService {
       const bad = input.allowedLocales.filter((l) => !codes.has(l));
       if (bad.length) throw new BadRequestException(`Unknown locale(s) for this project: ${bad.join(', ')}`);
     }
-    const member = await this.prisma.teamMember.update({
-      where: { teamId_userId: { teamId: project!.teamId, userId: targetUserId } },
-      data: {
-        ...(input.role ? { role: input.role as never } : {}),
-        ...(input.allowedLocales ? { allowedLocales: input.allowedLocales } : {}),
-      },
+    const member = await this.prisma.$transaction(async (tx) => {
+      const m = await tx.teamMember.update({
+        where: { teamId_userId: { teamId: project!.teamId, userId: targetUserId } },
+        data: {
+          ...(input.role ? { role: input.role as never } : {}),
+          ...(input.allowedLocales ? { allowedLocales: input.allowedLocales } : {}),
+        },
+      });
+      const target = await tx.user.findUnique({ where: { id: targetUserId }, select: { email: true } });
+      await this.activity.record(tx, {
+        projectId, actorId: userId, action: 'member.updated',
+        detail: { email: target?.email, from: { role: existing.role, allowedLocales: existing.allowedLocales }, to: { role: m.role, allowedLocales: m.allowedLocales } },
+      });
+      return m;
     });
     return { userId: member.userId, role: member.role, allowedLocales: member.allowedLocales };
   }
@@ -324,8 +374,15 @@ export class ProjectsService {
     });
     if (!existing) throw new NotFoundException('Member not found');
     if (existing.role === 'OWNER') throw new BadRequestException('Cannot remove the owner');
-    await this.prisma.teamMember.delete({
-      where: { teamId_userId: { teamId: project!.teamId, userId: targetUserId } },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.teamMember.delete({
+        where: { teamId_userId: { teamId: project!.teamId, userId: targetUserId } },
+      });
+      const target = await tx.user.findUnique({ where: { id: targetUserId }, select: { email: true } });
+      await this.activity.record(tx, {
+        projectId, actorId: userId, action: 'member.removed',
+        detail: { email: target?.email, role: existing.role },
+      });
     });
     return { removed: targetUserId };
   }

@@ -617,6 +617,16 @@ try {
   await shot('editor-24c-groups-member-view.png');
   await loginAs('demo@open-locale.dev', 'demo-password-1');
 
+  // Grant events render with proper labels in the activity feed.
+  await page.goto(`${WEB}/projects/${projId}/activity`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.activity-list', { timeout: 10000 });
+  const feedText = await page.evaluate(() => document.body.textContent || '');
+  check('activity feed labels group creation', feedText.includes('created group'));
+  check('activity feed labels member add', feedText.includes('added member'));
+  check('activity feed shows group from/to detail', feedText.includes('member → admin'));
+  await page.evaluate(() => { document.querySelector('h1').scrollIntoView({ block: 'start' }); window.scrollBy(0, -70); });
+  await shot('editor-30-activity-grants.png');
+
 
   // --- Branches: create via UI, isolation, merge into main ---
   await page.goto(`${WEB}/projects/${projId}`, { waitUntil: 'networkidle0' });
