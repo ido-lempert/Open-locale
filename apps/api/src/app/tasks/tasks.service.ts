@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
@@ -47,6 +47,33 @@ export class TasksService {
     }
   }
 
+  // Task key locks: while a lockKeys task is not DONE, only its assignee
+  // (direct or via the assigned group) or a team ADMIN/OWNER may edit the
+  // covered keys' translations. Called from the translations write paths.
+  async assertKeysEditable(userId: string, projectId: string, keyIds: string[]) {
+    if (keyIds.length === 0) return;
+    const locking = await this.prisma.task.findFirst({
+      where: { projectId, lockKeys: true, status: { not: 'DONE' }, keys: { some: { keyId: { in: keyIds } } } },
+      select: {
+        title: true, assigneeId: true,
+        assigneeGroup: { select: { members: { select: { userId: true } } } },
+      },
+    });
+    if (!locking) return;
+    if (locking.assigneeId === userId) return;
+    if (locking.assigneeGroup?.members.some((m) => m.userId === userId)) return;
+    const role = await this.projects.roleFor(userId, projectId);
+    if (role !== 'MEMBER') return; // ADMIN/OWNER override
+    throw new ForbiddenException(`Key is locked by task "${locking.title}"`);
+  }
+
+  private async assertKeysInProject(db: Prisma.TransactionClient | PrismaService, projectId: string, keyIds: string[]) {
+    const found = await db.key.count({ where: { id: { in: keyIds }, projectId } });
+    if (found !== new Set(keyIds).size) {
+      throw new BadRequestException('Locked keys must belong to this project');
+    }
+  }
+
   // Per-project advisory lock serializing dependency-graph mutations
   // (dependency writes and status transitions gated on them). Without it
   // two opposing PATCHes (A->B, B->A) could both pass their cycle walks.
@@ -64,6 +91,7 @@ export class TasksService {
     assignee: { select: { id: true, displayName: true, email: true } },
     assigneeGroup: { select: { id: true, name: true, role: true } },
     dependsOn: { select: { id: true, title: true, status: true } },
+    keys: { select: { key: { select: { id: true, name: true } } } },
     creator: { select: { id: true, displayName: true, email: true } },
   } as const;
 
@@ -84,7 +112,7 @@ export class TasksService {
 
   async create(userId: string, projectId: string, input: {
     title: string; description?: string; dueDate?: string; assigneeId?: string; assigneeGroupId?: string;
-    dependsOnId?: string;
+    dependsOnId?: string; lockKeys?: boolean; keyIds?: string[];
   }) {
     const project = await this.projects.getFor(userId, projectId);
     this.assertSingleAssignee(input.assigneeId, input.assigneeGroupId);
@@ -95,6 +123,7 @@ export class TasksService {
         await this.graphLock(tx, projectId);
         await this.assertDependency(tx, projectId, input.dependsOnId, null);
       }
+      if (input.keyIds?.length) await this.assertKeysInProject(tx, projectId, input.keyIds);
       return this.createIn(tx, userId, projectId, input);
     });
   }
@@ -104,7 +133,7 @@ export class TasksService {
   // already have validated membership and any assignee.
   async createIn(tx: Prisma.TransactionClient, userId: string, projectId: string, input: {
     title: string; description?: string; dueDate?: string; assigneeId?: string; assigneeGroupId?: string;
-    dependsOnId?: string;
+    dependsOnId?: string; lockKeys?: boolean; keyIds?: string[];
   }) {
     const title = input.title.trim();
     if (!title) throw new BadRequestException('Title cannot be empty');
@@ -113,10 +142,16 @@ export class TasksService {
         projectId, title, description: input.description?.trim() ?? '',
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
         assigneeId: input.assigneeId ?? null, assigneeGroupId: input.assigneeGroupId ?? null,
-        dependsOnId: input.dependsOnId ?? null, creatorId: userId,
+        dependsOnId: input.dependsOnId ?? null, lockKeys: input.lockKeys ?? false,
+        creatorId: userId,
       },
       include: this.includePeople,
     });
+    if (input.keyIds?.length) {
+      await tx.taskKey.createMany({ data: input.keyIds.map((keyId) => ({ taskId: task.id, keyId })) });
+      // The create's include resolved before the key rows existed; re-read.
+      return tx.task.findUniqueOrThrow({ where: { id: task.id }, include: this.includePeople });
+    }
     await this.activity.record(tx, {
       projectId, actorId: userId, action: 'task.created',
       detail: { title: truncate(title, 80) },
@@ -127,7 +162,7 @@ export class TasksService {
   async update(userId: string, projectId: string, taskId: string, input: {
     title?: string; description?: string; status?: 'OPEN' | 'IN_PROGRESS' | 'DONE';
     dueDate?: string | null; assigneeId?: string | null; assigneeGroupId?: string | null;
-    dependsOnId?: string | null;
+    dependsOnId?: string | null; lockKeys?: boolean; keyIds?: string[];
   }) {
     const project = await this.projects.getFor(userId, projectId);
     const existing = await this.prisma.task.findFirst({
@@ -135,6 +170,7 @@ export class TasksService {
       include: {
         assigneeGroup: { select: { id: true, name: true } },
         dependsOn: { select: { id: true, title: true, status: true } },
+        keys: { select: { key: { select: { id: true, name: true } } } },
       },
     });
     if (!existing) throw new NotFoundException('Task not found');
@@ -178,12 +214,22 @@ export class TasksService {
           ...(input.assigneeId !== undefined ? { assigneeId: input.assigneeId } : {}),
           ...(input.assigneeGroupId !== undefined ? { assigneeGroupId: input.assigneeGroupId } : {}),
           ...(input.dependsOnId !== undefined ? { dependsOnId: input.dependsOnId } : {}),
+          ...(input.lockKeys !== undefined ? { lockKeys: input.lockKeys } : {}),
           // Assigning one kind clears the other (single-assignee invariant).
           ...(input.assigneeId ? { assigneeGroupId: null } : {}),
           ...(input.assigneeGroupId ? { assigneeId: null } : {}),
         },
         include: this.includePeople,
       });
+      if (input.keyIds !== undefined) {
+        await this.assertKeysInProject(tx, projectId, input.keyIds);
+        await tx.taskKey.deleteMany({ where: { taskId } });
+        if (input.keyIds.length) {
+          await tx.taskKey.createMany({ data: input.keyIds.map((keyId) => ({ taskId, keyId })) });
+        }
+        // The update's include resolved before the key rows changed; re-read.
+        task.keys = await tx.taskKey.findMany({ where: { taskId }, select: { key: { select: { id: true, name: true } } } });
+      }
       const changes: Record<string, Prisma.InputJsonValue> = {};
       if (input.status !== undefined && input.status !== existing.status) {
         changes['status'] = { from: existing.status, to: input.status };
@@ -196,6 +242,17 @@ export class TasksService {
       if (newGroupId !== existing.assigneeGroupId) {
         const toGroup = newGroupId ? await tx.group.findUnique({ where: { id: newGroupId }, select: { name: true } }) : null;
         changes['assigneeGroup'] = { from: existing.assigneeGroup?.name ?? null, to: toGroup?.name ?? null };
+      }
+      if (input.lockKeys !== undefined && input.lockKeys !== existing.lockKeys) {
+        changes['lockKeys'] = { from: existing.lockKeys, to: input.lockKeys };
+      }
+      if (input.keyIds !== undefined) {
+        const fromNames = existing.keys.map((k) => k.key.name).sort();
+        const toKeys = await tx.key.findMany({ where: { id: { in: input.keyIds } }, select: { name: true } });
+        const toNames = toKeys.map((k) => k.name).sort();
+        if (JSON.stringify(fromNames) !== JSON.stringify(toNames)) {
+          changes['lockedKeys'] = { from: fromNames.slice(0, 5), to: toNames.slice(0, 5) };
+        }
       }
       if (input.dependsOnId !== undefined && input.dependsOnId !== existing.dependsOnId) {
         const toPred = input.dependsOnId ? await tx.task.findUnique({ where: { id: input.dependsOnId }, select: { title: true } }) : null;

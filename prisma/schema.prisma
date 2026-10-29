@@ -160,6 +160,7 @@ model Key {
 
   @@unique([branchId, name])
   @@map("keys")
+  taskLocks TaskKey[]
 }
 
 model Translation {
@@ -305,6 +306,7 @@ model Task {
   assigneeId  String?   @db.Uuid
   assigneeGroupId String? @db.Uuid
   dependsOnId String?   @db.Uuid
+  lockKeys    Boolean   @default(false)
   creatorId   String?   @db.Uuid
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -314,10 +316,23 @@ model Task {
   assigneeGroup Group? @relation(fields: [assigneeGroupId], references: [id], onDelete: SetNull)
   dependsOn Task?  @relation("TaskChain", fields: [dependsOnId], references: [id], onDelete: SetNull)
   dependents Task[] @relation("TaskChain")
+  keys      TaskKey[]
   creator  User?   @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: SetNull)
 
   @@index([projectId, status, createdAt])
   @@map("tasks")
+}
+
+model TaskKey {
+  taskId String @db.Uuid
+  keyId  String @db.Uuid
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  key  Key  @relation(fields: [keyId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, keyId])
+  @@index([keyId])
+  @@map("task_keys")
 }
 
 model TmEntry {

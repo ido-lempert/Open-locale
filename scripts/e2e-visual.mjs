@@ -617,6 +617,71 @@ try {
   await shot('editor-24c-groups-member-view.png');
   await loginAs('demo@open-locale.dev', 'demo-password-1');
 
+  // --- Task key locks: owner locks home.title through the tasks UI; a
+  // plain member's editor save is rejected; DONE releases the lock ---
+  await page.goto(`${WEB}/projects/${projId}`, { waitUntil: 'networkidle0' });
+  await page.click('.tasks-link');
+  await page.waitForSelector('.task-form', { timeout: 10000 });
+  await page.type('input[name=taskTitle]', 'Lock home.title');
+  // The key options load asynchronously; wait for the one we need.
+  // (ngModel prefixes option values with their index, so match by text
+  // and toggle selected directly - the same pattern as taskDependsOn.)
+  await page.waitForFunction(
+    () => [...document.querySelectorAll('select[name=taskLockKeys] option')].some((o) => o.textContent === 'home.title'),
+    { timeout: 10000 });
+  await page.evaluate(() => {
+    const sel = document.querySelector('select[name=taskLockKeys]');
+    const opt = [...sel.options].find((o) => o.textContent === 'home.title');
+    opt.selected = true;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await page.click('input[name=taskLockToggle]');
+  await page.evaluate(() => { document.querySelector('.task-form').requestSubmit(); });
+  const chipOk = await page.waitForFunction(
+    () => [...document.querySelectorAll('.lock-chip')].some((e) => e.textContent.includes('locks 1 key(s)') && e.textContent.includes('home.title')),
+    { timeout: 10000 }).then(() => true).catch(() => false);
+  check('lock chip lists the locked key on the task row', chipOk);
+  await page.evaluate(() => {
+    const chip = document.querySelector('.lock-chip');
+    if (chip) { chip.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70); }
+  });
+  await shot('editor-31-tasks-lock.png');
+  await page.setViewport({ width: 480, height: 800 });
+  const lockNarrowOk = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  check('tasks lock UI fits narrow viewport without horizontal overflow', lockNarrowOk === true);
+  await shot('editor-31b-tasks-lock-narrow.png');
+  await page.setViewport({ width: 1280, height: 800 });
+
+  await loginAs(user3.user.email, 'plain-pass-1');
+  await page.goto(`${WEB}/projects/${projId}`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.grid tbody tr', { timeout: 10000 });
+  // Real typing: (blur)="save(...)" only fires after an actual focus.
+  const lockRowIdx = await page.evaluate(() => [...document.querySelectorAll('.grid tbody tr')].findIndex((r) => r.textContent.includes('home.title')));
+  const lockCells = await page.$$(`.grid tbody tr:nth-child(${lockRowIdx + 1}) textarea`);
+  await lockCells[1].click();
+  await lockCells[1].type('member attempt');
+  await lockCells[1].evaluate((el) => el.blur());
+  const saveFailed = await page.waitForFunction(() => {
+    const row = [...document.querySelectorAll('.grid tbody tr')].find((r) => r.textContent.includes('home.title'));
+    return [...row.querySelectorAll('.cell-status')].some((e) => /save failed/i.test(e.textContent));
+  }, { timeout: 10000 }).then(() => true).catch(() => false);
+  check('locked key: plain member editor save rejected (save failed)', saveFailed);
+  await shot('editor-32-lock-save-failed.png');
+
+  const lockTasks = await (await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/tasks`, { headers: { Authorization: `Bearer ${ownerJwt}` } })).json();
+  const lockTaskId = lockTasks.find((t) => t.title === 'Lock home.title').id;
+  await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/tasks/${lockTaskId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ownerJwt}` }, body: JSON.stringify({ status: 'DONE' }) });
+  const lockCells2 = await page.$$(`.grid tbody tr:nth-child(${lockRowIdx + 1}) textarea`);
+  await lockCells2[1].click();
+  await lockCells2[1].type('member retry');
+  await lockCells2[1].evaluate((el) => el.blur());
+  const saveOkAfterDone = await page.waitForFunction(() => {
+    const row = [...document.querySelectorAll('.grid tbody tr')].find((r) => r.textContent.includes('home.title'));
+    return [...row.querySelectorAll('.cell-status')].some((e) => /saved/i.test(e.textContent));
+  }, { timeout: 10000 }).then(() => true).catch(() => false);
+  check('DONE releases the lock: member save succeeds', saveOkAfterDone);
+  await loginAs('demo@open-locale.dev', 'demo-password-1');
+
   // Grant events render with proper labels in the activity feed.
   await page.goto(`${WEB}/projects/${projId}/activity`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.activity-list', { timeout: 10000 });

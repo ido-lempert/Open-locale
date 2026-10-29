@@ -198,6 +198,73 @@ try {
 
   for (const id of [chainA.id, chainC.id, chainD.id, chainE.id, smuggle.id]) await call(`${base}/${id}`, { token: at, method: 'DELETE' });
 
+  // Task key locks
+  const k1 = (await call(`/projects/${proj.id}/keys`, { token: at, method: 'POST', body: { name: 'cart.checkout' } })).json;
+  const lockTask = (await call(base, { token: at, method: 'POST', body: { title: 'Lock cart keys', lockKeys: true, keyIds: [k1.id], assigneeId: a.user.id } })).json;
+  check('task created with key lock', lockTask.lockKeys === true && lockTask.keys?.[0]?.key?.name === 'cart.checkout', JSON.stringify(lockTask.keys));
+
+  const bobUpsert = await call(`/projects/${proj.id}/keys/${k1.id}/translations`, { token: bt, method: 'PUT', body: { locale: 'he', value: 'bob value' } });
+  check('non-assignee member edit of a locked key rejected (403)', bobUpsert.status === 403 && String(bobUpsert.json?.message ?? '').includes('Lock cart keys'), `${bobUpsert.status} ${JSON.stringify(bobUpsert.json?.message)}`);
+
+  const aliceUpsert = await call(`/projects/${proj.id}/keys/${k1.id}/translations`, { token: at, method: 'PUT', body: { locale: 'he', value: 'alice value' } });
+  check('direct assignee can edit a locked key', aliceUpsert.status === 200 || aliceUpsert.status === 201, `got ${aliceUpsert.status}`);
+
+  const bobStatus = await call(`/projects/${proj.id}/keys/${k1.id}/translations/he/status`, { token: bt, method: 'PATCH', body: { status: 'REVIEWED' } });
+  check('non-assignee status change on a locked key rejected (403)', bobStatus.status === 403, `got ${bobStatus.status}`);
+
+  const bobBulk = await call(`/projects/${proj.id}/review/bulk-status`, { token: bt, method: 'POST', body: { locale: 'he', status: 'REVIEWED' } });
+  check('bulk status on a locked key rejected (403)', bobBulk.status === 403, `got ${bobBulk.status}`);
+  // Rollback proof: the row must still sit at UNVERIFIED, so a dry-run
+  // preview for the same move still matches it (0 would mean it committed).
+  const probe = (await call(`/projects/${proj.id}/review/bulk-status`, { token: at, method: 'POST', body: { locale: 'he', status: 'REVIEWED', keyIds: [k1.id], dryRun: true } })).json;
+  check('bulk rejection rolled back (key untouched)', probe.matched === 1, `matched ${probe.matched}`);
+
+  // Group-member path: assign the lock task to the reviewers group (Bob is in it).
+  await call(`${base}/${lockTask.id}`, { token: at, method: 'PATCH', body: { assigneeGroupId: gr.id } });
+  const bobGroupEdit = await call(`/projects/${proj.id}/keys/${k1.id}/translations`, { token: bt, method: 'PUT', body: { locale: 'he', value: 'bob via group' } });
+  check('assignee group member can edit a locked key', bobGroupEdit.status === 200, `got ${bobGroupEdit.status}`);
+
+  await call(`/projects/${proj.id}/groups/${gr.id}/members/${b.user.id}`, { token: at, method: 'DELETE' });
+  const bobOutEdit = await call(`/projects/${proj.id}/keys/${k1.id}/translations`, { token: bt, method: 'PUT', body: { locale: 'he', value: 'bob out of group' } });
+  check('leaving the group revokes lock access immediately (403)', bobOutEdit.status === 403, `got ${bobOutEdit.status}`);
+
+  // Admin override: Alice is OWNER and no longer the assignee.
+  const aliceOverride = await call(`/projects/${proj.id}/keys/${k1.id}/translations`, { token: at, method: 'PUT', body: { locale: 'he', value: 'alice override' } });
+  check('team owner can edit a locked key (override)', aliceOverride.status === 200, `got ${aliceOverride.status}`);
+  await call(`/projects/${proj.id}/groups/${gr.id}/members/${b.user.id}`, { token: at, method: 'PUT' });
+  // Back to a direct Alice assignment so Bob is a plain member again.
+  await call(`${base}/${lockTask.id}`, { token: at, method: 'PATCH', body: { assigneeId: a.user.id } });
+
+  // Replacement semantics + audit
+  await call(`${base}/${lockTask.id}`, { token: at, method: 'PATCH', body: { keyIds: [] } });
+  const bobUnlocked = await call(`/projects/${proj.id}/keys/${k1.id}/translations`, { token: bt, method: 'PUT', body: { locale: 'he', value: 'bob unlocked' } });
+  check('emptying the locked key set unlocks edits', bobUnlocked.status === 200, `got ${bobUnlocked.status}`);
+  const relockPatch = await call(`${base}/${lockTask.id}`, { token: at, method: 'PATCH', body: { keyIds: [k1.id] } });
+  check('relock patch accepted', relockPatch.status === 200, `got ${relockPatch.status} ${JSON.stringify(relockPatch.json).slice(0, 200)}`);
+  const bobRelocked = await call(`/projects/${proj.id}/keys/${k1.id}/translations`, { token: bt, method: 'PUT', body: { locale: 'he', value: 'bob relocked' } });
+  check('re-adding the key re-locks edits (403)', bobRelocked.status === 403, `got ${bobRelocked.status}`);
+  const lockAudit = (await call(`/projects/${proj.id}/activity?action=task.updated`, { token: at })).json.items
+    .find((e) => e.detail?.changes?.lockedKeys);
+  check('audit records locked key set changes', !!lockAudit, 'no lockedKeys change event');
+
+  // DONE unlocks; reopening re-locks.
+  await call(`${base}/${lockTask.id}`, { token: at, method: 'PATCH', body: { status: 'DONE' } });
+  const bobAfterDone = await call(`/projects/${proj.id}/keys/${k1.id}/translations`, { token: bt, method: 'PUT', body: { locale: 'he', value: 'bob after done' } });
+  check('DONE task releases the lock', bobAfterDone.status === 200, `got ${bobAfterDone.status}`);
+  await call(`${base}/${lockTask.id}`, { token: at, method: 'PATCH', body: { status: 'OPEN' } });
+  const bobAfterReopen = await call(`/projects/${proj.id}/keys/${k1.id}/translations`, { token: bt, method: 'PUT', body: { locale: 'he', value: 'bob after reopen' } });
+  check('reopening the task re-applies the lock (403)', bobAfterReopen.status === 403, `got ${bobAfterReopen.status}`);
+
+  // Cross-project key reference rejected.
+  const proj2 = (await call('/projects', { token: at, method: 'POST', body: { name: 'TK2', slug: 'tk2', locales: ['en'] } })).json;
+  const k2 = (await call(`/projects/${proj2.id}/keys`, { token: at, method: 'POST', body: { name: 'other.key' } })).json;
+  const foreignKey = await call(base, { token: at, method: 'POST', body: { title: 'x', keyIds: [k2.id] } });
+  check('locking a key from another project rejected (400)', foreignKey.status === 400, `got ${foreignKey.status}`);
+
+  await call(`${base}/${lockTask.id}`, { token: at, method: 'DELETE' });
+  const bobAfterDelete = await call(`/projects/${proj.id}/keys/${k1.id}/translations`, { token: bt, method: 'PUT', body: { locale: 'he', value: 'bob after delete' } });
+  check('deleting the task releases the lock', bobAfterDelete.status === 200, `got ${bobAfterDelete.status}`);
+
   const ro = (await call('/auth/tokens', { token: at, method: 'POST', body: { name: 'ro', scopes: ['read'] } })).json;
   const roRead = await call(base, { apiKey: ro.token });
   const roWrite = await call(base, { apiKey: ro.token, method: 'POST', body: { title: 'x' } });

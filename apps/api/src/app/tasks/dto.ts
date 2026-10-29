@@ -1,4 +1,4 @@
-import { IsIn, IsISO8601, IsOptional, IsString, IsUUID, Length, ValidateIf } from 'class-validator';
+import { ArrayMaxSize, IsBoolean, IsIn, IsISO8601, IsOptional, IsString, IsUUID, Length, ValidateIf } from 'class-validator';
 
 export class CreateTaskDto {
   @IsString()
@@ -25,6 +25,15 @@ export class CreateTaskDto {
   @IsOptional()
   @IsUUID()
   dependsOnId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  lockKeys?: boolean;
+
+  @IsOptional()
+  @IsUUID(undefined, { each: true })
+  @ArrayMaxSize(200)
+  keyIds?: string[];
 }
 
 export class UpdateTaskDto {
@@ -58,4 +67,13 @@ export class UpdateTaskDto {
   @ValidateIf((_, v) => v !== null && v !== undefined)
   @IsUUID()
   dependsOnId?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  lockKeys?: boolean;
+
+  @IsOptional()
+  @IsUUID(undefined, { each: true })
+  @ArrayMaxSize(200)
+  keyIds?: string[];
 }

@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { ApiService, MemberInfo, TaskItem, GroupInfo } from '../api.service';
+import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service';
 
 @Component({
   selector: 'ol-tasks',
@@ -42,6 +42,14 @@ import { ApiService, MemberInfo, TaskItem, GroupInfo } from '../api.service';
             <option value="">no predecessor</option>
             @for (t of tasks(); track t.id) { <option [value]="t.id">{{ t.title }}</option> }
           </select>
+          <select multiple aria-label="Locked keys (optional)" size="4"
+            [ngModel]="selectedKeyIds()" (ngModelChange)="selectedKeyIds.set($event)" name="taskLockKeys">
+            @for (k of keys(); track k.id) { <option [value]="k.id">{{ k.name }}</option> }
+          </select>
+          <label class="lock-toggle">
+            <input type="checkbox" [ngModel]="lockKeys()" (ngModelChange)="lockKeys.set($event)" name="taskLockToggle" />
+            lock the selected keys while this task is open
+          </label>
           <button class="primary" type="submit">Create task</button>
         </form>
       </section>
@@ -53,6 +61,7 @@ import { ApiService, MemberInfo, TaskItem, GroupInfo } from '../api.service';
               <strong>{{ t.title }}</strong>
               @if (t.description) { <span class="muted">{{ t.description }}</span> }
               @if (t.dependsOn) { <span class="muted">waits on: {{ t.dependsOn.title }} ({{ t.dependsOn.status.toLowerCase().replace('_', ' ') }})</span> }
+              @if (t.lockKeys && t.keys.length) { <span class="muted lock-chip">locks {{ t.keys.length }} key(s): {{ lockedNames(t) }}</span> }
             </div>
             <select [attr.aria-label]="'Status for ' + t.title" [ngModel]="t.status"
               (change)="update(t, { status: $any($event.target).value }, $any($event.target), t.status)">
@@ -81,6 +90,9 @@ export class TasksComponent implements OnInit {
   tasks = signal<TaskItem[]>([]);
   members = signal<MemberInfo[]>([]);
   groups = signal<GroupInfo[]>([]);
+  keys = signal<Key[]>([]);
+  selectedKeyIds = signal<string[]>([]);
+  lockKeys = signal(false);
   statusFilter = signal('');
   mineFilter = signal('');
   loading = signal(true);
@@ -102,6 +114,9 @@ export class TasksComponent implements OnInit {
     void this.api.listGroups(this.projectId)
       .then((g) => this.groups.set(g))
       .catch(() => this.groups.set([]));
+    void this.api.listKeys(this.projectId)
+      .then((k) => this.keys.set(k))
+      .catch(() => this.keys.set([]));
   }
 
   setFilter(status: string) {
@@ -132,6 +147,11 @@ export class TasksComponent implements OnInit {
     return { assigneeId: v };
   }
 
+  lockedNames(t: TaskItem): string {
+    const names = t.keys.map((k) => k.key.name);
+    return names.length > 3 ? names.slice(0, 3).join(', ') + ', …' : names.join(', ');
+  }
+
   async create() {
     const title = this.title().trim();
     if (!title) return;
@@ -142,8 +162,10 @@ export class TasksComponent implements OnInit {
         ...(this.dueDate() ? { dueDate: this.dueDate() } : {}),
         ...this.assigneePatch(this.assigneeId()),
         ...(this.dependsOnId() ? { dependsOnId: this.dependsOnId() } : {}),
+        ...(this.selectedKeyIds().length ? { keyIds: this.selectedKeyIds(), lockKeys: this.lockKeys() } : {}),
       });
       this.title.set(''); this.description.set(''); this.dueDate.set(''); this.assigneeId.set(''); this.dependsOnId.set('');
+      this.selectedKeyIds.set([]); this.lockKeys.set(false);
       await this.fetch();
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to create task'); }
   }
