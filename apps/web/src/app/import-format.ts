@@ -3,7 +3,7 @@
 // unknown or missing extension; callers keep the user's explicit selection.
 // Ambiguity resolved by convention: .xml is Android strings XML (XLIFF uses
 // .xlf/.xliff); .json is the flat/nested JSON format (Flutter ARB uses .arb).
-export type IoFormat = 'json' | 'csv' | 'android' | 'ios' | 'po' | 'xliff' | 'properties' | 'arb' | 'yaml' | 'resx';
+export type IoFormat = 'json' | 'csv' | 'android' | 'ios' | 'po' | 'pot' | 'xliff' | 'properties' | 'arb' | 'yaml' | 'resx';
 
 const BY_EXTENSION: Record<string, IoFormat> = {
   json: 'json',
@@ -11,6 +11,7 @@ const BY_EXTENSION: Record<string, IoFormat> = {
   xml: 'android',
   strings: 'ios',
   po: 'po',
+  pot: 'pot',
   xlf: 'xliff',
   xliff: 'xliff',
   properties: 'properties',

@@ -174,6 +174,7 @@ export const OPENAPI = {
     '/api/projects/{projectId}/export/{locale}/po': { get: p('Export a locale as PO (gettext)', 'import/export') },
     '/api/projects/{projectId}/export/{locale}/xliff': { get: p('Export a locale as XLIFF 1.2', 'import/export') },
     '/api/projects/{projectId}/export/{locale}/resx': { get: p('Export a locale as RESX (.NET XML resources)', 'import/export') },
+    '/api/projects/{projectId}/export/{locale}/pot': { get: p('Export a locale as a POT (gettext template) with empty msgstr values', 'import/export') },
     '/api/projects/{projectId}/export/{locale}/properties': { get: p('Export a locale as Java .properties', 'import/export') },
     '/api/projects/{projectId}/export/{locale}/arb': { get: p('Export a locale as Flutter ARB', 'import/export') },
     '/api/projects/{projectId}/export/{locale}/yaml': { get: p('Export a locale as YAML (Rails-style subset)', 'import/export') },

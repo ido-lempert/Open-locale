@@ -1,4 +1,19 @@
-import { parsePo, toPo } from './po';
+import { parsePo, toPo, toPot } from './po';
+
+  it('exports a POT template with every msgstr empty', () => {
+    const out = toPot([['app.title', 'Hello'], ['cart.total', 'Total {n}']]);
+    expect(out).toContain('# Exported from Open-locale as a translation template (POT).');
+    expect(out).toContain('msgid "app.title"\nmsgstr ""');
+    expect(out).toContain('msgid "cart.total"\nmsgstr ""');
+    expect(out).not.toContain('msgstr "Hello"');
+  });
+
+  it('imports a POT through the PO parser: keys land with empty values', () => {
+    const pot = toPot([['a.b', 'ignored'], ['c.d', 'x']]);
+    const back = parsePo(pot);
+    expect(back.rejected).toBe(0);
+    expect(back.rows).toEqual([['a.b', ''], ['c.d', '']]);
+  });
 
 describe('PO interchange', () => {
   it('exports entries with escaped quotes, newlines, tabs and backslashes', () => {

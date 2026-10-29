@@ -13,6 +13,15 @@ export function toPo(rows: [string, string][]): string {
   return `# Exported from Open-locale.\n# Keys are msgids; plural and context forms are not used.\n\n${body}\n`;
 }
 
+// POT (gettext template): same entry shape with every msgstr empty - a
+// template translators fill in, not a translation delivery. Import accepts
+// it through the same PO parser: msgids land as keys, empty msgstr values
+// land as empty translations.
+export function toPot(rows: [string, string][]): string {
+  const body = rows.map(([k]) => `msgid "${esc(k)}"\nmsgstr ""`).join('\n\n');
+  return `# Exported from Open-locale as a translation template (POT).\n# Keys are msgids; every msgstr is intentionally empty.\n\n${body}\n`;
+}
+
 // A PO string literal: double-quoted, with C-style escapes. Unknown escapes
 // keep both characters - the roundtrip must stay lossless, never drop data.
 const parseLiteral = (s: string): string | null => {

@@ -14,6 +14,7 @@ describe('detectImportFormat', () => {
     expect(detectImportFormat('en.yaml')).toBe('yaml');
     expect(detectImportFormat('en.yml')).toBe('yaml');
     expect(detectImportFormat('Strings.resx')).toBe('resx');
+    expect(detectImportFormat('messages.pot')).toBe('pot');
   });
 
   it('returns null for unknown or missing extensions', () => {

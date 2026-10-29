@@ -14,7 +14,7 @@ import { flattenJson, unflattenJson } from './json-flatten';
 import type { ImportJsonDto } from './dto';
 import { parseCsv, toCsv } from './csv';
 import { parseAndroidXml, toAndroidXml } from './android-xml';
-import { parsePo, toPo } from './po';
+import { parsePo, toPo, toPot } from './po';
 import { parseXliff, toXliff } from './xliff';
 import { parseResx, toResx } from './resx';
 import { parseProperties, toProperties } from './properties';
@@ -345,6 +345,11 @@ export class TranslationsService {
     return toPo(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)));
   }
 
+  async exportPot(userId: string, projectId: string, locale: string, branch?: string) {
+    const flat = (await this.exportJson(userId, projectId, locale, true, branch)) as Record<string, string>;
+    return toPot(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)));
+  }
+
   async exportXliff(userId: string, projectId: string, locale: string, branch?: string) {
     const flat = (await this.exportJson(userId, projectId, locale, true, branch)) as Record<string, string>;
     const project = await this.projects.getFor(userId, projectId);
@@ -387,6 +392,7 @@ export class TranslationsService {
       android: { ext: '.xml', run: (l) => this.exportAndroid(userId, projectId, l, branch) },
       ios: { ext: '.strings', run: (l) => this.exportIos(userId, projectId, l, branch) },
       po: { ext: '.po', run: (l) => this.exportPo(userId, projectId, l, branch) },
+      pot: { ext: '.pot', run: (l) => this.exportPot(userId, projectId, l, branch) },
       xliff: { ext: '.xlf', run: (l) => this.exportXliff(userId, projectId, l, branch) },
       resx: { ext: '.resx', run: (l) => this.exportResx(userId, projectId, l, branch) },
       properties: { ext: '.properties', run: (l) => this.exportProperties(userId, projectId, l, branch) },
@@ -427,6 +433,7 @@ export class TranslationsService {
       android: { ext: '.xml', run: (l, t) => this.importAndroid(userId, projectId, l, t, branch) },
       ios: { ext: '.strings', run: (l, t) => this.importIos(userId, projectId, l, t, branch) },
       po: { ext: '.po', run: (l, t) => this.importPo(userId, projectId, l, t, branch) },
+      pot: { ext: '.pot', run: (l, t) => this.importPot(userId, projectId, l, t, branch) },
       xliff: { ext: '.xlf', run: (l, t) => this.importXliff(userId, projectId, l, t, branch) },
       resx: { ext: '.resx', run: (l, t) => this.importResx(userId, projectId, l, t, branch) },
       properties: { ext: '.properties', run: (l, t) => this.importProperties(userId, projectId, l, t, branch) },
@@ -486,6 +493,13 @@ export class TranslationsService {
       const { rows, rejected } = parsePo(dto.po);
       if (rejected > 0) {
         throw new BadRequestException(`${rejected} PO ${rejected === 1 ? 'entry' : 'entries'} rejected: plurals (msgid_plural/msgstr[n]), contexts (msgctxt) and malformed strings are not supported`);
+      }
+      return { entries: Object.fromEntries(rows), untranslatedSkipped: 0 };
+    }
+    if (dto.pot != null) {
+      const { rows, rejected } = parsePo(dto.pot);
+      if (rejected > 0) {
+        throw new BadRequestException(`${rejected} POT ${rejected === 1 ? 'entry' : 'entries'} rejected: plurals (msgid_plural/msgstr[n]), contexts (msgctxt) and malformed strings are not supported`);
       }
       return { entries: Object.fromEntries(rows), untranslatedSkipped: 0 };
     }
@@ -567,6 +581,10 @@ export class TranslationsService {
 
   async importPo(userId: string, projectId: string, locale: string, po: string, branch?: string) {
     return this.importJson(userId, projectId, locale, this.parseImport({ po }).entries, branch);
+  }
+
+  async importPot(userId: string, projectId: string, locale: string, pot: string, branch?: string) {
+    return this.importJson(userId, projectId, locale, this.parseImport({ pot }).entries, branch);
   }
 
   async importXliff(userId: string, projectId: string, locale: string, xliff: string, branch?: string) {

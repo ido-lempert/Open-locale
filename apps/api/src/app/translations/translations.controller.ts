@@ -61,6 +61,12 @@ export class TranslationsController {
     return this.translations.exportPo(user.userId, projectId, locale, branch);
   }
 
+  @Get('export/:locale/pot')
+  @Header('Content-Type', 'text/plain; charset=utf-8')
+  exportPot(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
+    return this.translations.exportPot(user.userId, projectId, locale, branch);
+  }
+
   @Get('export/:locale/xliff')
   @Header('Content-Type', 'application/x-xliff+xml; charset=utf-8')
   exportXliff(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
@@ -120,6 +126,7 @@ export class TranslationsController {
   importJson(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch: string | undefined, @Query('dryRun') dryRun: string | undefined, @Body() dto: ImportJsonDto) {
     if (dryRun === 'true') return this.translations.importPreview(user.userId, projectId, locale, dto, branch);
     if (dto.po != null) return this.translations.importPo(user.userId, projectId, locale, dto.po, branch);
+    if (dto.pot != null) return this.translations.importPot(user.userId, projectId, locale, dto.pot, branch);
     if (dto.xliff != null) return this.translations.importXliff(user.userId, projectId, locale, dto.xliff, branch);
     if (dto.resx != null) return this.translations.importResx(user.userId, projectId, locale, dto.resx, branch);
     if (dto.properties != null) return this.translations.importProperties(user.userId, projectId, locale, dto.properties, branch);
@@ -129,6 +136,6 @@ export class TranslationsController {
     if (dto.xml != null) return this.translations.importAndroid(user.userId, projectId, locale, dto.xml, branch);
     if (dto.strings != null) return this.translations.importIos(user.userId, projectId, locale, dto.strings, branch);
     if (dto.entries != null) return this.translations.importJson(user.userId, projectId, locale, dto.entries, branch);
-    throw new BadRequestException('Provide entries (JSON), csv, xml, strings, po, xliff, properties, arb, yaml or resx');
+    throw new BadRequestException('Provide entries (JSON), csv, xml, strings, po, pot, xliff, properties, arb, yaml or resx');
   }
 }

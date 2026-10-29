@@ -460,6 +460,30 @@ try {
   check('RESX numeric character reference rejected (400)', resxNum.status === 400, String(resxNum.status));
   const resxNs = await call(`${P}/import/he`, { token: at, method: 'POST', body: { resx: '<root xmlns="urn:x"><data name="resx.ns"><value>v</value></data></root>' } });
   check('RESX namespaced root rejected (400)', resxNs.status === 400, String(resxNs.status));
+  // --- POT (gettext template) ---
+  const potImp = await call(`${P}/import/he`, { token: at, method: 'POST', body: { pot: 'msgid "pot.title"\nmsgstr ""\n\nmsgid "pot.chars"\nmsgstr ""' } });
+  check('POT import creates keys with empty translations', potImp.status === 201 && potImp.json.keysCreated === 2, JSON.stringify(potImp.json));
+  const potJson = await (await fetch(`${API}${P}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('POT-imported keys hold empty values in the flat export', potJson['pot.title'] === '' && potJson['pot.chars'] === '', JSON.stringify(potJson['pot.title']));
+  const potOut = await (await fetch(`${API}${P}/export/he/pot`, { headers: { Authorization: `Bearer ${at}` } })).text();
+  check('POT export emits every msgid with msgstr empty, blanking translated keys too', potOut.includes('msgid "pot.title"\nmsgstr ""') && potOut.includes('msgid "resx.title"\nmsgstr ""') && potOut.includes('translation template (POT)') && !/msgstr "[^"]/.test(potOut), potOut.split('\n').find((l) => l.includes('pot.title')) ?? '');
+  // Roundtrip into a fresh empty branch: a template import writes empty values, so it must not touch main.
+  await call(`${P}/branches`, { token: at, method: 'POST', body: { name: 'pot-round' } });
+  const potRound = await call(`${P}/import/he?branch=pot-round`, { token: at, method: 'POST', body: { pot: potOut } });
+  const heAfterPotRound = await (await fetch(`${API}${P}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('POT export -> import roundtrips into an empty branch without touching main', potRound.status === 201 && potRound.json.keysCreated >= 2 && heAfterPotRound['resx.title'] === 'My App ✓', JSON.stringify(potRound.json));
+  const potPlural = await call(`${P}/import/he`, { token: at, method: 'POST', body: { pot: 'msgid "p"\nmsgid_plural "ps"\nmsgstr[0] ""\nmsgstr[1] ""' } });
+  const potAfterPlural = await (await fetch(`${API}${P}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('POT plural entry rejected (400) and leaves keys unchanged', potPlural.status === 400 && JSON.stringify(heAfterPotRound) === JSON.stringify(potAfterPlural) && potAfterPlural['p'] === undefined, String(potPlural.status));
+  const potMember = await call(`${P}/import/en`, { token: ct, method: 'POST', body: { pot: 'msgid "pot.member"\nmsgstr ""' } });
+  check('POT import outside the member locale grant denied (403)', potMember.status === 403, String(potMember.status));
+  await call(`${P}/branches`, { token: at, method: 'POST', body: { name: 'pot-branch' } });
+  const impPotBr = await call(`${P}/import/en?branch=pot-branch`, { token: at, method: 'POST', body: { pot: 'msgid "pot.branchonly"\nmsgstr ""' } });
+  const mainAfterPotBr = await (await fetch(`${API}${P}/export/en?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('POT import scopes to the named branch', impPotBr.status === 201 && mainAfterPotBr['pot.branchonly'] === undefined, String(impPotBr.status));
+  const potBrOut = await (await fetch(`${API}${P}/export/en/pot?branch=pot-branch`, { headers: { Authorization: `Bearer ${at}` } })).text();
+  check('POT export reads the named branch', potBrOut.includes('msgid "pot.branchonly"') && !/msgstr "[^"]/.test(potBrOut), potBrOut.split('\n').find((l) => l.includes('branchonly')) ?? '');
+
   const resxDry = await call(`${P}/import/he?dryRun=true`, { token: at, method: 'POST', body: { resx: resxOut } });
   check('RESX import previews through dry-run without writing', resxDry.status === 201 && resxDry.json.dryRun === true && resxDry.json.unchangedSkipped >= 2, JSON.stringify(resxDry.json));
 
@@ -527,7 +551,7 @@ try {
     }
     return out;
   };
-  const extFor = { csv: '.csv', android: '.xml', ios: '.strings', po: '.po', xliff: '.xlf', properties: '.properties', arb: '.arb', yaml: '.yaml', resx: '.resx' };
+  const extFor = { csv: '.csv', android: '.xml', ios: '.strings', po: '.po', pot: '.pot', xliff: '.xlf', properties: '.properties', arb: '.arb', yaml: '.yaml', resx: '.resx' };
   const bundleJson = await fetch(`${API}${P}/export-bundle/json`, { headers: { Authorization: `Bearer ${at}` } });
   const jsonEntries = readZip(Buffer.from(await bundleJson.arrayBuffer()));
   check('json bundle: zip content-type, attachment disposition, one entry per locale', bundleJson.status === 200 && (bundleJson.headers.get('content-type') || '').includes('application/zip') && (bundleJson.headers.get('content-disposition') || '').includes('fmt-json.zip') && jsonEntries.size === 2 && jsonEntries.has('en.json') && jsonEntries.has('he.json'), `${bundleJson.status} ${bundleJson.headers.get('content-disposition')} ${[...jsonEntries.keys()].join(',')}`);

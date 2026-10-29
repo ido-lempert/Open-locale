@@ -385,6 +385,31 @@ try {
   check('RESX export via UI emits resheaders and the imported key',
     resxExport.includes('<resheader name="resmimetype">') && resxExport.includes('<data name="resx.uikey" xml:space="preserve">') && resxExport.includes('<value>resx ui value ✓</value>'),
     resxExport.split('\n').find((l) => l.includes('resx.uikey')) ?? '');
+  // POT template through the UI: upload, notice + grid, export blob with empty msgstr.
+  await page.select('select[aria-label="Import/export format"]', 'pot');
+  const potFile = '/tmp/e2e-import.pot';
+  writeFileSync(potFile, 'msgid "pot.uikey"\nmsgstr ""\n');
+  const potInput = await page.$('input[name=importFile]');
+  await potInput.uploadFile(potFile);
+  const potNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('(POT (gettext template),'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('POT import via UI shows summary notice', potNotice);
+  check('POT-imported key appears in grid', await waitText('pot.uikey'));
+  await page.type('input[aria-label="Search keys"]', 'pot.uikey');
+  await page.waitForFunction(() => (document.querySelector('.grid tbody')?.textContent || '').includes('pot.uikey') && !(document.querySelector('.grid tbody')?.textContent || '').includes('home.title'), { timeout: 10000 });
+  await shot('editor-19b-pot-import.png');
+  await page.evaluate(() => { const el = document.querySelector('input[aria-label="Search keys"]'); const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; setter.call(el, ''); el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.waitForFunction(() => (document.querySelector('.grid tbody')?.textContent || '').includes('home.title'), { timeout: 10000 });
+  await page.evaluate(() => {
+    window.__potCapture = null;
+    const orig = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (b) => { window.__potCapture = b; return orig(b); };
+  });
+  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.startsWith('Export'))?.click());
+  await page.waitForFunction(() => !!window.__potCapture, { timeout: 10000 });
+  const potExport = await page.evaluate(() => window.__potCapture.text());
+  check('POT export via UI emits msgids with empty msgstr, blanking translated keys too',
+    potExport.includes('translation template (POT)') && potExport.includes('msgid "pot.uikey"\nmsgstr ""') && potExport.includes('msgid "resx.uikey"\nmsgstr ""') && !/msgstr "[^"]/.test(potExport),
+    potExport.split('\n').find((l) => l.includes('pot.uikey')) ?? '');
   const csvFile = '/tmp/e2e-import.csv';
   writeFileSync(csvFile, 'key,value\napp.subtitle,"Welcome, friend"\n');
   // The IO toolbar has a format picker; select CSV first so the import input and the safe/raw note apply to CSV.

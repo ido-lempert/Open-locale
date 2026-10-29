@@ -88,6 +88,11 @@ try {
   check('cli push imports a RESX file', pushResx.status === 0 && pushResx.out.includes('1 upserted'), pushResx.out.trim().slice(0, 120));
   const pullResx = cli(['pull', '--locale', 'he', '--format', 'resx'], workDir);
   check('cli pull resx prints the root and resheaders', pullResx.status === 0 && pullResx.out.includes('<root>') && pullResx.out.includes('resmimetype') && pullResx.out.includes('רסקס'), pullResx.out.trim().slice(0, 120));
+  writeFileSync(join(workDir, 'he.pot'), 'msgid "pot.cli"\nmsgstr ""\n');
+  const pushPot = cli(['push', 'he.pot', '--locale', 'he'], workDir);
+  check('cli push .pot imports template entries', pushPot.status === 0 && /1 key\(s\) created/.test(pushPot.out), pushPot.out.trim().slice(0, 120));
+  const pullPot = cli(['pull', '--locale', 'he', '--format', 'pot'], workDir);
+  check('cli pull pot prints msgids with empty msgstr', pullPot.status === 0 && pullPot.out.includes('msgid "pot.cli"\nmsgstr ""') && pullPot.out.includes('translation template (POT)'), pullPot.out.trim().slice(0, 120));
   const badFmt = cli(['pull', '--locale', 'he', '--format', 'toml'], workDir);
   check('cli pull rejects an unknown format', badFmt.status === 1 && badFmt.out.includes('unknown format'), badFmt.out.trim());
 
