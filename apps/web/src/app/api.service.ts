@@ -47,6 +47,14 @@ export interface MemberInfo {
   allowedLocales: string[];
 }
 
+export interface GroupInfo {
+  id: string;
+  name: string;
+  role: string;
+  allowedLocales: string[];
+  members: { userId: string; user: { id: string; displayName: string; email: string } }[];
+}
+
 export interface SnapshotMeta {
   id: string;
   label: string;
@@ -250,6 +258,24 @@ export class ApiService {
   }
   removeMember(projectId: string, userId: string) {
     return this.request<{ removed: string }>(`/projects/${projectId}/members/${userId}`, { method: 'DELETE' });
+  }
+  listGroups(projectId: string) {
+    return this.request<GroupInfo[]>(`/projects/${projectId}/groups`);
+  }
+  createGroup(projectId: string, name: string, role: string, allowedLocales: string[]) {
+    return this.request<GroupInfo>(`/projects/${projectId}/groups`, { method: 'POST', body: JSON.stringify({ name, role, allowedLocales }) });
+  }
+  updateGroup(projectId: string, groupId: string, input: { name?: string; role?: string; allowedLocales?: string[] }) {
+    return this.request<GroupInfo>(`/projects/${projectId}/groups/${groupId}`, { method: 'PATCH', body: JSON.stringify(input) });
+  }
+  deleteGroup(projectId: string, groupId: string) {
+    return this.request<{ ok: boolean }>(`/projects/${projectId}/groups/${groupId}`, { method: 'DELETE' });
+  }
+  addGroupMember(projectId: string, groupId: string, userId: string) {
+    return this.request<unknown>(`/projects/${projectId}/groups/${groupId}/members/${userId}`, { method: 'PUT' });
+  }
+  removeGroupMember(projectId: string, groupId: string, userId: string) {
+    return this.request<{ ok: boolean }>(`/projects/${projectId}/groups/${groupId}/members/${userId}`, { method: 'DELETE' });
   }
   listSnapshots(projectId: string) {
     return this.request<SnapshotMeta[]>(`/projects/${projectId}/snapshots`);

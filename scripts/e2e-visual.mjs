@@ -452,6 +452,41 @@ try {
   await shot('editor-10-tokens.png');
 
 
+  // --- Groups: create via UI, union copy visible, desktop + narrow shots ---
+  await page.goto(`${WEB}/projects/${projId}/settings`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('input[aria-label="Group name"]', { timeout: 10000 });
+  const unionCopy = await page.evaluate(() => document.body.textContent);
+  check('groups panel explains union never reduces a direct grant', unionCopy.includes('restrictive group never reduces an unrestricted direct grant'));
+  check('groups panel explains team-wide visibility (no per-project hiding)', unionCopy.includes('no per-project hiding'));
+  check('groups panel explains immediate effect of role changes', unionCopy.includes('Changes apply immediately'));
+  await page.type('input[aria-label="Group name"]', 'reviewers');
+  await page.select('select[aria-label="New group role"]', 'MEMBER');
+  await page.type('input[aria-label="Group locales"]', 'he');
+  await page.evaluate(() => { document.querySelector('input[aria-label="Group name"]').closest('form').requestSubmit(); });
+  const groupShown = await page.waitForFunction(() => (document.body.textContent || '').includes('reviewers'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('group created via UI and listed', groupShown);
+  await page.evaluate(() => {
+    const h = [...document.querySelectorAll('h2')].find((x) => x.textContent === 'Groups');
+    h.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70);
+  });
+  await shot('editor-24-groups.png');
+  await page.setViewport({ width: 480, height: 800 });
+  await page.evaluate(() => {
+    const h = [...document.querySelectorAll('h2')].find((x) => x.textContent === 'Groups');
+    h.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70);
+  });
+  await shot('editor-25-groups-narrow.png');
+  const narrowOk = await page.evaluate(() => {
+    const h = [...document.querySelectorAll('h2')].find((x) => x.textContent === 'Groups');
+    const r = h.getBoundingClientRect();
+    const headingVisible = r.top >= 0 && r.left >= 0 && r.right <= window.innerWidth;
+    const noHorizontalOverflow = document.documentElement.scrollWidth <= window.innerWidth;
+    return headingVisible && noHorizontalOverflow;
+  });
+  check('groups panel fits narrow viewport without horizontal overflow', narrowOk === true);
+  await page.setViewport({ width: 1280, height: 800 });
+
+
   // --- Branches: create via UI, isolation, merge into main ---
   await page.goto(`${WEB}/projects/${projId}`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('select[aria-label="Branch"]', { timeout: 10000 });

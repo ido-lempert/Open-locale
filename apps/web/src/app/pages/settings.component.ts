@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicationInfo, ApiTokenInfo, MemberInfo, Project } from '../api.service';
+import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicationInfo, ApiTokenInfo, GroupInfo, MemberInfo, Project } from '../api.service';
 
 @Component({
   selector: 'ol-settings',
@@ -195,6 +195,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                 <span>{{ m.displayName }} <span class="muted">{{ m.email }}</span></span>
                 <span class="role-badge">{{ m.role.toLowerCase() }}</span>
                 <span class="muted">{{ m.role === 'MEMBER' && m.allowedLocales.length ? 'locales: ' + m.allowedLocales.join(', ') : 'all locales' }}</span>
+                @if (effectiveNote(m); as note) { <span class="muted" aria-label="Effective grant">{{ note }}</span> }
                 @if (m.role !== 'OWNER') {
                   <select aria-label="Role" [ngModel]="m.role" (ngModelChange)="setRole(m, $event)" name="role-{{m.id}}">
                     <option value="MEMBER">member</option>
@@ -215,6 +216,46 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             <button type="submit" [disabled]="busy()">Add</button>
           </form>
           <p class="muted">Members join this team and can access every project in it. A locale list limits their translation writes across all of the team's projects. Project administration (settings, locales, webhooks, restores, members) requires admin.</p>
+        </section>
+        <section class="panel">
+          <h2>Groups</h2>
+          <p class="muted">Groups are team-wide grant templates: every member sees all groups and their members (there is no per-project hiding), and a group grant applies to every project in the team. A member's effective access is the UNION of their direct membership and every group they belong to: the strongest role wins, locale lists combine, and a restrictive group never reduces an unrestricted direct grant. Changes apply immediately - promoting or demoting a group changes its members' effective access on their next action.</p>
+          <ul class="locale-list">
+            @for (g of groups(); track g.id) {
+              <li>
+                <span><strong>{{ g.name }}</strong></span>
+                <span class="role-badge">{{ g.role.toLowerCase() }}</span>
+                <span class="muted">{{ g.role === 'MEMBER' && g.allowedLocales.length ? 'locales: ' + g.allowedLocales.join(', ') : 'all locales' }}</span>
+                <select aria-label="Group role" [ngModel]="g.role" (ngModelChange)="setGroupRole(g, $event)" name="grole-{{g.id}}">
+                  <option value="MEMBER">member</option>
+                  <option value="ADMIN">admin</option>
+                </select>
+                <button class="danger" (click)="removeGroup(g)">Delete</button>
+              </li>
+              <li class="muted" style="padding-left: 1rem;">
+                Members: {{ g.members.length ? '' : 'none' }}
+                @for (gm of g.members; track gm.userId) {
+                  <span>{{ gm.user.displayName }} <button class="danger" aria-label="Remove from group" (click)="removeGroupMember(g, gm.userId)">x</button></span>
+                }
+                <select aria-label="Add member to group" name="gadd-{{g.id}}" [ngModel]="groupPick()[g.id] ?? ''" (ngModelChange)="addGroupMember(g, $event)">
+                  <option value="">add member…</option>
+                  @for (m of members(); track m.id) {
+                    @if (!g.members.some((gm) => gm.userId === m.id)) { <option [value]="m.id">{{ m.displayName }}</option> }
+                  }
+                </select>
+              </li>
+            }
+            @if (!groups().length) { <li class="muted">No groups yet.</li> }
+          </ul>
+          <form class="inline" (ngSubmit)="addGroup()">
+            <input aria-label="Group name" placeholder="Group name" [ngModel]="groupName()" (ngModelChange)="groupName.set($event)" name="groupName" required />
+            <select aria-label="New group role" [ngModel]="groupRole()" (ngModelChange)="groupRole.set($event)" name="groupRole">
+              <option value="MEMBER">member</option>
+              <option value="ADMIN">admin</option>
+            </select>
+            <input aria-label="Group locales" placeholder="Locales (e.g. he,fr) - blank = all" [ngModel]="groupLocales()" (ngModelChange)="groupLocales.set($event)" name="groupLocales" />
+            <button type="submit" [disabled]="busy()">Add group</button>
+          </form>
         </section>
         <section class="panel">
           <h2>OTA publications</h2>
@@ -263,6 +304,9 @@ export class SettingsComponent implements OnInit {
   confirmingToken = signal<string | null>(null);
   confirmingLocale = signal<string | null>(null);
   members = signal<MemberInfo[]>([]);
+  groups = signal<GroupInfo[]>([]);
+  groupName = signal(''); groupRole = signal('MEMBER'); groupLocales = signal('');
+  groupPick = signal<Record<string, string>>({});
   otaPubs = signal<OtaPublicationInfo[]>([]); otaBranch = signal('main'); branches = signal<BranchInfo[]>([]); otaNotice = signal('');
   memberEmail = signal(''); memberRole = signal('MEMBER'); memberLocales = signal(''); newStatus = signal('');
   localeTxCount = signal(0);
@@ -279,6 +323,7 @@ export class SettingsComponent implements OnInit {
       this.name.set(p.name); this.description.set(p.description);
       this.tokens.set(await this.api.listTokens());
       this.members.set(await this.api.listMembers(this.projectId));
+      this.groups.set(await this.api.listGroups(this.projectId));
       this.otaPubs.set(await this.api.listOtaPublications(this.projectId));
       this.branches.set(await this.api.listBranches(this.projectId));
       this.mtProviders.set(await this.api.listMtProviders(this.projectId));
@@ -494,6 +539,55 @@ export class SettingsComponent implements OnInit {
       await this.reload();
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
+  }
+
+  // Mirrors the server's union rule so inherited grants are visible:
+  // strongest role wins across direct + group grants; a MEMBER-level
+  // effective role unions the locale lists (empty list from any grant =
+  // unrestricted). A restrictive group never shrinks a wider direct grant.
+  effectiveNote(m: MemberInfo): string | null {
+    const rank: Record<string, number> = { OWNER: 3, ADMIN: 2, MEMBER: 1 };
+    const grants = [{ role: m.role, allowedLocales: m.allowedLocales },
+      ...this.groups().filter((g) => g.members.some((gm) => gm.userId === m.id)).map((g) => ({ role: g.role, allowedLocales: g.allowedLocales }))];
+    if (grants.length === 1) return null;
+    const role = grants.reduce((a, b) => (rank[b.role] > rank[a.role] ? b : a)).role;
+    if (role !== 'MEMBER') return role === m.role ? null : `effective: ${role.toLowerCase()} via group`;
+    if (grants.some((g) => g.allowedLocales.length === 0)) return m.allowedLocales.length === 0 ? null : 'effective: all locales via group';
+    const union = [...new Set(grants.flatMap((g) => g.allowedLocales))].sort();
+    if (union.length === m.allowedLocales.length && union.every((l) => m.allowedLocales.includes(l))) return null;
+    return `effective locales: ${union.join(', ')}`;
+  }
+  async addGroup() {
+    this.busy.set(true); this.error.set('');
+    try {
+      const locales = this.groupLocales().split(',').map((l) => l.trim()).filter(Boolean);
+      await this.api.createGroup(this.projectId, this.groupName().trim(), this.groupRole(), locales);
+      this.groupName.set(''); this.groupLocales.set('');
+      await this.reload();
+    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+    finally { this.busy.set(false); }
+  }
+  async setGroupRole(g: GroupInfo, role: string) {
+    this.error.set('');
+    try { await this.api.updateGroup(this.projectId, g.id, { role }); await this.reload(); }
+    catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+  }
+  async removeGroup(g: GroupInfo) {
+    if (!confirm(`Delete group ${g.name}? Its members keep their direct team access but lose this grant immediately.`)) return;
+    this.error.set('');
+    try { await this.api.deleteGroup(this.projectId, g.id); await this.reload(); }
+    catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+  }
+  async addGroupMember(g: GroupInfo, userId: string) {
+    if (!userId) return;
+    this.error.set('');
+    try { await this.api.addGroupMember(this.projectId, g.id, userId); this.groupPick.set({ ...this.groupPick(), [g.id]: '' }); await this.reload(); }
+    catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+  }
+  async removeGroupMember(g: GroupInfo, userId: string) {
+    this.error.set('');
+    try { await this.api.removeGroupMember(this.projectId, g.id, userId); await this.reload(); }
+    catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
   }
   async setRole(m: MemberInfo, role: string) {
     this.error.set('');
