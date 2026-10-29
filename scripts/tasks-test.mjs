@@ -104,6 +104,24 @@ try {
 
   await call(`${base}/${t2.id}`, { token: at, method: 'DELETE' });
 
+  // assignee=me includes tasks assigned to my groups
+  await call(`/projects/${proj.id}/groups/${gr.id}/members/${b.user.id}`, { token: at, method: 'PUT' });
+  const t3 = (await call(base, { token: at, method: 'POST', body: { title: 'Group task for reviewers', assigneeGroupId: gr.id } })).json;
+  const t4 = (await call(base, { token: at, method: 'POST', body: { title: 'Alice solo task', assigneeId: a.user.id } })).json;
+  const t5 = (await call(base, { token: at, method: 'POST', body: { title: 'Unassigned task' } })).json;
+
+  const bobMine = (await call(`${base}?assignee=me`, { token: bt })).json;
+  check('mine includes group-assigned tasks', bobMine.some((t) => t.id === t3.id), JSON.stringify(bobMine.map((t) => t.title)));
+  check('mine excludes others\' tasks and unassigned', !bobMine.some((t) => t.id === t4.id) && !bobMine.some((t) => t.id === t5.id));
+
+  const aliceMine = (await call(`${base}?assignee=me`, { token: at })).json;
+  check('owner mine shows direct assignment only', aliceMine.some((t) => t.id === t4.id) && !aliceMine.some((t) => t.id === t3.id) && !aliceMine.some((t) => t.id === t5.id));
+
+  const bobMineOpen = (await call(`${base}?assignee=me&status=OPEN`, { token: bt })).json;
+  check('mine composes with status filter', bobMineOpen.some((t) => t.id === t3.id));
+
+  for (const id of [t3.id, t4.id, t5.id]) await call(`${base}/${id}`, { token: at, method: 'DELETE' });
+
   const ro = (await call('/auth/tokens', { token: at, method: 'POST', body: { name: 'ro', scopes: ['read'] } })).json;
   const roRead = await call(base, { apiKey: ro.token });
   const roWrite = await call(base, { apiKey: ro.token, method: 'POST', body: { title: 'x' } });

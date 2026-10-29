@@ -647,6 +647,15 @@ try {
     return sel.options[sel.selectedIndex]?.textContent === 'Group: leads';
   }));
 
+  // "assigned to me" filter: demo user is not in the leads group, so the
+  // group-assigned task hides; switching back to everyone shows it again.
+  await page.select('select[aria-label="Filter by assignee"]', 'me');
+  await page.waitForFunction(() => !document.querySelector('.task-row'), { timeout: 10000 });
+  check('mine filter hides group task for non-member', true);
+  await page.select('select[aria-label="Filter by assignee"]', '');
+  await page.waitForSelector('.task-row', { timeout: 10000 });
+  check('everyone filter shows the task again', true);
+
 
   // --- Branches: create via UI, isolation, merge into main ---
   await page.goto(`${WEB}/projects/${projId}`, { waitUntil: 'networkidle0' });

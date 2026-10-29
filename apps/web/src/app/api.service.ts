@@ -342,8 +342,9 @@ export class ApiService {
   deleteGlossaryTerm(projectId: string, termId: string) {
     return this.request<{ removed: string }>(`/projects/${projectId}/glossary/${termId}`, { method: 'DELETE' });
   }
-  listTasks(projectId: string, status?: string) {
-    return this.request<TaskItem[]>(`/projects/${projectId}/tasks${status ? `?status=${status}` : ''}`);
+  listTasks(projectId: string, status?: string, mine?: boolean) {
+    const q = [status ? `status=${status}` : '', mine ? 'assignee=me' : ''].filter(Boolean).join('&');
+    return this.request<TaskItem[]>(`/projects/${projectId}/tasks${q ? `?${q}` : ''}`);
   }
   createTask(projectId: string, input: { title: string; description?: string; dueDate?: string; assigneeId?: string }) {
     return this.request<TaskItem>(`/projects/${projectId}/tasks`, { method: 'POST', body: JSON.stringify(input) });

@@ -11,8 +11,9 @@ export class TasksController {
   constructor(private readonly tasks: TasksService) {}
 
   @Get()
-  list(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Query('status') status?: string) {
-    return this.tasks.list(user.userId, projectId, status);
+  list(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string,
+    @Query('status') status?: string, @Query('assignee') assignee?: string) {
+    return this.tasks.list(user.userId, projectId, status, assignee === 'me');
   }
 
   @Post()

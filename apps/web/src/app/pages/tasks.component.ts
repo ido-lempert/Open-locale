@@ -11,6 +11,10 @@ import { ApiService, MemberInfo, TaskItem, GroupInfo } from '../api.service';
     <header class="bar">
       <a [routerLink]="['/projects', projectId]" class="back">&larr; Editor</a>
       <h1>Tasks</h1>
+      <select aria-label="Filter by assignee" [ngModel]="mineFilter()" (ngModelChange)="setMine($event)">
+        <option value="">everyone</option>
+        <option value="me">assigned to me</option>
+      </select>
       <select aria-label="Filter by status" [ngModel]="statusFilter()" (ngModelChange)="setFilter($event)">
         <option value="">all statuses</option>
         <option value="OPEN">open</option>
@@ -73,6 +77,7 @@ export class TasksComponent implements OnInit {
   members = signal<MemberInfo[]>([]);
   groups = signal<GroupInfo[]>([]);
   statusFilter = signal('');
+  mineFilter = signal('');
   loading = signal(true);
   error = signal('');
   title = signal('');
@@ -98,10 +103,15 @@ export class TasksComponent implements OnInit {
     void this.fetch();
   }
 
+  setMine(v: string) {
+    this.mineFilter.set(v);
+    void this.fetch();
+  }
+
   async fetch() {
     this.loading.set(true);
     try {
-      this.tasks.set(await this.api.listTasks(this.projectId, this.statusFilter() || undefined));
+      this.tasks.set(await this.api.listTasks(this.projectId, this.statusFilter() || undefined, this.mineFilter() === 'me'));
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load tasks'); }
     finally { this.loading.set(false); }
   }

@@ -38,10 +38,15 @@ export class TasksService {
     creator: { select: { id: true, displayName: true, email: true } },
   } as const;
 
-  async list(userId: string, projectId: string, status?: string) {
+  async list(userId: string, projectId: string, status?: string, mine?: boolean) {
     await this.projects.getFor(userId, projectId);
     return this.prisma.task.findMany({
-      where: { projectId, ...(status ? { status: status as never } : {}) },
+      where: {
+        projectId,
+        ...(status ? { status: status as never } : {}),
+        // "mine" = assigned to me directly or to a group I belong to.
+        ...(mine ? { OR: [{ assigneeId: userId }, { assigneeGroup: { members: { some: { userId } } } }] } : {}),
+      },
       include: this.includePeople,
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
       take: 200,
