@@ -181,6 +181,9 @@ try {
   const nullLine = impNull.out.split('\n').find((l) => l.includes(latestRun.id)) ?? '';
   check('cli imports renders a null actor as unknown actor', impNull.status === 0 && nullLine.includes('unknown actor') && !impNull.out.includes('api token'), nullLine.trim().slice(0, 160));
 
+  const impBr = cli(['imports', '--branch', 'cli-br'], workDir);
+  check('cli imports rejects --branch with guidance', impBr.status === 1 && impBr.out.includes('not branch-scoped'), impBr.out.trim().slice(0, 120));
+
   // read-only enforcement through the CLI
   const roTok = await call('/auth/tokens', { jwt, method: 'POST', body: { name: 'cli-ro', scopes: ['read'] } });
   writeFileSync(join(workDir, 'open-locale.json'), JSON.stringify({ url: `http://127.0.0.1:${API_PORT}`, token: roTok.json.token, project: proj.json.id }));

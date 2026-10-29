@@ -153,6 +153,7 @@ async function keys() {
 }
 
 async function imports() {
+  if (opt('branch')) fail('import runs are not branch-scoped; drop --branch');
   const { project } = config();
   const limit = Number(opt('limit', '50'));
   if (!Number.isInteger(limit) || limit < 1) fail('--limit must be a positive integer');
@@ -177,8 +178,8 @@ const usage = `open-locale <command>
   keys [--search term]                   list keys
   imports [--limit N]                    list recent import runs (newest first, API caps at 50)
   docs                                   print the OpenAPI docs URL
-options: every command accepts [--branch name] to scope the read or write to a
-  branch (default: main)
+options: push/pull/keys accept [--branch name] to scope the read or write to a
+  branch (default: main); imports are not branch-scoped
 exit codes: 0 = success (bundle entries with no matching locale are skipped and listed
   on stderr; skips alone keep exit 0); 1 = any failed key or locale, details on stderr`;
 if (!cmd || cmd === 'help' || cmd === '--help') { console.log(usage); process.exit(cmd ? 0 : 1); }

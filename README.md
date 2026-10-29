@@ -76,8 +76,9 @@ open-locale docs                                # print the OpenAPI docs URL
 
 Formats: json, csv, android, ios, po, xliff, properties, arb, yaml. Each format
 is a subset: constructs outside the subset are rejected with an error rather
-than approximated. Every command accepts `--branch <name>` to scope the read or
-write to a branch instead of main.
+than approximated. `push`, `pull` and `keys` accept `--branch <name>` to scope
+the read or write to a branch instead of main; import runs are not
+branch-scoped.
 
 Bundle zips are store-only, as written by `pull --all`; compressed zips are
 rejected before any write. A bundle import runs per locale independently:
