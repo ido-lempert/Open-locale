@@ -388,6 +388,47 @@ try {
   check('PO export via UI emits msgid/msgstr for existing keys',
     poExport.includes('msgid "po.demo"') && poExport.includes('msgstr "Proof of gettext \\"quotes\\""'),
     poExport.split('\n').find((l) => l.includes('po.demo')) ?? '');
+  // Export-all bundle through the UI: capture blob + download name, parse
+  // the zip, verify one entry per project locale and byte content.
+  await page.evaluate(() => {
+    window.__bundleCapture = null;
+    const orig = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (b) => { window.__bundleCapture = b; return orig(b); };
+    HTMLAnchorElement.prototype.click = function () { window.__dlName = this.download; };
+  });
+  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Export all (.zip)')?.click());
+  const bundleGot = await page.waitForFunction(() => !!window.__bundleCapture, { timeout: 10000 }).then(() => true).catch(() => false);
+  const bundleB64 = await page.evaluate(async () => {
+    const buf = new Uint8Array(await window.__bundleCapture.arrayBuffer());
+    let bin = '';
+    for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+    return btoa(bin);
+  });
+  const bundleBuf = Buffer.from(bundleB64, 'base64');
+  const dlName = await page.evaluate(() => window.__dlName);
+  const bundleNames = [];
+  if (bundleBuf.readUInt32LE(bundleBuf.length - 22) === 0x06054b50) {
+    let cdOff = bundleBuf.readUInt32LE(bundleBuf.length - 6);
+    for (let i = 0; i < bundleBuf.readUInt16LE(bundleBuf.length - 12); i++) {
+      const nl = bundleBuf.readUInt16LE(cdOff + 28);
+      bundleNames.push(bundleBuf.subarray(cdOff + 46, cdOff + 46 + nl).toString('utf8'));
+      cdOff += 46 + nl;
+    }
+  }
+  check('Export all (.zip) downloads a zip named <slug>-po.zip with one entry per locale',
+    bundleGot && dlName === 'demo-shop-po.zip' && bundleNames.length === 2 && bundleNames.includes('en.po') && bundleNames.includes('he.po'),
+    `name=${dlName} entries=${bundleNames.join(',')}`);
+  // 480 layout: the new button fits the narrow import/export row.
+  await page.setViewport({ width: 480, height: 800 });
+  const bundle480 = await page.evaluate(() => {
+    const btn = [...document.querySelectorAll('button')].find((b) => b.textContent === 'Export all (.zip)');
+    if (!btn) return 'missing';
+    const r = btn.getBoundingClientRect();
+    return r.width > 0 && r.right <= 480 && document.documentElement.scrollWidth <= window.innerWidth ? 'fits' : `overflow right=${r.right} sw=${document.documentElement.scrollWidth}`;
+  });
+  check('Export all (.zip) button fits the 480px viewport', bundle480 === 'fits', bundle480);
+  await shot('editor-44-export-bundle-480.png');
+  await page.setViewport({ width: 1280, height: 800 });
   await page.evaluate(() => window.scrollTo(0, 0));
   await shot('editor-35-po.png');
   // Frame the imported PO row fully (it is the grid's last row).

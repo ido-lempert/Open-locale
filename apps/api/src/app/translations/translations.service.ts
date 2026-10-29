@@ -372,10 +372,12 @@ export class TranslationsService {
   // exporters, so text formats are byte-equal to their single-locale
   // endpoints; the json entry is the flat map pretty-printed (the flat
   // endpoint body is the same map, serialized without whitespace).
-  async exportBundle(userId: string, projectId: string, format: string, branch?: string): Promise<{ zip: Buffer; filename: string }> {
+  async exportBundle(userId: string, projectId: string, format: string, branch?: string, mode?: string): Promise<{ zip: Buffer; filename: string }> {
     const exporters: Record<string, { ext: string; run: (locale: string) => Promise<string> }> = {
       json: { ext: '.json', run: async (l) => JSON.stringify(await this.exportJson(userId, projectId, l, true, branch), null, 2) + '\n' },
-      csv: { ext: '.csv', run: (l) => this.exportCsv(userId, projectId, l, 'raw', branch) },
+      // Same default as the single-locale CSV export: spreadsheet-safe.
+      // mode=raw opts into the lossless variant explicitly.
+      csv: { ext: '.csv', run: (l) => this.exportCsv(userId, projectId, l, mode, branch) },
       android: { ext: '.xml', run: (l) => this.exportAndroid(userId, projectId, l, branch) },
       ios: { ext: '.strings', run: (l) => this.exportIos(userId, projectId, l, branch) },
       po: { ext: '.po', run: (l) => this.exportPo(userId, projectId, l, branch) },

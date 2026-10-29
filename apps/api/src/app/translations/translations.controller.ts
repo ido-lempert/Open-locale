@@ -87,8 +87,8 @@ export class TranslationsController {
 
   @Get('export-bundle/:format')
   @Header('Content-Type', 'application/zip')
-  async exportBundle(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('format') format: string, @Query('branch') branch: string | undefined, @Res({ passthrough: true }) res: Response) {
-    const { zip, filename } = await this.translations.exportBundle(user.userId, projectId, format, branch);
+  async exportBundle(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('format') format: string, @Query('branch') branch: string | undefined, @Query('mode') mode: string | undefined, @Res({ passthrough: true }) res: Response) {
+    const { zip, filename } = await this.translations.exportBundle(user.userId, projectId, format, branch, mode);
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     return new StreamableFile(zip);
   }

@@ -77,6 +77,7 @@ interface CellState {
             <option value="ios">iOS strings</option>
           </select>
           <button (click)="exportFile()">Export {{ formatLabel() }}</button>
+          <button (click)="exportBundleFile()" title="Download every locale as one zip in the selected format">Export all (.zip)</button>
           <label class="import">Import {{ formatLabel() }} <input type="file" name="importFile" accept=".json,.csv,.xml,.strings,.po,.xlf,.xliff,.properties,.arb,.yaml,.yml" (change)="importFile($event)" hidden /></label>
           <label class="import">Preview import <input type="file" name="previewFile" accept=".json,.csv,.xml,.strings,.po,.xlf,.xliff,.properties,.arb,.yaml,.yml" (change)="previewFile($event)" hidden /></label>
           @if (ioFormat() === 'csv') {
@@ -598,6 +599,18 @@ export class EditorComponent implements OnInit {
       this.notice.set(`Marked ${res.updated} translations in ${scope.locale} as ${scope.status.toLowerCase()}.`);
       await this.reload();
     } catch (err) { this.error.set(err instanceof Error ? err.message : 'Bulk update failed'); }
+  }
+  async exportBundleFile() {
+    const fmt = this.ioFormat();
+    try {
+      const blob = await this.api.exportBundle(this.projectId, fmt, this.branch());
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${this.project()?.slug ?? 'export'}-${fmt}.zip`;
+      a.click(); URL.revokeObjectURL(a.href);
+      this.notice.set(`All locales exported as one zip (${this.formatLabel()}${fmt === 'csv' ? ', spreadsheet-safe' : ''}).`);
+      this.error.set('');
+    } catch (err) { this.error.set(err instanceof Error ? err.message : 'Bundle export failed'); }
   }
   async exportFile() {
     const fmt = this.ioFormat();

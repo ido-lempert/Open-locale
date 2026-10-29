@@ -58,6 +58,11 @@ describe('zip writer', () => {
     const many = Array.from({ length: ZIP_LIMITS.MAX_ENTRIES + 1 }, (_, i) => ({ name: `f${i}`, data: Buffer.alloc(0) }));
     expect(() => buildZip(many)).toThrow('entry limit');
     expect(() => buildZip([{ name: 'big', data: Buffer.alloc(ZIP_LIMITS.MAX_BYTES + 1) }])).toThrow('size limit');
+    // Overhead counts toward the budget: payloads just under the cap still
+    // trip it once headers, names, central records and the EOCD are added.
+    const near = ZIP_LIMITS.MAX_BYTES - 22 - 76 - 2 * 'a.json'.length + 1;
+    expect(() => buildZip([{ name: 'a.json', data: Buffer.alloc(near) }])).toThrow('size limit');
+    expect(buildZip([{ name: 'a.json', data: Buffer.alloc(near - 1) }]).length).toBe(ZIP_LIMITS.MAX_BYTES);
   });
 
   it('zipSafeName strips traversal and collapses unsafe characters', () => {

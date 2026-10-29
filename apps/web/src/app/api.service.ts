@@ -332,6 +332,13 @@ export class ApiService {
     return this.request<{ keysCreated: number; translationsUpserted: number }>(
       `/projects/${projectId}/import/${locale}${branch ? `?branch=${encodeURIComponent(branch)}` : ''}`, { method: 'POST', body: JSON.stringify({ csv }) });
   }
+  async exportBundle(projectId: string, format: string, branch?: string) {
+    const res = await fetch(`${this.base}/projects/${projectId}/export-bundle/${format}${branch ? `?branch=${encodeURIComponent(branch)}` : ''}`, {
+      headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
+    });
+    if (!res.ok) throw new Error(`Bundle export failed (HTTP ${res.status})`);
+    return res.blob();
+  }
   async exportText(projectId: string, locale: string, kind: 'android' | 'ios' | 'po' | 'xliff' | 'properties' | 'arb' | 'yaml', branch?: string) {
     const res = await fetch(`${this.base}/projects/${projectId}/export/${locale}/${kind}${branch ? `?branch=${encodeURIComponent(branch)}` : ''}`, {
       headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},

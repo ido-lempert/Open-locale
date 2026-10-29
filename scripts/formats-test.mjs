@@ -486,10 +486,17 @@ try {
   const heFlatForBundle = await (await fetch(`${API}${P}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
   check('json bundle entry carries the same flat map as the flat endpoint', JSON.stringify(JSON.parse(jsonEntries.get('he.json').toString('utf8'))) === JSON.stringify(heFlatForBundle));
   for (const f of Object.keys(extFor)) {
-    const single = await (await fetch(`${API}${P}/export/he/${f === 'csv' ? 'csv?mode=raw' : f}`, { headers: { Authorization: `Bearer ${at}` } })).text();
+    const single = await (await fetch(`${API}${P}/export/he/${f}`, { headers: { Authorization: `Bearer ${at}` } })).text();
     const bundleEntries = readZip(Buffer.from(await (await fetch(`${API}${P}/export-bundle/${f}`, { headers: { Authorization: `Bearer ${at}` } })).arrayBuffer()));
     check(`${f} bundle entry byte-equals the single-locale export`, bundleEntries.get(`he${extFor[f]}`)?.toString('utf8') === single && bundleEntries.has(`en${extFor[f]}`), String(bundleEntries.get(`he${extFor[f]}`)?.length));
   }
+  // CSV keeps the established default: the bundle is spreadsheet-safe unless
+  // mode=raw is passed explicitly, matching the single-locale endpoint.
+  const csvSafeSingle = await (await fetch(`${API}${P}/export/he/csv`, { headers: { Authorization: `Bearer ${at}` } })).text();
+  const csvRawSingle = await (await fetch(`${API}${P}/export/he/csv?mode=raw`, { headers: { Authorization: `Bearer ${at}` } })).text();
+  const csvSafeBundle = readZip(Buffer.from(await (await fetch(`${API}${P}/export-bundle/csv`, { headers: { Authorization: `Bearer ${at}` } })).arrayBuffer()));
+  const csvRawBundle = readZip(Buffer.from(await (await fetch(`${API}${P}/export-bundle/csv?mode=raw`, { headers: { Authorization: `Bearer ${at}` } })).arrayBuffer()));
+  check('csv bundle defaults to spreadsheet-safe, mode=raw opts into lossless', csvSafeBundle.get('he.csv')?.toString('utf8') === csvSafeSingle && csvRawBundle.get('he.csv')?.toString('utf8') === csvRawSingle && csvSafeBundle.get('en.csv')?.toString('utf8').includes("'=HYPERLINK") && csvRawBundle.get('en.csv')?.toString('utf8').includes('evil.formula,"=HYPERLINK'));
   const badBundle = await call(`${P}/export-bundle/nope`, { token: at });
   check('unknown bundle format rejected (400)', badBundle.status === 400, String(badBundle.status));
   const memberBundle = await fetch(`${API}${P}/export-bundle/po`, { headers: { Authorization: `Bearer ${ct}` } });

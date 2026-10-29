@@ -14,9 +14,10 @@ exports.
   structural parser in zip.spec.ts.
 - Entry bytes come from the existing per-locale exporters. csv/android/ios/
   po/xliff/properties/arb/yaml entries are byte-equal to their single-locale
-  endpoints (csv compared with mode=raw; the bundle uses raw because the
-  spreadsheet-safe prefix is a per-file spreadsheet concern, and a bundle is
-  not opened as one sheet). The json entry is the flat map pretty-printed
+  endpoints under the SAME defaults: the csv entry is spreadsheet-safe
+  exactly like the single-locale default, and ?mode=raw opts the bundle into
+  the lossless variant explicitly - the bundle never silently weakens the
+  formula-injection shielding. The json entry is the flat map pretty-printed
   with a trailing newline; it is content-equal, not byte-equal, to the
   ?flat=true endpoint body. No other formats are implied.
 - Read boundary unchanged: team membership via projects.getFor, same as the
@@ -26,9 +27,11 @@ exports.
   to '-', leading dots/dashes stripped, traversal impossible, empty collapses
   to 'file'. A sanitization collision between two locales fails closed (400)
   instead of silently dropping one. Download filename: <safe-slug>-<format>.zip.
-- Limits: 256 entries and 32 MiB total (store-only, so compressed ==
-  uncompressed). Over the size limit: 413; over the entry limit or a name
-  collision: 400. ZIP64 is not emitted; the cap keeps every offset 32-bit.
+- Limits: 256 entries and 32 MiB total ARCHIVE bytes, counting full overhead
+  (local header + name + central record + name per entry, plus the EOCD);
+  store-only, so payload compressed == uncompressed. Over the size limit:
+  413; over the entry limit or a name collision: 400. ZIP64 is not emitted;
+  the cap keeps every offset 32-bit.
 - No locking, no snapshot, no import run: export is read-only.
 
 ## Verification
@@ -37,5 +40,11 @@ exports.
   duplicate/limit rejections, zipSafeName cases (unit-api).
 - Python zipfile parse: testzip clean, entries byte-exact, UTF-8 name intact.
 - formats-test legs: disposition + one entry per locale, json flat-map
-  equality, byte-equality for the eight text formats, unknown format 400,
-  member read 200, branch scoping.
+  equality, byte-equality for the eight text formats under shared defaults,
+  csv safe-by-default vs explicit mode=raw (formula-injection fixture), unknown
+  format 400, member read 200, branch scoping.
+- e2e-visual legs: Export all (.zip) button click-through captures the blob,
+  downloads <slug>-po.zip with one entry per locale (zip parsed from the
+  captured bytes); button fits the 480px viewport (screenshot
+  editor-44-export-bundle-480.png). The success notice names the format and,
+  for CSV, says spreadsheet-safe at the choice point.

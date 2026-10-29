@@ -2,9 +2,10 @@
 // contents are the exact bytes of the per-locale export endpoints, so a
 // bundle entry is byte-equal to its single-locale counterpart. Limits are
 // enforced while building: at most MAX_ENTRIES entries and MAX_BYTES total
-// uncompressed bytes (store-only, so compressed == uncompressed); exceeding
-// either throws before any bytes are returned. Fixed DOS date keeps output
-// deterministic.
+// archive bytes counting full overhead (each entry's local header, name and
+// central record, plus the EOCD - store-only, so compressed == uncompressed
+// for the data itself); exceeding either throws before any bytes are
+// returned. Fixed DOS date keeps output deterministic.
 
 const MAX_ENTRIES = 256;
 const MAX_BYTES = 32 * 1024 * 1024;
@@ -45,10 +46,12 @@ const DOS_DATE = (44 << 9) | (1 << 5) | 1;
 
 export function buildZip(entries: ZipEntry[]): Buffer {
   if (entries.length > MAX_ENTRIES) throw new Error(`zip entry limit exceeded (${entries.length} > ${MAX_ENTRIES})`);
-  let total = 0;
+  // Budget the whole archive, not just the payloads: 30-byte local header +
+  // name + 46-byte central record + name per entry, 22-byte EOCD once.
+  let total = 22;
   for (const e of entries) {
-    total += e.data.length;
-    if (total > MAX_BYTES) throw new Error(`zip size limit exceeded (${MAX_BYTES} bytes)`);
+    total += e.data.length + 76 + 2 * Buffer.byteLength(e.name, 'utf8');
+    if (total > MAX_BYTES) throw new Error(`zip size limit exceeded (${MAX_BYTES} bytes including overhead)`);
   }
   const names = new Set<string>();
   for (const e of entries) {
