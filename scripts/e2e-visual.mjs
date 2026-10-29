@@ -668,12 +668,16 @@ try {
 
   // --- 2FA: enable via projects-page security panel, log out, log in with code ---
   await page.goto(`${WEB}/projects`, { waitUntil: 'networkidle0' });
-  await page.waitForSelector('.panel.tfa button', { timeout: 10000 });
-  await page.evaluate(() => { [...document.querySelectorAll('.panel.tfa button')].find((b) => b.textContent.includes('Set up two-factor')).click(); });
+  await page.waitForSelector('.panel.tfa input[name=tfaSetupPassword]', { timeout: 10000 });
+  await page.type('.panel.tfa input[name=tfaSetupPassword]', 'demo-password-1');
+  await page.evaluate(() => { [...document.querySelectorAll('.panel.tfa button')].find((b) => b.textContent.includes('Set up two-factor')).closest('form').requestSubmit(); });
   await page.waitForSelector('.tfa-secret', { timeout: 10000 });
   const tfaSecret = await page.$eval('.tfa-secret', (el) => el.textContent.trim());
   check('2FA setup shows secret + otpauth URL', /^[A-Z2-7]{32}$/.test(tfaSecret));
   await page.evaluate((code) => {
+    const pw = document.querySelector('.panel.tfa input[name=tfaPassword]');
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(pw, 'demo-password-1');
+    pw.dispatchEvent(new Event('input', { bubbles: true }));
     const input = document.querySelector('.panel.tfa input[name=tfaCode]');
     Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, code);
     input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -681,13 +685,15 @@ try {
   }, totp(tfaSecret, 1));
   const tfaOn = await page.waitForFunction(() => (document.body.textContent || '').includes('recovery codes remain') && document.querySelectorAll('.tfa-codes li').length === 8, { timeout: 10000 }).then(() => true).catch(() => false);
   check('2FA enabled via UI, 8 recovery codes shown once', tfaOn);
-  // Screenshot policy: mask the secret and code interiors (throwaway demo
-  // account, but credentials never appear in captures).
-  await page.evaluate(() => {
-    const sec = document.querySelector('.tfa-secret'); if (sec) sec.textContent = 'XXXX-MASKED-XXXX';
-    document.querySelectorAll('.tfa-codes code').forEach((c) => { c.textContent = c.textContent.slice(0, 2) + '\u2022\u2022\u2022-\u2022\u2022\u2022' + c.textContent.slice(-2); });
-    document.querySelector('.panel.tfa')?.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70);
-  });
+  const codesShown = await page.$$eval('.tfa-codes code', (els) => els.map((e) => e.textContent));
+  check('recovery codes shaped XXXXXXXX-XXXXXXXX in UI', codesShown.length === 8 && codesShown.every((c) => /^[0-9A-Z]{8}-[0-9A-Z]{8}$/.test(c)));
+  // Dismiss the one-time codes, then capture the clean enabled state -
+  // credentials (even throwaway demo ones) never appear in captures.
+  await page.evaluate(() => { [...document.querySelectorAll('.panel.tfa button')].find((b) => b.textContent.includes("I've stored these")).click(); });
+  await new Promise((r) => setTimeout(r, 400));
+  const noCodes = await page.evaluate(() => document.querySelectorAll('.tfa-codes li').length === 0 && (document.body.textContent || '').includes('recovery codes remain'));
+  check('dismissing codes leaves clean enabled state', noCodes);
+  await page.evaluate(() => { document.querySelector('.panel.tfa')?.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70); });
   await new Promise((r) => setTimeout(r, 300));
   await shot('editor-30-2fa.png');
   await page.evaluate(() => { [...document.querySelectorAll('header.bar button')].find((b) => b.textContent === 'Log out').click(); });

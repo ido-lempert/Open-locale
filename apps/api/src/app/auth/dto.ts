@@ -27,7 +27,19 @@ export class LoginDto {
   totpCode?: string;
 }
 
+export class TotpSetupDto {
+  // Fresh-password step-up: changing the account's second factor always
+  // requires the current password, even inside an active session.
+  @IsString()
+  @IsNotEmpty()
+  password!: string;
+}
+
 export class TotpCodeDto {
+  @IsString()
+  @IsNotEmpty()
+  password!: string;
+
   @IsString()
   @IsNotEmpty()
   code!: string;

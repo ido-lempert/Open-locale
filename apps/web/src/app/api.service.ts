@@ -142,9 +142,9 @@ export class ApiService {
 
   listTokens() { return this.request<ApiTokenInfo[]>('/auth/tokens'); }
   get2faStatus() { return this.request<{ enabled: boolean; recoveryCodesRemaining: number }>('/auth/2fa/status'); }
-  setup2fa() { return this.request<{ secret: string; otpauthUrl: string }>('/auth/2fa/setup', { method: 'POST' }); }
-  enable2fa(code: string) { return this.request<{ enabled: boolean; recoveryCodes: string[] }>('/auth/2fa/enable', { method: 'POST', body: JSON.stringify({ code }) }); }
-  disable2fa(code: string) { return this.request<{ enabled: boolean }>('/auth/2fa/disable', { method: 'POST', body: JSON.stringify({ code }) }); }
+  setup2fa(password: string) { return this.request<{ secret: string; otpauthUrl: string }>('/auth/2fa/setup', { method: 'POST', body: JSON.stringify({ password }) }); }
+  enable2fa(password: string, code: string) { return this.request<{ enabled: boolean; recoveryCodes: string[] }>('/auth/2fa/enable', { method: 'POST', body: JSON.stringify({ password, code }) }); }
+  disable2fa(password: string, code: string) { return this.request<{ enabled: boolean }>('/auth/2fa/disable', { method: 'POST', body: JSON.stringify({ password, code }) }); }
   createToken(name: string, scopes: string[]) {
     return this.request<{ id: string; name: string; token: string }>('/auth/tokens', {
       method: 'POST', body: JSON.stringify({ name, scopes }),

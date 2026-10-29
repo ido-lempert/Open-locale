@@ -13,7 +13,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthService, AuthPrincipal } from './auth.service';
-import { CreateApiTokenDto, LoginDto, SignupDto, TotpCodeDto } from './dto';
+import { CreateApiTokenDto, LoginDto, SignupDto, TotpCodeDto, TotpSetupDto } from './dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './current-user.decorator';
 
@@ -38,29 +38,33 @@ export class AuthController {
   // not be able to change the account's second factor.
   @Post('2fa/setup')
   @UseGuards(JwtAuthGuard)
-  async setupTotp(@CurrentUser() user: AuthPrincipal) {
+  async setupTotp(@CurrentUser() user: AuthPrincipal, @Body() dto: TotpSetupDto) {
     this.requireSession(user);
-    return this.auth.setupTotp(user.userId);
+    return this.auth.setupTotp(user.userId, dto.password);
   }
 
   @Post('2fa/enable')
   @UseGuards(JwtAuthGuard)
   async enableTotp(@CurrentUser() user: AuthPrincipal, @Body() dto: TotpCodeDto) {
     this.requireSession(user);
-    return this.auth.enableTotp(user.userId, dto.code);
+    return this.auth.enableTotp(user.userId, dto.password, dto.code);
   }
 
+  // Disable + status are step-up-protected: a session issued before the
+  // account had 2FA must re-authenticate with the second factor first.
   @Post('2fa/disable')
   @UseGuards(JwtAuthGuard)
   async disableTotp(@CurrentUser() user: AuthPrincipal, @Body() dto: TotpCodeDto) {
     this.requireSession(user);
-    return this.auth.disableTotp(user.userId, dto.code);
+    await this.auth.requireStepUp(user.userId, user);
+    return this.auth.disableTotp(user.userId, dto.password, dto.code);
   }
 
   @Get('2fa/status')
   @UseGuards(JwtAuthGuard)
   async totpStatus(@CurrentUser() user: AuthPrincipal) {
     this.requireSession(user);
+    await this.auth.requireStepUp(user.userId, user);
     return this.auth.totpStatus(user.userId);
   }
 
@@ -77,6 +81,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async createToken(@CurrentUser() user: AuthPrincipal, @Body() dto: CreateApiTokenDto) {
     this.requireSession(user);
+    await this.auth.requireStepUp(user.userId, user);
     const scopes = dto.scopes?.length ? dto.scopes : ['read', 'write'];
     const valid = scopes.every((s) => s === 'read' || s === 'write');
     if (!valid || !scopes.includes('read')) {
@@ -96,6 +101,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async listTokens(@CurrentUser() user: AuthPrincipal) {
     this.requireSession(user);
+    await this.auth.requireStepUp(user.userId, user);
     return this.auth.listApiTokens(user.userId);
   }
 
@@ -103,6 +109,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async revokeToken(@CurrentUser() user: AuthPrincipal, @Param('id') id: string) {
     this.requireSession(user);
+    await this.auth.requireStepUp(user.userId, user);
     const result = await this.auth.revokeApiToken(user.userId, id);
     if (!result) throw new NotFoundException('Token not found');
     return result;

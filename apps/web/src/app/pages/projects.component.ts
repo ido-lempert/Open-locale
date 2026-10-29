@@ -26,6 +26,7 @@ import { ApiService, Project } from '../api.service';
           @if (t.enabled) {
             <p class="muted">Enabled. {{ t.recoveryCodesRemaining }} recovery codes remain.</p>
             <form class="inline" (ngSubmit)="disableTfa()">
+              <input aria-label="Current password" type="password" placeholder="Current password" [ngModel]="tfaPassword()" (ngModelChange)="tfaPassword.set($event)" name="tfaPassword" required autocomplete="current-password" />
               <input aria-label="Current 2FA code" placeholder="TOTP or recovery code" [ngModel]="tfaCode()" (ngModelChange)="tfaCode.set($event)" name="tfaCode" required />
               <button class="danger" type="submit" [disabled]="busy()">Disable</button>
             </form>
@@ -34,12 +35,16 @@ import { ApiService, Project } from '../api.service';
             <p><code class="tfa-secret">{{ su.secret }}</code></p>
             <p class="muted wrap"><code>{{ su.otpauthUrl }}</code></p>
             <form class="inline" (ngSubmit)="enableTfa()">
+              <input aria-label="Current password" type="password" placeholder="Current password" [ngModel]="tfaPassword()" (ngModelChange)="tfaPassword.set($event)" name="tfaPassword" required autocomplete="current-password" />
               <input aria-label="6-digit setup code" placeholder="6-digit code" [ngModel]="tfaCode()" (ngModelChange)="tfaCode.set($event)" name="tfaCode" required />
               <button class="primary" type="submit" [disabled]="busy()">Enable</button>
             </form>
           } @else {
-            <p class="muted">Not enabled. A TOTP code is required at login after enabling.</p>
-            <button (click)="startTfa()" [disabled]="busy()">Set up two-factor</button>
+            <p class="muted">Not enabled. A TOTP code is required at login after enabling. Setup requires your current password.</p>
+            <form class="inline" (ngSubmit)="startTfa()">
+              <input aria-label="Current password" type="password" placeholder="Current password" [ngModel]="tfaPassword()" (ngModelChange)="tfaPassword.set($event)" name="tfaSetupPassword" required autocomplete="current-password" />
+              <button type="submit" [disabled]="busy()">Set up two-factor</button>
+            </form>
           }
         }
         @if (tfaCodes().length) {
@@ -47,6 +52,7 @@ import { ApiService, Project } from '../api.service';
           <ul class="locale-list tfa-codes">
             @for (c of tfaCodes(); track c) { <li><code>{{ c }}</code></li> }
           </ul>
+          <button (click)="dismissTfaCodes()">I've stored these</button>
         }
       </section>
       <ul class="cards">
@@ -69,7 +75,7 @@ export class ProjectsComponent implements OnInit {
   busy = signal(false); error = signal('');
   tfa = signal<{ enabled: boolean; recoveryCodesRemaining: number } | null>(null);
   tfaSetup = signal<{ secret: string; otpauthUrl: string } | null>(null);
-  tfaCode = signal(''); tfaCodes = signal<string[]>([]);
+  tfaCode = signal(''); tfaPassword = signal(''); tfaCodes = signal<string[]>([]);
   constructor(private api: ApiService) {}
   async ngOnInit() { await this.reload(); }
   async reload() {
@@ -81,25 +87,28 @@ export class ProjectsComponent implements OnInit {
   }
   async startTfa() {
     this.busy.set(true); this.error.set('');
-    try { this.tfaSetup.set(await this.api.setup2fa()); }
+    try { this.tfaSetup.set(await this.api.setup2fa(this.tfaPassword())); this.tfaPassword.set(''); }
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }
+  dismissTfaCodes() { this.tfaCodes.set([]); }
   async enableTfa() {
     this.busy.set(true); this.error.set('');
     try {
-      const res = await this.api.enable2fa(this.tfaCode().trim());
+      const res = await this.api.enable2fa(this.tfaPassword(), this.tfaCode().trim());
       this.tfaCodes.set(res.recoveryCodes);
-      this.tfaSetup.set(null); this.tfaCode.set('');
-      this.tfa.set(await this.api.get2faStatus());
+      this.tfaSetup.set(null); this.tfaCode.set(''); this.tfaPassword.set('');
+      // The pre-2FA session is immediately locked out of status reads
+      // (step-up) - take the state from the enable response instead.
+      this.tfa.set({ enabled: true, recoveryCodesRemaining: res.recoveryCodes.length });
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }
   async disableTfa() {
     this.busy.set(true); this.error.set('');
     try {
-      await this.api.disable2fa(this.tfaCode().trim());
-      this.tfaCode.set(''); this.tfaCodes.set([]);
+      await this.api.disable2fa(this.tfaPassword(), this.tfaCode().trim());
+      this.tfaCode.set(''); this.tfaPassword.set(''); this.tfaCodes.set([]);
       this.tfa.set(await this.api.get2faStatus());
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }

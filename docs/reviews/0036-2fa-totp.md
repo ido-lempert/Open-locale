@@ -36,8 +36,31 @@ SSO is not in this slice.
   warning, status shows remaining recovery codes, disable form). Login
   form gains an optional 2FA code field (only needed when enabled).
 
+## Hardening pass (post-review)
+- Production fail-closed: with NODE_ENV=production and no
+  TOTP_ENCRYPTION_KEY (or one under 16 chars), secret encryption throws -
+  setup fails closed rather than ever using the dev fallback outside
+  local development.
+- Step-up: JWTs carry an `mfa` claim, true only when the login completed
+  the account's second factor. Once an account enables 2FA, sessions
+  without the claim get 403 on API-token mint/list/revoke and 2FA
+  status/disable - checked live against the DB, so enabling takes effect
+  on the very next request. Setup/enable/disable additionally require
+  the current password (fresh-password step-up inside the session).
+  Because the enabling session loses status reads immediately, the UI
+  takes the enabled state from the enable response.
+- Concurrency: the last-seen counter claim is a single conditional
+  UPDATE (totpLastCounter < matched) - exactly one simultaneous
+  identical-code submission wins. Failure counting uses an atomic
+  increment - concurrent failures cannot lose counts. Recovery-code
+  consumption was already atomic (single winner under simultaneous use).
+- Recovery codes: 16 Crockford chars (~80 bits), shaped XXXXXXXX-XXXXXXXX.
+- Documented boundary: an API token created before enabling 2FA keeps
+  serving its scoped calls (bearer tokens are a separate credential and
+  do not pass 2FA) but gets 403 on every session-only route.
+
 ## Verified
-scripts/2fa-test.mjs - 20 checks, real PG + HTTP, independent TOTP
+scripts/2fa-test.mjs - 28 checks, real PG + HTTP, independent TOTP
 implementation (test does not reuse the code under test):
 - enable-before-setup 401; setup returns secret + otpauth URL without
   enabling (login still single-factor).
@@ -53,6 +76,14 @@ implementation (test does not reuse the code under test):
 - 5 bad codes lock; correct code during lock 401 "try again later".
 - disable with valid code works; login single-factor again; old secret
   and recovery codes wiped (reuse 401, count 0).
+- step-up: setup without/with-wrong password 401; pre-2FA session JWT
+  gets 403 on token mint/list + 2FA status/disable after enable;
+  disable with wrong password 401.
+- simultaneous identical TOTP logins: exactly one 200; simultaneous
+  same-recovery-code logins: exactly one 200; 5 parallel bad codes lock.
+- pre-2FA API token still serves scoped GET calls (200) while 2FA routes
+  403 - the documented bearer-token boundary.
+- production mode without TOTP_ENCRYPTION_KEY: setup 500 (fail closed).
 
 e2e-visual additions (scripts/e2e-visual.mjs, 72 checks green):
 - setup via projects-page panel shows the secret; enable via UI lists 8

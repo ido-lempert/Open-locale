@@ -8,7 +8,16 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
 const DEV_FALLBACK_TOTP_KEY = 'open-locale-dev-totp-key';
 
 function key(): Buffer {
-  const raw = process.env.TOTP_ENCRYPTION_KEY || DEV_FALLBACK_TOTP_KEY;
+  const raw = process.env.TOTP_ENCRYPTION_KEY;
+  if (!raw) {
+    // Fail closed: the built-in fallback exists for local loopback
+    // development only and must never protect a real deployment.
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('TOTP_ENCRYPTION_KEY is required when NODE_ENV=production; refusing the development fallback');
+    }
+    return createHash('sha256').update(DEV_FALLBACK_TOTP_KEY).digest();
+  }
+  if (raw.length < 16) throw new Error('TOTP_ENCRYPTION_KEY must be at least 16 characters');
   return createHash('sha256').update(raw).digest();
 }
 

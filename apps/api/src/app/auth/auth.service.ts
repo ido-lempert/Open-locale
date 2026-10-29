@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import * as bcrypt from 'bcryptjs';
@@ -11,6 +11,8 @@ export interface AuthPrincipal {
   email: string;
   via: 'jwt' | 'api-token';
   scopes?: string[];
+  // True when this session completed the account's second factor at login.
+  mfa?: boolean;
 }
 
 function sha256(value: string): string {
@@ -42,7 +44,7 @@ export class AuthService {
         },
       },
     });
-    return this.issueTokens(user.id, user.email);
+    return this.issueTokens(user.id, user.email, false);
   }
 
   // Failed second-factor attempts lock the account's 2FA for 10 minutes
@@ -65,16 +67,18 @@ export class AuthService {
       }
       const passed = totpCode ? await this.checkSecondFactor(user, totpCode) : false;
       if (!passed) {
-        const failures = user.totpFailedAttempts + 1;
-        await this.prisma.user.update({
+        // Atomic increment - concurrent failures can never lose a count.
+        const updated = await this.prisma.user.update({
           where: { id: user.id },
-          data: {
-            totpFailedAttempts: failures,
-            ...(failures >= AuthService.TOTP_MAX_FAILURES
-              ? { totpLockedUntil: new Date(Date.now() + AuthService.TOTP_LOCK_MS), totpFailedAttempts: 0 }
-              : {}),
-          },
+          data: { totpFailedAttempts: { increment: 1 } },
+          select: { totpFailedAttempts: true },
         });
+        if (updated.totpFailedAttempts >= AuthService.TOTP_MAX_FAILURES) {
+          await this.prisma.user.update({
+            where: { id: user.id },
+            data: { totpLockedUntil: new Date(Date.now() + AuthService.TOTP_LOCK_MS), totpFailedAttempts: 0 },
+          });
+        }
         throw new UnauthorizedException(totpCode ? 'Invalid two-factor code' : 'Two-factor code required');
       }
       await this.prisma.user.update({
@@ -82,7 +86,7 @@ export class AuthService {
         data: { totpFailedAttempts: 0, totpLockedUntil: null },
       });
     }
-    return this.issueTokens(user.id, user.email);
+    return this.issueTokens(user.id, user.email, user.totpEnabled);
   }
 
   // Accepts a current TOTP code (replay-protected by last-seen counter) or
@@ -98,9 +102,13 @@ export class AuthService {
         if (timingSafeEqual(Buffer.from(trimmed), expected)) { matched = counter + w; break; }
       }
       if (matched === null) return false;
-      if (user.totpLastCounter !== null && matched <= user.totpLastCounter) return false;
-      await this.prisma.user.update({ where: { id: user.id }, data: { totpLastCounter: matched } });
-      return true;
+      // Atomic claim: exactly one concurrent submission of the same code
+      // advances the counter; the loser sees count 0 and is rejected.
+      const claimed = await this.prisma.user.updateMany({
+        where: { id: user.id, OR: [{ totpLastCounter: null }, { totpLastCounter: { lt: matched } }] },
+        data: { totpLastCounter: matched },
+      });
+      return claimed.count === 1;
     }
     // Recovery code path: consume atomically - only one concurrent login can
     // mark the hash used.
@@ -114,18 +122,26 @@ export class AuthService {
 
   // Generates and encrypts a pending secret; does NOT enable 2FA until a
   // valid code proves the authenticator was configured.
-  async setupTotp(userId: string) {
+  private async requirePassword(user: { passwordHash: string }, password: string) {
+    if (!password || !(await bcrypt.compare(password, user.passwordHash))) {
+      throw new UnauthorizedException('Current password required');
+    }
+  }
+
+  async setupTotp(userId: string, password: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new UnauthorizedException();
+    await this.requirePassword(user, password);
     if (user.totpEnabled) throw new ConflictException('Two-factor is already enabled; disable it first');
     const secret = generateTotpSecret();
     await this.prisma.user.update({ where: { id: userId }, data: { totpSecret: encryptTotpSecret(secret), totpLastCounter: null } });
     return { secret, otpauthUrl: otpauthUrl(secret, user.email) };
   }
 
-  async enableTotp(userId: string, code: string) {
+  async enableTotp(userId: string, password: string, code: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user || !user.totpSecret) throw new UnauthorizedException('Run setup first');
+    await this.requirePassword(user, password);
     if (user.totpEnabled) throw new ConflictException('Two-factor is already enabled');
     if (!verifyTotp(decryptTotpSecret(user.totpSecret), code.trim())) {
       throw new UnauthorizedException('Code does not match the pending secret');
@@ -143,9 +159,10 @@ export class AuthService {
     return { enabled: true, recoveryCodes: codes };
   }
 
-  async disableTotp(userId: string, code: string) {
+  async disableTotp(userId: string, password: string, code: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user || !user.totpEnabled) throw new UnauthorizedException('Two-factor is not enabled');
+    await this.requirePassword(user, password);
     const passed = await this.checkSecondFactor(user, code);
     if (!passed) throw new UnauthorizedException('Invalid two-factor code');
     await this.prisma.$transaction(async (tx) => {
@@ -165,17 +182,28 @@ export class AuthService {
     return { enabled: user.totpEnabled, recoveryCodesRemaining: user.totpEnabled ? remaining : 0 };
   }
 
-  private issueTokens(userId: string, email: string) {
+  private issueTokens(userId: string, email: string, mfa: boolean) {
     return {
-      accessToken: this.jwt.sign({ sub: userId, email }),
+      accessToken: this.jwt.sign({ sub: userId, email, mfa }),
       user: { id: userId, email },
     };
   }
 
+  // Step-up for session-sensitive operations: once an account has 2FA
+  // enabled, sessions issued before (or without) completing the second
+  // factor must not mint API tokens or manage 2FA. Checked live so
+  // enabling 2FA takes effect on the very next request.
+  async requireStepUp(userId: string, principal: AuthPrincipal) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { totpEnabled: true } });
+    if (user?.totpEnabled && principal.mfa !== true) {
+      throw new ForbiddenException('Step-up required: sign in again with your two-factor code');
+    }
+  }
+
   async verifyAccessToken(token: string): Promise<AuthPrincipal | null> {
     try {
-      const payload = this.jwt.verify<{ sub: string; email: string }>(token);
-      return { userId: payload.sub, email: payload.email, via: 'jwt' };
+      const payload = this.jwt.verify<{ sub: string; email: string; mfa?: boolean }>(token);
+      return { userId: payload.sub, email: payload.email, via: 'jwt', mfa: payload.mfa === true };
     } catch {
       return null;
     }

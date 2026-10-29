@@ -73,12 +73,13 @@ export function otpauthUrl(secretB32: string, email: string): string {
 const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
 export function generateRecoveryCodes(count = 8): string[] {
+  // 16 Crockford-base32 chars (~80 bits) grouped XXXXXXXX-XXXXXXXX.
   const codes: string[] = [];
   for (let i = 0; i < count; i++) {
-    const bytes = randomBytes(10);
+    const bytes = randomBytes(16);
     let raw = '';
     for (const b of bytes) raw += CROCKFORD[b % 32];
-    codes.push(`${raw.slice(0, 5)}-${raw.slice(5)}`);
+    codes.push(`${raw.slice(0, 8)}-${raw.slice(8)}`);
   }
   return codes;
 }
