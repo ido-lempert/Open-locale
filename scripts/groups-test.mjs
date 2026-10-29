@@ -16,6 +16,9 @@ const PG_PORT = 55473, API_PORT = 3039;
 const API = `http://127.0.0.1:${API_PORT}/api`;
 const root = process.cwd();
 let failures = 0;
+// Fail-closed exit: a silent exit before the success path (for example a
+// startup await that never settles with an empty event loop) leaves this at 1.
+process.exitCode = 1;
 const check = (n, c, x = '') => { console.log(`${c ? 'PASS' : (failures++, 'FAIL')} ${n} ${x}`); };
 async function call(path, { jwt, method = 'GET', body } = {}) {
   const headers = { 'Content-Type': 'application/json' };
@@ -187,6 +190,12 @@ try {
   check('owner deletes the group', del.status === 200, String(del.status));
   const groupDeleted = await act('group.deleted');
   check('audit: group.deleted recorded with final state', groupDeleted.some((e) => e.detail?.name === 'translators-2' && e.detail?.role === 'ADMIN'));
+} catch (err) {
+  // embedded-postgres can reject with `undefined` when the postmaster dies at
+  // startup; through an async finally that exception exits 0 SILENTLY. Catch
+  // and exit deterministically instead.
+  console.error('SUITE INCOMPLETE:', err);
+  process.exit(1);
 } finally {
   if (api) api.kill();
   await pg.stop().catch(() => {});
@@ -194,3 +203,4 @@ try {
 }
 if (failures) { console.log(`${failures} FAIL`); process.exit(1); }
 console.log('groups: all checks passed');
+process.exitCode = 0;

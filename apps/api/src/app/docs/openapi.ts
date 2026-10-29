@@ -174,8 +174,9 @@ export const OPENAPI = {
     '/api/projects/{projectId}/export/{locale}/po': { get: p('Export a locale as PO (gettext)', 'import/export') },
     '/api/projects/{projectId}/export/{locale}/xliff': { get: p('Export a locale as XLIFF 1.2', 'import/export') },
     '/api/projects/{projectId}/export/{locale}/properties': { get: p('Export a locale as Java .properties', 'import/export') },
+    '/api/projects/{projectId}/export/{locale}/arb': { get: p('Export a locale as Flutter ARB', 'import/export') },
     '/api/projects/{projectId}/import/{locale}': {
-      post: p('Import translations (JSON, CSV, Android XML, iOS strings, PO, XLIFF or .properties; atomic)', 'import/export', true),
+      post: p('Import translations (JSON, CSV, Android XML, iOS strings, PO, XLIFF, .properties or ARB; atomic)', 'import/export', true),
     },
     '/api/projects/{projectId}/imports': { get: p('List import runs', 'import/export') },
     '/api/projects/{projectId}/tm/suggest': { get: p('Translation memory suggestions', 'translations') },

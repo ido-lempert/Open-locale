@@ -16,6 +16,7 @@ import { parseAndroidXml, toAndroidXml } from './android-xml';
 import { parsePo, toPo } from './po';
 import { parseXliff, toXliff } from './xliff';
 import { parseProperties, toProperties } from './properties';
+import { parseArb, toArb } from './arb';
 import { parseIosStrings, toIosStrings } from './ios-strings';
 
 // Statuses every project supports; a project may extend this list with
@@ -351,6 +352,11 @@ export class TranslationsService {
     return toProperties(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)));
   }
 
+  async exportArb(userId: string, projectId: string, locale: string, branch?: string) {
+    const flat = (await this.exportJson(userId, projectId, locale, true, branch)) as Record<string, string>;
+    return toArb(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)), locale);
+  }
+
   async importAndroid(userId: string, projectId: string, locale: string, xml: string, branch?: string) {
     const { rows, rejected } = parseAndroidXml(xml);
     if (rejected > 0) {
@@ -388,6 +394,14 @@ export class TranslationsService {
     const { rows, rejected } = parseProperties(properties);
     if (rejected > 0) {
       throw new BadRequestException(`${rejected} .properties line(s) rejected: separator-less lines, duplicate keys and malformed escapes are not supported`);
+    }
+    return this.importJson(userId, projectId, locale, Object.fromEntries(rows), branch);
+  }
+
+  async importArb(userId: string, projectId: string, locale: string, arb: string, branch?: string) {
+    const { rows, rejected } = parseArb(arb);
+    if (rejected > 0) {
+      throw new BadRequestException(`${rejected} ARB ${rejected === 1 ? 'entry' : 'entries'} rejected: non-string or nested values, ICU plural/select messages and malformed JSON are not supported`);
     }
     return this.importJson(userId, projectId, locale, Object.fromEntries(rows), branch);
   }

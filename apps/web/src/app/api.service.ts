@@ -332,7 +332,7 @@ export class ApiService {
     return this.request<{ keysCreated: number; translationsUpserted: number }>(
       `/projects/${projectId}/import/${locale}${branch ? `?branch=${encodeURIComponent(branch)}` : ''}`, { method: 'POST', body: JSON.stringify({ csv }) });
   }
-  async exportText(projectId: string, locale: string, kind: 'android' | 'ios' | 'po' | 'xliff' | 'properties', branch?: string) {
+  async exportText(projectId: string, locale: string, kind: 'android' | 'ios' | 'po' | 'xliff' | 'properties' | 'arb', branch?: string) {
     const res = await fetch(`${this.base}/projects/${projectId}/export/${locale}/${kind}${branch ? `?branch=${encodeURIComponent(branch)}` : ''}`, {
       headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
     });

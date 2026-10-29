@@ -11,6 +11,9 @@ const API_PORT = 3002;
 const API = `http://127.0.0.1:${API_PORT}/api`;
 const root = process.cwd();
 let failures = 0;
+// Fail-closed exit: a silent exit before the success path (for example a
+// startup await that never settles with an empty event loop) leaves this at 1.
+process.exitCode = 1;
 const check = (n, c, x = '') => { console.log(`${c ? 'PASS' : (failures++, 'FAIL')} ${n} ${x}`); };
 
 async function call(path, { token, method = 'GET', body } = {}) {
@@ -93,6 +96,12 @@ try {
   const bHist = await call(`${t()}/translations/en/history`, { token: b.accessToken });
   check('cross-team status change denied (404)', bStatus.status === 404, `got ${bStatus.status}`);
   check('cross-team history read denied (404)', bHist.status === 404, `got ${bHist.status}`);
+} catch (err) {
+  // embedded-postgres can reject with `undefined` when the postmaster dies at
+  // startup; through an async finally that exception exits 0 SILENTLY. Catch
+  // and exit deterministically instead.
+  console.error('SUITE INCOMPLETE:', err);
+  process.exit(1);
 } finally {
   api?.kill('SIGTERM');
   await pg.stop().catch(() => {});
@@ -100,3 +109,4 @@ try {
 }
 if (failures > 0) { console.log(`${failures} FAILURES`); process.exit(1); }
 console.log('All status/history checks passed');
+process.exitCode = 0;

@@ -18,6 +18,9 @@ const SHOTS = process.env.SHOT_DIR ?? '/tmp/pptr';
 mkdirSync(SHOTS, { recursive: true });
 const root = process.cwd();
 let failures = 0;
+// Fail-closed exit: a silent exit before the success path (for example a
+// startup await that never settles with an empty event loop) leaves this at 1.
+process.exitCode = 1;
 const check = (n, c, x = '') => { console.log(`${c ? 'PASS' : (failures++, 'FAIL')} ${n} ${x}`); };
 async function call(path, { jwt, method = 'GET', body } = {}) {
   const headers = { 'Content-Type': 'application/json' };
@@ -362,6 +365,12 @@ try {
   await new Promise((r) => setTimeout(r, 1200));
   check('denied host handshake gets no pong', await page.evaluate(() => window.__received.filter((r) => r.data && r.data.type === 'ol:pong').length === 0));
   check('denied host caused no writes', (await trB()).version === 2);
+} catch (err) {
+  // embedded-postgres can reject with `undefined` when the postmaster dies at
+  // startup; through an async finally that exception exits 0 SILENTLY. Catch
+  // and exit deterministically instead.
+  console.error('SUITE INCOMPLETE:', err);
+  process.exit(1);
 } finally {
   if (browser) await browser.close().catch(() => {});
   if (host1) host1.close();

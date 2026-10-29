@@ -9,6 +9,9 @@ import { join } from 'node:path';
 const PORT = 55432;
 const root = process.cwd();
 let failures = 0;
+// Fail-closed exit: a silent exit before the success path (for example a
+// startup await that never settles with an empty event loop) leaves this at 1.
+process.exitCode = 1;
 function check(name, cond) {
   if (cond) { console.log(`PASS ${name}`); }
   else { failures += 1; console.log(`FAIL ${name}`); }
@@ -98,6 +101,12 @@ try {
   check('project delete cascades to keys and translations', orphanKeys === 0 && orphanTr === 0);
 
   await prisma.$disconnect();
+} catch (err) {
+  // embedded-postgres can reject with `undefined` when the postmaster dies at
+  // startup; through an async finally that exception exits 0 SILENTLY. Catch
+  // and exit deterministically instead.
+  console.error('SUITE INCOMPLETE:', err);
+  process.exit(1);
 } finally {
   await pg.stop().catch(() => {});
   rmSync(dataDir, { recursive: true, force: true });
@@ -105,3 +114,4 @@ try {
 
 if (failures > 0) { console.log(`${failures} check(s) FAILED`); process.exit(1); }
 console.log('All integration checks passed');
+process.exitCode = 0;

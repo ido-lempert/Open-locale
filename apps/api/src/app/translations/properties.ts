@@ -2,7 +2,10 @@
 // '#'/'!' comments, backslash continuation lines, standard escapes
 // (\t \n \r \f \\ \' \" \space \= \: \uXXXX). Keys and values escape the
 // separators and leading whitespace on export. Non-ASCII is written as
-// UTF-8 directly (Java 9+ default); no native2ascii \uXXXX emission.
+// UTF-8 directly; no native2ascii \uXXXX emission. Consumers differ:
+// PropertyResourceBundle (Java 9+) reads UTF-8 by default, but
+// Properties.load(InputStream) assumes ISO-8859-1 at any Java version -
+// such consumers must decode as UTF-8 explicitly.
 // Lines without a separator are rejected, never silently skipped.
 
 const NEEDS_KEY_ESCAPE_RE = /([\\=:])/g;
@@ -29,7 +32,7 @@ function escapeValue(v: string): string {
 
 export function toProperties(rows: [string, string][]): string {
   const body = rows.map(([k, v]) => `${escapeKey(k)}=${escapeValue(v)}`).join('\n');
-  return `# open-locale export (UTF-8; Java 9+ reads .properties as UTF-8)\n${body}\n`;
+  return `# open-locale export, UTF-8 encoded. Java: PropertyResourceBundle (9+) reads UTF-8 by default;\n# Properties.load(InputStream) assumes ISO-8859-1 - decode as UTF-8 explicitly.\n${body}\n`;
 }
 
 // Sequential unescape: a replace-chain would turn the two-character sequence

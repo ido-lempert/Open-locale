@@ -9,8 +9,12 @@ the import/export format picker, the API (`GET /export/:locale/properties`,
 Subset, stated plainly: `key=value` (or `:` or whitespace) lines, `#`/`!`
 comments, backslash continuation lines, standard escapes
 (`\t \n \r \f \\` `\= \: \space` and `\uXXXX`). Keys escape separators and
-spaces on export; values escape control characters. Non-ASCII is written as
-UTF-8 (Java 9+ default) rather than native2ascii `\uXXXX`. Rejected,
+spaces on export; values escape control characters. Non-ASCII is written as UTF-8 rather
+than native2ascii `\uXXXX`. Consumers differ: `PropertyResourceBundle`
+(Java 9+) reads UTF-8 by default (JEP 226, with ISO-8859-1 fallback on
+malformed input), while `Properties.load(InputStream)` assumes ISO-8859-1
+at any Java version - the export header names both so consumers decode
+explicitly. Rejected,
 never silently skipped: separator-less lines, duplicate keys, malformed
 escapes (lone trailing backslash, bad `\uXXXX`).
 
@@ -49,8 +53,9 @@ ids), also verified byte-identical.
   backslash + n); continuation join counts odd trailing backslashes; the
   whitespace-separator rule means a bare token line is the only
   separator-less case.
-- PM: the picker says "Java properties"; UTF-8 emission documented in the
-  export header comment.
+- PM: the picker says "Java properties"; the export header states the
+  exact encoding contract per consumer class (ResourceBundle vs
+  Properties.load), verified against the Oracle Java 9 and 21 docs.
 - Designer: one new option row; no layout change.
 - Security: fail-closed import; linear-scan parser, no regex backtracking
   surface; 2MB DTO cap matches the other formats.

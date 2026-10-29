@@ -9,6 +9,9 @@ const PG_PORT = 55446, API_PORT = 3013;
 const API = `http://127.0.0.1:${API_PORT}/api`;
 const root = process.cwd();
 let failures = 0;
+// Fail-closed exit: a silent exit before the success path (for example a
+// startup await that never settles with an empty event loop) leaves this at 1.
+process.exitCode = 1;
 const check = (n, c, x = '') => { console.log(`${c ? 'PASS' : (failures++, 'FAIL')} ${n} ${x}`); };
 async function call(path, { token, method = 'GET', body } = {}) {
   const headers = { 'Content-Type': 'application/json' };
@@ -310,9 +313,63 @@ try {
   const heAfterPropLock = await (await fetch(`${API}${P}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
   check('PROPERTIES locked key keeps its value, unlocked key imported', heAfterPropLock['prop.title'] === 'My App ✓' && heAfterPropLock['prop.unlocked'] === 'lands', JSON.stringify({ title: heAfterPropLock['prop.title'], unlocked: heAfterPropLock['prop.unlocked'] }));
 
+  // Flutter ARB round-trip, rejection and the shared boundaries.
+  const arbIn = JSON.stringify({
+    '@@locale': 'he',
+    'arb.title': 'My App ✓',
+    '@arb.title': { description: 'metadata ignored' },
+    'arb.multi': 'line1\nline2',
+    'arb.simple': 'Total: {amount}',
+  });
+  const impArb = await call(`${P}/import/he`, { token: at, method: 'POST', body: { arb: arbIn } });
+  check('ARB import accepted (metadata ignored)', impArb.status === 201 && impArb.json.translationsUpserted === 3, JSON.stringify(impArb.json));
+  const arbRes = await fetch(`${API}${P}/export/he/arb`, { headers: { Authorization: `Bearer ${at}` } });
+  const arbOut = await arbRes.text();
+  check('ARB export content-type and @@locale', (arbRes.headers.get('content-type') || '').includes('arb+json') && JSON.parse(arbOut)['@@locale'] === 'he', arbRes.headers.get('content-type') ?? '');
+  const arbParsed = JSON.parse(arbOut);
+  check('ARB export carries the entries', arbParsed['arb.title'] === 'My App ✓' && arbParsed['arb.multi'] === 'line1\nline2' && arbParsed['arb.simple'] === 'Total: {amount}');
+  const arbRound = await call(`${P}/import/he`, { token: at, method: 'POST', body: { arb: arbOut } });
+  check('ARB export-import roundtrip stable', arbRound.status === 201 && arbRound.json.unchangedSkipped >= 3, JSON.stringify(arbRound.json));
+  const arbBefore = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  const arbPlural = await call(`${P}/import/he`, { token: at, method: 'POST', body: { arb: JSON.stringify({ 'arb.plural': '{count, plural, one {# apple} other {# apples}}', 'arb.ok': 'should not land' }) } });
+  const arbAfterPlural = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('ARB ICU plural rejected (400) and leaves keys unchanged', arbPlural.status === 400 && JSON.stringify(arbBefore) === JSON.stringify(arbAfterPlural) && arbAfterPlural['arb.ok'] === undefined, String(arbPlural.status));
+  const arbNonString = await call(`${P}/import/he`, { token: at, method: 'POST', body: { arb: JSON.stringify({ 'arb.num': 3 }) } });
+  check('ARB non-string value rejected (400)', arbNonString.status === 400, String(arbNonString.status));
+
+  await call(`${P}/branches`, { token: at, method: 'POST', body: { name: 'arb-branch' } });
+  const impArbBr = await call(`${P}/import/en?branch=arb-branch`, { token: at, method: 'POST', body: { arb: JSON.stringify({ 'arb.branchonly': 'branch value' }) } });
+  check('ARB import scopes to the named branch', impArbBr.status === 201, JSON.stringify(impArbBr.json));
+  const mainAfterArbBr = await (await fetch(`${API}${P}/export/en?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  const brAfterArbBr = await (await fetch(`${API}${P}/export/en?flat=true&branch=arb-branch`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('ARB branch import invisible on main, present on the branch', mainAfterArbBr['arb.branchonly'] === undefined && brAfterArbBr['arb.branchonly'] === 'branch value');
+  const brArbOut = JSON.parse(await (await fetch(`${API}${P}/export/en/arb?branch=arb-branch`, { headers: { Authorization: `Bearer ${at}` } })).text());
+  check('ARB export reads the named branch', brArbOut['arb.branchonly'] === 'branch value');
+
+  const cArbEn = await call(`${P}/import/en`, { token: ct, method: 'POST', body: { arb: JSON.stringify({ 'arb.denied': 'x' }) } });
+  check('ARB import outside the member locale grant denied (403)', cArbEn.status === 403, String(cArbEn.status));
+  const cArbHe = await call(`${P}/import/he`, { token: ct, method: 'POST', body: { arb: JSON.stringify({ 'arb.memberok': 'allowed' }) } });
+  check('ARB import inside the member locale grant accepted', cArbHe.status === 201, String(cArbHe.status));
+  const cArbExport = await fetch(`${API}${P}/export/en/arb`, { headers: { Authorization: `Bearer ${ct}` } });
+  check('ARB export not narrowed by locale write grants', cArbExport.status === 200, String(cArbExport.status));
+
+  const keysForArbLock = (await call(`${P}/keys`, { token: at })).json;
+  const lockArbKey = keysForArbLock.find((k) => k.name === 'arb.title');
+  await call(`${P}/tasks`, { token: at, method: 'POST', body: { title: 'Lock arb.title', lockKeys: true, keyIds: [lockArbKey.id] } });
+  const arbLockImp = await call(`${P}/import/he`, { token: ct, method: 'POST', body: { arb: JSON.stringify({ 'arb.title': 'changed under lock', 'arb.unlocked': 'lands' }) } });
+  check('ARB import skips the locked key and reports it', arbLockImp.status === 201 && arbLockImp.json.failed === 1 && arbLockImp.json.translationsUpserted === 1, JSON.stringify(arbLockImp.json));
+  const heAfterArbLock = await (await fetch(`${API}${P}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('ARB locked key keeps its value, unlocked key imported', heAfterArbLock['arb.title'] === 'My App ✓' && heAfterArbLock['arb.unlocked'] === 'lands', JSON.stringify({ title: heAfterArbLock['arb.title'], unlocked: heAfterArbLock['arb.unlocked'] }));
+
   const runs = (await call(`${P}/imports`, { token: at })).json;
   check('CSV imports recorded as import runs', Array.isArray(runs) ? runs.length >= 2 : (runs.items?.length ?? 0) >= 2, JSON.stringify(runs).slice(0, 120));
 
+} catch (err) {
+  // embedded-postgres can reject with `undefined` when the postmaster dies at
+  // startup; through an async finally that exception exits 0 SILENTLY. Catch
+  // and exit deterministically instead.
+  console.error('SUITE INCOMPLETE:', err);
+  process.exit(1);
 } finally {
   api?.kill('SIGTERM');
   await pg.stop().catch(() => {});
@@ -320,3 +377,4 @@ try {
 }
 if (failures > 0) { console.log(`${failures} FAILURES`); process.exit(1); }
 console.log('All CSV format checks passed');
+process.exitCode = 0;

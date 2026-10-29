@@ -13,6 +13,9 @@ const API_PORT = 3001;
 const API = `http://127.0.0.1:${API_PORT}/api`;
 const root = process.cwd();
 let failures = 0;
+// Fail-closed exit: a silent exit before the success path (for example a
+// startup await that never settles with an empty event loop) leaves this at 1.
+process.exitCode = 1;
 function check(name, cond, extra = '') {
   if (cond) console.log(`PASS ${name}`);
   else { failures += 1; console.log(`FAIL ${name} ${extra}`); }
@@ -134,6 +137,12 @@ try {
   const exp = await call(`/projects/${proj.id}/export/en`, { token: a.accessToken });
   check('A project intact after B attempts', after.status === 200 && after.json.name === 'A Shop'
     && exp.json?.cart?.title === 'Cart' && !after.json.locales?.some?.((l) => l.code === 'fr'));
+} catch (err) {
+  // embedded-postgres can reject with `undefined` when the postmaster dies at
+  // startup; through an async finally that exception exits 0 SILENTLY. Catch
+  // and exit deterministically instead.
+  console.error('SUITE INCOMPLETE:', err);
+  process.exit(1);
 } finally {
   api?.kill('SIGTERM');
   await pg.stop().catch(() => {});
@@ -141,3 +150,4 @@ try {
 }
 if (failures > 0) { console.log(`${failures} FAILURES`); process.exit(1); }
 console.log('All authorization baseline checks passed');
+process.exitCode = 0;

@@ -17,6 +17,9 @@ const API = `http://127.0.0.1:${API_PORT}/api`;
 const MOCK = `http://127.0.0.1:${MOCK_PORT}`;
 const root = process.cwd();
 let failures = 0;
+// Fail-closed exit: a silent exit before the success path (for example a
+// startup await that never settles with an empty event loop) leaves this at 1.
+process.exitCode = 1;
 const check = (n, c, x = '') => { console.log(`${c ? 'PASS' : (failures++, 'FAIL')} ${n} ${x}`); };
 
 const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -283,6 +286,12 @@ try {
   await new Promise((r) => setTimeout(r, 800));
   await guardCase('redirecting metadata endpoint refused (no redirect follow)', { OIDC_ISSUER: 'http://127.0.0.1:5556', PORT: '3010' }, 400);
   mockRedir.kill('SIGTERM');
+} catch (err) {
+  // embedded-postgres can reject with `undefined` when the postmaster dies at
+  // startup; through an async finally that exception exits 0 SILENTLY. Catch
+  // and exit deterministically instead.
+  console.error('SUITE INCOMPLETE:', err);
+  process.exit(1);
 } finally {
   if (prisma) await prisma.$disconnect();
   if (api) api.kill('SIGTERM');

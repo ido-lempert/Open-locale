@@ -12,6 +12,9 @@ const PG_PORT = 55447, API_PORT = 3014, HOOK_PORT = 3915;
 const API = `http://127.0.0.1:${API_PORT}/api`;
 const root = process.cwd();
 let failures = 0;
+// Fail-closed exit: a silent exit before the success path (for example a
+// startup await that never settles with an empty event loop) leaves this at 1.
+process.exitCode = 1;
 const check = (n, c, x = '') => { console.log(`${c ? 'PASS' : (failures++, 'FAIL')} ${n} ${x}`); };
 async function call(path, { token, method = 'GET', body } = {}) {
   const headers = { 'Content-Type': 'application/json' };
@@ -90,6 +93,12 @@ try {
 
   const del = await call(`${P}/webhooks/${hook.id}`, { token: at, method: 'DELETE' });
   check('webhook deleted', del.status === 200 && (await call(`${P}/webhooks`, { token: at })).json.length === 0);
+} catch (err) {
+  // embedded-postgres can reject with `undefined` when the postmaster dies at
+  // startup; through an async finally that exception exits 0 SILENTLY. Catch
+  // and exit deterministically instead.
+  console.error('SUITE INCOMPLETE:', err);
+  process.exit(1);
 } finally {
   api?.kill('SIGTERM');
   receiver.close();

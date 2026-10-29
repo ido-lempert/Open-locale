@@ -10,6 +10,9 @@ const PG_PORT = 55439, API_PORT = 3006;
 const API = `http://127.0.0.1:${API_PORT}/api`;
 const root = process.cwd();
 let failures = 0;
+// Fail-closed exit: a silent exit before the success path (for example a
+// startup await that never settles with an empty event loop) leaves this at 1.
+process.exitCode = 1;
 const check = (n, c, x = '') => { console.log(`${c ? 'PASS' : (failures++, 'FAIL')} ${n} ${x}`); };
 async function call(path, { token, method = 'GET', body } = {}) {
   const headers = { 'Content-Type': 'application/json' };
@@ -98,6 +101,12 @@ try {
 
   const cross = await call(`/projects/${proj.id}/imports`, { token: bt });
   check('cross-team import runs denied (404)', cross.status === 404, `got ${cross.status}`);
+} catch (err) {
+  // embedded-postgres can reject with `undefined` when the postmaster dies at
+  // startup; through an async finally that exception exits 0 SILENTLY. Catch
+  // and exit deterministically instead.
+  console.error('SUITE INCOMPLETE:', err);
+  process.exit(1);
 } finally {
   api?.kill('SIGTERM');
   await pg.stop().catch(() => {});
@@ -105,3 +114,4 @@ try {
 }
 if (failures > 0) { console.log(`${failures} FAILURES`); process.exit(1); }
 console.log('All import-runs checks passed');
+process.exitCode = 0;

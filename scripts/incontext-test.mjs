@@ -16,6 +16,9 @@ const EMBED_ORIGIN = `http://127.0.0.1:${API_PORT}`;
 const HOST1 = `http://127.0.0.1:${HOST_PORT}`;
 const root = process.cwd();
 let failures = 0;
+// Fail-closed exit: a silent exit before the success path (for example a
+// startup await that never settles with an empty event loop) leaves this at 1.
+process.exitCode = 1;
 const check = (n, c, x = '') => { console.log(`${c ? 'PASS' : (failures++, 'FAIL')} ${n} ${x}`); };
 async function call(path, { jwt, token, method = 'GET', body } = {}) {
   const headers = { 'Content-Type': 'application/json' };
@@ -242,6 +245,12 @@ try {
   await new Promise((r) => setTimeout(r, 2000));
   const revokedPing = await sendAndWait({ source: 'open-locale-host', type: 'ol:ping' }, 'ol:pong', 1500);
   check('after origin removal a fresh embed is blocked (no pong)', !revokedPing.found);
+} catch (err) {
+  // embedded-postgres can reject with `undefined` when the postmaster dies at
+  // startup; through an async finally that exception exits 0 SILENTLY. Catch
+  // and exit deterministically instead.
+  console.error('SUITE INCOMPLETE:', err);
+  process.exit(1);
 } finally {
   if (browser) await browser.close().catch(() => {});
   if (host1) host1.close();

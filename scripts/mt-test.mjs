@@ -12,6 +12,9 @@ const PG_PORT = 55469, API_PORT = 3000;
 const API = `http://127.0.0.1:${API_PORT}/api`;
 const root = process.cwd();
 let failures = 0;
+// Fail-closed exit: a silent exit before the success path (for example a
+// startup await that never settles with an empty event loop) leaves this at 1.
+process.exitCode = 1;
 const check = (n, c, x = '') => { console.log(`${c ? 'PASS' : (failures++, 'FAIL')} ${n} ${x}`); };
 async function call(path, { jwt, method = 'GET', body } = {}) {
   const headers = { 'Content-Type': 'application/json' };
@@ -178,6 +181,12 @@ try {
   await call(`/projects/${pid}/mt/providers/${provider.id}`, { jwt, method: 'DELETE' });
   const gone = await call(`/projects/${pid}/mt/pretranslate`, { jwt, method: 'POST', body: { providerId: provider.id, locale: 'he' } });
   check('deleted provider is 404', gone.status === 404, `got ${gone.status}`);
+} catch (err) {
+  // embedded-postgres can reject with `undefined` when the postmaster dies at
+  // startup; through an async finally that exception exits 0 SILENTLY. Catch
+  // and exit deterministically instead.
+  console.error('SUITE INCOMPLETE:', err);
+  process.exit(1);
 } finally {
   if (api) api.kill('SIGTERM');
   await pg.stop();

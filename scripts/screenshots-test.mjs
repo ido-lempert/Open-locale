@@ -9,6 +9,9 @@ const PG_PORT = 55440, API_PORT = 3007;
 const API = `http://127.0.0.1:${API_PORT}/api`;
 const root = process.cwd();
 let failures = 0;
+// Fail-closed exit: a silent exit before the success path (for example a
+// startup await that never settles with an empty event loop) leaves this at 1.
+process.exitCode = 1;
 const check = (n, c, x = '') => { console.log(`${c ? 'PASS' : (failures++, 'FAIL')} ${n} ${x}`); };
 // 1x1 transparent PNG and 1x1 GIF89a
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
@@ -110,6 +113,12 @@ try {
   const feed = (await json(`/projects/${proj.id}/activity`, { token: at })).json;
   const acts = feed.items.map((e) => e.action);
   check('activity has screenshot.added + screenshot.deleted', acts.includes('screenshot.added') && acts.includes('screenshot.deleted'));
+} catch (err) {
+  // embedded-postgres can reject with `undefined` when the postmaster dies at
+  // startup; through an async finally that exception exits 0 SILENTLY. Catch
+  // and exit deterministically instead.
+  console.error('SUITE INCOMPLETE:', err);
+  process.exit(1);
 } finally {
   api?.kill('SIGTERM');
   await pg.stop().catch(() => {});
@@ -117,3 +126,4 @@ try {
 }
 if (failures > 0) { console.log(`${failures} FAILURES`); process.exit(1); }
 console.log('All screenshots checks passed');
+process.exitCode = 0;

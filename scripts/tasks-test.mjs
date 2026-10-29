@@ -10,6 +10,9 @@ const PG_PORT = 55441, API_PORT = 3008;
 const API = `http://127.0.0.1:${API_PORT}/api`;
 const root = process.cwd();
 let failures = 0;
+// Fail-closed exit: a silent exit before the success path (for example a
+// startup await that never settles with an empty event loop) leaves this at 1.
+process.exitCode = 1;
 const check = (n, c, x = '') => { console.log(`${c ? 'PASS' : (failures++, 'FAIL')} ${n} ${x}`); };
 async function call(path, { token, apiKey, method = 'GET', body } = {}) {
   const headers = { 'Content-Type': 'application/json' };
@@ -417,6 +420,12 @@ try {
     (await hasAction('task.created')) && (await hasAction('task.updated')) && (await hasAction('task.deleted')));
   const upd = (await call(`/projects/${proj.id}/activity?action=task.updated&limit=100`, { token: at })).json.items[0];
   check('update event names what changed', !!upd?.detail?.changes, JSON.stringify(upd?.detail));
+} catch (err) {
+  // embedded-postgres can reject with `undefined` when the postmaster dies at
+  // startup; through an async finally that exception exits 0 SILENTLY. Catch
+  // and exit deterministically instead.
+  console.error('SUITE INCOMPLETE:', err);
+  process.exit(1);
 } finally {
   api?.kill('SIGTERM');
   await pg.stop().catch(() => {});
@@ -424,3 +433,4 @@ try {
 }
 if (failures > 0) { console.log(`${failures} FAILURES`); process.exit(1); }
 console.log('All tasks checks passed');
+process.exitCode = 0;

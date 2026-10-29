@@ -18,6 +18,9 @@ const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const root = process.cwd();
 const shots = process.env.SHOT_DIR ?? '/downloads';
 let failures = 0;
+// Fail-closed exit: a silent exit before the success path (for example a
+// startup await that never settles with an empty event loop) leaves this at 1.
+process.exitCode = 1;
 const check = (n, c, x = '') => { console.log(`${c ? 'PASS' : (failures++, 'FAIL')} ${n} ${x}`); };
 
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-e2e-'));
@@ -460,6 +463,37 @@ try {
     cell?.scrollIntoView({ block: 'center' });
   });
   await shot('editor-37-properties.png');
+  await page.evaluate(() => {
+    document.body.style.paddingBottom = '';
+    window.scrollTo(0, 0);
+  });
+
+  // --- ARB via UI: import a new key, export capture verifies content ---
+  const arbFile = '/tmp/e2e-import.arb';
+  writeFileSync(arbFile, JSON.stringify({ '@@locale': 'en', 'arb.demo': 'Proof of ARB {count}', '@arb.demo': { description: 'ignored' } }) + '\n');
+  await page.select('select[aria-label="Import/export format"]', 'arb');
+  const arbInput = await page.$('input[type=file]');
+  await arbInput.uploadFile(arbFile);
+  const arbNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('(ARB (Flutter),'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('ARB import via UI shows summary notice', arbNotice);
+  check('ARB-imported key appears in grid', await waitText('arb.demo'));
+  await page.evaluate(() => {
+    window.__arbCapture = null;
+    const orig = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (b) => { window.__arbCapture = b; return orig(b); };
+  });
+  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.startsWith('Export'))?.click());
+  await page.waitForFunction(() => !!window.__arbCapture, { timeout: 10000 });
+  const arbExport = await page.evaluate(() => window.__arbCapture.text());
+  check('ARB export via UI emits JSON entries for existing keys',
+    JSON.parse(arbExport)['arb.demo'] === 'Proof of ARB {count}' && JSON.parse(arbExport)['@@locale'] === 'en',
+    arbExport.split('\n').find((l) => l.includes('arb.demo')) ?? '');
+  await page.evaluate(() => {
+    document.body.style.paddingBottom = '60vh';
+    const cell = [...document.querySelectorAll('.grid td.key')].find((el) => el.textContent.includes('arb.demo'));
+    cell?.scrollIntoView({ block: 'center' });
+  });
+  await shot('editor-38-arb.png');
   await page.evaluate(() => {
     document.body.style.paddingBottom = '';
     window.scrollTo(0, 0);
@@ -1455,6 +1489,12 @@ try {
   await page.waitForSelector('.toolbar', { timeout: 10000 });
   await shot('editor-09-mobile-320.png');
   check('mobile screenshots captured', true);
+} catch (err) {
+  // embedded-postgres can reject with `undefined` when the postmaster dies at
+  // startup; through an async finally that exception exits 0 SILENTLY. Catch
+  // and exit deterministically instead.
+  console.error('SUITE INCOMPLETE:', err);
+  process.exit(1);
 } finally {
   await browser?.close().catch(() => {});
   web?.kill('SIGTERM'); api?.kill('SIGTERM');
@@ -1463,3 +1503,4 @@ try {
 }
 if (failures > 0) { console.log(`${failures} FAILURES`); process.exit(1); }
 console.log('E2E visual pass complete');
+process.exitCode = 0;
