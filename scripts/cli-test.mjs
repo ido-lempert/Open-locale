@@ -158,6 +158,14 @@ try {
   const pushDrZip = cli(['push', 'bundle.zip', '--dry-run'], workDir);
   check('cli push --dry-run on a bundle zip is rejected before upload', pushDrZip.status === 1 && pushDrZip.out.includes('no preview mode'), pushDrZip.out.trim().slice(0, 160));
 
+  // Import-run audit through the CLI: earlier pushes left runs behind.
+  const imp = cli(['imports'], workDir);
+  const runLines = imp.out.split('\n').filter((l) => l.includes(' upserted, '));
+  check('cli imports lists the runs made by earlier pushes', imp.status === 0 && runLines.length >= 3 && imp.out.includes('COMPLETED') && imp.out.includes('he'), `${runLines.length} runs`);
+  const imp1 = cli(['imports', '--limit', '1'], workDir);
+  const runLines1 = imp1.out.split('\n').filter((l) => l.includes(' upserted, '));
+  check('cli imports --limit caps the list', imp1.status === 0 && runLines1.length === 1 && imp1.out.includes('1 of'), `${runLines1.length} shown`);
+
   // read-only enforcement through the CLI
   const roTok = await call('/auth/tokens', { jwt, method: 'POST', body: { name: 'cli-ro', scopes: ['read'] } });
   writeFileSync(join(workDir, 'open-locale.json'), JSON.stringify({ url: `http://127.0.0.1:${API_PORT}`, token: roTok.json.token, project: proj.json.id }));

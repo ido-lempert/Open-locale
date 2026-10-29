@@ -70,6 +70,7 @@ open-locale push <file.zip>                     # import a bundle (one entry per
 open-locale pull --locale he [--format f] [-o file]   # export one locale
 open-locale pull --all [--format f] -o bundle.zip     # export every locale as one zip
 open-locale keys [--search term]                # list keys
+open-locale imports [--limit N]                 # audit recent import runs (newest first)
 open-locale docs                                # print the OpenAPI docs URL
 ```
 

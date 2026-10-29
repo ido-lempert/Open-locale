@@ -8,6 +8,7 @@
 //   open-locale pull --locale he [--format f] [-o file]   json|csv|android|ios|po|xliff|properties|arb|yaml
 //   open-locale pull --all [--format f] -o <file.zip>     export every locale as one store-only zip
 //   open-locale keys [--search term]             list keys; every command accepts --branch <name>
+//   open-locale imports [--limit N]              audit recent import runs
 //
 // Config: OPENLOCALE_URL (default http://localhost:3000), OPENLOCALE_TOKEN,
 // OPENLOCALE_PROJECT; or { "url", "token", "project" } in open-locale.json.
@@ -147,6 +148,18 @@ async function keys() {
   console.error(`${list.length} key(s)`);
 }
 
+async function imports() {
+  const { project } = config();
+  const limit = Number(opt('limit', '50'));
+  if (!Number.isInteger(limit) || limit < 1) fail('--limit must be a positive integer');
+  const runs = await api(`/projects/${project}/imports`);
+  for (const r of runs.slice(0, limit)) {
+    console.log(`${r.createdAt}  ${r.localeCode}  ${r.status}  ${r.translationsUpserted} upserted, ${r.keysCreated} key(s) created, ` +
+      `${r.unchangedSkipped} unchanged, ${r.failed} failed  ${r.actor?.email ?? 'api token'}  ${r.id}${r.error ? `  - ${r.error}` : ''}`);
+  }
+  console.error(`${Math.min(limit, runs.length)} of ${runs.length} import run(s) (newest first)`);
+}
+
 const usage = `open-locale <command>
   push <file> --locale <code>            import a translations file (json/xml/strings/csv/po/xlf/properties/arb/yaml)
   push <file> --locale <c> --dry-run     preview counts without writing (not available for bundle zip)
@@ -156,6 +169,7 @@ const usage = `open-locale <command>
   pull --locale <code> [--format f] [-o file]   export translations (json|csv|android|ios|po|xliff|properties|arb|yaml)
   pull --all [--format f] -o <file.zip>  export every locale as one store-only zip
   keys [--search term]                   list keys
+  imports [--limit N]                    list recent import runs (newest first, API caps at 50)
   docs                                   print the OpenAPI docs URL
 options: every command accepts [--branch name] to scope the read or write to a
   branch (default: main)
@@ -166,4 +180,5 @@ if (cmd === 'docs') { const { url } = config(); console.log(`${url}/api/openapi.
 if (cmd === 'push') await push();
 else if (cmd === 'pull') await pull();
 else if (cmd === 'keys') await keys();
+else if (cmd === 'imports') await imports();
 else fail(`unknown command: ${cmd}\n${usage}`);
