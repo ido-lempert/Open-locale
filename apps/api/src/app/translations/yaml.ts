@@ -1,5 +1,8 @@
-// YAML interchange (Rails style). Subset, stated plainly:
+// YAML interchange (Rails-style locale-file subset). Subset, stated plainly:
 // - one document of nested string maps; keys with dots export as nested maps
+// - locale root: export wraps the document in `<locale>:`; on import a single
+//   top-level map equal to the target locale is stripped (Rails convention),
+//   a single top-level map that is a DIFFERENT locale-shaped code is rejected
 // - keys and values may be plain, 'single-quoted' or "double-quoted"
 // - all leaf scalars are treated as strings (no YAML bool/int/null typing)
 // Rejected, never silently dropped: document markers (--- / ...), lists
@@ -14,12 +17,15 @@ const yamlEscapeDouble = (v: string) =>
   v.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')
     .replace(/\t/g, '\\t').replace(/\r/g, '\\r');
 
-export function toYaml(rows: [string, string][]): string {
+export function toYaml(rows: [string, string][], localeRoot?: string): string {
+  const rootLine = localeRoot ? `${localeRoot}:\n` : '';
+  const base = localeRoot ? 1 : 0;
+  const pad1 = localeRoot ? '  ' : '';
   const keys = rows.map(([k]) => k);
   const collides = keys.some((k) => keys.some((o) => o !== k && o.startsWith(k + '.')));
   if (collides) {
-    const body = rows.map(([k, v]) => `"${yamlEscapeDouble(k)}": "${yamlEscapeDouble(v)}"`).join('\n');
-    return `# open-locale export (flat: a key is a dot-prefix of another)\n${body}\n`;
+    const body = rows.map(([k, v]) => `${pad1}"${yamlEscapeDouble(k)}": "${yamlEscapeDouble(v)}"`).join('\n');
+    return `# open-locale export (flat: a key is a dot-prefix of another)\n${rootLine}${body}\n`;
   }
   // Build a nested tree, then emit with 2-space indentation.
   const tree = new Map<string, unknown>();
@@ -44,8 +50,8 @@ export function toYaml(rows: [string, string][]): string {
       }
     }
   };
-  emit(tree, 0);
-  return `# open-locale export\n${lines.join('\n')}\n`;
+  emit(tree, base);
+  return `# open-locale export\n${rootLine}${lines.join('\n')}\n`;
 }
 
 function unquote(text: string): string | null {
@@ -83,10 +89,15 @@ function unquote(text: string): string | null {
 const FORBIDDEN_PLAIN_START = /^(?:!|&|\*|\{|\[|\||>|@|`|-\s)/;
 const FORBIDDEN_ANYWHERE_RE = /(^|\s)(?:&\w+|\*\w+|![\w!])|^\s*\.\.\.\s*$/;
 
-export function parseYaml(text: string): { rows: [string, string][]; rejected: number } {
-  const rows: [string, string][] = [];
+const LOCALE_SHAPE = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/;
+
+export function parseYaml(text: string, localeRoot?: string): { rows: [string, string][]; rejected: number } {
+  let rows: [string, string][] = [];
   let rejected = 0;
   const seen = new Set<string>();
+  let topMapRoots = 0;
+  let topRoot: string | null = null;
+  let topLeaf = false;
   const stack: { indent: number; prefix: string; children: number }[] = [];
   for (const rawLine of text.split('\n')) {
     const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
@@ -131,6 +142,7 @@ export function parseYaml(text: string): { rows: [string, string][]; rejected: n
     const flat = prefix + key;
     if (rest === '') {
       // Map node opens (children follow at greater indent).
+      if (stack.length === 0) { topMapRoots++; topRoot = key; }
       stack.push({ indent, prefix: flat, children: 0 });
       continue;
     }
@@ -145,11 +157,22 @@ export function parseYaml(text: string): { rows: [string, string][]; rejected: n
     }
     if (seen.has(flat)) { rejected++; continue; }
     seen.add(flat);
+    if (stack.length === 0) topLeaf = true;
     rows.push([flat, value]);
   }
   while (stack.length > 0) {
     const frame = stack.pop()!;
     if (frame.children === 0) rejected++;
+  }
+  // Locale-root handling (Rails locale-file convention). Only a single
+  // top-level map with no top-level leaves counts as a locale wrapper.
+  if (localeRoot && rows.length > 0 && topMapRoots === 1 && !topLeaf && topRoot !== null) {
+    if (topRoot === localeRoot) {
+      rows = rows.map(([k, v]) => [k.slice(topRoot.length + 1), v] as [string, string]);
+    } else if (LOCALE_SHAPE.test(topRoot)) {
+      // A file rooted at a different locale is the wrong file: fail closed.
+      rejected += rows.length;
+    }
   }
   return { rows, rejected };
 }

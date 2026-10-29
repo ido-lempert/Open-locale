@@ -70,4 +70,42 @@ describe('YAML interchange (Rails-style subset)', () => {
     expect(back.rejected).toBe(0);
     expect(back.rows).toEqual([['t', 'true'], ['n', '123'], ['word', 'null']]);
   });
+
+  it('strips a single locale root matching the target locale', () => {
+    const { rows, rejected } = parseYaml('en:\n  hello: "Hi"\n  "a.b": dot\n', 'en');
+    expect(rejected).toBe(0);
+    expect(rows).toEqual([['hello', 'Hi'], ['a.b', 'dot']]);
+  });
+
+  it('rejects a single root naming a different locale (fail closed)', () => {
+    const { rejected } = parseYaml('fr:\n  hello: "Bonjour"\n', 'en');
+    expect(rejected).toBe(1);
+  });
+
+  it('keeps keys when a top-level leaf shares the file with the locale-shaped root', () => {
+    const { rows, rejected } = parseYaml('en:\n  hello: "Hi"\ntop: leaf\n', 'en');
+    expect(rejected).toBe(0);
+    expect(rows).toEqual([['en.hello', 'Hi'], ['top', 'leaf']]);
+  });
+
+  it('keeps a quoted literal dotted key at top level (not a locale wrapper)', () => {
+    const { rows, rejected } = parseYaml('"en.foo": literal\n', 'en');
+    expect(rejected).toBe(0);
+    expect(rows).toEqual([['en.foo', 'literal']]);
+  });
+
+  it('export wraps nested output in the locale root and roundtrips', () => {
+    const out = toYaml([['yaml.title', 'My App']], 'he');
+    expect(out).toBe('# open-locale export\nhe:\n  "yaml":\n    "title": "My App"\n');
+    expect(parseYaml(out, 'he').rows).toEqual([['yaml.title', 'My App']]);
+  });
+
+  it('flat fallback with locale root roundtrips prefix-collision keys', () => {
+    const rows: [string, string][] = [['a', 'x'], ['a.b', 'y']];
+    const out = toYaml(rows, 'he');
+    expect(out.startsWith('# open-locale export (flat: a key is a dot-prefix of another)\nhe:\n')).toBe(true);
+    const back = parseYaml(out, 'he');
+    expect(back.rejected).toBe(0);
+    expect(back.rows).toEqual(rows);
+  });
 });

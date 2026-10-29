@@ -360,7 +360,7 @@ export class TranslationsService {
 
   async exportYaml(userId: string, projectId: string, locale: string, branch?: string) {
     const flat = (await this.exportJson(userId, projectId, locale, true, branch)) as Record<string, string>;
-    return toYaml(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)));
+    return toYaml(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)), locale);
   }
 
   async importAndroid(userId: string, projectId: string, locale: string, xml: string, branch?: string) {
@@ -413,9 +413,9 @@ export class TranslationsService {
   }
 
   async importYaml(userId: string, projectId: string, locale: string, yaml: string, branch?: string) {
-    const { rows, rejected } = parseYaml(yaml);
+    const { rows, rejected } = parseYaml(yaml, locale);
     if (rejected > 0) {
-      throw new BadRequestException(`${rejected} YAML ${rejected === 1 ? 'line' : 'lines'} rejected: document markers, lists, flow collections, anchors/aliases/tags, block scalars, bare null keys, duplicates and bad escapes are not supported`);
+      throw new BadRequestException(`${rejected} YAML ${rejected === 1 ? 'line' : 'lines'} rejected: document markers, lists, flow collections, anchors/aliases/tags, block scalars, bare null keys, duplicates, bad escapes and a root key naming a different locale are not supported`);
     }
     return this.importJson(userId, projectId, locale, Object.fromEntries(rows), branch);
   }

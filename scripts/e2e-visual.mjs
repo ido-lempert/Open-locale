@@ -519,6 +519,7 @@ try {
   check('YAML export via UI emits nested entries for existing keys',
     yamlExport.includes('"yaml":') && yamlExport.includes('"demo": "Proof of YAML ✓"'),
     yamlExport.split('\n').find((l) => l.includes('demo')) ?? '');
+  check('YAML export via UI wraps the document in a locale root', /^# open-locale export\n[a-z]{2}:\n/.test(yamlExport), yamlExport.split('\n').slice(0, 2).join('|'));
   await page.evaluate(() => {
     document.body.style.paddingBottom = '60vh';
     const cell = [...document.querySelectorAll('.grid td.key')].find((el) => el.textContent.includes('yaml.demo'));
