@@ -108,13 +108,16 @@ export class ActivityComponent implements OnInit {
       case 'member.removed':
         return `${d['email']} (was ${String(d['role']).toLowerCase()})`;
       case 'group.created':
-        return `${String(d['role']).toLowerCase()}${Array.isArray(d['allowedLocales']) && (d['allowedLocales'] as string[]).length ? ': ' + (d['allowedLocales'] as string[]).join(', ') : ''}`;
+        return `"${d['name']}" (${String(d['role']).toLowerCase()}${Array.isArray(d['allowedLocales']) && (d['allowedLocales'] as string[]).length ? ': ' + (d['allowedLocales'] as string[]).join(', ') : ''})`;
       case 'group.updated': {
-        const f = d['from'] as { role: string }; const t = d['to'] as { role: string };
-        return f.role !== t.role ? `${f.role.toLowerCase()} → ${t.role.toLowerCase()}` : '';
+        const f = d['from'] as { role: string; allowedLocales: string[] }; const t = d['to'] as { role: string; allowedLocales: string[] };
+        const parts: string[] = [];
+        if (f.role !== t.role) parts.push(`${f.role.toLowerCase()} → ${t.role.toLowerCase()}`);
+        if (JSON.stringify(f.allowedLocales) !== JSON.stringify(t.allowedLocales)) parts.push(`locales ${f.allowedLocales.join(',') || 'all'} → ${t.allowedLocales.join(',') || 'all'}`);
+        return `"${d['name']}"${parts.length ? ': ' + parts.join(', ') : ''}`;
       }
       case 'group.deleted':
-        return `was ${String(d['role']).toLowerCase()}, ${d['members']} member(s)`;
+        return `"${d['name']}" (was ${String(d['role']).toLowerCase()}, ${d['members']} member(s))`;
       case 'group.member.added':
       case 'group.member.removed':
         return `${d['member']} ${ev.action === 'group.member.added' ? '→' : '←'} ${d['group']}`;

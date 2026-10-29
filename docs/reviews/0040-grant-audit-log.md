@@ -9,8 +9,16 @@ log (audit trail for the permissions surface built in reviews 0037-0039).
   record commit in one transaction (existing record(tx) pattern).
 - Details carry what an auditor needs: target email, role/locale from-to
   on updates, group name + member email on membership changes, final
-  state on delete. member.added vs member.updated distinguished on the
-  upsert path by reading the prior row first.
+  state on delete. Every group event row names its target group in the
+  UI. member.added vs member.updated is distinguished on the upsert path
+  by reading the prior row first.
+- Scope note: "every change" means every change made through the API
+  routes above. Direct database edits and future migrations that rewrite
+  grants do not produce events (no DB-level triggers). Under concurrent
+  addMember calls for the same user, both calls can classify the change
+  as member.added (read-then-upsert without row locking); the recorded
+  final grant is still accurate, only the added/updated label can
+  duplicate. Not claimed as race-exact history.
 - Activity UI: labels for all 8 actions + from/to detail rendering.
 
 ## PM

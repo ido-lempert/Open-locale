@@ -624,6 +624,7 @@ try {
   check('activity feed labels group creation', feedText.includes('created group'));
   check('activity feed labels member add', feedText.includes('added member'));
   check('activity feed shows group from/to detail', feedText.includes('member → admin'));
+  check('activity feed names the target group', feedText.includes('"reviewers"') && feedText.includes('"leads"'));
   await page.evaluate(() => { document.querySelector('h1').scrollIntoView({ block: 'start' }); window.scrollBy(0, -70); });
   await shot('editor-30-activity-grants.png');
 
