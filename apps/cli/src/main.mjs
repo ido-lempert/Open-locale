@@ -14,6 +14,14 @@ import { basename } from 'node:path';
 
 const fail = (msg, code = 1) => { console.error(`error: ${msg}`); process.exit(code); };
 const branchQuery = () => { const b = opt('branch'); return b ? `?branch=${encodeURIComponent(b)}` : ''; };
+const queryString = (extra = {}) => {
+  const params = new URLSearchParams();
+  const b = opt('branch');
+  if (b) params.set('branch', b);
+  for (const [k, v] of Object.entries(extra)) if (v) params.set(k, v);
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
+};
 const args = process.argv.slice(2);
 const cmd = args[0];
 const opt = (name, dflt) => {
@@ -67,6 +75,7 @@ async function push() {
     if (locale) fail('bundle push imports every locale in the archive; drop --locale');
     const format = opt('format', 'json');
     if (!FORMATS.has(format)) fail(`unknown format ${format} (${[...FORMATS].join('|')})`);
+    if (args.includes('--dry-run')) fail('dry-run is not supported for bundle push: the bundle import API has no preview mode');
     console.error('note: bundle import accepts store-only zips from `pull --all` (compressed zips are rejected); each locale imports independently - skipped entries and failed locales are reported, not rolled back.');
     const result = await api(`/projects/${project}/import-bundle/${format}${bq}`, { method: 'POST', body: readFileSync(file), zip: true });
     for (const r of result.imported) console.log(`${r.locale}: ${r.translationsUpserted} upserted, ${r.keysCreated} key(s) created, ${r.unchangedSkipped} unchanged, ${r.failed} failed`);
@@ -81,7 +90,15 @@ async function push() {
   const hit = PUSH_EXTS.find(([ext]) => lower.endsWith(ext));
   const ext = hit ? hit[1] : 'json';
   const body = ext === 'json' ? { entries: JSON.parse(text) } : { [ext]: text };
-  const result = await api(`/projects/${project}/import/${locale}${bq}`, { method: 'POST', body });
+  const dryRun = args.includes('--dry-run');
+  const result = await api(`/projects/${project}/import/${locale}${queryString(dryRun ? { dryRun: 'true' } : {})}`, { method: 'POST', body });
+  if (dryRun) {
+    console.log(`dry run ${result.status}: ${result.translationsUpserted} upserted, ${result.keysCreated} key(s) created, ` +
+      `${result.unchangedSkipped} unchanged, ${result.failed} failed (preview only - nothing written; counts are a point-in-time snapshot)`);
+    for (const f of result.failures ?? []) console.error(`would fail: ${f}`);
+    if (result.status === 'FAILED') process.exit(1);
+    return;
+  }
   console.log(`import ${result.status}: ${result.translationsUpserted} upserted, ${result.keysCreated} key(s) created, ` +
     `${result.unchangedSkipped} unchanged, ${result.failed} failed (run ${result.importId})`);
   if (result.status === 'FAILED') process.exit(1);
@@ -130,6 +147,7 @@ async function keys() {
 
 const usage = `open-locale <command>
   push <file> --locale <code>            import a translations file (json/xml/strings/csv/po/xlf/properties/arb/yaml)
+  push <file> --locale <c> --dry-run     preview counts without writing (not available for bundle zip)
   push <file.zip> [--format f]           import a bundle zip: STORE-ONLY, as written by pull --all
                                          (compressed zips are rejected before any write; each locale
                                          imports independently, no rollback across locales)

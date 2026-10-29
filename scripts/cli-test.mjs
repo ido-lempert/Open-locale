@@ -149,6 +149,15 @@ try {
   const mainHe = (await call(`/projects/${proj.json.id}/export/he?flat=true`, { jwt })).json;
   check('cli bundle push --branch lands on the branch, main untouched', pushZipBr.status === 0 && brHe['app.title'] === 'כותרת פו' && mainHe['app.title'] === 'ראשי', JSON.stringify({ br: brHe['app.title'], main: mainHe['app.title'] }));
 
+  // Dry-run through the CLI: previews counts, writes nothing, bundle rejected.
+  writeFileSync(join(workDir, 'dr.json'), JSON.stringify({ 'app.title': 'טיוטה', 'app.new': 'חדש' }));
+  const preDr = (await call(`/projects/${proj.json.id}/export/he?flat=true`, { jwt })).json;
+  const pushDr = cli(['push', 'dr.json', '--locale', 'he', '--dry-run'], workDir);
+  const postDr = (await call(`/projects/${proj.json.id}/export/he?flat=true`, { jwt })).json;
+  check('cli push --dry-run previews counts and writes nothing', pushDr.status === 0 && pushDr.out.includes('dry run') && pushDr.out.includes('1 key(s) created') && pushDr.out.includes('snapshot') && JSON.stringify(preDr) === JSON.stringify(postDr) && postDr['app.new'] === undefined, pushDr.out.trim().slice(0, 200));
+  const pushDrZip = cli(['push', 'bundle.zip', '--dry-run'], workDir);
+  check('cli push --dry-run on a bundle zip is rejected before upload', pushDrZip.status === 1 && pushDrZip.out.includes('no preview mode'), pushDrZip.out.trim().slice(0, 160));
+
   // read-only enforcement through the CLI
   const roTok = await call('/auth/tokens', { jwt, method: 'POST', body: { name: 'cli-ro', scopes: ['read'] } });
   writeFileSync(join(workDir, 'open-locale.json'), JSON.stringify({ url: `http://127.0.0.1:${API_PORT}`, token: roTok.json.token, project: proj.json.id }));
