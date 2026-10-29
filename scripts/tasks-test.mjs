@@ -357,10 +357,36 @@ try {
   const raceAudit = (await call(`/projects/${proj.id}/activity?action=task.updated&limit=100`, { token: at })).json.items
     .find((e) => e.detail?.title === 'Race assign task' && e.detail?.changes?.assigneeGroup);
   check('assignment-vs-delete race settles consistently',
-    delRes.status === 200 && !!rtAfter && rtAfter.assigneeGroup === null
+    [200, 409].includes(assignRes.status) && delRes.status === 200 && !!rtAfter && rtAfter.assigneeGroup === null
       && (assignRes.status !== 200 || (raceAudit?.detail?.changes?.assigneeGroup?.from === 'race-grp' && raceAudit?.detail?.changes?.assigneeGroup?.to === null)),
     `assign=${assignRes.status} del=${delRes.status} after=${JSON.stringify(rtAfter?.assigneeGroup)} audit=${!!raceAudit}`);
   await call(`${base}/${rt.id}`, { token: at, method: 'DELETE' });
+
+  // Deterministic race-loser: a raw transaction holds the exclusive
+  // assignment lock and deletes the group (the app cannot open this window
+  // through the API alone); the blocked PATCH must surface a clean 409,
+  // never a 500, and the task must end unassigned.
+  const g5 = (await call(`/projects/${proj.id}/groups`, { token: at, method: 'POST', body: { name: 'race409-grp', role: 'MEMBER', allowedLocales: [] } })).json;
+  const t409 = (await call(base, { token: at, method: 'POST', body: { title: 'Race loser task' } })).json;
+  const raw = new PrismaClient({ datasources: { db: { url } } });
+  let lockHeld;
+  const held = new Promise((r) => { lockHeld = r; });
+  const blockerTx = raw.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext('${proj.id}::task-assignment')::bigint)`);
+    await tx.$executeRawUnsafe(`DELETE FROM "groups" WHERE id = '${g5.id}'::uuid`);
+    lockHeld();
+    await new Promise((r) => setTimeout(r, 2500));
+  });
+  await held;
+  const loser = await call(`${base}/${t409.id}`, { token: at, method: 'PATCH', body: { assigneeGroupId: g5.id } });
+  await blockerTx;
+  check('race loser gets a clean 409, never a 500',
+    loser.status === 409 && /deleted concurrently/i.test(JSON.stringify(loser.json)),
+    `status=${loser.status} body=${JSON.stringify(loser.json)?.slice(0, 120)}`);
+  const loserAfter = (await call(base, { token: at })).json.find((t) => t.id === t409.id);
+  check('race loser task ends unassigned', !!loserAfter && loserAfter.assigneeGroup === null);
+  await raw.$disconnect();
+  await call(`${base}/${t409.id}`, { token: at, method: 'DELETE' });
 
   // Capped audit disclosure: 51 assigned tasks - exact total reported,
   // audit rows capped at 50, and every task actually unassigned.

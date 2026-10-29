@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
@@ -92,6 +92,21 @@ export class TasksService {
   // unassigned + audited by the deletion's RETURNING set. Always taken
   // after graphLock/lockMutationLock - the exclusive side (group delete)
   // holds no other advisory lock, so no ordering cycle is possible.
+  // Maps the one expected FK violation on an assignment write - the
+  // assignee group deleted concurrently between the pre-check and the
+  // write reaching the row - to a client-facing 409. Narrow on purpose:
+  // matched on the exact constraint name, so any unrelated DB error
+  // (other constraint, other code, non-Prisma) rethrows unchanged and is
+  // never masked as a client error.
+  private rethrowUnlessAssigneeGroupDeleted(e: unknown): never {
+    const err = e as { code?: string; message?: string; meta?: unknown };
+    const text = `${err?.message ?? ''} ${JSON.stringify(err?.meta ?? '')}`;
+    if (err?.code === 'P2003' && text.includes('tasks_assigneeGroupId_fkey')) {
+      throw new ConflictException('Assignee group was deleted concurrently; retry with a current group');
+    }
+    throw e;
+  }
+
   private async assignmentLockShared(db: Prisma.TransactionClient, projectId: string) {
     await db.$executeRaw`SELECT pg_advisory_xact_lock_shared(hashtext(${projectId + '::task-assignment'})::bigint)`;
   }
@@ -170,7 +185,7 @@ export class TasksService {
         creatorId: userId,
       },
       include: this.includePeople,
-    });
+    }).catch((e) => this.rethrowUnlessAssigneeGroupDeleted(e));
     if (input.keyIds?.length) {
       await tx.taskKey.createMany({ data: input.keyIds.map((keyId) => ({ taskId: task.id, keyId })) });
       // The create's include resolved before the key rows existed; re-read.
@@ -248,7 +263,7 @@ export class TasksService {
           ...(input.assigneeGroupId ? { assigneeId: null } : {}),
         },
         include: this.includePeople,
-      });
+      }).catch((e) => this.rethrowUnlessAssigneeGroupDeleted(e));
       if (input.keyIds !== undefined) {
         await this.assertKeysInProject(tx, projectId, input.keyIds);
         await tx.taskKey.deleteMany({ where: { taskId } });
