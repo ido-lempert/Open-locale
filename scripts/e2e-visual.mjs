@@ -1129,6 +1129,21 @@ try {
   });
   await shot('editor-32-lock-save-failed.png');
 
+  // Locked-key import preview as the member: the failure is named with its
+  // lock reason and nothing is written. (ADMIN/OWNER override locks, so this
+  // locked-failure path is only reachable in the UI as a MEMBER.)
+  await page.select('select[aria-label="Import/export format"]', 'json');
+  const lockPreviewFile = '/tmp/e2e-preview-locked.json';
+  writeFileSync(lockPreviewFile, JSON.stringify({ 'home.title': 'member preview attempt' }) + '\n');
+  const lpInput = await page.$('input[name=previewFile]');
+  await lpInput.uploadFile(lockPreviewFile);
+  const lockPreviewNotice = await page.waitForFunction(() => {
+    const t = document.querySelector('p.notice')?.textContent || '';
+    return t.includes('Preview only - nothing imported') && t.includes('1 would fail') && t.includes('is locked by task "Lock home.title"');
+  }, { timeout: 10000 }).then(() => true).catch(() => false);
+  const lockPreviewUntouched = await page.evaluate(() => !(document.body.textContent || '').includes('member preview attempt'));
+  check('locked key: member import preview reports the failure with its lock reason, writes nothing', lockPreviewNotice && lockPreviewUntouched, `notice=${lockPreviewNotice} untouched=${lockPreviewUntouched}`);
+
   const lockTasks = await (await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/tasks`, { headers: { Authorization: `Bearer ${ownerJwt}` } })).json();
   const lockTaskId = lockTasks.find((t) => t.title === 'Lock home.title').id;
   await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/tasks/${lockTaskId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ownerJwt}` }, body: JSON.stringify({ status: 'DONE' }) });

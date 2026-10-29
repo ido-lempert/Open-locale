@@ -11,7 +11,7 @@
 - UI notice is unmistakable: "Preview only - nothing imported: would create N keys, update M translations, K unchanged (FMT, locale)."
 
 ## Outcome safeguards (review follow-up)
-- The preview response carries a `failures` list (up to 5) naming each failed key and its reason (locking task title, or the non-string rejection); the UI notice prints the count and reasons, not just successes.
+- The preview response carries a `failures` list (up to 5) naming each failed key and its reason (locking task title, or the non-string rejection); the UI notice prints the count and reasons, not just successes. UI coverage includes a MEMBER-session preview over a task-locked key: the notice names the locking task and nothing is written (the OWNER session cannot reach this path because ADMIN/OWNER override locks).
 - Mode safety: dry-run is never a persisted mode - it lives only in the pick handler and an open conflict object. Any new file pick (either input) clears an open conflict banner and stale notices before acting, so a preview conflict can never leak into a later real import or vice versa. Verified both directions through the UI.
 - The conflict banner has a Cancel button: closes with no import and no residue.
 - In a preview conflict BOTH non-cancel buttons name the read-only action ("Preview as <detected>" / "Preview as <current>"); "Keep <current>" only appears for real imports.
