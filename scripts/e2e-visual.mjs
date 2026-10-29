@@ -602,6 +602,20 @@ try {
   const noBanner = await page.evaluate(() => !document.querySelector('.import-conflict'));
   check('unknown extension imports under the explicit selection with no conflict prompt', unknownNotice && noBanner && (await page.$eval('select[aria-label="Import/export format"]', (el) => el.value)) === 'po', `notice=${unknownNotice} noBanner=${noBanner}`);
 
+  // --- Import dry-run preview via UI ---
+  await page.select('select[aria-label="Import/export format"]', 'json');
+  const previewJsonFile = '/tmp/e2e-preview.json';
+  writeFileSync(previewJsonFile, JSON.stringify({ 'preview.key': 'preview value ✓' }) + '\n');
+  const previewInput = await page.$('input[name=previewFile]');
+  await previewInput.uploadFile(previewJsonFile);
+  const previewNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('Preview only - nothing imported: would create 1 keys'), { timeout: 10000 }).then(() => true).catch(() => false);
+  const previewAbsent = await page.evaluate(() => ![...document.querySelectorAll('.grid td.key')].some((el) => el.textContent.includes('preview.key')));
+  check('preview import shows would-be counts and writes nothing', previewNotice && previewAbsent, `notice=${previewNotice} absent=${previewAbsent}`);
+  await shot('editor-42-import-preview.png');
+  const realInput = await page.$('input[name=importFile]');
+  await realInput.uploadFile(previewJsonFile);
+  check('the same file then imports for real via the import input', await waitText('preview.key'));
+
   // Settings screen: rename, add locale, verify grid column appears (on the editor)
   await page.click('.settings-link');
   await page.waitForSelector('.panel', { timeout: 10000 });

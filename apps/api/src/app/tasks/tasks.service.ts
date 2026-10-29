@@ -72,6 +72,26 @@ export class TasksService {
     throw new ForbiddenException(`Key is locked by task "${locking.title}"`);
   }
 
+  // Read-only counterpart of assertKeysEditable for the import preview:
+  // returns the locking task's title when this user could NOT write the key,
+  // null when they could. Point-in-time read with no advisory lock - preview
+  // counts are a snapshot and can shift before a real import.
+  async keyLockFor(db: Prisma.TransactionClient | PrismaService, userId: string, projectId: string, keyId: string): Promise<string | null> {
+    const locking = await db.task.findFirst({
+      where: { projectId, lockKeys: true, status: { not: 'DONE' }, keys: { some: { keyId } } },
+      select: {
+        title: true, assigneeId: true,
+        assigneeGroup: { select: { members: { select: { userId: true } } } },
+      },
+    });
+    if (!locking) return null;
+    if (locking.assigneeId === userId) return null;
+    if (locking.assigneeGroup?.members.some((m) => m.userId === userId)) return null;
+    const role = await this.projects.roleFor(userId, projectId);
+    if (role !== 'MEMBER') return null; // ADMIN/OWNER override
+    return locking.title;
+  }
+
   private async assertKeysInProject(db: Prisma.TransactionClient | PrismaService, projectId: string, keyIds: string[]) {
     const found = await db.key.count({ where: { id: { in: keyIds }, projectId } });
     if (found !== new Set(keyIds).size) {

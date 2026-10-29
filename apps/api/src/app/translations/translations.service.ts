@@ -11,6 +11,7 @@ import { BranchesService } from '../branches/branches.service';
 import { AutomationsService } from '../automations/automations.service';
 import { TasksService } from '../tasks/tasks.service';
 import { flattenJson, unflattenJson } from './json-flatten';
+import type { ImportJsonDto } from './dto';
 import { parseCsv, toCsv } from './csv';
 import { parseAndroidXml, toAndroidXml } from './android-xml';
 import { parsePo, toPo } from './po';
@@ -363,69 +364,164 @@ export class TranslationsService {
     return toYaml(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)), locale);
   }
 
-  async importAndroid(userId: string, projectId: string, locale: string, xml: string, branch?: string) {
-    const { rows, rejected } = parseAndroidXml(xml);
-    if (rejected > 0) {
-      throw new BadRequestException(`${rejected} unsupported or unparsable element(s) in Android XML: a missing <resources> root, plurals, string-array, DOCTYPE/entity declarations and nested markup are not supported`);
+  // Single parse dispatch for every import format. The write path and the
+  // dry-run preview share it, so both see identical parsing and identical
+  // 400 rejections, in the same order (parse errors before grant checks).
+  private parseImport(dto: ImportJsonDto): { entries: Record<string, unknown>; untranslatedSkipped: number } {
+    if (dto.po != null) {
+      const { rows, rejected } = parsePo(dto.po);
+      if (rejected > 0) {
+        throw new BadRequestException(`${rejected} PO ${rejected === 1 ? 'entry' : 'entries'} rejected: plurals (msgid_plural/msgstr[n]), contexts (msgctxt) and malformed strings are not supported`);
+      }
+      return { entries: Object.fromEntries(rows), untranslatedSkipped: 0 };
     }
-    return this.importJson(userId, projectId, locale, Object.fromEntries(rows), branch);
+    if (dto.xliff != null) {
+      const { rows, rejected, skipped } = parseXliff(dto.xliff);
+      if (rejected > 0) {
+        throw new BadRequestException(`${rejected} XLIFF trans-unit(s) rejected: a missing <xliff> root, group nesting, inline markup, alt-trans/seg-source and duplicate or missing ids are not supported`);
+      }
+      return { entries: Object.fromEntries(rows), untranslatedSkipped: skipped };
+    }
+    if (dto.properties != null) {
+      const { rows, rejected } = parseProperties(dto.properties);
+      if (rejected > 0) {
+        throw new BadRequestException(`${rejected} .properties line(s) rejected: separator-less lines, duplicate keys and malformed escapes are not supported`);
+      }
+      return { entries: Object.fromEntries(rows), untranslatedSkipped: 0 };
+    }
+    if (dto.arb != null) {
+      const { rows, rejected } = parseArb(dto.arb);
+      if (rejected > 0) {
+        throw new BadRequestException(`${rejected} ARB ${rejected === 1 ? 'entry' : 'entries'} rejected: non-string or nested values, ICU plural/select messages and malformed JSON are not supported`);
+      }
+      return { entries: Object.fromEntries(rows), untranslatedSkipped: 0 };
+    }
+    if (dto.yaml != null) {
+      return { entries: this.parseYamlEntries(dto), untranslatedSkipped: 0 };
+    }
+    if (dto.csv != null) {
+      const { rows, rejected } = parseCsv(dto.csv);
+      if (rejected > 0) {
+        throw new BadRequestException(`${rejected} CSV row(s) have more than 2 columns`);
+      }
+      return { entries: Object.fromEntries(rows), untranslatedSkipped: 0 };
+    }
+    if (dto.xml != null) {
+      const { rows, rejected } = parseAndroidXml(dto.xml);
+      if (rejected > 0) {
+        throw new BadRequestException(`${rejected} unsupported or unparsable element(s) in Android XML: a missing <resources> root, plurals, string-array, DOCTYPE/entity declarations and nested markup are not supported`);
+      }
+      return { entries: Object.fromEntries(rows), untranslatedSkipped: 0 };
+    }
+    if (dto.strings != null) {
+      const { rows, rejected } = parseIosStrings(dto.strings);
+      if (rejected > 0) {
+        throw new BadRequestException(`${rejected} line(s) are not valid "key" = "value"; entries`);
+      }
+      return { entries: Object.fromEntries(rows), untranslatedSkipped: 0 };
+    }
+    if (dto.entries != null) {
+      return { entries: dto.entries, untranslatedSkipped: 0 };
+    }
+    throw new BadRequestException('Provide entries (JSON), csv, xml, strings, po, xliff, properties, arb or yaml');
   }
 
-  async importIos(userId: string, projectId: string, locale: string, strings: string, branch?: string) {
-    const { rows, rejected } = parseIosStrings(strings);
-    if (rejected > 0) {
-      throw new BadRequestException(`${rejected} line(s) are not valid "key" = "value"; entries`);
-    }
-    return this.importJson(userId, projectId, locale, Object.fromEntries(rows), branch);
-  }
-
-  async importPo(userId: string, projectId: string, locale: string, po: string, branch?: string) {
-    const { rows, rejected } = parsePo(po);
-    if (rejected > 0) {
-      throw new BadRequestException(`${rejected} PO ${rejected === 1 ? 'entry' : 'entries'} rejected: plurals (msgid_plural/msgstr[n]), contexts (msgctxt) and malformed strings are not supported`);
-    }
-    return this.importJson(userId, projectId, locale, Object.fromEntries(rows), branch);
-  }
-
-  async importXliff(userId: string, projectId: string, locale: string, xliff: string, branch?: string) {
-    const { rows, rejected, skipped } = parseXliff(xliff);
-    if (rejected > 0) {
-      throw new BadRequestException(`${rejected} XLIFF trans-unit(s) rejected: a missing <xliff> root, group nesting, inline markup, alt-trans/seg-source and duplicate or missing ids are not supported`);
-    }
-    const res = await this.importJson(userId, projectId, locale, Object.fromEntries(rows), branch);
-    return { ...res, untranslatedSkipped: skipped };
-  }
-
-  async importProperties(userId: string, projectId: string, locale: string, properties: string, branch?: string) {
-    const { rows, rejected } = parseProperties(properties);
-    if (rejected > 0) {
-      throw new BadRequestException(`${rejected} .properties line(s) rejected: separator-less lines, duplicate keys and malformed escapes are not supported`);
-    }
-    return this.importJson(userId, projectId, locale, Object.fromEntries(rows), branch);
-  }
-
-  async importArb(userId: string, projectId: string, locale: string, arb: string, branch?: string) {
-    const { rows, rejected } = parseArb(arb);
-    if (rejected > 0) {
-      throw new BadRequestException(`${rejected} ARB ${rejected === 1 ? 'entry' : 'entries'} rejected: non-string or nested values, ICU plural/select messages and malformed JSON are not supported`);
-    }
-    return this.importJson(userId, projectId, locale, Object.fromEntries(rows), branch);
-  }
-
-  async importYaml(userId: string, projectId: string, locale: string, yaml: string, branch?: string) {
-    const { rows, rejected } = parseYaml(yaml, locale);
+  // YAML parsing needs the target locale for its locale-root rule, so it is
+  // split out of parseImport (which is locale-agnostic for every other format).
+  private parseYamlEntries(dto: ImportJsonDto, locale?: string) {
+    const { rows, rejected } = parseYaml(dto.yaml!, locale);
     if (rejected > 0) {
       throw new BadRequestException(`${rejected} YAML ${rejected === 1 ? 'line' : 'lines'} rejected: document markers, lists, flow collections, anchors/aliases/tags, block scalars, bare null keys, duplicates, bad escapes and a root key naming a different locale are not supported`);
     }
-    return this.importJson(userId, projectId, locale, Object.fromEntries(rows), branch);
+    return Object.fromEntries(rows);
+  }
+
+  async importAndroid(userId: string, projectId: string, locale: string, xml: string, branch?: string) {
+    return this.importJson(userId, projectId, locale, this.parseImport({ xml }).entries, branch);
+  }
+
+  async importIos(userId: string, projectId: string, locale: string, strings: string, branch?: string) {
+    return this.importJson(userId, projectId, locale, this.parseImport({ strings }).entries, branch);
+  }
+
+  async importPo(userId: string, projectId: string, locale: string, po: string, branch?: string) {
+    return this.importJson(userId, projectId, locale, this.parseImport({ po }).entries, branch);
+  }
+
+  async importXliff(userId: string, projectId: string, locale: string, xliff: string, branch?: string) {
+    const { entries, untranslatedSkipped } = this.parseImport({ xliff });
+    const res = await this.importJson(userId, projectId, locale, entries, branch);
+    return { ...res, untranslatedSkipped };
+  }
+
+  async importProperties(userId: string, projectId: string, locale: string, properties: string, branch?: string) {
+    return this.importJson(userId, projectId, locale, this.parseImport({ properties }).entries, branch);
+  }
+
+  async importArb(userId: string, projectId: string, locale: string, arb: string, branch?: string) {
+    return this.importJson(userId, projectId, locale, this.parseImport({ arb }).entries, branch);
+  }
+
+  async importYaml(userId: string, projectId: string, locale: string, yaml: string, branch?: string) {
+    return this.importJson(userId, projectId, locale, this.parseYamlEntries({ yaml }, locale), branch);
   }
 
   async importCsv(userId: string, projectId: string, locale: string, csv: string, branch?: string) {
-    const { rows, rejected } = parseCsv(csv);
-    if (rejected > 0) {
-      throw new BadRequestException(`${rejected} CSV row(s) have more than 2 columns`);
+    return this.importJson(userId, projectId, locale, this.parseImport({ csv }).entries, branch);
+  }
+
+  // Dry-run preview: the same parsing, grant, locale and lock rules as a real
+  // import, but strictly read-only - no snapshot, no ImportRun row, no key or
+  // translation writes. Counts are a point-in-time snapshot: a concurrent
+  // change between preview and import shifts them.
+  async importPreview(userId: string, projectId: string, locale: string, dto: ImportJsonDto, branch?: string) {
+    const parsed = dto.yaml != null
+      ? { entries: this.parseYamlEntries(dto, locale), untranslatedSkipped: 0 }
+      : this.parseImport(dto);
+    await this.projects.assertLocaleWrite(userId, projectId, [locale]);
+    const b = await this.branches.branchFor(projectId, branch);
+    const project = await this.projects.getFor(userId, projectId);
+    if (!project.locales.some((l) => l.code === locale)) {
+      throw new BadRequestException(`Locale ${locale} is not part of this project`);
     }
-    return this.importJson(userId, projectId, locale, Object.fromEntries(rows), branch);
+    const { flat, rejected } = flattenJson(parsed.entries);
+    let keysCreated = 0;
+    let translationsUpserted = 0;
+    let unchangedSkipped = 0;
+    let failed = rejected.length;
+    let firstError: string | null = rejected.length
+      ? `Non-string values rejected for: ${rejected.slice(0, 5).join(', ')}`
+      : null;
+    for (const [name, value] of Object.entries(flat)) {
+      const key = await this.prisma.key.findUnique({
+        where: { branchId_name: { branchId: b.id, name } },
+      });
+      if (!key) {
+        keysCreated++;
+        translationsUpserted++;
+        continue;
+      }
+      const lockTitle = await this.tasks.keyLockFor(this.prisma, userId, projectId, key.id);
+      if (lockTitle) {
+        failed++;
+        firstError = firstError ?? `Key "${name}" is locked by task "${lockTitle}"`;
+        continue;
+      }
+      const existing = await this.prisma.translation.findUnique({
+        where: { keyId_localeCode: { keyId: key.id, localeCode: locale } },
+      });
+      if (existing && existing.value === value) unchangedSkipped++;
+      else translationsUpserted++;
+    }
+    const status = failed > 0
+      ? (translationsUpserted + unchangedSkipped > 0 ? 'PARTIAL' : 'FAILED')
+      : 'COMPLETED';
+    return {
+      locale, keysCreated, translationsUpserted, unchangedSkipped, failed, status,
+      ...(firstError ? { error: truncate(firstError) } : {}),
+      ...(parsed.untranslatedSkipped ? { untranslatedSkipped: parsed.untranslatedSkipped } : {}),
+      dryRun: true as const,
+    };
   }
 
   async importJson(userId: string, projectId: string, locale: string, entries: Record<string, unknown>, branch?: string) {
@@ -466,12 +562,20 @@ export class TranslationsService {
         // Each key's change, its history row and the run's counters commit in
         // one transaction - progress on the run row always matches the data.
         await this.prisma.$transaction(async (tx) => {
-          const key = await tx.key.upsert({
-            where: { branchId_name: { branchId, name } },
-            create: { projectId, branchId, name },
-            update: {},
-          });
-          const keyCreated = key.createdAt.getTime() === key.updatedAt.getTime();
+          // Atomic create-if-absent: ON CONFLICT DO NOTHING + RETURNING tells
+          // us reliably whether THIS statement inserted the key. The previous
+          // createdAt === updatedAt heuristic misclassified never-updated
+          // existing keys as created (the two timestamps can differ by a
+          // millisecond per row), overcounting keysCreated on reimports.
+          const inserted = await tx.$queryRaw<{ id: string }[]>`
+            INSERT INTO "keys" ("id", "projectId", "branchId", "name", "createdAt", "updatedAt")
+            VALUES (${randomUUID()}::uuid, ${projectId}::uuid, ${branchId}::uuid, ${name}, now(), now())
+            ON CONFLICT ("branchId", "name") DO NOTHING
+            RETURNING "id"`;
+          const keyCreated = inserted.length === 1;
+          const key = keyCreated
+            ? inserted[0]
+            : await tx.key.findUniqueOrThrow({ where: { branchId_name: { branchId, name } } });
           // Locked keys fail their own per-key transaction (the run row
           // records the failure); the rest of the import continues.
           await this.tasks.assertKeysEditable(tx, userId, projectId, [key.id]);

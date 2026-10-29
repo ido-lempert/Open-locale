@@ -96,7 +96,8 @@ export class TranslationsController {
   }
 
   @Post('import/:locale')
-  importJson(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch: string | undefined, @Body() dto: ImportJsonDto) {
+  importJson(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch: string | undefined, @Query('dryRun') dryRun: string | undefined, @Body() dto: ImportJsonDto) {
+    if (dryRun === 'true') return this.translations.importPreview(user.userId, projectId, locale, dto, branch);
     if (dto.po != null) return this.translations.importPo(user.userId, projectId, locale, dto.po, branch);
     if (dto.xliff != null) return this.translations.importXliff(user.userId, projectId, locale, dto.xliff, branch);
     if (dto.properties != null) return this.translations.importProperties(user.userId, projectId, locale, dto.properties, branch);

@@ -78,13 +78,14 @@ interface CellState {
           </select>
           <button (click)="exportFile()">Export {{ formatLabel() }}</button>
           <label class="import">Import {{ formatLabel() }} <input type="file" name="importFile" accept=".json,.csv,.xml,.strings,.po,.xlf,.xliff,.properties,.arb,.yaml,.yml" (change)="importFile($event)" hidden /></label>
+          <label class="import">Preview import <input type="file" name="previewFile" accept=".json,.csv,.xml,.strings,.po,.xlf,.xliff,.properties,.arb,.yaml,.yml" (change)="previewFile($event)" hidden /></label>
           @if (ioFormat() === 'csv') {
             <div class="muted csv-note">CSV exports are spreadsheet-safe: values starting with formula characters get a protective prefix, so re-importing a safe export keeps those prefixes and changes stored values. For a lossless roundtrip use the API with <code>mode=raw</code>.</div>
           }
           @if (importConflict(); as c) {
             <div class="import-conflict" role="alert">
               <span>{{ c.filename }} has a .{{ c.ext }} extension, which usually means {{ labelFor(c.detected) }}, but the format is set to {{ labelFor(c.current) }}. Nothing was imported yet.</span>
-              <button type="button" (click)="resolveImportConflict(true)">Import as {{ labelFor(c.detected) }}</button>
+              <button type="button" (click)="resolveImportConflict(true)">{{ c.dryRun ? 'Preview as' : 'Import as' }} {{ labelFor(c.detected) }}</button>
               <button type="button" (click)="resolveImportConflict(false)">Keep {{ labelFor(c.current) }}</button>
             </div>
           }
@@ -267,7 +268,7 @@ export class EditorComponent implements OnInit {
   branch = signal('main'); branches = signal<BranchInfo[]>([]); newBranch = signal('');
   mergePreview = signal<{ branchId: string; from: string; lines: string[]; previewAt: string } | null>(null); ioFormat = signal<'json' | 'csv' | 'android' | 'ios' | 'po' | 'xliff' | 'properties' | 'arb' | 'yaml'>('json');
   ioFormatTouched = signal(false);
-  importConflict = signal<{ filename: string; ext: string; detected: IoFormat; current: IoFormat; text: string } | null>(null);
+  importConflict = signal<{ filename: string; ext: string; detected: IoFormat; current: IoFormat; text: string; dryRun: boolean } | null>(null);
   glossary = signal<GlossaryTermItem[]>([]);
   filterTag = signal(''); filterStatus = signal<'' | TranslationStatus>('');
   tagEditFor = signal<string | null>(null);
@@ -633,6 +634,12 @@ export class EditorComponent implements OnInit {
     this.importConflict.set(null);
   }
   async importFile(event: Event) {
+    return this.handleFile(event, false);
+  }
+  async previewFile(event: Event) {
+    return this.handleFile(event, true);
+  }
+  private async handleFile(event: Event, dryRun: boolean) {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
@@ -648,12 +655,12 @@ export class EditorComponent implements OnInit {
     const detected = detectImportFormat(file.name);
     if (detected && detected !== this.ioFormat()) {
       if (this.ioFormatTouched()) {
-        this.importConflict.set({ filename: file.name, ext: file.name.split('.').pop() ?? '', detected, current: this.ioFormat(), text });
+        this.importConflict.set({ filename: file.name, ext: file.name.split('.').pop() ?? '', detected, current: this.ioFormat(), text, dryRun });
         return;
       }
       this.ioFormat.set(detected);
     }
-    await this.runImport(text);
+    await this.runImport(text, dryRun);
   }
   async resolveImportConflict(useDetected: boolean) {
     const c = this.importConflict();
@@ -665,18 +672,20 @@ export class EditorComponent implements OnInit {
       this.ioFormat.set(c.detected);
       this.ioFormatTouched.set(true); // an explicit click on the banner choice
     }
-    await this.runImport(c.text);
+    await this.runImport(c.text, c.dryRun);
   }
-  private async runImport(text: string) {
+  private async runImport(text: string, dryRun: boolean) {
     const fmt = this.ioFormat();
     try {
       const payload = fmt === 'json' ? { entries: JSON.parse(text) }
         : fmt === 'csv' ? { csv: text }
         : fmt === 'android' ? { xml: text } : fmt === 'po' ? { po: text } : fmt === 'xliff' ? { xliff: text } : fmt === 'properties' ? { properties: text } : fmt === 'arb' ? { arb: text } : fmt === 'yaml' ? { yaml: text } : { strings: text };
-      const res = await this.api.importPayload(this.projectId, this.ioLocale(), payload, this.branch());
+      const res = await this.api.importPayload(this.projectId, this.ioLocale(), payload, this.branch(), dryRun);
       this.error.set('');
-      this.notice.set(`Imported ${res.keysCreated} keys, ${res.translationsUpserted} translations (${this.formatLabel()}, ${this.ioLocale()}).`);
-      await this.reload();
-    } catch (err) { this.notice.set(''); this.error.set(err instanceof Error ? err.message : `Import failed: invalid ${this.formatLabel()}`); }
+      this.notice.set(dryRun
+        ? `Preview only - nothing imported: would create ${res.keysCreated} keys, update ${res.translationsUpserted} translations, ${res.unchangedSkipped} unchanged${res.failed ? `, ${res.failed} would fail (locked or rejected)` : ''} (${this.formatLabel()}, ${this.ioLocale()}).`
+        : `Imported ${res.keysCreated} keys, ${res.translationsUpserted} translations (${this.formatLabel()}, ${this.ioLocale()}).`);
+      if (!dryRun) await this.reload();
+    } catch (err) { this.notice.set(''); this.error.set(err instanceof Error ? err.message : `${dryRun ? 'Preview' : 'Import'} failed: invalid ${this.formatLabel()}`); }
   }
 }

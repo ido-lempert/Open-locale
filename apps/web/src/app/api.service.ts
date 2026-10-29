@@ -339,9 +339,10 @@ export class ApiService {
     if (!res.ok) throw new Error(`Export failed (HTTP ${res.status})`);
     return res.text();
   }
-  importPayload(projectId: string, locale: string, payload: Record<string, unknown>, branch?: string) {
-    return this.request<{ keysCreated: number; translationsUpserted: number }>(
-      `/projects/${projectId}/import/${locale}${branch ? `?branch=${encodeURIComponent(branch)}` : ''}`, { method: 'POST', body: JSON.stringify(payload) });
+  importPayload(projectId: string, locale: string, payload: Record<string, unknown>, branch?: string, dryRun = false) {
+    const q = [branch ? `branch=${encodeURIComponent(branch)}` : '', dryRun ? 'dryRun=true' : ''].filter(Boolean).join('&');
+    return this.request<{ keysCreated: number; translationsUpserted: number; unchangedSkipped: number; failed: number }>(
+      `/projects/${projectId}/import/${locale}${q ? `?${q}` : ''}`, { method: 'POST', body: JSON.stringify(payload) });
   }
   runQa(projectId: string, locale?: string) {
     return this.request<{ issues: QaIssue[] }>(`/projects/${projectId}/qa${locale ? `?locale=${locale}` : ''}`);

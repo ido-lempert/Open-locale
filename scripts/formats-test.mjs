@@ -434,6 +434,30 @@ try {
   const heAfterYamlLock = await (await fetch(`${API}${P}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
   check('YAML locked key keeps its value, unlocked key imported', heAfterYamlLock['yaml.title'] === 'My App ✓' && heAfterYamlLock['yaml.unlocked'] === 'lands', JSON.stringify({ title: heAfterYamlLock['yaml.title'], unlocked: heAfterYamlLock['yaml.unlocked'] }));
 
+  // Import dry-run preview: same parsing/grants/locks as a real import, strictly read-only.
+  await call(`${P}/import/he`, { token: at, method: 'POST', body: { entries: { 'pv.chg': 'old', 'pv.same': 'same', 'pv.lock': 'orig' } } });
+  const pvKeys = (await call(`${P}/keys`, { token: at })).json;
+  await call(`${P}/tasks`, { token: at, method: 'POST', body: { title: 'Lock pv.lock', lockKeys: true, keyIds: [pvKeys.find((k) => k.name === 'pv.lock').id] } });
+  const pvPayload = { entries: { 'pv.new': 'n', 'pv.chg': 'new', 'pv.same': 'same', 'pv.lock': 'changed' } };
+  const runsBefore = (await call(`${P}/imports`, { token: at })).json.length;
+  const pvBefore = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  const pv = await call(`${P}/import/he?dryRun=true`, { token: ct, method: 'POST', body: pvPayload });
+  const pvAfter = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  const runsAfter = (await call(`${P}/imports`, { token: at })).json.length;
+  check('dry-run preview returns the counters a real import would produce', pv.status === 201 && pv.json.dryRun === true && pv.json.keysCreated === 1 && pv.json.translationsUpserted === 2 && pv.json.unchangedSkipped === 1 && pv.json.failed === 1 && pv.json.status === 'PARTIAL', JSON.stringify(pv.json));
+  check('dry-run preview writes nothing: keys byte-identical, no import run recorded', JSON.stringify(pvBefore) === JSON.stringify(pvAfter) && pvAfter['pv.new'] === undefined && runsBefore === runsAfter, `runs ${runsBefore}->${runsAfter}`);
+  const pvReal = await call(`${P}/import/he`, { token: ct, method: 'POST', body: pvPayload });
+  check('real import of the previewed payload matches the preview counters exactly', pvReal.status === 201 && pvReal.json.keysCreated === pv.json.keysCreated && pvReal.json.translationsUpserted === pv.json.translationsUpserted && pvReal.json.unchangedSkipped === pv.json.unchangedSkipped && pvReal.json.failed === pv.json.failed, JSON.stringify(pvReal.json));
+  const pvBad = await call(`${P}/import/he?dryRun=true`, { token: ct, method: 'POST', body: { entries: { 'pv.bad': 42 } } });
+  check('dry-run preview counts non-string JSON values as failed like the write path', pvBad.status === 201 && pvBad.json.failed === 1 && pvBad.json.keysCreated === 0 && (pvBad.json.error || '').includes('Non-string'), JSON.stringify(pvBad.json));
+  const pvDenied = await call(`${P}/import/en?dryRun=true`, { token: ct, method: 'POST', body: pvPayload });
+  check('dry-run preview enforces the same locale write grant (403)', pvDenied.status === 403, String(pvDenied.status));
+  await call(`${P}/branches`, { token: at, method: 'POST', body: { name: 'preview-branch' } });
+  await call(`${P}/import/en?branch=preview-branch`, { token: at, method: 'POST', body: { entries: { 'pv.scoped': 'on branch' } } });
+  const pvMain = await call(`${P}/import/en?dryRun=true`, { token: at, method: 'POST', body: { entries: { 'pv.scoped': 'on branch' } } });
+  const pvBr = await call(`${P}/import/en?dryRun=true&branch=preview-branch`, { token: at, method: 'POST', body: { entries: { 'pv.scoped': 'on branch' } } });
+  check('dry-run preview scopes counters to the named branch', pvMain.json.keysCreated === 1 && pvBr.json.keysCreated === 0 && pvBr.json.unchangedSkipped === 1, JSON.stringify({ main: pvMain.json.keysCreated, branch: pvBr.json.keysCreated }));
+
   const runs = (await call(`${P}/imports`, { token: at })).json;
   check('CSV imports recorded as import runs', Array.isArray(runs) ? runs.length >= 2 : (runs.items?.length ?? 0) >= 2, JSON.stringify(runs).slice(0, 120));
 
