@@ -38,6 +38,10 @@ import { ApiService, MemberInfo, TaskItem, GroupInfo } from '../api.service';
             @for (m of members(); track m.id) { <option [value]="m.id">{{ m.displayName }}</option> }
             @for (g of groups(); track g.id) { <option [value]="'g:' + g.id">Group: {{ g.name }}</option> }
           </select>
+          <select aria-label="Depends on (optional)" [ngModel]="dependsOnId()" (ngModelChange)="dependsOnId.set($event)" name="taskDependsOn">
+            <option value="">no predecessor</option>
+            @for (t of tasks(); track t.id) { <option [value]="t.id">{{ t.title }}</option> }
+          </select>
           <button class="primary" type="submit">Create task</button>
         </form>
       </section>
@@ -48,6 +52,7 @@ import { ApiService, MemberInfo, TaskItem, GroupInfo } from '../api.service';
             <div class="task-body">
               <strong>{{ t.title }}</strong>
               @if (t.description) { <span class="muted">{{ t.description }}</span> }
+              @if (t.dependsOn) { <span class="muted">waits on: {{ t.dependsOn.title }} ({{ t.dependsOn.status.toLowerCase().replace('_', ' ') }})</span> }
             </div>
             <select [attr.aria-label]="'Status for ' + t.title" [ngModel]="t.status"
               (ngModelChange)="update(t, { status: $event })">
@@ -84,6 +89,7 @@ export class TasksComponent implements OnInit {
   description = signal('');
   dueDate = signal('');
   assigneeId = signal('');
+  dependsOnId = signal('');
 
   constructor(private route: ActivatedRoute, private api: ApiService) {}
 
@@ -135,8 +141,9 @@ export class TasksComponent implements OnInit {
         ...(this.description().trim() ? { description: this.description().trim() } : {}),
         ...(this.dueDate() ? { dueDate: this.dueDate() } : {}),
         ...this.assigneePatch(this.assigneeId()),
+        ...(this.dependsOnId() ? { dependsOnId: this.dependsOnId() } : {}),
       });
-      this.title.set(''); this.description.set(''); this.dueDate.set(''); this.assigneeId.set('');
+      this.title.set(''); this.description.set(''); this.dueDate.set(''); this.assigneeId.set(''); this.dependsOnId.set('');
       await this.fetch();
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to create task'); }
   }

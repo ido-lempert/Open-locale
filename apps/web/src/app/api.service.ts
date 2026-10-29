@@ -92,6 +92,7 @@ export interface TaskItem {
   dueDate: string | null; createdAt: string;
   assignee: { id: string; displayName: string; email: string } | null;
   assigneeGroup: { id: string; name: string; role: string } | null;
+  dependsOn: { id: string; title: string; status: string } | null;
   creator: { id: string; displayName: string; email: string } | null;
 }
 export interface LocaleProgress { locale: string; base: boolean; total: number; translated: number; untranslated: number; percent: number; byStatus: Record<string, number>; }
@@ -346,7 +347,7 @@ export class ApiService {
     const q = [status ? `status=${status}` : '', mine ? 'assignee=me' : ''].filter(Boolean).join('&');
     return this.request<TaskItem[]>(`/projects/${projectId}/tasks${q ? `?${q}` : ''}`);
   }
-  createTask(projectId: string, input: { title: string; description?: string; dueDate?: string; assigneeId?: string }) {
+  createTask(projectId: string, input: { title: string; description?: string; dueDate?: string; assigneeId?: string; assigneeGroupId?: string; dependsOnId?: string }) {
     return this.request<TaskItem>(`/projects/${projectId}/tasks`, { method: 'POST', body: JSON.stringify(input) });
   }
   updateTask(projectId: string, taskId: string, input: Record<string, unknown>) {

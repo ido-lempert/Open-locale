@@ -656,6 +656,33 @@ try {
   await page.waitForSelector('.task-row', { timeout: 10000 });
   check('everyone filter shows the task again', true);
 
+  // Task chaining: create a successor through the form, see the chip, and
+  // confirm starting it while the predecessor is open shows the API error.
+  await page.type('input[name=taskTitle]', 'Proofread after translation');
+  await page.evaluate(() => {
+    const sel = document.querySelector('select[name=taskDependsOn]');
+    const opt = [...sel.options].find((o) => o.textContent === 'Translate checkout to Hebrew');
+    sel.value = opt.value;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await page.evaluate(() => { document.querySelector('.task-form').requestSubmit(); });
+  await page.waitForFunction(
+    () => document.body.textContent.includes('waits on: Translate checkout to Hebrew'),
+    { timeout: 10000 },
+  );
+  check('chained task shows its predecessor chip', true);
+  await page.evaluate(() => {
+    const row = [...document.querySelectorAll('.task-row')].find((r) => r.textContent.includes('Proofread after translation'));
+    const sel = row.querySelector('select[aria-label^="Status for"]');
+    sel.value = 'IN_PROGRESS';
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await page.waitForFunction(
+    () => (document.querySelector('[role=alert]')?.textContent || '').includes('blocked until its predecessor is done'),
+    { timeout: 10000 },
+  );
+  check('starting a blocked chain task surfaces the error', true);
+
 
   // --- Branches: create via UI, isolation, merge into main ---
   await page.goto(`${WEB}/projects/${projId}`, { waitUntil: 'networkidle0' });

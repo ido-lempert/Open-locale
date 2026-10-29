@@ -26,6 +26,24 @@ export class TasksService {
     if (!group) throw new BadRequestException('Assignee group is not part of this team');
   }
 
+  // Validates the dependency target: same project, and no cycle when
+  // attached under taskId (null when creating). Walks the chain with a
+  // visited set so a corrupted cycle can never loop the query.
+  private async assertDependency(projectId: string, dependsOnId: string, taskId: string | null) {
+    const visited = new Set<string>(taskId ? [taskId] : []);
+    let cursor: string | null = dependsOnId;
+    while (cursor) {
+      if (visited.has(cursor)) throw new BadRequestException('Task dependency would create a cycle');
+      visited.add(cursor);
+      const pred: { id: string; dependsOnId: string | null } | null = await this.prisma.task.findFirst({
+        where: { id: cursor, projectId },
+        select: { id: true, dependsOnId: true },
+      });
+      if (!pred) throw new BadRequestException('Dependency task is not part of this project');
+      cursor = pred.dependsOnId;
+    }
+  }
+
   private assertSingleAssignee(assigneeId?: string | null, assigneeGroupId?: string | null) {
     if (assigneeId && assigneeGroupId) {
       throw new BadRequestException('Assign a task to a member or a group, not both');
@@ -35,6 +53,7 @@ export class TasksService {
   private readonly includePeople = {
     assignee: { select: { id: true, displayName: true, email: true } },
     assigneeGroup: { select: { id: true, name: true, role: true } },
+    dependsOn: { select: { id: true, title: true, status: true } },
     creator: { select: { id: true, displayName: true, email: true } },
   } as const;
 
@@ -55,11 +74,13 @@ export class TasksService {
 
   async create(userId: string, projectId: string, input: {
     title: string; description?: string; dueDate?: string; assigneeId?: string; assigneeGroupId?: string;
+    dependsOnId?: string;
   }) {
     const project = await this.projects.getFor(userId, projectId);
     this.assertSingleAssignee(input.assigneeId, input.assigneeGroupId);
     if (input.assigneeId) await this.assertAssigneeMember(project.teamId, input.assigneeId);
     if (input.assigneeGroupId) await this.assertAssigneeGroup(project.teamId, input.assigneeGroupId);
+    if (input.dependsOnId) await this.assertDependency(projectId, input.dependsOnId, null);
     return this.prisma.$transaction((tx) => this.createIn(tx, userId, projectId, input));
   }
 
@@ -68,6 +89,7 @@ export class TasksService {
   // already have validated membership and any assignee.
   async createIn(tx: Prisma.TransactionClient, userId: string, projectId: string, input: {
     title: string; description?: string; dueDate?: string; assigneeId?: string; assigneeGroupId?: string;
+    dependsOnId?: string;
   }) {
     const title = input.title.trim();
     if (!title) throw new BadRequestException('Title cannot be empty');
@@ -76,7 +98,7 @@ export class TasksService {
         projectId, title, description: input.description?.trim() ?? '',
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
         assigneeId: input.assigneeId ?? null, assigneeGroupId: input.assigneeGroupId ?? null,
-        creatorId: userId,
+        dependsOnId: input.dependsOnId ?? null, creatorId: userId,
       },
       include: this.includePeople,
     });
@@ -90,19 +112,36 @@ export class TasksService {
   async update(userId: string, projectId: string, taskId: string, input: {
     title?: string; description?: string; status?: 'OPEN' | 'IN_PROGRESS' | 'DONE';
     dueDate?: string | null; assigneeId?: string | null; assigneeGroupId?: string | null;
+    dependsOnId?: string | null;
   }) {
     const project = await this.projects.getFor(userId, projectId);
     const existing = await this.prisma.task.findFirst({
       where: { id: taskId, projectId },
-      include: { assigneeGroup: { select: { id: true, name: true } } },
+      include: {
+        assigneeGroup: { select: { id: true, name: true } },
+        dependsOn: { select: { id: true, title: true, status: true } },
+      },
     });
     if (!existing) throw new NotFoundException('Task not found');
     this.assertSingleAssignee(input.assigneeId, input.assigneeGroupId);
     if (input.assigneeId) await this.assertAssigneeMember(project.teamId, input.assigneeId);
     if (input.assigneeGroupId) await this.assertAssigneeGroup(project.teamId, input.assigneeGroupId);
+    if (input.dependsOnId) await this.assertDependency(projectId, input.dependsOnId, taskId);
     return this.prisma.$transaction(async (tx) => {
       if (input.title !== undefined && !input.title.trim()) {
         throw new BadRequestException('Title cannot be empty');
+      }
+      // A chained task can only start once its predecessor is DONE. The
+      // predecessor's status is read inside the same transaction as the
+      // status update.
+      const targetStatus = input.status ?? existing.status;
+      const targetDependsOn = input.dependsOnId !== undefined ? input.dependsOnId : existing.dependsOnId;
+      if (targetStatus === 'IN_PROGRESS' && existing.status !== 'IN_PROGRESS' && targetDependsOn) {
+        const blocked = await tx.task.findFirst({
+          where: { id: targetDependsOn, status: { not: 'DONE' } },
+          select: { id: true },
+        });
+        if (blocked) throw new BadRequestException('Task is blocked until its predecessor is done');
       }
       const task = await tx.task.update({
         where: { id: taskId },
@@ -113,6 +152,7 @@ export class TasksService {
           ...(input.dueDate !== undefined ? { dueDate: input.dueDate === null ? null : new Date(input.dueDate) } : {}),
           ...(input.assigneeId !== undefined ? { assigneeId: input.assigneeId } : {}),
           ...(input.assigneeGroupId !== undefined ? { assigneeGroupId: input.assigneeGroupId } : {}),
+          ...(input.dependsOnId !== undefined ? { dependsOnId: input.dependsOnId } : {}),
           // Assigning one kind clears the other (single-assignee invariant).
           ...(input.assigneeId ? { assigneeGroupId: null } : {}),
           ...(input.assigneeGroupId ? { assigneeId: null } : {}),
@@ -131,6 +171,10 @@ export class TasksService {
       if (newGroupId !== existing.assigneeGroupId) {
         const toGroup = newGroupId ? await tx.group.findUnique({ where: { id: newGroupId }, select: { name: true } }) : null;
         changes['assigneeGroup'] = { from: existing.assigneeGroup?.name ?? null, to: toGroup?.name ?? null };
+      }
+      if (input.dependsOnId !== undefined && input.dependsOnId !== existing.dependsOnId) {
+        const toPred = input.dependsOnId ? await tx.task.findUnique({ where: { id: input.dependsOnId }, select: { title: true } }) : null;
+        changes['dependsOn'] = { from: existing.dependsOn ? truncate(existing.dependsOn.title, 80) : null, to: toPred ? truncate(toPred.title, 80) : null };
       }
       if (input.title !== undefined && input.title.trim() !== existing.title) {
         changes['title'] = { from: truncate(existing.title, 80), to: truncate(input.title.trim(), 80) };

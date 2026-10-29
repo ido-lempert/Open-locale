@@ -130,6 +130,39 @@ try {
 
   for (const id of [t3.id, t4.id, t5.id]) await call(`${base}/${id}`, { token: at, method: 'DELETE' });
 
+  // Task chaining
+  const chainA = (await call(base, { token: at, method: 'POST', body: { title: 'Source copy review' } })).json;
+  const chainB = (await call(base, { token: at, method: 'POST', body: { title: 'Translate reviewed keys', dependsOnId: chainA.id } })).json;
+  check('chained task created with predecessor', chainB.dependsOn?.id === chainA.id && chainB.dependsOn?.status === 'OPEN', JSON.stringify(chainB.dependsOn));
+
+  const startBlocked = await call(`${base}/${chainB.id}`, { token: at, method: 'PATCH', body: { status: 'IN_PROGRESS' } });
+  check('starting a blocked chain task rejected (400)', startBlocked.status === 400, `got ${startBlocked.status}`);
+
+  await call(`${base}/${chainA.id}`, { token: at, method: 'PATCH', body: { status: 'DONE' } });
+  const startOk = await call(`${base}/${chainB.id}`, { token: at, method: 'PATCH', body: { status: 'IN_PROGRESS' } });
+  check('starting works once predecessor is done', startOk.status === 200, `got ${startOk.status}`);
+
+  const cycle = await call(`${base}/${chainA.id}`, { token: at, method: 'PATCH', body: { dependsOnId: chainB.id } });
+  const selfDep = await call(`${base}/${chainA.id}`, { token: at, method: 'PATCH', body: { dependsOnId: chainA.id } });
+  check('cycle and self-dependency rejected (400)', cycle.status === 400 && selfDep.status === 400, `${cycle.status}/${selfDep.status}`);
+
+  const foreignDep = await call(base, { token: at, method: 'POST', body: { title: 'x', dependsOnId: '00000000-0000-4000-8000-000000000000' } });
+  check('dependency outside project rejected (400)', foreignDep.status === 400, `got ${foreignDep.status}`);
+
+  const chainC = (await call(base, { token: at, method: 'POST', body: { title: 'Proofread translations', dependsOnId: chainB.id } })).json;
+  // Exercise dependency updates both ways so the audit trail has update events.
+  await call(`${base}/${chainC.id}`, { token: at, method: 'PATCH', body: { dependsOnId: chainA.id } });
+  await call(`${base}/${chainC.id}`, { token: at, method: 'PATCH', body: { dependsOnId: chainB.id } });
+  await call(`${base}/${chainB.id}`, { token: at, method: 'DELETE' });
+  const chainCAfter = (await call(base, { token: at })).json.find((t) => t.id === chainC.id);
+  check('deleting predecessor clears the link', chainCAfter && chainCAfter.dependsOn === null, JSON.stringify(chainCAfter?.dependsOn));
+
+  const depUpd = (await call(`/projects/${proj.id}/activity?action=task.updated`, { token: at })).json.items
+    .find((e) => e.detail?.changes?.dependsOn);
+  check('audit records dependency changes by title', depUpd?.detail?.changes?.dependsOn?.to === 'Translate reviewed keys', JSON.stringify(depUpd?.detail?.changes));
+
+  for (const id of [chainA.id, chainC.id]) await call(`${base}/${id}`, { token: at, method: 'DELETE' });
+
   const ro = (await call('/auth/tokens', { token: at, method: 'POST', body: { name: 'ro', scopes: ['read'] } })).json;
   const roRead = await call(base, { apiKey: ro.token });
   const roWrite = await call(base, { apiKey: ro.token, method: 'POST', body: { title: 'x' } });
