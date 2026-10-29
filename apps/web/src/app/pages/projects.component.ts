@@ -20,6 +20,35 @@ import { ApiService, Project } from '../api.service';
       @if (projects().length === 0 && !error()) {
         <p class="muted empty">No projects yet. Create your first one above.</p>
       }
+      <section class="panel tfa">
+        <h2>Two-factor authentication</h2>
+        @if (tfa(); as t) {
+          @if (t.enabled) {
+            <p class="muted">Enabled. {{ t.recoveryCodesRemaining }} recovery codes remain.</p>
+            <form class="inline" (ngSubmit)="disableTfa()">
+              <input aria-label="Current 2FA code" placeholder="TOTP or recovery code" [ngModel]="tfaCode()" (ngModelChange)="tfaCode.set($event)" name="tfaCode" required />
+              <button class="danger" type="submit" [disabled]="busy()">Disable</button>
+            </form>
+          } @else if (tfaSetup(); as su) {
+            <p class="muted">Add this secret to your authenticator app, then enter its 6-digit code. Shown once.</p>
+            <p><code class="tfa-secret">{{ su.secret }}</code></p>
+            <p class="muted wrap"><code>{{ su.otpauthUrl }}</code></p>
+            <form class="inline" (ngSubmit)="enableTfa()">
+              <input aria-label="6-digit setup code" placeholder="6-digit code" [ngModel]="tfaCode()" (ngModelChange)="tfaCode.set($event)" name="tfaCode" required />
+              <button class="primary" type="submit" [disabled]="busy()">Enable</button>
+            </form>
+          } @else {
+            <p class="muted">Not enabled. A TOTP code is required at login after enabling.</p>
+            <button (click)="startTfa()" [disabled]="busy()">Set up two-factor</button>
+          }
+        }
+        @if (tfaCodes().length) {
+          <p class="muted"><strong>Recovery codes - store them now; they are shown once and each works once.</strong></p>
+          <ul class="locale-list tfa-codes">
+            @for (c of tfaCodes(); track c) { <li><code>{{ c }}</code></li> }
+          </ul>
+        }
+      </section>
       <ul class="cards">
         @for (p of projects(); track p.id) {
           <li>
@@ -38,11 +67,42 @@ export class ProjectsComponent implements OnInit {
   projects = signal<Project[]>([]);
   name = signal(''); slug = signal(''); locales = signal('');
   busy = signal(false); error = signal('');
+  tfa = signal<{ enabled: boolean; recoveryCodesRemaining: number } | null>(null);
+  tfaSetup = signal<{ secret: string; otpauthUrl: string } | null>(null);
+  tfaCode = signal(''); tfaCodes = signal<string[]>([]);
   constructor(private api: ApiService) {}
   async ngOnInit() { await this.reload(); }
   async reload() {
-    try { this.projects.set(await this.api.listProjects()); }
+    try {
+      this.projects.set(await this.api.listProjects());
+      this.tfa.set(await this.api.get2faStatus());
+    }
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load'); }
+  }
+  async startTfa() {
+    this.busy.set(true); this.error.set('');
+    try { this.tfaSetup.set(await this.api.setup2fa()); }
+    catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+    finally { this.busy.set(false); }
+  }
+  async enableTfa() {
+    this.busy.set(true); this.error.set('');
+    try {
+      const res = await this.api.enable2fa(this.tfaCode().trim());
+      this.tfaCodes.set(res.recoveryCodes);
+      this.tfaSetup.set(null); this.tfaCode.set('');
+      this.tfa.set(await this.api.get2faStatus());
+    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+    finally { this.busy.set(false); }
+  }
+  async disableTfa() {
+    this.busy.set(true); this.error.set('');
+    try {
+      await this.api.disable2fa(this.tfaCode().trim());
+      this.tfaCode.set(''); this.tfaCodes.set([]);
+      this.tfa.set(await this.api.get2faStatus());
+    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+    finally { this.busy.set(false); }
   }
   async create() {
     this.busy.set(true); this.error.set('');

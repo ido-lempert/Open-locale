@@ -7,6 +7,11 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 const { default: puppeteer } = await import('puppeteer-core');
+import { createHmac } from 'node:crypto';
+// Independent RFC 6238 for driving the 2FA UI flow.
+const B32C = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+const b32dec = (s) => { let bits = 0, v = 0; const o = []; for (const ch of s.toUpperCase().replace(/=+$/, '')) { v = (v << 5) | B32C.indexOf(ch); bits += 5; if (bits >= 8) { o.push((v >>> (bits - 8)) & 255); bits -= 8; } } return Buffer.from(o); };
+const totp = (secret, off = 0) => { const c = Math.floor(Date.now() / 1000 / 30) + off; const m = Buffer.alloc(8); m.writeBigUInt64BE(BigInt(c)); const h = createHmac('sha1', b32dec(secret)).update(m).digest(); const o = h[h.length - 1] & 15; return String((((h[o] & 127) << 24) | (h[o + 1] << 16) | (h[o + 2] << 8) | h[o + 3]) % 1e6).padStart(6, '0'); };
 
 const PG_PORT = 55434, API_PORT = 3000, WEB_PORT = 4200;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
@@ -660,6 +665,39 @@ try {
   const clipped = await page.evaluate(() => [...document.querySelectorAll('.panel select, .panel input')].some((el) => el.getBoundingClientRect().right > document.documentElement.clientWidth));
   check('automations panel usable at 480px (no control overflows viewport)', !clipped);
   await page.setViewport({ width: 1280, height: 800 });
+
+  // --- 2FA: enable via projects-page security panel, log out, log in with code ---
+  await page.goto(`${WEB}/projects`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.panel.tfa button', { timeout: 10000 });
+  await page.evaluate(() => { [...document.querySelectorAll('.panel.tfa button')].find((b) => b.textContent.includes('Set up two-factor')).click(); });
+  await page.waitForSelector('.tfa-secret', { timeout: 10000 });
+  const tfaSecret = await page.$eval('.tfa-secret', (el) => el.textContent.trim());
+  check('2FA setup shows secret + otpauth URL', /^[A-Z2-7]{32}$/.test(tfaSecret));
+  await page.evaluate((code) => {
+    const input = document.querySelector('.panel.tfa input[name=tfaCode]');
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, code);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.closest('form').requestSubmit();
+  }, totp(tfaSecret, 1));
+  const tfaOn = await page.waitForFunction(() => (document.body.textContent || '').includes('recovery codes remain') && document.querySelectorAll('.tfa-codes li').length === 8, { timeout: 10000 }).then(() => true).catch(() => false);
+  check('2FA enabled via UI, 8 recovery codes shown once', tfaOn);
+  // Screenshot policy: mask the secret and code interiors (throwaway demo
+  // account, but credentials never appear in captures).
+  await page.evaluate(() => {
+    const sec = document.querySelector('.tfa-secret'); if (sec) sec.textContent = 'XXXX-MASKED-XXXX';
+    document.querySelectorAll('.tfa-codes code').forEach((c) => { c.textContent = c.textContent.slice(0, 2) + '\u2022\u2022\u2022-\u2022\u2022\u2022' + c.textContent.slice(-2); });
+    document.querySelector('.panel.tfa')?.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70);
+  });
+  await new Promise((r) => setTimeout(r, 300));
+  await shot('editor-30-2fa.png');
+  await page.evaluate(() => { [...document.querySelectorAll('header.bar button')].find((b) => b.textContent === 'Log out').click(); });
+  await page.waitForSelector('.auth-card', { timeout: 10000 });
+  await page.type('input[name=email]', 'demo@open-locale.dev');
+  await page.type('input[name=password]', 'demo-password-1');
+  await page.type('input[name=totpCode]', totp(tfaSecret, 1));
+  await page.click('button.primary');
+  const relogged = await page.waitForSelector('.create', { timeout: 10000 }).then(() => true).catch(() => false);
+  check('login with TOTP code via UI succeeds', relogged);
 
   // --- Progress report ---
   await page.setViewport({ width: 1280, height: 900 });

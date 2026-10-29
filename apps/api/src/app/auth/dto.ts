@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, Matches, MinLength } from 'class-validator';
 
 export class SignupDto {
   @IsEmail()
@@ -20,6 +20,17 @@ export class LoginDto {
   @IsString()
   @IsNotEmpty()
   password!: string;
+
+  // Second factor: a 6-digit TOTP code or a XXXXX-XXXXX recovery code.
+  @IsOptional()
+  @IsString()
+  totpCode?: string;
+}
+
+export class TotpCodeDto {
+  @IsString()
+  @IsNotEmpty()
+  code!: string;
 }
 
 export class CreateApiTokenDto {

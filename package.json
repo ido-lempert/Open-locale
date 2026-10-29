@@ -32,7 +32,8 @@
     "test:ota": "node scripts/ota-test.mjs",
     "test:reports": "node scripts/reports-test.mjs",
     "test:incontext": "node scripts/incontext-test.mjs",
-    "test:incontext-edit": "node scripts/incontext-edit-test.mjs"
+    "test:incontext-edit": "node scripts/incontext-edit-test.mjs",
+    "test:2fa": "node scripts/2fa-test.mjs"
   },
   "private": true,
   "dependencies": {

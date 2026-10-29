@@ -13,6 +13,12 @@ model User {
   email        String    @unique
   passwordHash String
   displayName  String
+  totpSecret   String?   // AES-256-GCM encrypted (enc:v1:<iv>:<tag>:<ct>), never plaintext at rest
+  totpEnabled  Boolean   @default(false)
+  totpLastCounter Int?   // replay protection: codes at or below this counter are rejected
+  totpFailedAttempts Int @default(0)
+  totpLockedUntil DateTime?
+  recoveryCodes RecoveryCode[]
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -27,6 +33,18 @@ model User {
   tasksCreated  Task[] @relation("TaskCreator")
 
   @@map("users")
+}
+
+model RecoveryCode {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  codeHash  String    // sha256 of the one-use code; the code itself is shown once at enable
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("recovery_codes")
 }
 
 model Team {

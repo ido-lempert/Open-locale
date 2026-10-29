@@ -22,6 +22,10 @@ import { ApiService } from '../api.service';
         <label>Password <input type="password" [(ngModel)]="password" name="password" required
           [attr.minlength]="mode() === 'signup' ? 8 : null"
           [attr.autocomplete]="mode() === 'signup' ? 'new-password' : 'current-password'" /></label>
+        @if (mode() === 'login') {
+          <label>2FA code <input [(ngModel)]="totpCode" name="totpCode" inputmode="numeric" autocomplete="one-time-code"
+            placeholder="Only if two-factor is enabled" /></label>
+        }
         @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
         <button class="primary" type="submit" [disabled]="busy()">
           {{ busy() ? 'Working…' : mode() === 'login' ? 'Log in' : 'Create account' }}
@@ -32,14 +36,14 @@ import { ApiService } from '../api.service';
 })
 export class LoginComponent {
   mode = signal<'login' | 'signup'>('login');
-  email = ''; password = ''; displayName = '';
+  email = ''; password = ''; displayName = ''; totpCode = '';
   busy = signal(false); error = signal('');
   constructor(private api: ApiService, private router: Router) {}
   async submit() {
     this.busy.set(true); this.error.set('');
     try {
       const res = this.mode() === 'login'
-        ? await this.api.login(this.email, this.password)
+        ? await this.api.login(this.email, this.password, this.totpCode.trim() || undefined)
         : await this.api.signup(this.email, this.password, this.displayName);
       this.api.token = res.accessToken;
       await this.router.navigate(['/projects']);
