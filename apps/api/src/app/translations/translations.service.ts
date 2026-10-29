@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { BadRequestException, ConflictException, Injectable, NotFoundException, PayloadTooLargeException } from '@nestjs/common';
+import { BadRequestException, ConflictException, HttpException, Injectable, NotFoundException, PayloadTooLargeException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
@@ -20,7 +20,7 @@ import { parseProperties, toProperties } from './properties';
 import { parseArb, toArb } from './arb';
 import { parseYaml, toYaml } from './yaml';
 import { parseIosStrings, toIosStrings } from './ios-strings';
-import { buildZip, zipSafeName } from './zip';
+import { buildZip, readZip, zipSafeName } from './zip';
 
 // Statuses every project supports; a project may extend this list with
 // customStatuses (validated in ProjectsService.updateFor).
@@ -403,6 +403,71 @@ export class TranslationsService {
       throw new BadRequestException(`Cannot build bundle: ${message}`);
     }
     return { zip, filename: `${zipSafeName(project.slug)}-${format}.zip` };
+  }
+
+  // Import a bundle zip (the export-bundle shape): one entry per locale,
+  // every entry in the declared format. Per-locale partial semantics mirror
+  // the per-key partial single-file import: each locale imports through the
+  // existing per-locale path (same grants, locks, atomicity), entries that
+  // name no locale or the wrong extension are skipped with a reason, and a
+  // locale whose import is rejected (grant, parse, lock) is reported without
+  // aborting the others. Read path: readZip's store-only subset with CRC
+  // verification and the shared archive budgets.
+  async importBundle(userId: string, projectId: string, format: string, zip: Buffer, branch?: string) {
+    const importers: Record<string, { ext: string; run: (locale: string, text: string) => Promise<unknown> }> = {
+      json: { ext: '.json', run: (l, t) => this.importJson(userId, projectId, l, JSON.parse(t) as Record<string, unknown>, branch) },
+      csv: { ext: '.csv', run: (l, t) => this.importCsv(userId, projectId, l, t, branch) },
+      android: { ext: '.xml', run: (l, t) => this.importAndroid(userId, projectId, l, t, branch) },
+      ios: { ext: '.strings', run: (l, t) => this.importIos(userId, projectId, l, t, branch) },
+      po: { ext: '.po', run: (l, t) => this.importPo(userId, projectId, l, t, branch) },
+      xliff: { ext: '.xlf', run: (l, t) => this.importXliff(userId, projectId, l, t, branch) },
+      properties: { ext: '.properties', run: (l, t) => this.importProperties(userId, projectId, l, t, branch) },
+      arb: { ext: '.arb', run: (l, t) => this.importArb(userId, projectId, l, t, branch) },
+      yaml: { ext: '.yaml', run: (l, t) => this.importYaml(userId, projectId, l, t, branch) },
+    };
+    const importer = importers[format];
+    if (!importer) throw new BadRequestException(`Unknown bundle format ${format}; expected one of ${Object.keys(importers).join(', ')}`);
+    const project = await this.projects.getFor(userId, projectId);
+    let entries;
+    try {
+      entries = readZip(zip);
+    } catch (err) {
+      throw new BadRequestException(err instanceof Error ? err.message : String(err));
+    }
+    const byStem = new Map<string, string>();
+    for (const l of project.locales) {
+      byStem.set(l.code, l.code); // exact match wins
+    }
+    const sanitized = new Map<string, string[]>();
+    for (const l of project.locales) {
+      const safe = zipSafeName(l.code);
+      if (!byStem.has(safe)) sanitized.set(safe, [...(sanitized.get(safe) ?? []), l.code]);
+    }
+    const imported: Array<{ locale: string } & Record<string, unknown>> = [];
+    const skipped: { name: string; reason: string }[] = [];
+    const failedLocales: { locale: string; status: number; error: string }[] = [];
+    for (const entry of entries) {
+      if (entry.name.includes('/')) { skipped.push({ name: entry.name, reason: 'entry is inside a directory; bundle entries are flat' }); continue; }
+      if (!entry.name.endsWith(importer.ext)) { skipped.push({ name: entry.name, reason: `expected a ${importer.ext} entry for format ${format}` }); continue; }
+      const stem = entry.name.slice(0, -importer.ext.length);
+      let locale = byStem.get(stem) ?? null;
+      if (!locale) {
+        const candidates = sanitized.get(stem) ?? [];
+        if (candidates.length === 1) locale = candidates[0];
+        else if (candidates.length > 1) { skipped.push({ name: entry.name, reason: `stem matches multiple locales (${candidates.join(', ')})` }); continue; }
+      }
+      if (!locale) { skipped.push({ name: entry.name, reason: 'no project locale matches the entry name' }); continue; }
+      const text = entry.data.toString('utf8');
+      if (text.length > 2_000_000) { failedLocales.push({ locale, status: 413, error: 'entry exceeds the 2,000,000 character per-file limit' }); continue; }
+      try {
+        const res = (await importer.run(locale, text)) as Record<string, unknown>;
+        imported.push({ locale, ...res });
+      } catch (err) {
+        if (err instanceof HttpException) failedLocales.push({ locale, status: err.getStatus(), error: err.message });
+        else throw err;
+      }
+    }
+    return { format, branch: branch ?? 'main', imported, skipped, failedLocales };
   }
 
   // Single parse dispatch for every import format. The write path and the

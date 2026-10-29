@@ -1,5 +1,6 @@
 import { Logger, RequestMethod, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { raw } from 'express';
 import { AppModule } from './app/app.module';
 import { DEV_FALLBACK_JWT_SECRET } from './app/auth/dev-secret';
 import { DEV_FALLBACK_TOTP_KEY } from './app/auth/totp-crypto';
@@ -39,6 +40,9 @@ async function bootstrap() {
     );
   }
   const app = await NestFactory.create(AppModule);
+  // Binary zip bodies for bundle import only; the JSON parser skips this
+  // content type, and the 40 MiB cap bounds allocation (archive budget is 32 MiB).
+  app.use(raw({ type: 'application/zip', limit: 40 * 1024 * 1024 }));
   const corsOrigin = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : true;
   app.enableCors({ origin: corsOrigin, credentials: false });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));

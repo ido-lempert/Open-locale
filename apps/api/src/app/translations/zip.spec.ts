@@ -1,4 +1,4 @@
-import { buildZip, crc32, zipSafeName, ZIP_LIMITS } from './zip';
+import { buildZip, crc32, readZip, zipSafeName, ZIP_LIMITS } from './zip';
 
 // Structural parse of a store-only zip: local headers, central directory and
 // EOCD must agree; entry bytes must round-trip exactly.
@@ -75,5 +75,51 @@ describe('zip writer', () => {
     expect(zipSafeName('...')).toBe('file');
     expect(zipSafeName('')).toBe('file');
     expect(zipSafeName('/')).toBe('file');
+  });
+});
+
+describe('zip reader (store-only subset)', () => {
+  it('round-trips buildZip output byte-exactly', () => {
+    const a = Buffer.from('{"k":"v"}\n');
+    const b = Buffer.from('msgid "x"\nmsgstr "y"\n');
+    const entries = readZip(buildZip([{ name: 'he.json', data: a }, { name: 'עברית.po', data: b }]));
+    expect(entries.map((e) => e.name)).toEqual(['he.json', 'עברית.po']);
+    expect(entries[0].data.equals(a)).toBe(true);
+    expect(entries[1].data.equals(b)).toBe(true);
+  });
+
+  it('rejects a truncated archive and a CRC-tampered entry', () => {
+    const zip = buildZip([{ name: 'he.json', data: Buffer.from('{"a":1}\n') }]);
+    expect(() => readZip(zip.subarray(0, zip.length - 30))).toThrow('unsupported zip');
+    const tampered = Buffer.from(zip);
+    // First entry data starts at 30 + name length; flip one payload byte.
+    tampered[30 + 'he.json'.length] ^= 0xff;
+    expect(() => readZip(tampered)).toThrow('CRC mismatch');
+  });
+
+  it('rejects compressed (deflate) entries and data descriptors', () => {
+    const zip = Buffer.from(buildZip([{ name: 'he.json', data: Buffer.from('x') }]));
+    // Method lives at local+8 and central+10; set both to 8 (deflate).
+    const deflated = Buffer.from(zip);
+    deflated.writeUInt16LE(8, 8);
+    deflated.writeUInt16LE(8, zip.length - 22 - (46 + 'he.json'.length) + 10 - (0)); // central record
+    expect(() => readZip(deflated)).toThrow('store-only');
+    const descriptor = Buffer.from(zip);
+    descriptor.writeUInt16LE(descriptor.readUInt16LE(6) | 0x08, 6); // local flags
+    const cdOff = zip.length - 22 - (46 + 'he.json'.length);
+    descriptor.writeUInt16LE(descriptor.readUInt16LE(cdOff + 8) | 0x08, cdOff + 8);
+    expect(() => readZip(descriptor)).toThrow('data descriptor');
+  });
+
+  it('rejects traversal and duplicate entry names', () => {
+    const evil = buildZip([{ name: 'ok.json', data: Buffer.from('{}') }]);
+    // Rewrite the only entry name to ../ok.json (same length bucket: 'ok' -> '..', keep 7 chars).
+    const renamed = Buffer.from(evil);
+    // Same-length rewrite of 'ok.json' to '../json' in both name fields.
+    renamed[30] = 0x2e; renamed[31] = 0x2e; renamed[32] = 0x2f;
+    const cdOff = evil.length - 22 - (46 + 'ok.json'.length);
+    renamed[cdOff + 46] = 0x2e; renamed[cdOff + 47] = 0x2e; renamed[cdOff + 48] = 0x2f;
+    expect(() => readZip(renamed)).toThrow('unsafe entry name');
+    expect(() => readZip(buildZip([{ name: 'a.json', data: Buffer.alloc(0) }, { name: 'a.json', data: Buffer.alloc(0) }]))).toThrow();
   });
 });

@@ -107,3 +107,61 @@ export function buildZip(entries: ZipEntry[]): Buffer {
 }
 
 export const ZIP_LIMITS = { MAX_ENTRIES, MAX_BYTES };
+
+// Store-only ZIP reader, the exact inverse of buildZip: archives produced by
+// the export bundle, or byte-compatible ones. The subset is deliberate and
+// every deviation is rejected: EOCD must sit at len-22 (no archive comment),
+// single disk, no ZIP64 markers, method 0 (store) only, no data descriptors,
+// compressed size == uncompressed size, CRC32 verified per entry. The same
+// MAX_ENTRIES / MAX_BYTES budgets as the writer apply, with full overhead
+// accounted. Anything outside the subset throws before a caller sees entries.
+export function readZip(buf: Buffer): ZipEntry[] {
+  const fail = (reason: string): never => { throw new Error(`unsupported zip: ${reason}`); };
+  if (buf.length < 22) fail('too small');
+  const eocd = buf.length - 22;
+  if (buf.readUInt32LE(eocd) !== 0x06054b50) fail('no end-of-central-directory at the expected offset');
+  if (buf.readUInt16LE(eocd + 4) !== 0 || buf.readUInt16LE(eocd + 6) !== 0) fail('multi-disk archive');
+  const count = buf.readUInt16LE(eocd + 10);
+  if (count !== buf.readUInt16LE(eocd + 8)) fail('disk entry count differs from total');
+  if (count > MAX_ENTRIES) fail(`entry limit exceeded (${count} > ${MAX_ENTRIES})`);
+  const cdSize = buf.readUInt32LE(eocd + 12);
+  const cdOffset = buf.readUInt32LE(eocd + 16);
+  if (cdOffset === 0xffffffff || cdSize === 0xffffffff) fail('ZIP64');
+  if (cdOffset + cdSize !== eocd) fail('central directory does not abut the EOCD');
+  let total = 22;
+  const out: ZipEntry[] = [];
+  const names = new Set<string>();
+  let off = cdOffset;
+  for (let i = 0; i < count; i++) {
+    if (buf.readUInt32LE(off) !== 0x02014b50) fail('bad central record');
+    const flags = buf.readUInt16LE(off + 8);
+    if (flags & 0x08) fail('data descriptor');
+    const method = buf.readUInt16LE(off + 10);
+    if (method !== 0) fail(`compression method ${method} (store-only subset)`);
+    const crc = buf.readUInt32LE(off + 16);
+    const compressed = buf.readUInt32LE(off + 20);
+    const size = buf.readUInt32LE(off + 24);
+    if (compressed === 0xffffffff || size === 0xffffffff) fail('ZIP64');
+    if (compressed !== size) fail('compressed size differs from uncompressed');
+    const nameLen = buf.readUInt16LE(off + 28);
+    const extraLen = buf.readUInt16LE(off + 30);
+    const commentLen = buf.readUInt16LE(off + 32);
+    const local = buf.readUInt32LE(off + 42);
+    if (buf.readUInt32LE(local) !== 0x04034b50) fail('bad local header');
+    const localNameLen = buf.readUInt16LE(local + 26);
+    const localExtraLen = buf.readUInt16LE(local + 28);
+    const name = buf.subarray(off + 46, off + 46 + nameLen).toString('utf8');
+    if (name.length === 0 || name.includes('\\') || name.split('/').some((seg) => seg === '..')) fail(`unsafe entry name ${JSON.stringify(name)}`);
+    if (names.has(name)) fail(`duplicate entry name ${JSON.stringify(name)}`);
+    names.add(name);
+    const dataStart = local + 30 + localNameLen + localExtraLen;
+    if (dataStart + size > cdOffset) fail('entry data overlaps the central directory');
+    const data = buf.subarray(dataStart, dataStart + size);
+    if (crc32(data) !== crc) fail(`CRC mismatch on ${JSON.stringify(name)}`);
+    total += size + 76 + 2 * nameLen;
+    if (total > MAX_BYTES) fail(`size limit exceeded (${MAX_BYTES} bytes including overhead)`);
+    out.push({ name, data: Buffer.from(data) });
+    off += 46 + nameLen + extraLen + commentLen;
+  }
+  return out;
+}

@@ -99,6 +99,12 @@ export class TranslationsController {
     return this.translations.suggest(user.userId, projectId, locale ?? '', source ?? '');
   }
 
+  @Post('import-bundle/:format')
+  importBundle(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('format') format: string, @Query('branch') branch: string | undefined, @Body() zip: Buffer) {
+    if (!Buffer.isBuffer(zip) || zip.length === 0) throw new BadRequestException('Send the zip archive as an application/zip request body');
+    return this.translations.importBundle(user.userId, projectId, format, zip, branch);
+  }
+
   @Get('imports')
   listImportRuns(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string) {
     return this.translations.listImportRuns(user.userId, projectId);

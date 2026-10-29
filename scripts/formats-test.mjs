@@ -505,6 +505,31 @@ try {
   const brBundle = readZip(Buffer.from(await (await fetch(`${API}${P}/export-bundle/json?branch=preview-branch`, { headers: { Authorization: `Bearer ${at}` } })).arrayBuffer()));
   check('bundle respects the branch scope', !JSON.parse(mainBundle.get('en.json').toString('utf8'))['pv.scoped'] && JSON.parse(brBundle.get('en.json').toString('utf8'))['pv.scoped'] === 'on branch');
 
+  // Import bundle: export a zip from FMT and import it into a fresh project.
+  const proj2 = (await call('/projects', { token: at, method: 'POST', body: { name: 'FMT2', slug: 'fmt2', locales: ['en', 'he'] } })).json;
+  const P2 = `/projects/${proj2.id}`;
+  const expZip = Buffer.from(await (await fetch(`${API}${P}/export-bundle/json`, { headers: { Authorization: `Bearer ${at}` } })).arrayBuffer());
+  const impBundle = await fetch(`${API}${P2}/import-bundle/json`, { method: 'POST', headers: { 'Content-Type': 'application/zip', Authorization: `Bearer ${at}` }, body: expZip });
+  const impBundleJson = await impBundle.json();
+  const heIn2 = await (await fetch(`${API}${P2}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('export->import bundle round-trip lands both locales', impBundle.status === 201 && impBundleJson.imported.length === 2 && impBundleJson.skipped.length === 0 && impBundleJson.failedLocales.length === 0 && heIn2['yaml.title'] === 'My App ✓', JSON.stringify({ status: impBundle.status, imported: impBundleJson.imported?.length, failed: impBundleJson.failedLocales }));
+  const badFmt = await fetch(`${API}${P2}/import-bundle/nope`, { method: 'POST', headers: { 'Content-Type': 'application/zip', Authorization: `Bearer ${at}` }, body: expZip });
+  check('unknown bundle import format rejected (400)', badFmt.status === 400, String(badFmt.status));
+  const noZip = await call(`${P2}/import-bundle/json`, { token: at, method: 'POST', body: {} });
+  check('bundle import without an application/zip body rejected (400)', noZip.status === 400, String(noZip.status));
+  const tampered = Buffer.from(expZip);
+  tampered[30 + 'en.json'.length] ^= 0xff; // first entry's first payload byte
+  const tamperedRes = await fetch(`${API}${P2}/import-bundle/json`, { method: 'POST', headers: { 'Content-Type': 'application/zip', Authorization: `Bearer ${at}` }, body: tampered });
+  check('CRC-tampered bundle rejected (400), nothing imported', tamperedRes.status === 400, String(tamperedRes.status));
+  // Entry naming no project locale: skipped with a reason, others land.
+  const proj3 = (await call('/projects', { token: at, method: 'POST', body: { name: 'FMT3', slug: 'fmt3', locales: ['en'] } })).json;
+  const imp3 = await (await fetch(`${API}/projects/${proj3.id}/import-bundle/json`, { method: 'POST', headers: { 'Content-Type': 'application/zip', Authorization: `Bearer ${at}` }, body: expZip })).json();
+  check('bundle entry naming no project locale is skipped with a reason', imp3.imported.length === 1 && imp3.skipped.some((x) => x.name === 'he.json' && x.reason.includes('no project locale')), JSON.stringify(imp3.skipped));
+  // Member grant boundary: member ct (he-only in proj2 too) imports he, en is reported failed (403), no abort.
+  await call(`${P2}/members`, { token: at, method: 'POST', body: { email: 'c@fmt.io', role: 'MEMBER', allowedLocales: ['he'] } });
+  const ctBundle = await (await fetch(`${API}${P2}/import-bundle/json`, { method: 'POST', headers: { 'Content-Type': 'application/zip', Authorization: `Bearer ${ct}` }, body: expZip })).json();
+  check('member bundle import: granted locale imports, other locale reported 403', ctBundle.imported.some((x) => x.locale === 'he') && ctBundle.failedLocales.some((x) => x.locale === 'en' && x.status === 403), JSON.stringify(ctBundle.failedLocales));
+
 } catch (err) {
   // embedded-postgres can reject with `undefined` when the postmaster dies at
   // startup; through an async finally that exception exits 0 SILENTLY. Catch
