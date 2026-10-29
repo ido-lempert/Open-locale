@@ -454,6 +454,43 @@ try {
   await badUpInput.uploadFile('/tmp/e2e-bundle-bad.zip');
   const badNotice = await page.waitForFunction(() => (document.querySelector('p.error')?.textContent || '').includes('CRC mismatch'), { timeout: 10000 }).then(() => true).catch(() => false);
   check('CRC-tampered bundle upload rejected with the reason shown', badNotice);
+  // The store-only and partial/no-rollback restrictions are visible, not
+  // only a tooltip.
+  const bundleNoteShown = await page.evaluate(() => {
+    const el = [...document.querySelectorAll('.csv-note')].find((n) => n.textContent.includes('.zip bundles'));
+    return !!el && el.textContent.includes('store-only') && el.textContent.includes('not rolled back') && el.getBoundingClientRect().height > 0;
+  });
+  check('store-only + no-rollback bundle restrictions visible before upload', bundleNoteShown);
+  // Mixed outcome through the UI: rename he.po to fr.po (same length, CRC is
+  // over data only) -> en imports, fr skipped with its reason in the notice.
+  const mixZip = Buffer.from(bundleBuf);
+  const cdOff2 = mixZip.length - 22 - (46 + 'en.po'.length) - (46 + 'he.po'.length);
+  const heRec = cdOff2 + 46 + 'en.po'.length; // second central record (he.po)
+  mixZip.fill(0x66, heRec + 46, heRec + 47); // central: 'h' -> 'f'
+  mixZip.fill(0x72, heRec + 47, heRec + 48); // central: 'e' -> 'r'
+  const heLocalOff = mixZip.readUInt32LE(heRec + 42);
+  mixZip.fill(0x66, heLocalOff + 30, heLocalOff + 31);
+  mixZip.fill(0x72, heLocalOff + 31, heLocalOff + 32);
+  writeFileSync('/tmp/e2e-bundle-mix.zip', mixZip);
+  const mixUpInput = await page.$('input[name=bundleFile]');
+  await mixUpInput.uploadFile('/tmp/e2e-bundle-mix.zip');
+  const mixNotice = await page.waitForFunction(() => {
+    const t = document.querySelector('p.notice')?.textContent || '';
+    return t.includes('en:') && t.includes('skipped fr.po (no project locale matches the entry name)') && t.includes('not rolled back');
+  }, { timeout: 10000 }).then(() => true).catch(() => false);
+  check('mixed bundle outcome: en imported, fr.po skipped with reason, both in the notice', mixNotice);
+  await page.evaluate(() => { document.querySelector('p.notice')?.scrollIntoView({ block: 'center' }); });
+  await shot('editor-45-bundle-import-mixed.png');
+  await page.setViewport({ width: 480, height: 800 });
+  const note480 = await page.evaluate(() => {
+    const el = [...document.querySelectorAll('.csv-note')].find((n) => n.textContent.includes('.zip bundles'));
+    if (!el) return 'missing';
+    const r = el.getBoundingClientRect();
+    return r.width <= 480 && r.right <= 480 && document.documentElement.scrollWidth <= window.innerWidth ? 'fits' : `overflow right=${r.right} sw=${document.documentElement.scrollWidth}`;
+  });
+  check('bundle restriction note wraps within the 480px viewport', note480 === 'fits', note480);
+  await shot('editor-45b-bundle-note-480.png');
+  await page.setViewport({ width: 1280, height: 800 });
   await page.evaluate(() => window.scrollTo(0, 0));
   await shot('editor-35-po.png');
   // Frame the imported PO row fully (it is the grid's last row).

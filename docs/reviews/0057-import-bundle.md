@@ -67,6 +67,9 @@ Two things this endpoint is NOT, stated plainly:
 - e2e-visual legs: Import bundle (.zip) upload of a real export-bundle zip
   summarizes every locale in the notice with explicit per-locale-independent
   wording; a CRC-tampered upload shows the rejection reason; the label fits
-  the 480px viewport (editor-44-export-bundle-480.png). The label's title
-  states the store-only restriction and the partial outcome at the choice
-  point.
+  the 480px viewport (editor-44-export-bundle-480.png). The restrictions are
+  also visible text under the import row (store-only, per-locale
+  independence, no rollback), not only a tooltip - verified present and
+  wrapped at 480px (editor-45b-bundle-note-480.png). Mixed outcome through
+  the UI: en imported, a renamed fr.po entry skipped with its reason, both in
+  the notice (editor-45-bundle-import-mixed.png).
