@@ -24,7 +24,7 @@ import { ApiService, Project } from '../api.service';
         <h2>Two-factor authentication</h2>
         @if (tfa(); as t) {
           @if (t.enabled) {
-            <p class="muted">Enabled. {{ t.recoveryCodesRemaining }} recovery codes remain. Changing two-factor settings signs out all other sessions.</p>
+            <p class="muted">Enabled. {{ t.recoveryCodesRemaining }} recovery codes remain. Changing two-factor settings signs out all sessions, including this one.</p>
             <form class="inline" (ngSubmit)="disableTfa()">
               <input aria-label="Current password" type="password" placeholder="Current password" [ngModel]="tfaPassword()" (ngModelChange)="tfaPassword.set($event)" name="tfaPassword" required autocomplete="current-password" />
               <input aria-label="Current 2FA code" placeholder="TOTP or recovery code" [ngModel]="tfaCode()" (ngModelChange)="tfaCode.set($event)" name="tfaCode" required />
