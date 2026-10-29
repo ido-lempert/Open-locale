@@ -366,7 +366,7 @@ export class TranslationsService {
   async importAndroid(userId: string, projectId: string, locale: string, xml: string, branch?: string) {
     const { rows, rejected } = parseAndroidXml(xml);
     if (rejected > 0) {
-      throw new BadRequestException(`${rejected} unsupported or unparsable element(s) in Android XML: plurals, string-array, DOCTYPE/entity declarations and nested markup are not supported`);
+      throw new BadRequestException(`${rejected} unsupported or unparsable element(s) in Android XML: a missing <resources> root, plurals, string-array, DOCTYPE/entity declarations and nested markup are not supported`);
     }
     return this.importJson(userId, projectId, locale, Object.fromEntries(rows), branch);
   }
@@ -390,7 +390,7 @@ export class TranslationsService {
   async importXliff(userId: string, projectId: string, locale: string, xliff: string, branch?: string) {
     const { rows, rejected, skipped } = parseXliff(xliff);
     if (rejected > 0) {
-      throw new BadRequestException(`${rejected} XLIFF trans-unit(s) rejected: group nesting, inline markup, alt-trans/seg-source and duplicate or missing ids are not supported`);
+      throw new BadRequestException(`${rejected} XLIFF trans-unit(s) rejected: a missing <xliff> root, group nesting, inline markup, alt-trans/seg-source and duplicate or missing ids are not supported`);
     }
     const res = await this.importJson(userId, projectId, locale, Object.fromEntries(rows), branch);
     return { ...res, untranslatedSkipped: skipped };

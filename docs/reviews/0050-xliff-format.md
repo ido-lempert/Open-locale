@@ -1,5 +1,7 @@
 # 0050 - XLIFF 1.2 import/export
 
+
+Note (0054 follow-up): a document with no `<xliff>` root element is rejected 400. Before this, a non-XLIFF XML file produced a silent zero-key success; that is now fail-closed. A valid `<xliff>` file with zero trans-units remains a legitimate empty import.
 ## What landed
 
 XLIFF 1.2 joins JSON, CSV, Android XML, iOS strings and PO in the import/export

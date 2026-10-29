@@ -345,6 +345,15 @@ try {
   // --- CSV via UI: import a new key, verify notice + grid, export buttons visible ---
   await page.click('.back');
   await page.waitForSelector('.grid', { timeout: 10000 });
+  // Untouched format select: extension detection applies without a prompt (no deliberate choice exists yet on this mount).
+  const firstYaml = '/tmp/e2e-first.yaml';
+  writeFileSync(firstYaml, '"first":\n  "detect": "untouched detect ✓"\n');
+  const firstInput = await page.$('input[type=file]');
+  await firstInput.uploadFile(firstYaml);
+  const firstNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('(YAML,'), { timeout: 10000 }).then(() => true).catch(() => false);
+  const firstSel = await page.$eval('select[aria-label="Import/export format"]', (el) => el.value);
+  const firstNoBanner = await page.evaluate(() => !document.querySelector('.import-conflict'));
+  check('untouched format select auto-detects YAML from .yaml without a prompt', firstNotice && firstSel === 'yaml' && firstNoBanner, `select=${firstSel} notice=${firstNotice}`);
   const csvFile = '/tmp/e2e-import.csv';
   writeFileSync(csvFile, 'key,value\napp.subtitle,"Welcome, friend"\n');
   // The IO toolbar has a format picker; select CSV first so the import input and the safe/raw note apply to CSV.
@@ -531,22 +540,52 @@ try {
     window.scrollTo(0, 0);
   });
 
-  // --- Import format auto-detection from file extension ---
-  const autoPoFile = '/tmp/e2e-autodetect.po';
-  writeFileSync(autoPoFile, 'msgid "auto.po"\nmsgstr "detected from extension"\n');
+  // --- Import format conflict handling: a deliberate format choice is never overridden ---
+  const conflictPoFile = '/tmp/e2e-conflict.po';
+  writeFileSync(conflictPoFile, 'msgid "conflict.po"\nmsgstr "conflict fixture"\n');
   await page.select('select[aria-label="Import/export format"]', 'json');
-  const autoPoInput = await page.$('input[type=file]');
-  await autoPoInput.uploadFile(autoPoFile);
-  const autoPoNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('(PO (gettext),'), { timeout: 10000 }).then(() => true).catch(() => false);
-  const selAfterPo = await page.$eval('select[aria-label="Import/export format"]', (el) => el.value);
-  check('format auto-detects PO from .po extension (overrides explicit JSON selection)', autoPoNotice && selAfterPo === 'po', `select=${selAfterPo} notice=${autoPoNotice}`);
-  const autoYmlFile = '/tmp/e2e-autodetect.yml';
-  writeFileSync(autoYmlFile, '"auto":\n  "yml": "yml detect ✓"\n');
-  const autoYmlInput = await page.$('input[type=file]');
-  await autoYmlInput.uploadFile(autoYmlFile);
-  const autoYmlNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('(YAML,'), { timeout: 10000 }).then(() => true).catch(() => false);
-  const selAfterYml = await page.$eval('select[aria-label="Import/export format"]', (el) => el.value);
-  check('format auto-detects YAML from .yml extension (overrides prior PO selection)', autoYmlNotice && selAfterYml === 'yaml' && (await waitText('auto.yml')), `select=${selAfterYml} notice=${autoYmlNotice}`);
+  const conflictPoInput = await page.$('input[type=file]');
+  await conflictPoInput.uploadFile(conflictPoFile);
+  const bannerPo = await page.waitForFunction(() => (document.body.textContent || '').includes('looks like PO (gettext) but the format is set to JSON'), { timeout: 10000 }).then(() => true).catch(() => false);
+  const poAbsent = await page.evaluate(() => ![...document.querySelectorAll('.grid td.key')].some((el) => el.textContent.includes('conflict.po')));
+  const selStillJson = await page.$eval('select[aria-label="Import/export format"]', (el) => el.value);
+  check('explicit JSON + .po file: conflict presented, nothing imported, selection kept', bannerPo && poAbsent && selStillJson === 'json', `banner=${bannerPo} absent=${poAbsent} select=${selStillJson}`);
+  await page.evaluate(() => [...document.querySelectorAll('.import-conflict button')].find((b) => b.textContent.includes('Import as PO'))?.click());
+  const poImported = await page.waitForFunction(() => (document.body.textContent || '').includes('(PO (gettext),'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('resolving the conflict as the detected format imports the file', poImported && (await waitText('conflict.po')) && (await page.$eval('select[aria-label="Import/export format"]', (el) => el.value)) === 'po');
+
+  const conflictXmlFile = '/tmp/e2e-conflict.xml';
+  writeFileSync(conflictXmlFile, '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n  <string name="conflict_xml">android content</string>\n</resources>\n');
+  await page.select('select[aria-label="Import/export format"]', 'xliff');
+  const conflictXmlInput = await page.$('input[type=file]');
+  await conflictXmlInput.uploadFile(conflictXmlFile);
+  const bannerXml = await page.waitForFunction(() => (document.body.textContent || '').includes('looks like Android XML but the format is set to XLIFF 1.2'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('explicit XLIFF + .xml file: ambiguous extension presented as a conflict, nothing imported', bannerXml && await page.evaluate(() => ![...document.querySelectorAll('.grid td.key')].some((el) => el.textContent.includes('conflict_xml'))));
+  await shot('editor-40-import-conflict.png');
+  await page.evaluate(() => [...document.querySelectorAll('.import-conflict button')].find((b) => b.textContent.includes('Keep XLIFF'))?.click());
+  const errShown = await page.waitForFunction(() => (document.querySelector('p.error')?.textContent || '').length > 3, { timeout: 10000 }).then(() => true).catch(() => false);
+  const xmlStillAbsent = await page.evaluate(() => ![...document.querySelectorAll('.grid td.key')].some((el) => el.textContent.includes('conflict_xml')));
+  const selStillXliff = await page.$eval('select[aria-label="Import/export format"]', (el) => el.value);
+  check('keeping the explicit XLIFF choice imports as XLIFF and fails closed, selection kept', errShown && xmlStillAbsent && selStillXliff === 'xliff', `err=${errShown} absent=${xmlStillAbsent} select=${selStillXliff}`);
+
+  const conflictJsonFile = '/tmp/e2e-conflict.json';
+  writeFileSync(conflictJsonFile, JSON.stringify({ 'conflict.json': 'from json file' }) + '\n');
+  await page.select('select[aria-label="Import/export format"]', 'arb');
+  const conflictJsonInput = await page.$('input[type=file]');
+  await conflictJsonInput.uploadFile(conflictJsonFile);
+  const bannerJson = await page.waitForFunction(() => (document.body.textContent || '').includes('looks like JSON but the format is set to ARB (Flutter)'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('explicit ARB + .json file: ambiguous extension presented as a conflict, nothing imported', bannerJson && await page.evaluate(() => ![...document.querySelectorAll('.grid td.key')].some((el) => el.textContent.includes('conflict.json'))));
+  await page.evaluate(() => [...document.querySelectorAll('.import-conflict button')].find((b) => b.textContent.includes('Import as JSON'))?.click());
+  check('resolving the ARB/JSON conflict as JSON imports the file', (await waitText('conflict.json')) && (await page.$eval('select[aria-label="Import/export format"]', (el) => el.value)) === 'json');
+
+  const unknownFile = '/tmp/e2e-unknown.txt';
+  writeFileSync(unknownFile, 'msgid "conflict.txt"\nmsgstr "unknown extension keeps the explicit format"\n');
+  await page.select('select[aria-label="Import/export format"]', 'po');
+  const unknownInput = await page.$('input[type=file]');
+  await unknownInput.uploadFile(unknownFile);
+  const unknownNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('(PO (gettext),'), { timeout: 10000 }).then(() => true).catch(() => false);
+  const noBanner = await page.evaluate(() => !document.querySelector('.import-conflict'));
+  check('unknown extension imports under the explicit selection with no conflict prompt', unknownNotice && noBanner && (await page.$eval('select[aria-label="Import/export format"]', (el) => el.value)) === 'po', `notice=${unknownNotice} noBanner=${noBanner}`);
 
   // Settings screen: rename, add locale, verify grid column appears (on the editor)
   await page.click('.settings-link');

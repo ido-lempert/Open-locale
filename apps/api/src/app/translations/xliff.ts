@@ -42,6 +42,11 @@ export function parseXliff(text: string): { rows: [string, string][]; rejected: 
   const rows: [string, string][] = [];
   let rejected = 0;
   let skipped = 0;
+  if (!/<xliff[\s>]/.test(text)) {
+    // No XLIFF root element: this is not an XLIFF document at all. Reject
+    // instead of silently importing zero keys (wrong-format file pick).
+    return { rows, rejected: 1, skipped: 0 };
+  }
   if (/<group[\s>]/.test(text)) {
     // Nested group structure anywhere in the file is unsupported.
     return { rows, rejected: 1, skipped: 0 };

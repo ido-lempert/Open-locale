@@ -50,6 +50,11 @@ const unescapeValue = (v: string) => {
 export function parseAndroidXml(text: string): { rows: [string, string][]; rejected: number } {
   const rows: [string, string][] = [];
   let rejected = 0;
+  if (!/<resources[\s>]/.test(text)) {
+    // No <resources> root: not an Android strings document. Reject instead
+    // of silently importing zero keys (wrong-format file pick).
+    return { rows, rejected: 1 };
+  }
   // Linear scan for <string name="...">...</string>; inner markup unsupported.
   const re = /<string\s+name="([^"]*)"\s*>([\s\S]*?)<\/string>/g;
   let m: RegExpExecArray | null;

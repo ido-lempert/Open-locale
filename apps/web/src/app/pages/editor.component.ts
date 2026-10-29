@@ -3,7 +3,7 @@ import { Component, OnInit, signal, WritableSignal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { hintsForTarget, GlossaryHint } from '../glossary-match';
-import { detectImportFormat } from '../import-format';
+import { detectImportFormat, IoFormat } from '../import-format';
 import { ApiService, BranchInfo, ScreenshotMeta, TmSuggestion, GlossaryTermItem, CommentEntry, HistoryEntry, Key, Project, TranslationStatus } from '../api.service';
 
 interface CellState {
@@ -65,7 +65,7 @@ interface CellState {
             <input placeholder="locale (e.g. fr)" aria-label="New locale code" [ngModel]="newLocale()" (ngModelChange)="newLocale.set($event)" name="newLocale" required maxlength="10" />
             <button type="submit">Add locale</button>
           </form>
-          <select [ngModel]="ioFormat()" (ngModelChange)="ioFormat.set($event)" name="ioFormat" aria-label="Import/export format">
+          <select [ngModel]="ioFormat()" (ngModelChange)="onFormatPick($event)" name="ioFormat" aria-label="Import/export format">
             <option value="json">JSON</option>
             <option value="csv">CSV (spreadsheet-safe)</option>
             <option value="android">Android XML</option>
@@ -80,6 +80,13 @@ interface CellState {
           <label class="import">Import {{ formatLabel() }} <input type="file" name="importFile" accept=".json,.csv,.xml,.strings,.po,.xlf,.xliff,.properties,.arb,.yaml,.yml" (change)="importFile($event)" hidden /></label>
           @if (ioFormat() === 'csv') {
             <div class="muted csv-note">CSV exports are spreadsheet-safe: values starting with formula characters get a protective prefix, so re-importing a safe export keeps those prefixes and changes stored values. For a lossless roundtrip use the API with <code>mode=raw</code>.</div>
+          }
+          @if (importConflict(); as c) {
+            <div class="import-conflict" role="alert">
+              <span>{{ c.filename }} looks like {{ labelFor(c.detected) }} but the format is set to {{ labelFor(c.current) }}. Nothing was imported yet.</span>
+              <button type="button" (click)="resolveImportConflict(true)">Import as {{ labelFor(c.detected) }}</button>
+              <button type="button" (click)="resolveImportConflict(false)">Keep {{ labelFor(c.current) }}</button>
+            </div>
           }
           <select [ngModel]="ioLocale()" (ngModelChange)="ioLocale.set($event)" name="ioLocale" aria-label="Import/export locale">
             @for (l of p.locales; track l.code) { <option [value]="l.code">{{ l.code }}</option> }
@@ -259,6 +266,8 @@ export class EditorComponent implements OnInit {
   search = signal(''); newKey = signal(''); newLocale = signal(''); ioLocale = signal('en'); bulkStatus = signal('REVIEWED');
   branch = signal('main'); branches = signal<BranchInfo[]>([]); newBranch = signal('');
   mergePreview = signal<{ branchId: string; from: string; lines: string[]; previewAt: string } | null>(null); ioFormat = signal<'json' | 'csv' | 'android' | 'ios' | 'po' | 'xliff' | 'properties' | 'arb' | 'yaml'>('json');
+  ioFormatTouched = signal(false);
+  importConflict = signal<{ filename: string; detected: IoFormat; current: IoFormat; text: string } | null>(null);
   glossary = signal<GlossaryTermItem[]>([]);
   filterTag = signal(''); filterStatus = signal<'' | TranslationStatus>('');
   tagEditFor = signal<string | null>(null);
@@ -612,20 +621,49 @@ export class EditorComponent implements OnInit {
       if (fmt === 'csv') this.notice.set('CSV exported (spreadsheet-safe). For a lossless roundtrip export use the API with mode=raw.');
     } catch (err) { this.error.set(err instanceof Error ? err.message : 'Export failed'); }
   }
+  labelFor(fmt: IoFormat): string {
+    return fmt === 'json' ? 'JSON' : fmt === 'csv' ? 'CSV' : fmt === 'android' ? 'Android XML' : fmt === 'po' ? 'PO (gettext)' : fmt === 'xliff' ? 'XLIFF 1.2' : fmt === 'properties' ? 'Java properties' : fmt === 'arb' ? 'ARB (Flutter)' : fmt === 'yaml' ? 'YAML' : 'iOS strings';
+  }
   formatLabel(): string {
-    return this.ioFormat() === 'json' ? 'JSON' : this.ioFormat() === 'csv' ? 'CSV' : this.ioFormat() === 'android' ? 'Android XML' : this.ioFormat() === 'po' ? 'PO (gettext)' : this.ioFormat() === 'xliff' ? 'XLIFF 1.2' : this.ioFormat() === 'properties' ? 'Java properties' : this.ioFormat() === 'arb' ? 'ARB (Flutter)' : this.ioFormat() === 'yaml' ? 'YAML' : 'iOS strings';
+    return this.labelFor(this.ioFormat());
+  }
+  onFormatPick(fmt: IoFormat) {
+    this.ioFormat.set(fmt);
+    this.ioFormatTouched.set(true);
+    this.importConflict.set(null);
   }
   async importFile(event: Event) {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
-    // Auto-detect the format from the file extension; an unknown extension
-    // keeps the user's explicit selection (no content sniffing).
+    const text = await file.text();
+    input.value = '';
+    // Extension detection never overrides a deliberate format choice. A
+    // conflict is presented for an explicit decision before anything is
+    // imported; an unknown extension always keeps the current selection.
     const detected = detectImportFormat(file.name);
-    if (detected) this.ioFormat.set(detected);
+    if (detected && detected !== this.ioFormat()) {
+      if (this.ioFormatTouched()) {
+        this.importConflict.set({ filename: file.name, detected, current: this.ioFormat(), text });
+        return;
+      }
+      this.ioFormat.set(detected);
+    }
+    await this.runImport(text);
+  }
+  async resolveImportConflict(useDetected: boolean) {
+    const c = this.importConflict();
+    if (!c) return;
+    this.importConflict.set(null);
+    if (useDetected) {
+      this.ioFormat.set(c.detected);
+      this.ioFormatTouched.set(true); // an explicit click on the banner choice
+    }
+    await this.runImport(c.text);
+  }
+  private async runImport(text: string) {
     const fmt = this.ioFormat();
     try {
-      const text = await file.text();
       const payload = fmt === 'json' ? { entries: JSON.parse(text) }
         : fmt === 'csv' ? { csv: text }
         : fmt === 'android' ? { xml: text } : fmt === 'po' ? { po: text } : fmt === 'xliff' ? { xliff: text } : fmt === 'properties' ? { properties: text } : fmt === 'arb' ? { arb: text } : fmt === 'yaml' ? { yaml: text } : { strings: text };
@@ -633,6 +671,5 @@ export class EditorComponent implements OnInit {
       this.notice.set(`Imported ${res.keysCreated} keys, ${res.translationsUpserted} translations (${this.formatLabel()}, ${this.ioLocale()}).`);
       await this.reload();
     } catch (err) { this.error.set(err instanceof Error ? err.message : `Import failed: invalid ${this.formatLabel()}`); }
-    input.value = '';
   }
 }

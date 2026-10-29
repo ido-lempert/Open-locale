@@ -93,6 +93,8 @@ try {
   check('Android XML export has entities + escapes', xmlOut.includes('<string name="app.title">Rocks &amp; Co</string>') && xmlOut.includes("say \\\"hi\\\"\\nnext"), xmlOut.split("\n").find((l) => l.includes("msg.quote")) ?? "");
   const xmlRound = await call(`${P}/import/he`, { token: at, method: 'POST', body: { xml: xmlOut } });
   check('Android export-import roundtrip stable', xmlRound.status === 201 && xmlRound.json.unchangedSkipped >= 2, JSON.stringify(xmlRound.json));
+  const noRootXml = await call(`${P}/import/he`, { token: at, method: 'POST', body: { xml: '<xliff version="1.2"><file><body><trans-unit id="android.noroot"><source>s</source><target>t</target></trans-unit></body></file></xliff>' } });
+  check('Android import without a <resources> root rejected (400)', noRootXml.status === 400, String(noRootXml.status));
   const nested = await call(`${P}/import/he`, { token: at, method: 'POST', body: { xml: '<resources><string name="x">a <b>bold</b></string></resources>' } });
   check('nested markup rejected (400)', nested.status === 400, String(nested.status));
   // Atomicity: a mixed import (one valid <string> plus an unsupported <plurals>)
@@ -228,6 +230,10 @@ try {
   const xlBefore = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
   const xlGroup = await call(`${P}/import/he`, { token: at, method: 'POST', body: { xliff: '<xliff version="1.2"><file><body><group id="g"><trans-unit id="xliff.grouped"><source>s</source><target>should not land</target></trans-unit></group></body></file></xliff>' } });
   const xlAfterGroup = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  const xlNoRootBefore = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  const xlNoRoot = await call(`${P}/import/he`, { token: at, method: 'POST', body: { xliff: '<?xml version="1.0"?><resources><string name="xliff.noroot">x</string></resources>' } });
+  const xlNoRootAfter = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('XLIFF document without an <xliff> root rejected (400), keys unchanged', xlNoRoot.status === 400 && JSON.stringify(xlNoRootBefore) === JSON.stringify(xlNoRootAfter) && xlNoRootAfter['xliff.noroot'] === undefined, String(xlNoRoot.status));
   check('XLIFF group nesting rejected (400) and leaves keys unchanged', xlGroup.status === 400 && JSON.stringify(xlBefore) === JSON.stringify(xlAfterGroup) && xlAfterGroup['xliff.grouped'] === undefined, String(xlGroup.status));
   const xlMarkup = await call(`${P}/import/he`, { token: at, method: 'POST', body: { xliff: '<xliff version="1.2"><file><body><trans-unit id="xliff.markup"><source>a<g id="1">bad</g></source><target>x</target></trans-unit></body></file></xliff>' } });
   check('XLIFF inline markup rejected (400)', xlMarkup.status === 400, String(xlMarkup.status));

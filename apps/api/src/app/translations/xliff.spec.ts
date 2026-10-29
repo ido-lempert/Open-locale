@@ -63,4 +63,10 @@ describe('XLIFF 1.2 interchange', () => {
     const back = parseXliff('<xliff><file><body><trans-unit id="a"><source>s</source><target/></trans-unit></body></file></xliff>');
     expect(back.rows).toEqual([['a', '']]);
   });
+
+  it('rejects a document with no <xliff> root instead of a silent zero-key import', () => {
+    const res = parseXliff('<?xml version="1.0"?><resources><string name="a">x</string></resources>');
+    expect(res.rows).toEqual([]);
+    expect(res.rejected).toBe(1);
+  });
 });

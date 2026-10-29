@@ -1,5 +1,7 @@
 # Review 0017 - CSV import/export (API-first)
 
+Note (0054 follow-up): an Android XML import with no `<resources>` root element is rejected 400. Before this, a non-Android XML file (for example an XLIFF document) produced a silent zero-key success; that is now fail-closed.
+
 ## Scope
 CSV as a second interchange format: GET /projects/:id/export/:locale/csv (text/csv,
 RFC-4180 quoting, CRLF, key,value header) and POST /projects/:id/import/:locale with

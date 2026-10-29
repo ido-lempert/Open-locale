@@ -77,4 +77,10 @@ describe('ios-strings adversarial', () => {
     expect(rows).toEqual([['a', 'b']]);
     expect(rejected).toBe(0);
   });
+
+  it('rejects an Android import with no <resources> root instead of a silent zero-key import', () => {
+    const { rows, rejected } = parseAndroidXml('<xliff version="1.2"><file><body><trans-unit id="a"><source>s</source><target>t</target></trans-unit></body></file></xliff>');
+    expect(rows).toEqual([]);
+    expect(rejected).toBe(1);
+  });
 });
