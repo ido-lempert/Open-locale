@@ -36,10 +36,20 @@ first.
   entry (2 upserted), export content-type, escaped export content,
   export-import roundtrip (unchangedSkipped >= 2), plural 400, mixed
   valid+context import 400 with keys byte-identical before/after.
+- Boundary (formats-test, +8): branch scoping (PO import with
+  ?branch= is invisible on main JSON export, present on the branch
+  export; PO export reads the named branch), locale grants (he-only
+  member: PO import to en 403, to he 201; PO export en 200 - writes
+  constrained, reads not), task key lock (locked po.title skipped with
+  failed=1 in the import summary for a non-admin non-assignee while an
+  unlocked key lands; locked value verified unchanged after import).
 - UI (e2e-visual, +3): select PO, import a .po fixture through the
   file input, summary notice names the format, the key appears in the
   grid; export captured via the generated blob contains the msgid and
-  escaped msgstr. editor-35-po.png pixel-inspected.
+  escaped msgstr. editor-35-po.png (top of grid) and
+  editor-35b-po-row.png (po.demo row framed fully; the last grid row
+  cannot center without temporary body padding, so the shot pads,
+  centers, restores) pixel-inspected.
 
 ## Review pass notes
 

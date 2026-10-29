@@ -156,6 +156,38 @@ try {
   const poAfter = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
   check('PO mixed valid+context import rejected (400) and leaves keys unchanged', poMixed.status === 400 && JSON.stringify(poBefore) === JSON.stringify(poAfter) && poAfter['po.mixed'] === undefined, String(poMixed.status));
 
+  // PO respects the shared boundaries - branch scoping, locale write
+  // grants, task key locks - enforced inside importJson/exportJson and
+  // exercised here through the PO path itself.
+  await call(`${P}/branches`, { token: at, method: 'POST', body: { name: 'po-branch' } });
+  const impBr = await call(`${P}/import/en?branch=po-branch`, { token: at, method: 'POST', body: { po: 'msgid "po.branchonly"\nmsgstr "branch value"\n' } });
+  check('PO import scopes to the named branch', impBr.status === 201, JSON.stringify(impBr.json));
+  const mainAfterBr = await (await fetch(`${API}${P}/export/en?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  const brAfterBr = await (await fetch(`${API}${P}/export/en?flat=true&branch=po-branch`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('PO branch import invisible on main, present on the branch', mainAfterBr['po.branchonly'] === undefined && brAfterBr['po.branchonly'] === 'branch value');
+  const brPoOut = await (await fetch(`${API}${P}/export/en/po?branch=po-branch`, { headers: { Authorization: `Bearer ${at}` } })).text();
+  check('PO export reads the named branch', brPoOut.includes('msgid "po.branchonly"'));
+
+  const c = (await call('/auth/signup', { method: 'POST', body: { email: 'c@fmt.io', password: 'password-c', displayName: 'He Only' } })).json;
+  const ct = c.accessToken;
+  await call(`${P}/members`, { token: at, method: 'POST', body: { email: 'c@fmt.io', role: 'MEMBER', allowedLocales: ['he'] } });
+  const cEn = await call(`${P}/import/en`, { token: ct, method: 'POST', body: { po: 'msgid "po.denied"\nmsgstr "x"\n' } });
+  check('PO import outside the member locale grant denied (403)', cEn.status === 403, String(cEn.status));
+  const cHe = await call(`${P}/import/he`, { token: ct, method: 'POST', body: { po: 'msgid "po.memberok"\nmsgstr "allowed"\n' } });
+  check('PO import inside the member locale grant accepted', cHe.status === 201, String(cHe.status));
+  const cExport = await fetch(`${API}${P}/export/en/po`, { headers: { Authorization: `Bearer ${ct}` } });
+  check('PO export not narrowed by locale write grants', cExport.status === 200, String(cExport.status));
+
+  // Lock po.title through a task; a PO import by a non-admin non-assignee
+  // skips the locked key (reported in the run) while an unlocked key lands.
+  const keysForLock = (await call(`${P}/keys`, { token: at })).json;
+  const lockKey = keysForLock.find((k) => k.name === 'po.title');
+  await call(`${P}/tasks`, { token: at, method: 'POST', body: { title: 'Lock po.title', lockKeys: true, keyIds: [lockKey.id] } });
+  const lockImp = await call(`${P}/import/he`, { token: ct, method: 'POST', body: { po: 'msgid "po.title"\nmsgstr "changed under lock"\n\nmsgid "po.unlocked"\nmsgstr "lands"\n' } });
+  check('PO import skips the locked key and reports it', lockImp.status === 201 && lockImp.json.failed === 1 && lockImp.json.translationsUpserted === 1, JSON.stringify(lockImp.json));
+  const heAfterLock = await (await fetch(`${API}${P}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('locked key keeps its value, unlocked key imported', heAfterLock['po.title'] === 'My "App"' && heAfterLock['po.unlocked'] === 'lands', JSON.stringify({ title: heAfterLock['po.title'], unlocked: heAfterLock['po.unlocked'] }));
+
   const runs = (await call(`${P}/imports`, { token: at })).json;
   check('CSV imports recorded as import runs', Array.isArray(runs) ? runs.length >= 2 : (runs.items?.length ?? 0) >= 2, JSON.stringify(runs).slice(0, 120));
 

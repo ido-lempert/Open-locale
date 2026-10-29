@@ -378,6 +378,18 @@ try {
     poExport.split('\n').find((l) => l.includes('po.demo')) ?? '');
   await page.evaluate(() => window.scrollTo(0, 0));
   await shot('editor-35-po.png');
+  // Frame the imported PO row fully (it is the grid's last row).
+  await page.evaluate(() => {
+    // Last row cannot center without extra scroll room; pad, center, then restore.
+    document.body.style.paddingBottom = '60vh';
+    const cell = [...document.querySelectorAll('.grid td.key')].find((el) => el.textContent.includes('po.demo'));
+    cell?.scrollIntoView({ block: 'center' });
+  });
+  await shot('editor-35b-po-row.png');
+  await page.evaluate(() => {
+    document.body.style.paddingBottom = '';
+    window.scrollTo(0, 0);
+  });
 
   // Settings screen: rename, add locale, verify grid column appears (on the editor)
   await page.click('.settings-link');
