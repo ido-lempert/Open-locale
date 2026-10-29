@@ -355,6 +355,30 @@ try {
   check('UI visibly distinguishes spreadsheet-safe CSV from lossless raw', csvControls);
   await shot('editor-20-csv.png');
 
+  // --- PO via UI: import a new key, export capture verifies content ---
+  const poFile = '/tmp/e2e-import.po';
+  writeFileSync(poFile, '# fixture\nmsgid "po.demo"\nmsgstr "Proof of gettext \\"quotes\\""\n');
+  await page.select('select[aria-label="Import/export format"]', 'po');
+  const poInput = await page.$('input[type=file]');
+  await poInput.uploadFile(poFile);
+  const poNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('(PO (gettext),'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('PO import via UI shows summary notice', poNotice);
+  check('PO-imported key appears in grid', await waitText('po.demo'));
+  // Export through the UI: capture the generated blob instead of downloading.
+  await page.evaluate(() => {
+    window.__poCapture = null;
+    const orig = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (b) => { window.__poCapture = b; return orig(b); };
+  });
+  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.startsWith('Export'))?.click());
+  await page.waitForFunction(() => !!window.__poCapture, { timeout: 10000 });
+  const poExport = await page.evaluate(() => window.__poCapture.text());
+  check('PO export via UI emits msgid/msgstr for existing keys',
+    poExport.includes('msgid "po.demo"') && poExport.includes('msgstr "Proof of gettext \\"quotes\\""'),
+    poExport.split('\n').find((l) => l.includes('po.demo')) ?? '');
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await shot('editor-35-po.png');
+
   // Settings screen: rename, add locale, verify grid column appears (on the editor)
   await page.click('.settings-link');
   await page.waitForSelector('.panel', { timeout: 10000 });

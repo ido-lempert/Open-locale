@@ -54,6 +54,12 @@ export class TranslationsController {
     return this.translations.exportIos(user.userId, projectId, locale, branch);
   }
 
+  @Get('export/:locale/po')
+  @Header('Content-Type', 'text/plain; charset=utf-8')
+  exportPo(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
+    return this.translations.exportPo(user.userId, projectId, locale, branch);
+  }
+
   @Get('tm/suggest')
   suggest(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string,
     @Query('locale') locale?: string, @Query('source') source?: string) {
@@ -67,10 +73,11 @@ export class TranslationsController {
 
   @Post('import/:locale')
   importJson(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch: string | undefined, @Body() dto: ImportJsonDto) {
+    if (dto.po != null) return this.translations.importPo(user.userId, projectId, locale, dto.po, branch);
     if (dto.csv != null) return this.translations.importCsv(user.userId, projectId, locale, dto.csv, branch);
     if (dto.xml != null) return this.translations.importAndroid(user.userId, projectId, locale, dto.xml, branch);
     if (dto.strings != null) return this.translations.importIos(user.userId, projectId, locale, dto.strings, branch);
     if (dto.entries != null) return this.translations.importJson(user.userId, projectId, locale, dto.entries, branch);
-    throw new BadRequestException('Provide entries (JSON), csv, xml or strings');
+    throw new BadRequestException('Provide entries (JSON), csv, xml, strings or po');
   }
 }

@@ -13,6 +13,7 @@ import { TasksService } from '../tasks/tasks.service';
 import { flattenJson, unflattenJson } from './json-flatten';
 import { parseCsv, toCsv } from './csv';
 import { parseAndroidXml, toAndroidXml } from './android-xml';
+import { parsePo, toPo } from './po';
 import { parseIosStrings, toIosStrings } from './ios-strings';
 
 // Statuses every project supports; a project may extend this list with
@@ -332,6 +333,11 @@ export class TranslationsService {
     return toIosStrings(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)));
   }
 
+  async exportPo(userId: string, projectId: string, locale: string, branch?: string) {
+    const flat = (await this.exportJson(userId, projectId, locale, true, branch)) as Record<string, string>;
+    return toPo(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)));
+  }
+
   async importAndroid(userId: string, projectId: string, locale: string, xml: string, branch?: string) {
     const { rows, rejected } = parseAndroidXml(xml);
     if (rejected > 0) {
@@ -344,6 +350,14 @@ export class TranslationsService {
     const { rows, rejected } = parseIosStrings(strings);
     if (rejected > 0) {
       throw new BadRequestException(`${rejected} line(s) are not valid "key" = "value"; entries`);
+    }
+    return this.importJson(userId, projectId, locale, Object.fromEntries(rows), branch);
+  }
+
+  async importPo(userId: string, projectId: string, locale: string, po: string, branch?: string) {
+    const { rows, rejected } = parsePo(po);
+    if (rejected > 0) {
+      throw new BadRequestException(`${rejected} PO ${rejected === 1 ? 'entry' : 'entries'} rejected: plurals (msgid_plural/msgstr[n]), contexts (msgctxt) and malformed strings are not supported`);
     }
     return this.importJson(userId, projectId, locale, Object.fromEntries(rows), branch);
   }

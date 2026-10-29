@@ -128,6 +128,34 @@ try {
   const crossXml = await fetch(`${API}${P}/export/he/android`, { headers: { Authorization: `Bearer ${bt}` } });
   check('cross-team android export denied (404)', crossXml.status === 404, String(crossXml.status));
 
+  // PO (gettext) round-trip + rejection
+  const poIn = [
+    '# fixture comment',
+    'msgid "po.title"',
+    'msgstr "My \\"App\\""',
+    '',
+    'msgid "po.multi"',
+    'msgstr "line1\\nline2"',
+    '',
+    '#~ msgid "po.obsolete"',
+    '#~ msgstr "old"',
+    '',
+  ].join('\n');
+  const impPo = await call(`${P}/import/he`, { token: at, method: 'POST', body: { po: poIn } });
+  check('PO import accepted (obsolete skipped)', impPo.status === 201 && impPo.json.translationsUpserted === 2, JSON.stringify(impPo.json));
+  const poRes = await fetch(`${API}${P}/export/he/po`, { headers: { Authorization: `Bearer ${at}` } });
+  const poOut = await poRes.text();
+  check('PO export content-type', (poRes.headers.get('content-type') || '').includes('text/plain'));
+  check('PO export has escaped entries', poOut.includes('msgid "po.title"\nmsgstr "My \\"App\\""') && poOut.includes('msgstr "line1\\nline2"'), poOut.split('\n').find((l) => l.includes('po.title')) ?? '');
+  const poRound = await call(`${P}/import/he`, { token: at, method: 'POST', body: { po: poOut } });
+  check('PO export-import roundtrip stable', poRound.status === 201 && poRound.json.unchangedSkipped >= 2, JSON.stringify(poRound.json));
+  const poPlural = await call(`${P}/import/he`, { token: at, method: 'POST', body: { po: 'msgid "apple"\nmsgid_plural "apples"\nmsgstr[0] "%d"\nmsgstr[1] "%d"\n' } });
+  check('PO plural entry rejected (400)', poPlural.status === 400, String(poPlural.status));
+  const poBefore = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  const poMixed = await call(`${P}/import/he`, { token: at, method: 'POST', body: { po: 'msgid "po.mixed"\nmsgstr "should not land"\n\nmsgctxt "button"\nmsgid "po.ctx"\nmsgstr "Save"\n' } });
+  const poAfter = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('PO mixed valid+context import rejected (400) and leaves keys unchanged', poMixed.status === 400 && JSON.stringify(poBefore) === JSON.stringify(poAfter) && poAfter['po.mixed'] === undefined, String(poMixed.status));
+
   const runs = (await call(`${P}/imports`, { token: at })).json;
   check('CSV imports recorded as import runs', Array.isArray(runs) ? runs.length >= 2 : (runs.items?.length ?? 0) >= 2, JSON.stringify(runs).slice(0, 120));
 

@@ -68,10 +68,11 @@ interface CellState {
             <option value="json">JSON</option>
             <option value="csv">CSV (spreadsheet-safe)</option>
             <option value="android">Android XML</option>
+            <option value="po">PO (gettext)</option>
             <option value="ios">iOS strings</option>
           </select>
           <button (click)="exportFile()">Export {{ formatLabel() }}</button>
-          <label class="import">Import {{ formatLabel() }} <input type="file" name="importFile" accept=".json,.csv,.xml,.strings" (change)="importFile($event)" hidden /></label>
+          <label class="import">Import {{ formatLabel() }} <input type="file" name="importFile" accept=".json,.csv,.xml,.strings,.po" (change)="importFile($event)" hidden /></label>
           @if (ioFormat() === 'csv') {
             <div class="muted csv-note">CSV exports are spreadsheet-safe: values starting with formula characters get a protective prefix, so re-importing a safe export keeps those prefixes and changes stored values. For a lossless roundtrip use the API with <code>mode=raw</code>.</div>
           }
@@ -252,7 +253,7 @@ export class EditorComponent implements OnInit {
   cells = new Map<string, WritableSignal<CellState>>();
   search = signal(''); newKey = signal(''); newLocale = signal(''); ioLocale = signal('en'); bulkStatus = signal('REVIEWED');
   branch = signal('main'); branches = signal<BranchInfo[]>([]); newBranch = signal('');
-  mergePreview = signal<{ branchId: string; from: string; lines: string[]; previewAt: string } | null>(null); ioFormat = signal<'json' | 'csv' | 'android' | 'ios'>('json');
+  mergePreview = signal<{ branchId: string; from: string; lines: string[]; previewAt: string } | null>(null); ioFormat = signal<'json' | 'csv' | 'android' | 'ios' | 'po'>('json');
   glossary = signal<GlossaryTermItem[]>([]);
   filterTag = signal(''); filterStatus = signal<'' | TranslationStatus>('');
   tagEditFor = signal<string | null>(null);
@@ -596,7 +597,7 @@ export class EditorComponent implements OnInit {
       } else {
         content = await this.api.exportText(this.projectId, locale, fmt, this.branch());
         type = fmt === 'android' ? 'text/xml' : 'text/plain';
-        ext = fmt === 'android' ? 'xml' : 'strings';
+        ext = fmt === 'android' ? 'xml' : fmt === 'po' ? 'po' : 'strings';
       }
       const blob = new Blob([content], { type });
       const a = document.createElement('a');
@@ -607,7 +608,7 @@ export class EditorComponent implements OnInit {
     } catch (err) { this.error.set(err instanceof Error ? err.message : 'Export failed'); }
   }
   formatLabel(): string {
-    return this.ioFormat() === 'json' ? 'JSON' : this.ioFormat() === 'csv' ? 'CSV' : this.ioFormat() === 'android' ? 'Android XML' : 'iOS strings';
+    return this.ioFormat() === 'json' ? 'JSON' : this.ioFormat() === 'csv' ? 'CSV' : this.ioFormat() === 'android' ? 'Android XML' : this.ioFormat() === 'po' ? 'PO (gettext)' : 'iOS strings';
   }
   async importFile(event: Event) {
     const input = event.target as HTMLInputElement;
@@ -618,7 +619,7 @@ export class EditorComponent implements OnInit {
       const text = await file.text();
       const payload = fmt === 'json' ? { entries: JSON.parse(text) }
         : fmt === 'csv' ? { csv: text }
-        : fmt === 'android' ? { xml: text } : { strings: text };
+        : fmt === 'android' ? { xml: text } : fmt === 'po' ? { po: text } : { strings: text };
       const res = await this.api.importPayload(this.projectId, this.ioLocale(), payload, this.branch());
       this.notice.set(`Imported ${res.keysCreated} keys, ${res.translationsUpserted} translations (${this.formatLabel()}, ${this.ioLocale()}).`);
       await this.reload();

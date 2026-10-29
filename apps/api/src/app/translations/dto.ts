@@ -28,6 +28,9 @@ export class ImportJsonDto {
 
   @IsOptional() @IsString() @MaxLength(2_000_000)
   strings?: string;
+
+  @IsOptional() @IsString() @MaxLength(2_000_000)
+  po?: string;
   @IsOptional() @IsString()
   locale?: string;
 

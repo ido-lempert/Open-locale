@@ -171,8 +171,9 @@ export const OPENAPI = {
     '/api/projects/{projectId}/export/{locale}/csv': { get: p('Export a locale as CSV', 'import/export') },
     '/api/projects/{projectId}/export/{locale}/android': { get: p('Export a locale as Android strings.xml', 'import/export') },
     '/api/projects/{projectId}/export/{locale}/ios': { get: p('Export a locale as iOS .strings', 'import/export') },
+    '/api/projects/{projectId}/export/{locale}/po': { get: p('Export a locale as PO (gettext)', 'import/export') },
     '/api/projects/{projectId}/import/{locale}': {
-      post: p('Import translations (JSON, CSV, Android XML or iOS strings; atomic)', 'import/export', true),
+      post: p('Import translations (JSON, CSV, Android XML, iOS strings or PO; atomic)', 'import/export', true),
     },
     '/api/projects/{projectId}/imports': { get: p('List import runs', 'import/export') },
     '/api/projects/{projectId}/tm/suggest': { get: p('Translation memory suggestions', 'translations') },
