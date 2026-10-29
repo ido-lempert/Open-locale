@@ -100,13 +100,16 @@ try {
   const hashes = await prisma.recoveryCode.findMany({ where: { user: { email } } });
   check('recovery codes stored hashed only', hashes.length === 8 && hashes.every((h) => /^[0-9a-f]{64}$/.test(h.codeHash)) && !hashes.some((h) => codes.includes(h.codeHash)));
 
-  // Step-up: the PRE-2FA session JWT can no longer mint/list/revoke tokens
-  // or read/manage 2FA - the account now has a second factor it never passed.
+  // Epoch revocation: enabling 2FA bumps the account's auth epoch, so the
+  // pre-2FA 7-day session JWT dies immediately - on session-only routes AND
+  // on ordinary data routes. No window where an old session lingers.
   const oldTok = await call('/auth/tokens', { jwt, method: 'POST', body: { name: 'x', scopes: ['read'] } });
   const oldTokList = await call('/auth/tokens', { jwt });
   const oldStatus = await call('/auth/2fa/status', { jwt });
   const oldDisable = await call('/auth/2fa/disable', { jwt, method: 'POST', body: { password: 'pass1234', code: '000000' } });
-  check('pre-2FA session loses token mint/list + 2FA manage (step-up 403)', [oldTok, oldTokList, oldStatus, oldDisable].every((r) => r.status === 403), `got ${[oldTok, oldTokList, oldStatus, oldDisable].map((r) => r.status)}`);
+  const oldData = await call('/projects', { jwt });
+  const oldSetup = await call('/auth/2fa/setup', { jwt, method: 'POST', body: { password: 'pass1234' } });
+  check('pre-2FA session revoked at enable: 401 on manage AND data routes', [oldTok, oldTokList, oldStatus, oldDisable, oldData, oldSetup].every((r) => r.status === 401), `got ${[oldTok, oldTokList, oldStatus, oldDisable, oldData, oldSetup].map((r) => r.status)}`);
 
   // Login now requires the second factor.
   const noCode = await call('/auth/login', { method: 'POST', body: { email, password: 'pass1234' } });
@@ -149,6 +152,10 @@ try {
   const statusAfterUse = (await call('/auth/2fa/status', { jwt: jwtStepped })).json;
   check('status reports remaining recovery codes', statusAfterUse.enabled === true && statusAfterUse.recoveryCodesRemaining === 6, JSON.stringify(statusAfterUse));
 
+  // A pending setup must never overwrite an ENABLED secret.
+  const setupWhileEnabled = await call('/auth/2fa/setup', { jwt: jwtStepped, method: 'POST', body: { password: 'pass1234' } });
+  check('setup while enabled rejected (no secret overwrite)', setupWhileEnabled.status === 409, `got ${setupWhileEnabled.status}`);
+
   // Session-only management: API tokens cannot read or change 2FA.
   const apiSetup = await call('/auth/2fa/setup', { apiKey: preTok.token, method: 'POST', body: { password: 'pass1234' } });
   const apiStatus = await call('/auth/2fa/status', { apiKey: preTok.token });
@@ -180,21 +187,44 @@ try {
   const open2 = await call('/auth/login', { method: 'POST', body: { email, password: 'pass1234' } });
   check('login single-factor again after disable', open2.status === 200, `got ${open2.status}`);
   const oldRecovery = await call('/auth/2fa/disable', { jwt: jwtStepped, method: 'POST', body: { password: 'pass1234', code: codes[2] } });
-  check('disable cleared secrets and recovery codes', oldRecovery.status === 401 && (await prisma.recoveryCode.count({ where: { user: { email } } })) === 0, `got ${oldRecovery.status}`);
-  // Production fail-closed: with NODE_ENV=production and no
-  // TOTP_ENCRYPTION_KEY, 2FA setup must refuse rather than use the dev key.
+  check('disable revoked the stepping session too (epoch bump)', oldRecovery.status === 401, `got ${oldRecovery.status}`);
+  check('disable cleared secrets and recovery codes', (await prisma.recoveryCode.count({ where: { user: { email } } })) === 0);
+
+  // Lifecycle generation binding: an MFA JWT from a previous 2FA generation
+  // must never become valid again after disable + re-enable with a NEW
+  // secret. Re-enable, then prove the old MFA token stays dead and the old
+  // secret's codes no longer authenticate.
   {
-    api.kill('SIGTERM'); // free the port for the production-mode instance
-    await new Promise((r) => setTimeout(r, 1200));
-    const prodApi = spawn(process.execPath, [join(root, 'dist', 'apps', 'api', 'main.js')], {
-      env: { ...process.env, DATABASE_URL: url, JWT_SECRET: '2fa-secret', NODE_ENV: 'production', TOTP_ENCRYPTION_KEY: '', PORT: String(API_PORT) }, stdio: 'pipe' });
-    try {
-      if (!(await waitFor(`${API}/projects`))) throw new Error('prod API did not start');
-      const u2 = (await call('/auth/signup', { method: 'POST', body: { email: `fp${ts}@t.dev`, password: 'pass1234', displayName: 'fp' } })).json;
-      const prodSetup = await call('/auth/2fa/setup', { jwt: u2.accessToken, method: 'POST', body: { password: 'pass1234' } });
-      check('production without TOTP_ENCRYPTION_KEY fails closed', prodSetup.status === 500, `got ${prodSetup.status}`);
-    } finally { prodApi.kill('SIGTERM'); await new Promise((r) => setTimeout(r, 800)); }
+    const relogin = (await call('/auth/login', { method: 'POST', body: { email, password: 'pass1234' } })).json;
+    const setup2 = (await call('/auth/2fa/setup', { jwt: relogin.accessToken, method: 'POST', body: { password: 'pass1234' } })).json;
+    check('re-setup after disable returns a fresh secret', /^[A-Z2-7]{32}$/.test(setup2.secret) && setup2.secret !== setup.secret);
+    const en2 = await call('/auth/2fa/enable', { jwt: relogin.accessToken, method: 'POST', body: { password: 'pass1234', code: totp(setup2.secret) } });
+    check('re-enable with new secret succeeds', en2.status === 200 || en2.status === 201, `got ${en2.status}`);
+    const staleMfa = await call('/projects', { jwt: jwtStepped });
+    check('MFA JWT from previous 2FA generation stays revoked after re-enable', staleMfa.status === 401, `got ${staleMfa.status}`);
+    // Wait past the counter consumed by re-enable before logging in again.
+    await new Promise((r) => setTimeout(r, 31000));
+    const oldSecretLogin = await call('/auth/login', { method: 'POST', body: { email, password: 'pass1234', totpCode: totp(setup.secret) } });
+    check('old secret codes rejected after re-enable with new secret', oldSecretLogin.status === 401, `got ${oldSecretLogin.status}`);
+    const newSecretLogin = await call('/auth/login', { method: 'POST', body: { email, password: 'pass1234', totpCode: totp(setup2.secret) } });
+    check('new secret codes accepted after re-enable', newSecretLogin.status === 200, `got ${newSecretLogin.status}`);
   }
+  // Startup fail-closed: a missing/weak/known-fallback TOTP key must stop
+  // the process from ever listening - in production, on any non-loopback
+  // bind, and whenever the variable holds the built-in development value.
+  const expectRefusesStart = async (label, env) => {
+    const p = spawn(process.execPath, [join(root, 'dist', 'apps', 'api', 'main.js')], {
+      env: { ...process.env, DATABASE_URL: url, JWT_SECRET: '2fa-secret', PORT: '3993', ...env }, stdio: 'pipe' });
+    const exitCode = await new Promise((resolve) => {
+      const t = setTimeout(() => resolve('still-running'), 9000);
+      p.on('exit', (c) => { clearTimeout(t); resolve(c); });
+    });
+    if (exitCode === 'still-running') p.kill('SIGKILL');
+    check(label, exitCode !== 'still-running' && exitCode !== 0, `exit=${exitCode}`);
+  };
+  await expectRefusesStart('production without TOTP_ENCRYPTION_KEY refuses to start', { NODE_ENV: 'production', TOTP_ENCRYPTION_KEY: '' });
+  await expectRefusesStart('non-loopback bind without TOTP_ENCRYPTION_KEY refuses to start', { NODE_ENV: 'development', HOST: '0.0.0.0', TOTP_ENCRYPTION_KEY: '' });
+  await expectRefusesStart('known fallback value as TOTP_ENCRYPTION_KEY refused at startup', { NODE_ENV: 'development', TOTP_ENCRYPTION_KEY: 'open-locale-dev-totp-key' });
 } finally {
   if (prisma) await prisma.$disconnect();
   if (api) api.kill('SIGTERM');

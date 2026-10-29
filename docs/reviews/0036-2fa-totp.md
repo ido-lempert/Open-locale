@@ -105,3 +105,14 @@ e2e-visual additions (scripts/e2e-visual.mjs, 72 checks green):
 - No SSO/OIDC yet.
 - Lockout state is per account in the DB (survives restarts), but there
   is no global/IP rate limiting yet.
+
+## Second hardening pass (epoch revocation + startup fail-closed)
+
+1. Startup fail-closed key enforcement: the API refuses to boot when (a) NODE_ENV=production without a strong explicit TOTP_ENCRYPTION_KEY (>=16 chars), (b) any non-loopback bind without one, or (c) the variable holds the known built-in development value - in every environment. Verified by spawning the compiled API under all three conditions: the process exits non-zero and never listens (replaces the earlier setup-time 500 behavior).
+2. Session epoch revocation: users.authEpoch, carried as a JWT epoch claim. Enabling or disabling 2FA increments the epoch, revoking every earlier JWT - a pre-2FA 7-day session dies on the very next request after enable (tested 401 on token mint/list, 2FA status/disable/setup AND ordinary data routes). Every JWT-authenticated request re-checks epoch + live totpEnabled against the database. API bearer tokens deliberately skip epoch/2FA: scoped credentials outside the session model, verified still serving read-scoped GET while blocked from all session-only routes.
+3. Generation binding: because disable also bumps the epoch, an MFA-completed JWT from a previous 2FA generation can never become valid again after re-enable with a new secret. Lifecycle test: stale MFA JWT gets 401 after re-enable; the old secret's codes are rejected; the new secret's codes are accepted.
+4. Pending-setup overwrite guard: POST /auth/2fa/setup returns 409 while 2FA is enabled, so a replayed/duplicated setup cannot rotate the live secret (a fresh setup is only possible after an authenticated disable). Tested.
+5. Honest client re-auth: enable/disable revoke the current session too, so the web app no longer keeps the user visually signed in on a dead token. Enable shows the one-time recovery codes, then "I've stored these - sign in again" routes to the login page with a re-auth notice; disable signs out immediately with a notice. The clean enabled-state screenshot is captured on the fresh, epoch-valid session after re-login. Verified in e2e (notice shown, re-login with TOTP code succeeds, clean state rendered).
+6. Recovery codes remain test-account fixtures only; no real accounts exist.
+
+Suite: scripts/2fa-test.mjs 37 checks 0 FAIL; e2e-visual 75 PASS 0 FAIL.

@@ -18,6 +18,7 @@ model User {
   totpLastCounter Int?   // replay protection: codes at or below this counter are rejected
   totpFailedAttempts Int @default(0)
   totpLockedUntil DateTime?
+  authEpoch    Int       @default(0) // session generation: bumped on 2FA enable/disable, revoking earlier JWTs
   recoveryCodes RecoveryCode[]
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt

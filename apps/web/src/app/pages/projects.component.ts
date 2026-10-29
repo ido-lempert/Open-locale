@@ -24,7 +24,7 @@ import { ApiService, Project } from '../api.service';
         <h2>Two-factor authentication</h2>
         @if (tfa(); as t) {
           @if (t.enabled) {
-            <p class="muted">Enabled. {{ t.recoveryCodesRemaining }} recovery codes remain.</p>
+            <p class="muted">Enabled. {{ t.recoveryCodesRemaining }} recovery codes remain. Changing two-factor settings signs out all other sessions.</p>
             <form class="inline" (ngSubmit)="disableTfa()">
               <input aria-label="Current password" type="password" placeholder="Current password" [ngModel]="tfaPassword()" (ngModelChange)="tfaPassword.set($event)" name="tfaPassword" required autocomplete="current-password" />
               <input aria-label="Current 2FA code" placeholder="TOTP or recovery code" [ngModel]="tfaCode()" (ngModelChange)="tfaCode.set($event)" name="tfaCode" required />
@@ -52,7 +52,8 @@ import { ApiService, Project } from '../api.service';
           <ul class="locale-list tfa-codes">
             @for (c of tfaCodes(); track c) { <li><code>{{ c }}</code></li> }
           </ul>
-          <button (click)="dismissTfaCodes()">I've stored these</button>
+          <p class="muted">Your current session was signed out when you enabled two-factor.</p>
+          <button class="primary" (click)="dismissTfaCodes()">I've stored these - sign in again</button>
         }
       </section>
       <ul class="cards">
@@ -91,7 +92,10 @@ export class ProjectsComponent implements OnInit {
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }
-  dismissTfaCodes() { this.tfaCodes.set([]); }
+  dismissTfaCodes() {
+    this.tfaCodes.set([]);
+    this.logout('Two-factor authentication is on - sign in again with your code.');
+  }
   async enableTfa() {
     this.busy.set(true); this.error.set('');
     try {
@@ -109,7 +113,9 @@ export class ProjectsComponent implements OnInit {
     try {
       await this.api.disable2fa(this.tfaPassword(), this.tfaCode().trim());
       this.tfaCode.set(''); this.tfaPassword.set(''); this.tfaCodes.set([]);
-      this.tfa.set(await this.api.get2faStatus());
+      // Disabling bumps the session epoch too - this token is already
+      // revoked, so re-authenticate instead of refetching with it.
+      this.logout('Two-factor authentication disabled - sign in again.');
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }
@@ -126,5 +132,8 @@ export class ProjectsComponent implements OnInit {
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }
-  logout() { this.api.token = null; location.href = '/login'; }
+  logout(reason?: string) {
+    this.api.token = null;
+    location.href = reason ? `/login?reason=${encodeURIComponent(reason)}` : '/login';
+  }
 }

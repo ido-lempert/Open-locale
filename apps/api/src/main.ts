@@ -2,6 +2,7 @@ import { Logger, RequestMethod, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app/app.module';
 import { DEV_FALLBACK_JWT_SECRET } from './app/auth/dev-secret';
+import { DEV_FALLBACK_TOTP_KEY } from './app/auth/totp-crypto';
 
 const isLoopbackHost = (host: string) =>
   ['127.0.0.1', '::1', 'localhost'].includes(host);
@@ -11,16 +12,30 @@ async function bootstrap() {
     throw new Error('JWT_SECRET must be set in production');
   }
   const host = process.env.HOST;
+  const totpKey = process.env.TOTP_ENCRYPTION_KEY;
+  const totpKeyWeak = !totpKey || totpKey.length < 16;
+  // Setting the variable to the well-known built-in value is not configuring
+  // a key - reject it everywhere, at startup, whatever the environment.
+  if (totpKey === DEV_FALLBACK_TOTP_KEY) {
+    throw new Error('TOTP_ENCRYPTION_KEY must not be the built-in development value');
+  }
+  if (process.env.NODE_ENV === 'production' && totpKeyWeak) {
+    throw new Error(
+      'A strong explicit TOTP_ENCRYPTION_KEY (>=16 chars, not the built-in development value) is required in production - failing closed at startup.',
+    );
+  }
   // Development default: loopback only. Listening beyond localhost requires an
   // explicit HOST and a real JWT_SECRET - setting the variable to the known
   // built-in value does not count as configuring a secret.
   if (
     host &&
     !isLoopbackHost(host) &&
-    (!process.env.JWT_SECRET || process.env.JWT_SECRET === DEV_FALLBACK_JWT_SECRET)
+    (!process.env.JWT_SECRET ||
+      process.env.JWT_SECRET === DEV_FALLBACK_JWT_SECRET ||
+      totpKeyWeak)
   ) {
     throw new Error(
-      `Refusing to bind ${host}: a non-loopback listener needs an explicit non-default JWT_SECRET (the built-in development secret is not acceptable).`,
+      `Refusing to bind ${host}: a non-loopback listener needs explicit non-default JWT_SECRET and TOTP_ENCRYPTION_KEY (built-in development values are not acceptable).`,
     );
   }
   const app = await NestFactory.create(AppModule);

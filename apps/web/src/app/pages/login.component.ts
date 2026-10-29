@@ -1,6 +1,6 @@
 import { Component, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../api.service';
 
 @Component({
@@ -10,6 +10,7 @@ import { ApiService } from '../api.service';
     <main class="auth-card">
       <h1>Open-locale</h1>
       <p class="muted">Open-source localization management</p>
+        @if (notice()) { <p class="muted" role="status" name="loginNotice">{{ notice() }}</p> }
       <div class="tabs">
         <button [class.active]="mode() === 'login'" (click)="mode.set('login')">Log in</button>
         <button [class.active]="mode() === 'signup'" (click)="mode.set('signup')">Sign up</button>
@@ -38,7 +39,10 @@ export class LoginComponent {
   mode = signal<'login' | 'signup'>('login');
   email = ''; password = ''; displayName = ''; totpCode = '';
   busy = signal(false); error = signal('');
-  constructor(private api: ApiService, private router: Router) {}
+  notice = signal('');
+  constructor(private api: ApiService, private router: Router, route: ActivatedRoute) {
+    this.notice.set(route.snapshot.queryParamMap.get('reason') ?? '');
+  }
   async submit() {
     this.busy.set(true); this.error.set('');
     try {

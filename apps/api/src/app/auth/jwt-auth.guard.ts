@@ -29,6 +29,9 @@ export class JwtAuthGuard implements CanActivate {
     if (!principal) {
       throw new UnauthorizedException('Valid Bearer token or X-Api-Key required');
     }
+    // JWT sessions are re-authorized live (epoch + MFA requirement);
+    // API tokens are scoped credentials outside the 2FA model.
+    await this.auth.authorizeSession(principal);
     const method = (request.method ?? 'GET').toUpperCase();
     const isRead = method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
     if (principal.via === 'api-token' && !isRead && !(principal.scopes ?? []).includes('write')) {

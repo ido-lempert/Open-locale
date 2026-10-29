@@ -5,7 +5,7 @@
 // other machines.
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 
-const DEV_FALLBACK_TOTP_KEY = 'open-locale-dev-totp-key';
+export const DEV_FALLBACK_TOTP_KEY = 'open-locale-dev-totp-key';
 
 function key(): Buffer {
   const raw = process.env.TOTP_ENCRYPTION_KEY;
@@ -16,6 +16,11 @@ function key(): Buffer {
       throw new Error('TOTP_ENCRYPTION_KEY is required when NODE_ENV=production; refusing the development fallback');
     }
     return createHash('sha256').update(DEV_FALLBACK_TOTP_KEY).digest();
+  }
+  if (raw === DEV_FALLBACK_TOTP_KEY) {
+    // Setting the variable to the well-known built-in value is not
+    // configuring a key - refuse it everywhere, including development.
+    throw new Error('TOTP_ENCRYPTION_KEY must not be the built-in development value');
   }
   if (raw.length < 16) throw new Error('TOTP_ENCRYPTION_KEY must be at least 16 characters');
   return createHash('sha256').update(raw).digest();

@@ -687,23 +687,26 @@ try {
   check('2FA enabled via UI, 8 recovery codes shown once', tfaOn);
   const codesShown = await page.$$eval('.tfa-codes code', (els) => els.map((e) => e.textContent));
   check('recovery codes shaped XXXXXXXX-XXXXXXXX in UI', codesShown.length === 8 && codesShown.every((c) => /^[0-9A-Z]{8}-[0-9A-Z]{8}$/.test(c)));
-  // Dismiss the one-time codes, then capture the clean enabled state -
-  // credentials (even throwaway demo ones) never appear in captures.
-  await page.evaluate(() => { [...document.querySelectorAll('.panel.tfa button')].find((b) => b.textContent.includes("I've stored these")).click(); });
-  await new Promise((r) => setTimeout(r, 400));
-  const noCodes = await page.evaluate(() => document.querySelectorAll('.tfa-codes li').length === 0 && (document.body.textContent || '').includes('recovery codes remain'));
-  check('dismissing codes leaves clean enabled state', noCodes);
-  await page.evaluate(() => { document.querySelector('.panel.tfa')?.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70); });
-  await new Promise((r) => setTimeout(r, 300));
-  await shot('editor-30-2fa.png');
-  await page.evaluate(() => { [...document.querySelectorAll('header.bar button')].find((b) => b.textContent === 'Log out').click(); });
+  // Confirming the stored codes ends the revoked session: the app routes to
+  // the login page with a re-auth notice instead of staying signed in on a
+  // dead token.
+  await page.evaluate(() => { [...document.querySelectorAll('.panel.tfa button')].find((b) => b.textContent.includes("I've stored these - sign in again")).click(); });
   await page.waitForSelector('.auth-card', { timeout: 10000 });
+  const noticeShown = await page.evaluate(() => (document.body.textContent || '').includes('sign in again with your code'));
+  check('after enable, session signed out and login shows re-auth notice', noticeShown);
   await page.type('input[name=email]', 'demo@open-locale.dev');
   await page.type('input[name=password]', 'demo-password-1');
   await page.type('input[name=totpCode]', totp(tfaSecret, 1));
   await page.click('button.primary');
   const relogged = await page.waitForSelector('.create', { timeout: 10000 }).then(() => true).catch(() => false);
   check('login with TOTP code via UI succeeds', relogged);
+  // Clean enabled state after re-auth: no codes rendered, panel shows the
+  // enabled status and the disable form. Status loads async - wait for it.
+  const cleanState = await page.waitForFunction(() => document.querySelectorAll('.tfa-codes li').length === 0 && (document.body.textContent || '').includes('recovery codes remain'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('re-authenticated session shows clean enabled state (no codes)', cleanState);
+  await page.evaluate(() => { document.querySelector('.panel.tfa')?.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70); });
+  await new Promise((r) => setTimeout(r, 300));
+  await shot('editor-30-2fa.png');
 
   // --- Progress report ---
   await page.setViewport({ width: 1280, height: 900 });

@@ -13,6 +13,9 @@ export interface AuthPrincipal {
   scopes?: string[];
   // True when this session completed the account's second factor at login.
   mfa?: boolean;
+  // Session generation: bumped whenever 2FA is enabled or disabled, which
+  // revokes every JWT issued earlier. API tokens are not epoch-bound.
+  epoch?: number;
 }
 
 function sha256(value: string): string {
@@ -44,7 +47,7 @@ export class AuthService {
         },
       },
     });
-    return this.issueTokens(user.id, user.email, false);
+    return this.issueTokens(user.id, user.email, false, user.authEpoch);
   }
 
   // Failed second-factor attempts lock the account's 2FA for 10 minutes
@@ -86,7 +89,7 @@ export class AuthService {
         data: { totpFailedAttempts: 0, totpLockedUntil: null },
       });
     }
-    return this.issueTokens(user.id, user.email, user.totpEnabled);
+    return this.issueTokens(user.id, user.email, user.totpEnabled, user.authEpoch);
   }
 
   // Accepts a current TOTP code (replay-protected by last-seen counter) or
@@ -150,7 +153,7 @@ export class AuthService {
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: userId },
-        data: { totpEnabled: true, totpLastCounter: Math.floor(Date.now() / 1000 / 30), totpFailedAttempts: 0, totpLockedUntil: null },
+        data: { totpEnabled: true, totpLastCounter: Math.floor(Date.now() / 1000 / 30), totpFailedAttempts: 0, totpLockedUntil: null, authEpoch: { increment: 1 } },
       });
       await tx.recoveryCode.deleteMany({ where: { userId } });
       await tx.recoveryCode.createMany({ data: codes.map((c) => ({ userId, codeHash: hashRecoveryCode(c) })) });
@@ -168,7 +171,7 @@ export class AuthService {
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: userId },
-        data: { totpEnabled: false, totpSecret: null, totpLastCounter: null, totpFailedAttempts: 0, totpLockedUntil: null },
+        data: { totpEnabled: false, totpSecret: null, totpLastCounter: null, totpFailedAttempts: 0, totpLockedUntil: null, authEpoch: { increment: 1 } },
       });
       await tx.recoveryCode.deleteMany({ where: { userId } });
     });
@@ -182,9 +185,9 @@ export class AuthService {
     return { enabled: user.totpEnabled, recoveryCodesRemaining: user.totpEnabled ? remaining : 0 };
   }
 
-  private issueTokens(userId: string, email: string, mfa: boolean) {
+  private issueTokens(userId: string, email: string, mfa: boolean, epoch: number) {
     return {
-      accessToken: this.jwt.sign({ sub: userId, email, mfa }),
+      accessToken: this.jwt.sign({ sub: userId, email, mfa, epoch }),
       user: { id: userId, email },
     };
   }
@@ -202,10 +205,37 @@ export class AuthService {
 
   async verifyAccessToken(token: string): Promise<AuthPrincipal | null> {
     try {
-      const payload = this.jwt.verify<{ sub: string; email: string; mfa?: boolean }>(token);
-      return { userId: payload.sub, email: payload.email, via: 'jwt', mfa: payload.mfa === true };
+      const payload = this.jwt.verify<{ sub: string; email: string; mfa?: boolean; epoch?: number }>(token);
+      return {
+        userId: payload.sub,
+        email: payload.email,
+        via: 'jwt',
+        mfa: payload.mfa === true,
+        epoch: payload.epoch ?? 0,
+      };
     } catch {
       return null;
+    }
+  }
+
+  // Live session authorization for JWT-authenticated requests: the token's
+  // epoch must match the account's current epoch (enabling/disabling 2FA
+  // revokes all earlier sessions, so a pre-2FA 7-day token dies at enable
+  // and a pre-disable MFA token can never become valid again after a
+  // re-enable with a new secret), and an account with 2FA on requires a
+  // second-factor-completed session. API tokens skip this (via 'api-token'):
+  // they are scoped credentials that never pass 2FA - documented boundary.
+  async authorizeSession(principal: AuthPrincipal): Promise<void> {
+    if (principal.via !== 'jwt') return;
+    const user = await this.prisma.user.findUnique({
+      where: { id: principal.userId },
+      select: { authEpoch: true, totpEnabled: true },
+    });
+    if (!user || user.authEpoch !== (principal.epoch ?? 0)) {
+      throw new UnauthorizedException('Session revoked - sign in again');
+    }
+    if (user.totpEnabled && principal.mfa !== true) {
+      throw new ForbiddenException('Two-factor authentication required - sign in again with your code');
     }
   }
 
