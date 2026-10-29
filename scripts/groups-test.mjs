@@ -128,6 +128,40 @@ try {
   const bList = await call(`/projects/${pid}/groups`, { jwt: memberB.accessToken });
   check('removed team member cannot even list groups', bList.status === 404, String(bList.status));
 
+  // Protected group cannot be entered sideways: an admin cannot enroll
+  // anyone (self or other) into an ADMIN group, and the failed demote above
+  // means the group really still is ADMIN when they try.
+  await call(`/projects/${pid}/groups/${group.id}`, { jwt: O, method: 'PATCH', body: { role: 'ADMIN' } });
+  const enrollSelf = await call(`/projects/${pid}/groups/${group.id}/members/${admin.user.id}`, { jwt: A(), method: 'PUT' });
+  check('admin cannot enroll self into an ADMIN group', enrollSelf.status === 403, String(enrollSelf.status));
+  const enrollOther = await call(`/projects/${pid}/groups/${group.id}/members/${memberA.user.id}`, { jwt: A(), method: 'PUT' });
+  check('admin cannot enroll another user into an ADMIN group', enrollOther.status === 403, String(enrollOther.status));
+  const stillAdmin = await call(`/projects/${pid}/groups`, { jwt: O });
+  check('protected group role unchanged after failed mutations', stillAdmin.json.find((g) => g.id === group.id).role === 'ADMIN');
+
+  // Cross-team isolation: a group id from another team is 404 on this
+  // project, and a user who belongs only to another team cannot enroll.
+  const owner2 = await signup('gowner2');
+  const pid2 = (await call('/projects', { jwt: owner2.accessToken, method: 'POST', body: { name: 'Other', slug: `other-${Date.now()}`, baseLocale: 'en', locales: ['en'] } })).json.id;
+  await call(`/projects/${pid2}/members`, { jwt: owner2.accessToken, method: 'POST', body: { email: outsider.user.email } });
+  const group2 = (await call(`/projects/${pid2}/groups`, { jwt: owner2.accessToken, method: 'POST', body: { name: 'elsewhere', role: 'MEMBER' } })).json;
+  const xGid = await call(`/projects/${pid}/groups/${group2.id}`, { jwt: O, method: 'PATCH', body: { name: 'x' } });
+  check('cross-team group id is 404 on this project', xGid.status === 404, String(xGid.status));
+  const xGidDel = await call(`/projects/${pid}/groups/${group2.id}`, { jwt: O, method: 'DELETE' });
+  check('cross-team group id delete is 404', xGidDel.status === 404, String(xGidDel.status));
+  const xUid = await call(`/projects/${pid}/groups/${group.id}/members/${outsider.user.id}`, { jwt: O, method: 'PUT' });
+  check('user of another team cannot enroll here (400)', xUid.status === 400, String(xUid.status));
+
+  // API tokens: management obeys token scope AND the owner's effective role.
+  const roToken = (await call('/auth/tokens', { jwt: O, method: 'POST', body: { name: 'grp-ro', scopes: ['read'] } })).json;
+  const roList = await fetch(`${API}/projects/${pid}/groups`, { headers: { 'X-Api-Key': roToken.token } });
+  check('read-only token can list groups', roList.status === 200, String(roList.status));
+  const roCreate = await fetch(`${API}/projects/${pid}/groups`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Api-Key': roToken.token }, body: JSON.stringify({ name: 'tk', role: 'MEMBER' }) });
+  check('read-only token cannot create a group', roCreate.status === 403, String(roCreate.status));
+  const memberToken = (await call('/auth/tokens', { jwt: memberA.accessToken, method: 'POST', body: { name: 'grp-mem', scopes: ['read', 'write'] } })).json;
+  const memCreate = await fetch(`${API}/projects/${pid}/groups`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Api-Key': memberToken.token }, body: JSON.stringify({ name: 'tk2', role: 'MEMBER' }) });
+  check('write token of a MEMBER cannot create a group', memCreate.status === 403, String(memCreate.status));
+
   const del = await call(`/projects/${pid}/groups/${group.id}`, { jwt: O, method: 'DELETE' });
   check('owner deletes the group', del.status === 200, String(del.status));
 } finally {

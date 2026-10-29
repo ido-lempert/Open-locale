@@ -42,7 +42,16 @@ contributor access, groups, admin roles".
   only ever shrink, never widen, access.
 
 ## QA / integration
-- scripts/groups-test.mjs: 25/25 PASS on real PG + HTTP - list/manage
+- scripts/groups-test.mjs: 34/34 PASS on real PG + HTTP - list/manage
   authz, rank rules both directions, union semantics (ar + he, en denied),
   live promotion/demotion, group removal vs direct grant survival, outer
-  boundary after team removal, delete. Full sweep run separately.
+  boundary after team removal, no sideways enrollment into a protected
+  ADMIN group (self or other, before and after a refused demote),
+  cross-team group id = 404, cross-team user enrollment rejected,
+  API-token discipline (read-only token lists but cannot mutate; a write
+  token owned by a MEMBER still cannot manage groups), delete.
+- Wrapper audit: every scripts/*-test.mjs exits nonzero on failure
+  (verified individually); the old sweep additionally lost command exit
+  codes behind a grep pipe, so a crash printing no FAIL lines could read
+  green. Sweep rewritten to require rc=0 AND zero FAIL lines per leg,
+  with per-leg logs under /tmp/sweep-legs/. Full sweep run separately.
