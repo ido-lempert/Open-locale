@@ -23,14 +23,17 @@ ownership marker only, with no way to see "tasks I am responsible for".
 - Designer: filter is a plain select next to the existing status
   filter; no new layout (verified wrapping at 480px in the previous
   slice's shots of the same header pattern).
-- Security: the filter only ever narrows by the *caller's* id; there is
-  no `assignee=<other user>` parameter, so it cannot be used to probe
-  other members' workloads beyond what the full list already shows.
-  Project membership is still enforced by getFor before any query.
-- QA: tasks-test +4 checks (mine includes group-assigned, excludes
-  others' and unassigned, owner direct-only, composes with status);
-  e2e-visual +2 checks (filter hides a group task for a non-member,
-  "everyone" restores it).
+- Security: this is a convenience filter, not a privacy boundary - the
+  unfiltered list already shows every team task with its assignee, so
+  the filter adds no information and withholds none. There is no
+  `assignee=<other user>` parameter; the only supported value is `me`,
+  resolved from the caller's token. Project membership is still
+  enforced by getFor before any query.
+- QA: tasks-test +6 checks (mine includes group-assigned, excludes
+  others' and unassigned, owner direct-only, composes with status, and
+  consecutive queries across a live leave/rejoin flip the result with
+  the same token - no re-login); e2e-visual +2 checks (filter hides a
+  group task for a non-member, "everyone" restores it).
 
 ## Limits
 

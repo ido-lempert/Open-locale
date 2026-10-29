@@ -120,6 +120,14 @@ try {
   const bobMineOpen = (await call(`${base}?assignee=me&status=OPEN`, { token: bt })).json;
   check('mine composes with status filter', bobMineOpen.some((t) => t.id === t3.id));
 
+  // Live membership changes take effect on the next query, same token.
+  await call(`/projects/${proj.id}/groups/${gr.id}/members/${b.user.id}`, { token: at, method: 'DELETE' });
+  const bobAfterLeave = (await call(`${base}?assignee=me`, { token: bt })).json;
+  check('leaving the group removes the task from mine immediately', !bobAfterLeave.some((t) => t.id === t3.id), JSON.stringify(bobAfterLeave.map((t) => t.title)));
+  await call(`/projects/${proj.id}/groups/${gr.id}/members/${b.user.id}`, { token: at, method: 'PUT' });
+  const bobAfterRejoin = (await call(`${base}?assignee=me`, { token: bt })).json;
+  check('rejoining the group restores the task to mine immediately', bobAfterRejoin.some((t) => t.id === t3.id));
+
   for (const id of [t3.id, t4.id, t5.id]) await call(`${base}/${id}`, { token: at, method: 'DELETE' });
 
   const ro = (await call('/auth/tokens', { token: at, method: 'POST', body: { name: 'ro', scopes: ['read'] } })).json;
