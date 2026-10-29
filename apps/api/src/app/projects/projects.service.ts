@@ -236,16 +236,22 @@ export class ProjectsService {
   async deleteGroup(userId: string, projectId: string, groupId: string) {
     const { group } = await this.groupFor(userId, projectId, groupId);
     await this.prisma.$transaction(async (tx) => {
-      // Tasks assigned to the group lose the assignment via ON DELETE SET
-      // NULL. Audit each affected task (capped at 50) so the feed shows the
-      // per-task change, not only the group deletion.
-      const total = await tx.task.count({ where: { assigneeGroupId: groupId } });
-      const affected = await tx.task.findMany({
-        where: { assigneeGroupId: groupId }, select: { id: true, title: true },
-        orderBy: { createdAt: 'asc' }, take: 50,
-      });
+      // Exclusive side of the task-assignment advisory pair: in-flight
+      // group assignments settle before we read the affected set, and new
+      // ones block until this transaction commits (then 400 on the missing
+      // group) - so the RETURNING set is exactly what this deletion
+      // unassigns, never an observed count that a race could skew.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${projectId + '::task-assignment'})::bigint)`;
+      // Unassign in the same statement that reports the affected tasks:
+      // the count can never drift from the actual result, and the FK's
+      // ON DELETE SET NULL stays as a safety net only.
+      const affected = await tx.$queryRaw<{ id: string; title: string }[]>`
+        UPDATE "tasks" SET "assigneeGroupId" = NULL, "updatedAt" = now() AT TIME ZONE 'UTC'
+        WHERE "assigneeGroupId" = ${groupId}::uuid RETURNING "id", "title"`;
       await tx.group.delete({ where: { id: group.id } });
-      for (const t of affected) {
+      // Audit each affected task (capped at 50 rows) so the feed shows the
+      // per-task change, not only the group deletion.
+      for (const t of affected.slice(0, 50)) {
         await this.activity.record(tx, {
           projectId, actorId: userId, action: 'task.updated',
           detail: { title: truncate(t.title, 80), changes: { assigneeGroup: { from: group.name, to: null } } },
@@ -253,7 +259,7 @@ export class ProjectsService {
       }
       await this.activity.record(tx, {
         projectId, actorId: userId, action: 'group.deleted',
-        detail: { name: group.name, role: group.role, members: group.members.length, tasksUnassigned: total, tasksAudited: affected.length },
+        detail: { name: group.name, role: group.role, members: group.members.length, tasksUnassigned: affected.length, tasksAudited: Math.min(50, affected.length) },
       });
     });
     return { ok: true };

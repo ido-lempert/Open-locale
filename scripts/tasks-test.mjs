@@ -343,10 +343,53 @@ try {
   check('group.deleted detail counts unassigned tasks', gdelAudit?.detail?.tasksUnassigned === 1 && gdelAudit?.detail?.tasksAudited === 1, JSON.stringify(gdelAudit?.detail));
   await call(`${base}/${gt.id}`, { token: at, method: 'DELETE' });
 
-  const feed = (await call(`/projects/${proj.id}/activity`, { token: at })).json;
-  const acts = feed.items.map((e) => e.action);
-  check('activity has task.created/updated/deleted', acts.includes('task.created') && acts.includes('task.updated') && acts.includes('task.deleted'));
-  const upd = feed.items.find((e) => e.action === 'task.updated');
+  // Assignment-vs-delete race: serialized by the task-assignment advisory
+  // pair. Both orderings must settle consistently: either the assignment
+  // 400s on the gone group, or it committed first and the delete's
+  // RETURNING set unassigned + audited it.
+  const g3 = (await call(`/projects/${proj.id}/groups`, { token: at, method: 'POST', body: { name: 'race-grp', role: 'MEMBER', allowedLocales: [] } })).json;
+  const rt = (await call(base, { token: at, method: 'POST', body: { title: 'Race assign task' } })).json;
+  const [assignRes, delRes] = await Promise.all([
+    call(`${base}/${rt.id}`, { token: at, method: 'PATCH', body: { assigneeGroupId: g3.id } }),
+    call(`/projects/${proj.id}/groups/${g3.id}`, { token: at, method: 'DELETE' }),
+  ]);
+  const rtAfter = (await call(base, { token: at })).json.find((t) => t.id === rt.id);
+  const raceAudit = (await call(`/projects/${proj.id}/activity?action=task.updated&limit=100`, { token: at })).json.items
+    .find((e) => e.detail?.title === 'Race assign task' && e.detail?.changes?.assigneeGroup);
+  check('assignment-vs-delete race settles consistently',
+    delRes.status === 200 && !!rtAfter && rtAfter.assigneeGroup === null
+      && (assignRes.status !== 200 || (raceAudit?.detail?.changes?.assigneeGroup?.from === 'race-grp' && raceAudit?.detail?.changes?.assigneeGroup?.to === null)),
+    `assign=${assignRes.status} del=${delRes.status} after=${JSON.stringify(rtAfter?.assigneeGroup)} audit=${!!raceAudit}`);
+  await call(`${base}/${rt.id}`, { token: at, method: 'DELETE' });
+
+  // Capped audit disclosure: 51 assigned tasks - exact total reported,
+  // audit rows capped at 50, and every task actually unassigned.
+  const g4 = (await call(`/projects/${proj.id}/groups`, { token: at, method: 'POST', body: { name: 'cap-grp', role: 'MEMBER', allowedLocales: [] } })).json;
+  const capTaskIds = [];
+  for (let i = 0; i < 51; i++) {
+    const ct = (await call(base, { token: at, method: 'POST', body: { title: `Cap task ${i}`, assigneeGroupId: g4.id } })).json;
+    capTaskIds.push(ct.id);
+  }
+  await call(`/projects/${proj.id}/groups/${g4.id}`, { token: at, method: 'DELETE' });
+  const capAudit = (await call(`/projects/${proj.id}/activity?action=group.deleted`, { token: at })).json.items
+    .find((e) => e.detail?.name === 'cap-grp');
+  const perTaskAudits = (await call(`/projects/${proj.id}/activity?action=task.updated&limit=100`, { token: at })).json.items
+    .filter((e) => e.detail?.changes?.assigneeGroup?.from === 'cap-grp');
+  check('cap: >50 unassigned discloses exact total with capped audit count',
+    capAudit?.detail?.tasksUnassigned === 51 && capAudit?.detail?.tasksAudited === 50 && perTaskAudits.length === 50,
+    `detail=${JSON.stringify(capAudit?.detail)} rows=${perTaskAudits.length}`);
+  const capAfter = (await call(base, { token: at })).json;
+  check('cap: every one of the 51 tasks actually unassigned',
+    capTaskIds.every((id) => capAfter.find((t) => t.id === id)?.assigneeGroup === null));
+  for (const id of capTaskIds) await call(`${base}/${id}`, { token: at, method: 'DELETE' });
+
+  // Filter per action: the cap test above adds >100 events, so the
+  // unfiltered first page no longer holds every action type.
+  const hasAction = async (action) =>
+    (await call(`/projects/${proj.id}/activity?action=${action}&limit=1`, { token: at })).json.items.length > 0;
+  check('activity has task.created/updated/deleted',
+    (await hasAction('task.created')) && (await hasAction('task.updated')) && (await hasAction('task.deleted')));
+  const upd = (await call(`/projects/${proj.id}/activity?action=task.updated&limit=100`, { token: at })).json.items[0];
   check('update event names what changed', !!upd?.detail?.changes, JSON.stringify(upd?.detail));
 } finally {
   api?.kill('SIGTERM');

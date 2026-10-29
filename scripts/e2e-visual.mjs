@@ -895,12 +895,29 @@ try {
   await new Promise((r) => setTimeout(r, 1500));
   check('rejected cycle change reverts the select', (await selectedDepends('Lock home.title')) === 'no predecessor');
 
+  // Group-delete audit fixture: a group with one assigned task is deleted
+  // through the API, producing a group.deleted row (name + unassigned count)
+  // and a per-task task.updated row naming the task and the cleared group.
+  const auditGrp = await (await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/groups`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ownerJwt}` }, body: JSON.stringify({ name: 'audit-demo', role: 'MEMBER' }) })).json();
+  await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/tasks`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ownerJwt}` }, body: JSON.stringify({ title: 'Audit demo task', assigneeGroupId: auditGrp.id }) });
+  const auditDel = await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/groups/${auditGrp.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${ownerJwt}` } });
+  check('audit fixture: group with an assigned task deleted', auditDel.ok, `status=${auditDel.status}`);
+
   // The activity feed now renders task.updated change detail generically
   // (was a blank detail); the dependency edits above give it real data.
   await page.goto(`${WEB}/projects/${projId}/activity`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.activity-list', { timeout: 10000 });
   check('activity feed renders task dependency change detail', await page.evaluate(() =>
     (document.body.textContent || '').includes('dependsOn:')));
+  check('activity feed shows group.deleted with group name and unassigned count', await page.evaluate(() => {
+    const t = document.body.textContent || '';
+    return t.includes('"audit-demo"') && t.includes('1 task(s) unassigned');
+  }));
+  check('activity feed task.updated row names the unassigned task and group', await page.evaluate(() => {
+    const t = document.body.textContent || '';
+    return t.includes('Audit demo task') && t.includes('assigneeGroup: audit-demo → none');
+  }));
+  await shot('editor-33-activity-task-audit.png');
 
 
   // --- Branches: create via UI, isolation, merge into main ---

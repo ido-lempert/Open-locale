@@ -86,6 +86,16 @@ export class TasksService {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${projectId + '::task-locks'})::bigint)`;
   }
 
+  // Shared side of the task-assignment advisory pair: assigning a GROUP
+  // to a task holds this, so a concurrent group deletion either settles
+  // first (the assignment then 400s on the missing group) or waits and is
+  // unassigned + audited by the deletion's RETURNING set. Always taken
+  // after graphLock/lockMutationLock - the exclusive side (group delete)
+  // holds no other advisory lock, so no ordering cycle is possible.
+  private async assignmentLockShared(db: Prisma.TransactionClient, projectId: string) {
+    await db.$executeRaw`SELECT pg_advisory_xact_lock_shared(hashtext(${projectId + '::task-assignment'})::bigint)`;
+  }
+
   // Per-project advisory lock serializing dependency-graph mutations
   // (dependency writes and status transitions gated on them). Without it
   // two opposing PATCHes (A->B, B->A) could both pass their cycle walks.
@@ -150,6 +160,7 @@ export class TasksService {
   }) {
     const title = input.title.trim();
     if (!title) throw new BadRequestException('Title cannot be empty');
+    if (input.assigneeGroupId) await this.assignmentLockShared(tx, projectId);
     const task = await tx.task.create({
       data: {
         projectId, title, description: input.description?.trim() ?? '',
@@ -203,6 +214,7 @@ export class TasksService {
       if (existing.lockKeys || input.lockKeys !== undefined || input.keyIds !== undefined) {
         await this.lockMutationLock(tx, projectId);
       }
+      if (input.assigneeGroupId) await this.assignmentLockShared(tx, projectId);
       if (input.dependsOnId) await this.assertDependency(tx, projectId, input.dependsOnId, taskId);
       // The chain gates every forward transition out of OPEN (starting OR
       // completing), and also attaching/changing the predecessor on a
