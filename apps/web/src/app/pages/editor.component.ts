@@ -87,6 +87,7 @@ interface CellState {
               <span>{{ c.filename }} has a .{{ c.ext }} extension, which usually means {{ labelFor(c.detected) }}, but the format is set to {{ labelFor(c.current) }}. Nothing was imported yet.</span>
               <button type="button" (click)="resolveImportConflict(true)">{{ c.dryRun ? 'Preview as' : 'Import as' }} {{ labelFor(c.detected) }}</button>
               <button type="button" (click)="resolveImportConflict(false)">Keep {{ labelFor(c.current) }}</button>
+              <button type="button" (click)="importConflict.set(null)">Cancel</button>
             </div>
           }
           <select [ngModel]="ioLocale()" (ngModelChange)="ioLocale.set($event)" name="ioLocale" aria-label="Import/export locale">
@@ -643,10 +644,12 @@ export class EditorComponent implements OnInit {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
-    // A new pick supersedes any earlier result: never let a stale success or
-    // error notice sit next to a new conflict prompt or import outcome.
+    // A new pick supersedes any earlier result AND any open conflict prompt:
+    // never let a stale notice or a banner for a different file sit next to
+    // this pick's outcome, and never let a banner's mode outlive its file.
     this.notice.set('');
     this.error.set('');
+    this.importConflict.set(null);
     const text = await file.text();
     input.value = '';
     // Extension detection never overrides a deliberate format choice. A
@@ -683,7 +686,7 @@ export class EditorComponent implements OnInit {
       const res = await this.api.importPayload(this.projectId, this.ioLocale(), payload, this.branch(), dryRun);
       this.error.set('');
       this.notice.set(dryRun
-        ? `Preview only - nothing imported: would create ${res.keysCreated} keys, update ${res.translationsUpserted} translations, ${res.unchangedSkipped} unchanged${res.failed ? `, ${res.failed} would fail (locked or rejected)` : ''} (${this.formatLabel()}, ${this.ioLocale()}).`
+        ? `Preview only - nothing imported: would create ${res.keysCreated} keys, update ${res.translationsUpserted} translations, ${res.unchangedSkipped} unchanged${res.failed ? `, ${res.failed} would fail: ${(res.failures ?? []).join('; ')}` : ''} (${this.formatLabel()}, ${this.ioLocale()}).`
         : `Imported ${res.keysCreated} keys, ${res.translationsUpserted} translations (${this.formatLabel()}, ${this.ioLocale()}).`);
       if (!dryRun) await this.reload();
     } catch (err) { this.notice.set(''); this.error.set(err instanceof Error ? err.message : `${dryRun ? 'Preview' : 'Import'} failed: invalid ${this.formatLabel()}`); }

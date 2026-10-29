@@ -616,6 +616,72 @@ try {
   await realInput.uploadFile(previewJsonFile);
   check('the same file then imports for real via the import input', await waitText('preview.key'));
 
+  // Mixed preview: failed entries named with reasons, still nothing written.
+  const mixedFile = '/tmp/e2e-preview-mixed.json';
+  writeFileSync(mixedFile, JSON.stringify({ 'preview.ok': 'lands only on real import', 'preview.bad': 42 }) + '\n');
+  const mixedInput = await page.$('input[name=previewFile]');
+  await mixedInput.uploadFile(mixedFile);
+  const mixedNotice = await page.waitForFunction(() => {
+    const t = document.querySelector('p.notice')?.textContent || '';
+    return t.includes('1 would fail') && t.includes('Non-string values rejected for: preview.bad');
+  }, { timeout: 10000 }).then(() => true).catch(() => false);
+  const mixedAbsent = await page.evaluate(() => ![...document.querySelectorAll('.grid td.key')].some((el) => el.textContent.includes('preview.ok')));
+  check('mixed preview reports the failed count with its reason, writes nothing', mixedNotice && mixedAbsent);
+
+  // Mode safety: an open preview-conflict banner must not affect the next real pick.
+  await page.select('select[aria-label="Import/export format"]', 'po');
+  const pcInput = await page.$('input[name=previewFile]');
+  await pcInput.uploadFile(previewJsonFile); // .json vs explicit po: preview-conflict banner opens
+  await page.waitForFunction(() => !!document.querySelector('.import-conflict'), { timeout: 10000 });
+  const realPoFile = '/tmp/e2e-real.po';
+  writeFileSync(realPoFile, 'msgid "mode.real"\nmsgstr "real import after preview conflict"\n');
+  const riInput = await page.$('input[name=importFile]');
+  await riInput.uploadFile(realPoFile); // detected po === current: imports for real
+  const realLanded = await waitText('mode.real');
+  const bannerGone1 = await page.evaluate(() => !document.querySelector('.import-conflict'));
+  check('a real import pick supersedes an open preview conflict (imports for real, banner cleared)', realLanded && bannerGone1);
+
+  // Inverse: an open import-conflict banner must not leak into the next preview pick.
+  await page.select('select[aria-label="Import/export format"]', 'json');
+  const icInput = await page.$('input[name=importFile]');
+  await icInput.uploadFile(realPoFile); // .po vs explicit json: import-conflict banner opens
+  await page.waitForFunction(() => !!document.querySelector('.import-conflict'), { timeout: 10000 });
+  const previewJson2 = '/tmp/e2e-preview2.json';
+  writeFileSync(previewJson2, JSON.stringify({ 'preview.two': 'second preview' }) + '\n');
+  const pi2 = await page.$('input[name=previewFile]');
+  await pi2.uploadFile(previewJson2); // detected json === current: preview runs
+  const previewNotice2 = await page.waitForFunction(() => (document.querySelector('p.notice')?.textContent || '').includes('Preview only - nothing imported'), { timeout: 10000 }).then(() => true).catch(() => false);
+  const twoAbsent = await page.evaluate(() => ![...document.querySelectorAll('.grid td.key')].some((el) => el.textContent.includes('preview.two')));
+  const bannerGone2 = await page.evaluate(() => !document.querySelector('.import-conflict'));
+  check('a preview pick supersedes an open import conflict (previews only, banner cleared)', previewNotice2 && twoAbsent && bannerGone2);
+
+  // Cancel resolves a conflict with no import and no mode residue.
+  await page.select('select[aria-label="Import/export format"]', 'yaml');
+  const ccInput = await page.$('input[name=previewFile]');
+  await ccInput.uploadFile(previewJson2); // .json vs explicit yaml: preview-conflict opens
+  await page.waitForFunction(() => !!document.querySelector('.import-conflict'), { timeout: 10000 });
+  await page.evaluate(() => [...document.querySelectorAll('.import-conflict button')].find((b) => b.textContent.trim() === 'Cancel')?.click());
+  const bannerGone3 = await page.evaluate(() => !document.querySelector('.import-conflict'));
+  const stillAbsent = await page.evaluate(() => ![...document.querySelectorAll('.grid td.key')].some((el) => el.textContent.includes('preview.two')));
+  const noNotice = await page.evaluate(() => !document.querySelector('p.notice'));
+  check('cancel closes the conflict with no import and no stale notice', bannerGone3 && stillAbsent && noNotice);
+
+  // 480 preview layout: notice and both affordances fit.
+  await page.setViewport({ width: 480, height: 800 });
+  const pi480 = await page.$('input[name=previewFile]');
+  await pi480.uploadFile(previewJsonFile); // .json vs explicit yaml: preview-conflict at 480
+  await page.waitForFunction(() => !!document.querySelector('.import-conflict'), { timeout: 10000 });
+  await shot('editor-43-preview-480.png');
+  const fits480 = await page.evaluate(() => {
+    const el = document.querySelector('.import-conflict');
+    if (!el) return 'missing';
+    const r = el.getBoundingClientRect();
+    return r.width <= 480 && r.left >= 0 && r.right <= 480 ? 'fits' : `overflow left=${r.left} right=${r.right}`;
+  });
+  check('preview conflict banner with three buttons fits the 480px viewport', fits480 === 'fits', fits480);
+  await page.setViewport({ width: 1280, height: 800 });
+  await page.evaluate(() => [...document.querySelectorAll('.import-conflict button')]?.find((b) => b.textContent.trim() === 'Cancel')?.click());
+
   // Settings screen: rename, add locale, verify grid column appears (on the editor)
   await page.click('.settings-link');
   await page.waitForSelector('.panel', { timeout: 10000 });

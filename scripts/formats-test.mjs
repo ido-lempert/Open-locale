@@ -445,6 +445,7 @@ try {
   const pvAfter = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
   const runsAfter = (await call(`${P}/imports`, { token: at })).json.length;
   check('dry-run preview returns the counters a real import would produce', pv.status === 201 && pv.json.dryRun === true && pv.json.keysCreated === 1 && pv.json.translationsUpserted === 2 && pv.json.unchangedSkipped === 1 && pv.json.failed === 1 && pv.json.status === 'PARTIAL', JSON.stringify(pv.json));
+  check('dry-run preview names the locked key and locking task in failures', Array.isArray(pv.json.failures) && pv.json.failures.some((f) => f.includes('pv.lock') && f.includes('Lock pv.lock')), JSON.stringify(pv.json.failures ?? null));
   check('dry-run preview writes nothing: keys byte-identical, no import run recorded', JSON.stringify(pvBefore) === JSON.stringify(pvAfter) && pvAfter['pv.new'] === undefined && runsBefore === runsAfter, `runs ${runsBefore}->${runsAfter}`);
   const pvReal = await call(`${P}/import/he`, { token: ct, method: 'POST', body: pvPayload });
   check('real import of the previewed payload matches the preview counters exactly', pvReal.status === 201 && pvReal.json.keysCreated === pv.json.keysCreated && pvReal.json.translationsUpserted === pv.json.translationsUpserted && pvReal.json.unchangedSkipped === pv.json.unchangedSkipped && pvReal.json.failed === pv.json.failed, JSON.stringify(pvReal.json));

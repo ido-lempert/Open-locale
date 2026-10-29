@@ -489,9 +489,9 @@ export class TranslationsService {
     let translationsUpserted = 0;
     let unchangedSkipped = 0;
     let failed = rejected.length;
-    let firstError: string | null = rejected.length
-      ? `Non-string values rejected for: ${rejected.slice(0, 5).join(', ')}`
-      : null;
+    const failures: string[] = rejected.length
+      ? [`Non-string values rejected for: ${rejected.slice(0, 5).join(', ')}`]
+      : [];
     for (const [name, value] of Object.entries(flat)) {
       const key = await this.prisma.key.findUnique({
         where: { branchId_name: { branchId: b.id, name } },
@@ -504,7 +504,7 @@ export class TranslationsService {
       const lockTitle = await this.tasks.keyLockFor(this.prisma, userId, projectId, key.id);
       if (lockTitle) {
         failed++;
-        firstError = firstError ?? `Key "${name}" is locked by task "${lockTitle}"`;
+        if (failures.length < 5) failures.push(`Key "${name}" is locked by task "${lockTitle}"`);
         continue;
       }
       const existing = await this.prisma.translation.findUnique({
@@ -518,7 +518,7 @@ export class TranslationsService {
       : 'COMPLETED';
     return {
       locale, keysCreated, translationsUpserted, unchangedSkipped, failed, status,
-      ...(firstError ? { error: truncate(firstError) } : {}),
+      ...(failures.length ? { error: truncate(failures[0]), failures: failures.map((f) => truncate(f)) } : {}),
       ...(parsed.untranslatedSkipped ? { untranslatedSkipped: parsed.untranslatedSkipped } : {}),
       dryRun: true as const,
     };
