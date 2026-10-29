@@ -17,6 +17,7 @@ import { parsePo, toPo } from './po';
 import { parseXliff, toXliff } from './xliff';
 import { parseProperties, toProperties } from './properties';
 import { parseArb, toArb } from './arb';
+import { parseYaml, toYaml } from './yaml';
 import { parseIosStrings, toIosStrings } from './ios-strings';
 
 // Statuses every project supports; a project may extend this list with
@@ -357,6 +358,11 @@ export class TranslationsService {
     return toArb(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)), locale);
   }
 
+  async exportYaml(userId: string, projectId: string, locale: string, branch?: string) {
+    const flat = (await this.exportJson(userId, projectId, locale, true, branch)) as Record<string, string>;
+    return toYaml(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)));
+  }
+
   async importAndroid(userId: string, projectId: string, locale: string, xml: string, branch?: string) {
     const { rows, rejected } = parseAndroidXml(xml);
     if (rejected > 0) {
@@ -402,6 +408,14 @@ export class TranslationsService {
     const { rows, rejected } = parseArb(arb);
     if (rejected > 0) {
       throw new BadRequestException(`${rejected} ARB ${rejected === 1 ? 'entry' : 'entries'} rejected: non-string or nested values, ICU plural/select messages and malformed JSON are not supported`);
+    }
+    return this.importJson(userId, projectId, locale, Object.fromEntries(rows), branch);
+  }
+
+  async importYaml(userId: string, projectId: string, locale: string, yaml: string, branch?: string) {
+    const { rows, rejected } = parseYaml(yaml);
+    if (rejected > 0) {
+      throw new BadRequestException(`${rejected} YAML ${rejected === 1 ? 'line' : 'lines'} rejected: document markers, lists, flow collections, anchors/aliases/tags, block scalars, bare null keys, duplicates and bad escapes are not supported`);
     }
     return this.importJson(userId, projectId, locale, Object.fromEntries(rows), branch);
   }

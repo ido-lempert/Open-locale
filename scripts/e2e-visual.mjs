@@ -499,6 +499,37 @@ try {
     window.scrollTo(0, 0);
   });
 
+  // --- YAML via UI: import a new key, export capture verifies content ---
+  const yamlFile = '/tmp/e2e-import.yaml';
+  writeFileSync(yamlFile, '# fixture\n"yaml":\n  "demo": "Proof of YAML ✓"\n');
+  await page.select('select[aria-label="Import/export format"]', 'yaml');
+  const yamlInput = await page.$('input[type=file]');
+  await yamlInput.uploadFile(yamlFile);
+  const yamlNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('(YAML,'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('YAML import via UI shows summary notice', yamlNotice);
+  check('YAML-imported key appears in grid', await waitText('yaml.demo'));
+  await page.evaluate(() => {
+    window.__yamlCapture = null;
+    const orig = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (b) => { window.__yamlCapture = b; return orig(b); };
+  });
+  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.startsWith('Export'))?.click());
+  await page.waitForFunction(() => !!window.__yamlCapture, { timeout: 10000 });
+  const yamlExport = await page.evaluate(() => window.__yamlCapture.text());
+  check('YAML export via UI emits nested entries for existing keys',
+    yamlExport.includes('"yaml":') && yamlExport.includes('"demo": "Proof of YAML ✓"'),
+    yamlExport.split('\n').find((l) => l.includes('demo')) ?? '');
+  await page.evaluate(() => {
+    document.body.style.paddingBottom = '60vh';
+    const cell = [...document.querySelectorAll('.grid td.key')].find((el) => el.textContent.includes('yaml.demo'));
+    cell?.scrollIntoView({ block: 'center' });
+  });
+  await shot('editor-39-yaml.png');
+  await page.evaluate(() => {
+    document.body.style.paddingBottom = '';
+    window.scrollTo(0, 0);
+  });
+
   // Settings screen: rename, add locale, verify grid column appears (on the editor)
   await page.click('.settings-link');
   await page.waitForSelector('.panel', { timeout: 10000 });

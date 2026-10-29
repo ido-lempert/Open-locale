@@ -40,6 +40,9 @@ export class ImportJsonDto {
 
   @IsOptional() @IsString() @MaxLength(2_000_000)
   arb?: string;
+
+  @IsOptional() @IsString() @MaxLength(2_000_000)
+  yaml?: string;
   @IsOptional() @IsString()
   locale?: string;
 

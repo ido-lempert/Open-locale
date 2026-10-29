@@ -361,6 +361,56 @@ try {
   const heAfterArbLock = await (await fetch(`${API}${P}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
   check('ARB locked key keeps its value, unlocked key imported', heAfterArbLock['arb.title'] === 'My App ✓' && heAfterArbLock['arb.unlocked'] === 'lands', JSON.stringify({ title: heAfterArbLock['arb.title'], unlocked: heAfterArbLock['arb.unlocked'] }));
 
+  // YAML (Rails-style subset) round-trip, rejection and the shared boundaries.
+  const yamlIn = [
+    '# fixture comment',
+    '"yaml":',
+    '  "title": "My App ✓"',
+    '  "multi": "line1\\nline2"',
+    'plain: plain value # trailing comment',
+    '',
+  ].join('\n');
+  const impYaml = await call(`${P}/import/he`, { token: at, method: 'POST', body: { yaml: yamlIn } });
+  check('YAML import accepted (nested + plain)', impYaml.status === 201 && impYaml.json.translationsUpserted === 3, JSON.stringify(impYaml.json));
+  const heAfterYaml = await (await fetch(`${API}${P}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('YAML nested keys flatten with dots, escapes decode', heAfterYaml['yaml.title'] === 'My App ✓' && heAfterYaml['yaml.multi'] === 'line1\nline2' && heAfterYaml['plain'] === 'plain value', JSON.stringify({ t: heAfterYaml['yaml.title'], p: heAfterYaml['plain'] }));
+  const yamlRes = await fetch(`${API}${P}/export/he/yaml`, { headers: { Authorization: `Bearer ${at}` } });
+  const yamlOut = await yamlRes.text();
+  check('YAML export content-type', (yamlRes.headers.get('content-type') || '').includes('yaml'), yamlRes.headers.get('content-type') ?? '');
+  check('YAML export nests dotted keys quoted', yamlOut.includes('"yaml":') && yamlOut.includes('"title": "My App ✓"') && yamlOut.includes('"multi": "line1\\nline2"'), yamlOut.split('\n').find((l) => l.includes('yaml.title') || l.includes('"yaml"')) ?? '');
+  const yamlRound = await call(`${P}/import/he`, { token: at, method: 'POST', body: { yaml: yamlOut } });
+  check('YAML export-import roundtrip stable', yamlRound.status === 201 && yamlRound.json.unchangedSkipped >= 3, JSON.stringify(yamlRound.json));
+  const yamlBefore = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  const yamlList = await call(`${P}/import/he`, { token: at, method: 'POST', body: { yaml: 'yaml.list:\n  - item\n\nyaml.ok: should not land\n' } });
+  const yamlAfterList = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('YAML list rejected (400) and leaves keys unchanged', yamlList.status === 400 && JSON.stringify(yamlBefore) === JSON.stringify(yamlAfterList) && yamlAfterList['yaml.ok'] === undefined, String(yamlList.status));
+  const yamlAnchor = await call(`${P}/import/he`, { token: at, method: 'POST', body: { yaml: 'a: &anc v\nb: *anc\n' } });
+  check('YAML anchor/alias rejected (400)', yamlAnchor.status === 400, String(yamlAnchor.status));
+
+  await call(`${P}/branches`, { token: at, method: 'POST', body: { name: 'yaml-branch' } });
+  const impYamlBr = await call(`${P}/import/en?branch=yaml-branch`, { token: at, method: 'POST', body: { yaml: 'yaml:\n  branchonly: branch value\n' } });
+  check('YAML import scopes to the named branch', impYamlBr.status === 201, JSON.stringify(impYamlBr.json));
+  const mainAfterYamlBr = await (await fetch(`${API}${P}/export/en?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  const brAfterYamlBr = await (await fetch(`${API}${P}/export/en?flat=true&branch=yaml-branch`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('YAML branch import invisible on main, present on the branch', mainAfterYamlBr['yaml.branchonly'] === undefined && brAfterYamlBr['yaml.branchonly'] === 'branch value');
+  const brYamlOut = await (await fetch(`${API}${P}/export/en/yaml?branch=yaml-branch`, { headers: { Authorization: `Bearer ${at}` } })).text();
+  check('YAML export reads the named branch', brYamlOut.includes('"branchonly": "branch value"'));
+
+  const cYamlEn = await call(`${P}/import/en`, { token: ct, method: 'POST', body: { yaml: 'yaml:\n  denied: x\n' } });
+  check('YAML import outside the member locale grant denied (403)', cYamlEn.status === 403, String(cYamlEn.status));
+  const cYamlHe = await call(`${P}/import/he`, { token: ct, method: 'POST', body: { yaml: 'yaml:\n  memberok: allowed\n' } });
+  check('YAML import inside the member locale grant accepted', cYamlHe.status === 201, String(cYamlHe.status));
+  const cYamlExport = await fetch(`${API}${P}/export/en/yaml`, { headers: { Authorization: `Bearer ${ct}` } });
+  check('YAML export not narrowed by locale write grants', cYamlExport.status === 200, String(cYamlExport.status));
+
+  const keysForYamlLock = (await call(`${P}/keys`, { token: at })).json;
+  const lockYamlKey = keysForYamlLock.find((k) => k.name === 'yaml.title');
+  await call(`${P}/tasks`, { token: at, method: 'POST', body: { title: 'Lock yaml.title', lockKeys: true, keyIds: [lockYamlKey.id] } });
+  const yamlLockImp = await call(`${P}/import/he`, { token: ct, method: 'POST', body: { yaml: 'yaml:\n  title: changed under lock\n  unlocked: lands\n' } });
+  check('YAML import skips the locked key and reports it', yamlLockImp.status === 201 && yamlLockImp.json.failed === 1 && yamlLockImp.json.translationsUpserted === 1, JSON.stringify(yamlLockImp.json));
+  const heAfterYamlLock = await (await fetch(`${API}${P}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('YAML locked key keeps its value, unlocked key imported', heAfterYamlLock['yaml.title'] === 'My App ✓' && heAfterYamlLock['yaml.unlocked'] === 'lands', JSON.stringify({ title: heAfterYamlLock['yaml.title'], unlocked: heAfterYamlLock['yaml.unlocked'] }));
+
   const runs = (await call(`${P}/imports`, { token: at })).json;
   check('CSV imports recorded as import runs', Array.isArray(runs) ? runs.length >= 2 : (runs.items?.length ?? 0) >= 2, JSON.stringify(runs).slice(0, 120));
 
