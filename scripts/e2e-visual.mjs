@@ -367,6 +367,12 @@ try {
   const resxNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('(RESX (.NET),'), { timeout: 10000 }).then(() => true).catch(() => false);
   check('RESX import via UI shows summary notice', resxNotice);
   check('RESX-imported key appears in grid', await waitText('resx.uikey'));
+  // Filter the grid to the new key so the capture shows notice AND row together.
+  await page.type('input[aria-label="Search keys"]', 'resx.uikey');
+  await page.waitForFunction(() => (document.querySelector('.grid tbody')?.textContent || '').includes('resx.uikey') && !(document.querySelector('.grid tbody')?.textContent || '').includes('home.title'), { timeout: 10000 });
+  await shot('editor-19a-resx-import.png');
+  await page.evaluate(() => { const el = document.querySelector('input[aria-label="Search keys"]'); const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; setter.call(el, ''); el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.waitForFunction(() => (document.querySelector('.grid tbody')?.textContent || '').includes('home.title'), { timeout: 10000 });
   // RESX export through the UI: capture the generated blob and verify content.
   await page.evaluate(() => {
     window.__resxCapture = null;
