@@ -132,6 +132,23 @@ try {
   const pushDenied = cli(['push', 'bundle.zip'], workDir);
   check('cli push bundle exits nonzero when a locale is grant-denied', pushDenied.status === 1 && pushDenied.out.includes('en failed (403)') && pushDenied.out.includes('he:'), pushDenied.out.trim().slice(0, 200));
 
+  // Branch scoping through the CLI: --branch writes and reads only the branch.
+  // Pin main to a distinct marker first so branch writes can never pass by
+  // accidentally matching main's current value.
+  await call(`/projects/${proj.json.id}/branches`, { jwt, method: 'POST', body: { name: 'cli-br' } });
+  await call(`/projects/${proj.json.id}/import/he`, { jwt, method: 'POST', body: { entries: { 'app.title': 'ראשי' } } });
+  writeFileSync(join(workDir, 'open-locale.json'), JSON.stringify({ url: `http://127.0.0.1:${API_PORT}`, token: tok.json.token, project: proj.json.id }));
+  writeFileSync(join(workDir, 'br.json'), JSON.stringify({ 'app.title': 'ענף' }));
+  const pushBr = cli(['push', 'br.json', '--locale', 'he', '--branch', 'cli-br'], workDir);
+  const pullBr = cli(['pull', '--locale', 'he', '--branch', 'cli-br'], workDir);
+  const pullMain = cli(['pull', '--locale', 'he'], workDir);
+  check('cli push/pull --branch writes and reads only the branch', pushBr.status === 0 && pullBr.out.includes('ענף') && !pullMain.out.includes('ענף') && pullMain.out.includes('ראשי'), `${pushBr.status}|${pullBr.status}|${pullMain.status}`);
+  // Bundle push --branch routes every locale import to the named branch.
+  const pushZipBr = cli(['push', 'bundle.zip', '--branch', 'cli-br'], workDir);
+  const brHe = (await call(`/projects/${proj.json.id}/export/he?flat=true&branch=cli-br`, { jwt })).json;
+  const mainHe = (await call(`/projects/${proj.json.id}/export/he?flat=true`, { jwt })).json;
+  check('cli bundle push --branch lands on the branch, main untouched', pushZipBr.status === 0 && brHe['app.title'] === 'כותרת פו' && mainHe['app.title'] === 'ראשי', JSON.stringify({ br: brHe['app.title'], main: mainHe['app.title'] }));
+
   // read-only enforcement through the CLI
   const roTok = await call('/auth/tokens', { jwt, method: 'POST', body: { name: 'cli-ro', scopes: ['read'] } });
   writeFileSync(join(workDir, 'open-locale.json'), JSON.stringify({ url: `http://127.0.0.1:${API_PORT}`, token: roTok.json.token, project: proj.json.id }));

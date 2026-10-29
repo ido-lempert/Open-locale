@@ -13,6 +13,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { basename } from 'node:path';
 
 const fail = (msg, code = 1) => { console.error(`error: ${msg}`); process.exit(code); };
+const branchQuery = () => { const b = opt('branch'); return b ? `?branch=${encodeURIComponent(b)}` : ''; };
 const args = process.argv.slice(2);
 const cmd = args[0];
 const opt = (name, dflt) => {
@@ -60,13 +61,14 @@ async function push() {
   const locale = opt('locale');
   if (!file || !existsSync(file)) fail('push needs an existing file: open-locale push <file> --locale he');
   const { project } = config();
+  const bq = branchQuery();
   // A .zip file is a bundle import: one entry per locale, no --locale.
   if (file.toLowerCase().endsWith('.zip')) {
     if (locale) fail('bundle push imports every locale in the archive; drop --locale');
     const format = opt('format', 'json');
     if (!FORMATS.has(format)) fail(`unknown format ${format} (${[...FORMATS].join('|')})`);
     console.error('note: bundle import accepts store-only zips from `pull --all` (compressed zips are rejected); each locale imports independently - skipped entries and failed locales are reported, not rolled back.');
-    const result = await api(`/projects/${project}/import-bundle/${format}`, { method: 'POST', body: readFileSync(file), zip: true });
+    const result = await api(`/projects/${project}/import-bundle/${format}${bq}`, { method: 'POST', body: readFileSync(file), zip: true });
     for (const r of result.imported) console.log(`${r.locale}: ${r.translationsUpserted} upserted, ${r.keysCreated} key(s) created, ${r.unchangedSkipped} unchanged, ${r.failed} failed`);
     for (const x of result.skipped) console.error(`skipped entry ${x.name} (not imported; exit stays 0 for skips alone): ${x.reason}`);
     for (const x of result.failedLocales) console.error(`${x.locale} failed (${x.status}): ${x.error}`);
@@ -79,7 +81,7 @@ async function push() {
   const hit = PUSH_EXTS.find(([ext]) => lower.endsWith(ext));
   const ext = hit ? hit[1] : 'json';
   const body = ext === 'json' ? { entries: JSON.parse(text) } : { [ext]: text };
-  const result = await api(`/projects/${project}/import/${locale}`, { method: 'POST', body });
+  const result = await api(`/projects/${project}/import/${locale}${bq}`, { method: 'POST', body });
   console.log(`import ${result.status}: ${result.translationsUpserted} upserted, ${result.keysCreated} key(s) created, ` +
     `${result.unchangedSkipped} unchanged, ${result.failed} failed (run ${result.importId})`);
   if (result.status === 'FAILED') process.exit(1);
@@ -96,7 +98,7 @@ async function pull() {
   if (all) {
     if (locale) fail('pull --all exports every locale into one zip; drop --locale');
     if (!out) fail('pull --all needs -o <file.zip> (binary output)');
-    const res = await api(`/projects/${project}/export-bundle/${format}`, { raw: true });
+    const res = await api(`/projects/${project}/export-bundle/${format}${branchQuery()}`, { raw: true });
     if (!res.ok) fail(`export-bundle -> ${res.status}`);
     const buf = Buffer.from(await res.arrayBuffer());
     writeFileSync(out, buf);
@@ -105,7 +107,7 @@ async function pull() {
   }
   if (!locale) fail('pull needs --locale <code> (or --all for a bundle zip)');
   const suffix = format === 'json' ? '' : `/${format}`;
-  const res = await api(`/projects/${project}/export/${locale}${suffix}`, { raw: true });
+  const res = await api(`/projects/${project}/export/${locale}${suffix}${branchQuery()}`, { raw: true });
   if (!res.ok) fail(`export -> ${res.status}`);
   const text = await res.text();
   if (out) { writeFileSync(out, text); console.log(`wrote ${out} (${locale}, ${format})`); }
@@ -115,7 +117,12 @@ async function pull() {
 async function keys() {
   const search = opt('search');
   const { project } = config();
-  const q = search ? `?search=${encodeURIComponent(search)}` : '';
+  const params = new URLSearchParams();
+  if (search) params.set('search', search);
+  const br = opt('branch');
+  if (br) params.set('branch', br);
+  const ps = params.toString();
+  const q = ps ? `?${ps}` : '';
   const list = await api(`/projects/${project}/keys${q}`);
   for (const k of list) console.log(`${k.name}${k.description ? `\t${k.description}` : ''}`);
   console.error(`${list.length} key(s)`);
@@ -127,6 +134,7 @@ const usage = `open-locale <command>
                                          (compressed zips are rejected before any write; each locale
                                          imports independently, no rollback across locales)
   pull --locale <code> [--format f] [-o file]   export translations (json|csv|android|ios|po|xliff|properties|arb|yaml)
+  all commands accept [--branch name]        scope the read or write to a branch (default: main)
   pull --all [--format f] -o <file.zip>  export every locale as one store-only zip
   keys [--search term]                   list keys
   docs                                   print the OpenAPI docs URL
