@@ -77,6 +77,33 @@ try {
   const inprog = (await call(`${base}?status=IN_PROGRESS`, { token: at })).json;
   check('status filter splits correctly', open.length === 0 && inprog.length === 1 && inprog[0].id === t1.id);
 
+  // Group assignment
+  const gr = (await call(`/projects/${proj.id}/groups`, { token: at, method: 'POST', body: { name: 'qa-reviewers', role: 'MEMBER', allowedLocales: [] } })).json;
+  const t2 = (await call(base, { token: at, method: 'POST', body: { title: 'Review glossary terms', assigneeGroupId: gr.id } })).json;
+  check('task created with group assignee', t2.assigneeGroup?.name === 'qa-reviewers' && t2.assignee === null, JSON.stringify(t2.assigneeGroup));
+
+  const both = await call(base, { token: at, method: 'POST', body: { title: 'x', assigneeId: b.user.id, assigneeGroupId: gr.id } });
+  const bothUpd = await call(`${base}/${t2.id}`, { token: at, method: 'PATCH', body: { assigneeId: b.user.id, assigneeGroupId: gr.id } });
+  check('member+group together rejected (400)', both.status === 400 && bothUpd.status === 400, `${both.status}/${bothUpd.status}`);
+
+  const foreignGroup = await call(base, { token: at, method: 'POST', body: { title: 'x', assigneeGroupId: '00000000-0000-4000-8000-000000000000' } });
+  check('group outside team rejected (400)', foreignGroup.status === 400, `got ${foreignGroup.status}`);
+
+  const toMember = (await call(`${base}/${t2.id}`, { token: at, method: 'PATCH', body: { assigneeId: b.user.id } })).json;
+  check('assigning a member clears the group', toMember.assignee?.id === b.user.id && toMember.assigneeGroup === null, JSON.stringify(toMember.assigneeGroup));
+
+  const backToGroup = (await call(`${base}/${t2.id}`, { token: at, method: 'PATCH', body: { assigneeGroupId: gr.id } })).json;
+  check('assigning a group clears the member', backToGroup.assigneeGroup?.id === gr.id && backToGroup.assignee === null);
+
+  const listed = (await call(base, { token: at })).json;
+  check('list includes group assignee', listed.some((t) => t.id === t2.id && t.assigneeGroup?.name === 'qa-reviewers'));
+
+  const grpUpd = (await call(`/projects/${proj.id}/activity?action=task.updated`, { token: at })).json.items
+    .find((e) => e.detail?.changes?.assigneeGroup);
+  check('audit records group assignment change', grpUpd?.detail?.changes?.assigneeGroup?.from === 'qa-reviewers' || grpUpd?.detail?.changes?.assigneeGroup?.to === 'qa-reviewers', JSON.stringify(grpUpd?.detail?.changes));
+
+  await call(`${base}/${t2.id}`, { token: at, method: 'DELETE' });
+
   const ro = (await call('/auth/tokens', { token: at, method: 'POST', body: { name: 'ro', scopes: ['read'] } })).json;
   const roRead = await call(base, { apiKey: ro.token });
   const roWrite = await call(base, { apiKey: ro.token, method: 'POST', body: { title: 'x' } });

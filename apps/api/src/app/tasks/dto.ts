@@ -17,6 +17,10 @@ export class CreateTaskDto {
   @IsOptional()
   @IsUUID()
   assigneeId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  assigneeGroupId?: string;
 }
 
 export class UpdateTaskDto {
@@ -42,4 +46,8 @@ export class UpdateTaskDto {
   @ValidateIf((_, v) => v !== null && v !== undefined)
   @IsUUID()
   assigneeId?: string | null;
+
+  @ValidateIf((_, v) => v !== null && v !== undefined)
+  @IsUUID()
+  assigneeGroupId?: string | null;
 }

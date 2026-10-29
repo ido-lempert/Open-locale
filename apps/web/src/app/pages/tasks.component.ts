@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { ApiService, MemberInfo, TaskItem } from '../api.service';
+import { ApiService, MemberInfo, TaskItem, GroupInfo } from '../api.service';
 
 @Component({
   selector: 'ol-tasks',
@@ -32,6 +32,7 @@ import { ApiService, MemberInfo, TaskItem } from '../api.service';
           <select aria-label="Assignee (optional)" [ngModel]="assigneeId()" (ngModelChange)="assigneeId.set($event)" name="taskAssignee">
             <option value="">unassigned</option>
             @for (m of members(); track m.id) { <option [value]="m.id">{{ m.displayName }}</option> }
+            @for (g of groups(); track g.id) { <option [value]="'g:' + g.id">Group: {{ g.name }}</option> }
           </select>
           <button class="primary" type="submit">Create task</button>
         </form>
@@ -50,10 +51,11 @@ import { ApiService, MemberInfo, TaskItem } from '../api.service';
               <option value="IN_PROGRESS">in progress</option>
               <option value="DONE">done</option>
             </select>
-            <select [attr.aria-label]="'Assignee for ' + t.title" [ngModel]="t.assignee?.id ?? ''"
-              (ngModelChange)="update(t, { assigneeId: $event || null })">
+            <select [attr.aria-label]="'Assignee for ' + t.title" [ngModel]="assigneeValue(t)"
+              (ngModelChange)="update(t, assigneePatch($event))">
               <option value="">unassigned</option>
               @for (m of members(); track m.id) { <option [value]="m.id">{{ m.displayName }}</option> }
+              @for (g of groups(); track g.id) { <option [value]="'g:' + g.id">Group: {{ g.name }}</option> }
             </select>
             @if (t.dueDate) { <time class="muted">due {{ t.dueDate | date:'mediumDate' }}</time> }
             <button class="danger" [attr.aria-label]="'Delete task ' + t.title" (click)="remove(t)">&times;</button>
@@ -69,6 +71,7 @@ export class TasksComponent implements OnInit {
   projectId = '';
   tasks = signal<TaskItem[]>([]);
   members = signal<MemberInfo[]>([]);
+  groups = signal<GroupInfo[]>([]);
   statusFilter = signal('');
   loading = signal(true);
   error = signal('');
@@ -85,6 +88,9 @@ export class TasksComponent implements OnInit {
     void this.api.listMembers(this.projectId)
       .then((m) => this.members.set(m))
       .catch(() => this.members.set([]));
+    void this.api.listGroups(this.projectId)
+      .then((g) => this.groups.set(g))
+      .catch(() => this.groups.set([]));
   }
 
   setFilter(status: string) {
@@ -100,6 +106,16 @@ export class TasksComponent implements OnInit {
     finally { this.loading.set(false); }
   }
 
+  assigneeValue(t: TaskItem): string {
+    return t.assignee?.id ?? (t.assigneeGroup ? 'g:' + t.assigneeGroup.id : '');
+  }
+
+  assigneePatch(v: string): Record<string, unknown> {
+    if (!v) return { assigneeId: null, assigneeGroupId: null };
+    if (v.startsWith('g:')) return { assigneeGroupId: v.slice(2) };
+    return { assigneeId: v };
+  }
+
   async create() {
     const title = this.title().trim();
     if (!title) return;
@@ -108,7 +124,7 @@ export class TasksComponent implements OnInit {
         title,
         ...(this.description().trim() ? { description: this.description().trim() } : {}),
         ...(this.dueDate() ? { dueDate: this.dueDate() } : {}),
-        ...(this.assigneeId() ? { assigneeId: this.assigneeId() } : {}),
+        ...this.assigneePatch(this.assigneeId()),
       });
       this.title.set(''); this.description.set(''); this.dueDate.set(''); this.assigneeId.set('');
       await this.fetch();

@@ -91,6 +91,7 @@ export interface TaskItem {
   id: string; title: string; description: string; status: 'OPEN' | 'IN_PROGRESS' | 'DONE';
   dueDate: string | null; createdAt: string;
   assignee: { id: string; displayName: string; email: string } | null;
+  assigneeGroup: { id: string; name: string; role: string } | null;
   creator: { id: string; displayName: string; email: string } | null;
 }
 export interface LocaleProgress { locale: string; base: boolean; total: number; translated: number; untranslated: number; percent: number; byStatus: Record<string, number>; }

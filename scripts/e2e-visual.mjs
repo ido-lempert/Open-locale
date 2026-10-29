@@ -628,6 +628,25 @@ try {
   await page.evaluate(() => { document.querySelector('h1').scrollIntoView({ block: 'start' }); window.scrollBy(0, -70); });
   await shot('editor-30-activity-grants.png');
 
+  // Tasks page: groups appear as assignee options and assignment sticks.
+  await page.goto(`${WEB}/projects/${projId}/tasks`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.task-form', { timeout: 10000 });
+  check('assignee dropdown offers groups', await page.evaluate(() =>
+    [...document.querySelectorAll('select[name=taskAssignee] option')].some((o) => o.textContent === 'Group: leads')));
+  await page.evaluate(() => {
+    const sel = document.querySelector('.task-row select[aria-label^="Assignee for"]');
+    const opt = [...sel.options].find((o) => o.textContent === 'Group: leads');
+    sel.value = opt.value;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await new Promise((r) => setTimeout(r, 1500));
+  await page.reload({ waitUntil: 'networkidle0' });
+  await page.waitForSelector('.task-row', { timeout: 10000 });
+  check('group assignment persists and renders selected', await page.evaluate(() => {
+    const sel = document.querySelector('.task-row select[aria-label^="Assignee for"]');
+    return sel.options[sel.selectedIndex]?.textContent === 'Group: leads';
+  }));
+
 
   // --- Branches: create via UI, isolation, merge into main ---
   await page.goto(`${WEB}/projects/${projId}`, { waitUntil: 'networkidle0' });

@@ -19,8 +19,22 @@ export class TasksService {
     if (!member) throw new BadRequestException('Assignee is not a member of this team');
   }
 
+  async assertAssigneeGroup(projectTeamId: string, groupId: string) {
+    const group = await this.prisma.group.findFirst({
+      where: { id: groupId, teamId: projectTeamId },
+    });
+    if (!group) throw new BadRequestException('Assignee group is not part of this team');
+  }
+
+  private assertSingleAssignee(assigneeId?: string | null, assigneeGroupId?: string | null) {
+    if (assigneeId && assigneeGroupId) {
+      throw new BadRequestException('Assign a task to a member or a group, not both');
+    }
+  }
+
   private readonly includePeople = {
     assignee: { select: { id: true, displayName: true, email: true } },
+    assigneeGroup: { select: { id: true, name: true, role: true } },
     creator: { select: { id: true, displayName: true, email: true } },
   } as const;
 
@@ -35,10 +49,12 @@ export class TasksService {
   }
 
   async create(userId: string, projectId: string, input: {
-    title: string; description?: string; dueDate?: string; assigneeId?: string;
+    title: string; description?: string; dueDate?: string; assigneeId?: string; assigneeGroupId?: string;
   }) {
     const project = await this.projects.getFor(userId, projectId);
+    this.assertSingleAssignee(input.assigneeId, input.assigneeGroupId);
     if (input.assigneeId) await this.assertAssigneeMember(project.teamId, input.assigneeId);
+    if (input.assigneeGroupId) await this.assertAssigneeGroup(project.teamId, input.assigneeGroupId);
     return this.prisma.$transaction((tx) => this.createIn(tx, userId, projectId, input));
   }
 
@@ -46,7 +62,7 @@ export class TasksService {
   // for atomic check-then-create under an advisory lock). The caller must
   // already have validated membership and any assignee.
   async createIn(tx: Prisma.TransactionClient, userId: string, projectId: string, input: {
-    title: string; description?: string; dueDate?: string; assigneeId?: string;
+    title: string; description?: string; dueDate?: string; assigneeId?: string; assigneeGroupId?: string;
   }) {
     const title = input.title.trim();
     if (!title) throw new BadRequestException('Title cannot be empty');
@@ -54,7 +70,8 @@ export class TasksService {
       data: {
         projectId, title, description: input.description?.trim() ?? '',
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
-        assigneeId: input.assigneeId ?? null, creatorId: userId,
+        assigneeId: input.assigneeId ?? null, assigneeGroupId: input.assigneeGroupId ?? null,
+        creatorId: userId,
       },
       include: this.includePeople,
     });
@@ -67,12 +84,17 @@ export class TasksService {
 
   async update(userId: string, projectId: string, taskId: string, input: {
     title?: string; description?: string; status?: 'OPEN' | 'IN_PROGRESS' | 'DONE';
-    dueDate?: string | null; assigneeId?: string | null;
+    dueDate?: string | null; assigneeId?: string | null; assigneeGroupId?: string | null;
   }) {
     const project = await this.projects.getFor(userId, projectId);
-    const existing = await this.prisma.task.findFirst({ where: { id: taskId, projectId } });
+    const existing = await this.prisma.task.findFirst({
+      where: { id: taskId, projectId },
+      include: { assigneeGroup: { select: { id: true, name: true } } },
+    });
     if (!existing) throw new NotFoundException('Task not found');
+    this.assertSingleAssignee(input.assigneeId, input.assigneeGroupId);
     if (input.assigneeId) await this.assertAssigneeMember(project.teamId, input.assigneeId);
+    if (input.assigneeGroupId) await this.assertAssigneeGroup(project.teamId, input.assigneeGroupId);
     return this.prisma.$transaction(async (tx) => {
       if (input.title !== undefined && !input.title.trim()) {
         throw new BadRequestException('Title cannot be empty');
@@ -85,6 +107,10 @@ export class TasksService {
           ...(input.status !== undefined ? { status: input.status } : {}),
           ...(input.dueDate !== undefined ? { dueDate: input.dueDate === null ? null : new Date(input.dueDate) } : {}),
           ...(input.assigneeId !== undefined ? { assigneeId: input.assigneeId } : {}),
+          ...(input.assigneeGroupId !== undefined ? { assigneeGroupId: input.assigneeGroupId } : {}),
+          // Assigning one kind clears the other (single-assignee invariant).
+          ...(input.assigneeId ? { assigneeGroupId: null } : {}),
+          ...(input.assigneeGroupId ? { assigneeId: null } : {}),
         },
         include: this.includePeople,
       });
@@ -92,8 +118,14 @@ export class TasksService {
       if (input.status !== undefined && input.status !== existing.status) {
         changes['status'] = { from: existing.status, to: input.status };
       }
-      if (input.assigneeId !== undefined && input.assigneeId !== existing.assigneeId) {
-        changes['assignee'] = { from: existing.assigneeId, to: input.assigneeId };
+      const newAssigneeId = input.assigneeGroupId ? null : (input.assigneeId !== undefined ? input.assigneeId : existing.assigneeId);
+      const newGroupId = input.assigneeId ? null : (input.assigneeGroupId !== undefined ? input.assigneeGroupId : existing.assigneeGroupId);
+      if (newAssigneeId !== existing.assigneeId) {
+        changes['assignee'] = { from: existing.assigneeId, to: newAssigneeId };
+      }
+      if (newGroupId !== existing.assigneeGroupId) {
+        const toGroup = newGroupId ? await tx.group.findUnique({ where: { id: newGroupId }, select: { name: true } }) : null;
+        changes['assigneeGroup'] = { from: existing.assigneeGroup?.name ?? null, to: toGroup?.name ?? null };
       }
       if (input.title !== undefined && input.title.trim() !== existing.title) {
         changes['title'] = { from: truncate(existing.title, 80), to: truncate(input.title.trim(), 80) };
