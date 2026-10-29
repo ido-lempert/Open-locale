@@ -114,6 +114,16 @@ export class TasksComponent implements OnInit {
 
   ngOnInit() {
     this.projectId = this.route.snapshot.paramMap.get('id') ?? '';
+    // Restore the assignee/status filters chosen on a previous visit to
+    // this project's tasks page (best-effort; storage may be unavailable).
+    try {
+      const raw = localStorage.getItem(this.filterKey());
+      if (raw) {
+        const saved = JSON.parse(raw) as { status?: string; mine?: string };
+        if (saved.status && ['OPEN', 'IN_PROGRESS', 'DONE'].includes(saved.status)) this.statusFilter.set(saved.status);
+        if (saved.mine === 'me') this.mineFilter.set('me');
+      }
+    } catch { /* corrupt or unavailable storage: fall back to defaults */ }
     void this.fetch();
     void this.api.listMembers(this.projectId)
       .then((m) => this.members.set(m))
@@ -128,12 +138,24 @@ export class TasksComponent implements OnInit {
 
   setFilter(status: string) {
     this.statusFilter.set(status);
+    this.persistFilters();
     void this.fetch();
   }
 
   setMine(v: string) {
     this.mineFilter.set(v);
+    this.persistFilters();
     void this.fetch();
+  }
+
+  private filterKey(): string {
+    return 'ol.taskFilters.' + this.projectId;
+  }
+
+  private persistFilters() {
+    try {
+      localStorage.setItem(this.filterKey(), JSON.stringify({ status: this.statusFilter(), mine: this.mineFilter() }));
+    } catch { /* private mode/quota: persistence is best-effort */ }
   }
 
   async fetch() {

@@ -737,6 +737,54 @@ try {
   await page.waitForSelector('.task-row', { timeout: 10000 });
   check('everyone filter shows the task again', true);
 
+  // Filter persistence: assignee/status choices survive a full reload
+  // (stored per project). A probe task guarantees the OPEN filter has a
+  // match regardless of the other tasks' statuses; the probe is deleted
+  // afterwards so later legs and shots see the original list.
+  await page.select('select[aria-label="Filter by assignee"]', 'me');
+  await page.waitForFunction(() => !document.querySelector('.task-row'), { timeout: 10000 });
+  await page.reload({ waitUntil: 'networkidle0' });
+  await page.waitForSelector('select[aria-label="Filter by assignee"]', { timeout: 10000 });
+  await new Promise((r) => setTimeout(r, 800));
+  check('assignee filter persists across reload', await page.evaluate(() =>
+    document.querySelector('select[aria-label="Filter by assignee"]')?.value === 'me'
+    && !document.querySelector('.task-row')));
+
+  await page.select('select[aria-label="Filter by assignee"]', '');
+  await page.waitForSelector('.task-row', { timeout: 10000 });
+  await page.type('input[name=taskTitle]', 'Persistence probe');
+  await page.evaluate(() => { document.querySelector('.task-form').requestSubmit(); });
+  await page.waitForFunction(() => [...document.querySelectorAll('.task-row')].some(
+    (r) => (r.querySelector('.task-body strong')?.textContent || '').includes('Persistence probe')), { timeout: 10000 });
+  await page.select('select[aria-label="Filter by status"]', 'OPEN');
+  // Wait for the OPEN-filtered fetch specifically (a stale all-status
+  // fetch can win the race and show other rows): probe present, all open.
+  await page.waitForFunction(() => {
+    const rows = [...document.querySelectorAll('.task-row')];
+    return rows.length > 0
+      && rows.some((r) => (r.querySelector('.task-body strong')?.textContent || '').includes('Persistence probe'))
+      && rows.every((r) => (r.querySelector('.task-status')?.textContent || '').trim() === 'open');
+  }, { timeout: 10000 });
+  await page.reload({ waitUntil: 'networkidle0' });
+  await page.waitForFunction(() => {
+    const sel = document.querySelector('select[aria-label="Filter by status"]');
+    const rows = [...document.querySelectorAll('.task-row')];
+    return sel?.value === 'OPEN' && rows.length > 0
+      && rows.some((r) => (r.querySelector('.task-body strong')?.textContent || '').includes('Persistence probe'))
+      && rows.every((r) => (r.querySelector('.task-status')?.textContent || '').trim() === 'open');
+  }, { timeout: 10000 });
+  check('status filter persists across reload', true);
+
+  await page.evaluate(() => {
+    const row = [...document.querySelectorAll('.task-row')].find((r) => (r.querySelector('.task-body strong')?.textContent || '').includes('Persistence probe'));
+    row.querySelector('button[aria-label^="Delete task"]').click();
+  });
+  await page.waitForFunction(() => ![...document.querySelectorAll('.task-row')].some(
+    (r) => (r.querySelector('.task-body strong')?.textContent || '').includes('Persistence probe')), { timeout: 10000 });
+  check('probe task deleted after the persistence check', true);
+  await page.select('select[aria-label="Filter by status"]', '');
+  await page.waitForSelector('.task-row', { timeout: 10000 });
+
   // Task chaining: create a successor through the form, see the chip, and
   // confirm starting it while the predecessor is open shows the API error.
   await page.type('input[name=taskTitle]', 'Proofread after translation');

@@ -38,4 +38,16 @@ ownership marker only, with no way to see "tasks I am responsible for".
 ## Limits
 
 - No email/notification side effects; "mine" is a view filter only.
-- The filter is not persisted across page loads (resets to "everyone").
+- ~~The filter is not persisted across page loads~~ Fixed in the
+  follow-up below.
+
+## Follow-up: filter persistence
+
+The assignee and status filters persist per project in localStorage
+(`ol.taskFilters.<projectId>`), restored before the first fetch on the
+next visit. Stored values are whitelisted on restore (OPEN/IN_PROGRESS/
+DONE, "me"); corrupt or unavailable storage falls back to the defaults.
+Persistence is best-effort (private mode/quota simply skips it). Scope
+stays a view filter - no server state, no notifications. Verified by
+e2e: both filters survive a full page reload with the list reflecting
+the persisted filter; filters are reset to defaults afterwards.
