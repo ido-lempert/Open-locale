@@ -67,6 +67,12 @@ export class TranslationsController {
     return this.translations.exportXliff(user.userId, projectId, locale, branch);
   }
 
+  @Get('export/:locale/resx')
+  @Header('Content-Type', 'text/xml; charset=utf-8')
+  exportResx(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
+    return this.translations.exportResx(user.userId, projectId, locale, branch);
+  }
+
   @Get('export/:locale/properties')
   @Header('Content-Type', 'text/x-java-properties; charset=utf-8')
   exportProperties(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
@@ -115,6 +121,7 @@ export class TranslationsController {
     if (dryRun === 'true') return this.translations.importPreview(user.userId, projectId, locale, dto, branch);
     if (dto.po != null) return this.translations.importPo(user.userId, projectId, locale, dto.po, branch);
     if (dto.xliff != null) return this.translations.importXliff(user.userId, projectId, locale, dto.xliff, branch);
+    if (dto.resx != null) return this.translations.importResx(user.userId, projectId, locale, dto.resx, branch);
     if (dto.properties != null) return this.translations.importProperties(user.userId, projectId, locale, dto.properties, branch);
     if (dto.arb != null) return this.translations.importArb(user.userId, projectId, locale, dto.arb, branch);
     if (dto.yaml != null) return this.translations.importYaml(user.userId, projectId, locale, dto.yaml, branch);
@@ -122,6 +129,6 @@ export class TranslationsController {
     if (dto.xml != null) return this.translations.importAndroid(user.userId, projectId, locale, dto.xml, branch);
     if (dto.strings != null) return this.translations.importIos(user.userId, projectId, locale, dto.strings, branch);
     if (dto.entries != null) return this.translations.importJson(user.userId, projectId, locale, dto.entries, branch);
-    throw new BadRequestException('Provide entries (JSON), csv, xml, strings, po, xliff, properties, arb or yaml');
+    throw new BadRequestException('Provide entries (JSON), csv, xml, strings, po, xliff, properties, arb, yaml or resx');
   }
 }

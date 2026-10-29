@@ -36,6 +36,9 @@ export class ImportJsonDto {
   xliff?: string;
 
   @IsOptional() @IsString() @MaxLength(2_000_000)
+  resx?: string;
+
+  @IsOptional() @IsString() @MaxLength(2_000_000)
   properties?: string;
 
   @IsOptional() @IsString() @MaxLength(2_000_000)

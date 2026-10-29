@@ -13,6 +13,7 @@ describe('detectImportFormat', () => {
     expect(detectImportFormat('app_en.arb')).toBe('arb');
     expect(detectImportFormat('en.yaml')).toBe('yaml');
     expect(detectImportFormat('en.yml')).toBe('yaml');
+    expect(detectImportFormat('Strings.resx')).toBe('resx');
   });
 
   it('returns null for unknown or missing extensions', () => {

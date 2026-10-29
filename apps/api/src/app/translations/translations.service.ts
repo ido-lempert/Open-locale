@@ -16,6 +16,7 @@ import { parseCsv, toCsv } from './csv';
 import { parseAndroidXml, toAndroidXml } from './android-xml';
 import { parsePo, toPo } from './po';
 import { parseXliff, toXliff } from './xliff';
+import { parseResx, toResx } from './resx';
 import { parseProperties, toProperties } from './properties';
 import { parseArb, toArb } from './arb';
 import { parseYaml, toYaml } from './yaml';
@@ -350,6 +351,11 @@ export class TranslationsService {
     return toXliff(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)), project.baseLocale, locale);
   }
 
+  async exportResx(userId: string, projectId: string, locale: string, branch?: string) {
+    const flat = (await this.exportJson(userId, projectId, locale, true, branch)) as Record<string, string>;
+    return toResx(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)));
+  }
+
   async exportProperties(userId: string, projectId: string, locale: string, branch?: string) {
     const flat = (await this.exportJson(userId, projectId, locale, true, branch)) as Record<string, string>;
     return toProperties(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)));
@@ -382,6 +388,7 @@ export class TranslationsService {
       ios: { ext: '.strings', run: (l) => this.exportIos(userId, projectId, l, branch) },
       po: { ext: '.po', run: (l) => this.exportPo(userId, projectId, l, branch) },
       xliff: { ext: '.xlf', run: (l) => this.exportXliff(userId, projectId, l, branch) },
+      resx: { ext: '.resx', run: (l) => this.exportResx(userId, projectId, l, branch) },
       properties: { ext: '.properties', run: (l) => this.exportProperties(userId, projectId, l, branch) },
       arb: { ext: '.arb', run: (l) => this.exportArb(userId, projectId, l, branch) },
       yaml: { ext: '.yaml', run: (l) => this.exportYaml(userId, projectId, l, branch) },
@@ -421,6 +428,7 @@ export class TranslationsService {
       ios: { ext: '.strings', run: (l, t) => this.importIos(userId, projectId, l, t, branch) },
       po: { ext: '.po', run: (l, t) => this.importPo(userId, projectId, l, t, branch) },
       xliff: { ext: '.xlf', run: (l, t) => this.importXliff(userId, projectId, l, t, branch) },
+      resx: { ext: '.resx', run: (l, t) => this.importResx(userId, projectId, l, t, branch) },
       properties: { ext: '.properties', run: (l, t) => this.importProperties(userId, projectId, l, t, branch) },
       arb: { ext: '.arb', run: (l, t) => this.importArb(userId, projectId, l, t, branch) },
       yaml: { ext: '.yaml', run: (l, t) => this.importYaml(userId, projectId, l, t, branch) },
@@ -488,6 +496,13 @@ export class TranslationsService {
       }
       return { entries: Object.fromEntries(rows), untranslatedSkipped: skipped };
     }
+    if (dto.resx != null) {
+      const { rows, rejected } = parseResx(dto.resx);
+      if (rejected > 0) {
+        throw new BadRequestException(`${rejected} RESX data row(s) rejected: a missing <root>, metadata/assembly sections, typed or binary resources, inline markup and duplicate or missing names are not supported`);
+      }
+      return { entries: Object.fromEntries(rows), untranslatedSkipped: 0 };
+    }
     if (dto.properties != null) {
       const { rows, rejected } = parseProperties(dto.properties);
       if (rejected > 0) {
@@ -529,7 +544,7 @@ export class TranslationsService {
     if (dto.entries != null) {
       return { entries: dto.entries, untranslatedSkipped: 0 };
     }
-    throw new BadRequestException('Provide entries (JSON), csv, xml, strings, po, xliff, properties, arb or yaml');
+    throw new BadRequestException('Provide entries (JSON), csv, xml, strings, po, xliff, properties, arb, yaml or resx');
   }
 
   // YAML parsing needs the target locale for its locale-root rule, so it is
@@ -558,6 +573,10 @@ export class TranslationsService {
     const { entries, untranslatedSkipped } = this.parseImport({ xliff });
     const res = await this.importJson(userId, projectId, locale, entries, branch);
     return { ...res, untranslatedSkipped };
+  }
+
+  async importResx(userId: string, projectId: string, locale: string, resx: string, branch?: string) {
+    return this.importJson(userId, projectId, locale, this.parseImport({ resx }).entries, branch);
   }
 
   async importProperties(userId: string, projectId: string, locale: string, properties: string, branch?: string) {

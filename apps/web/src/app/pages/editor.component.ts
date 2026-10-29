@@ -71,6 +71,7 @@ interface CellState {
             <option value="android">Android XML</option>
             <option value="po">PO (gettext)</option>
             <option value="xliff">XLIFF 1.2</option>
+            <option value="resx">RESX (.NET)</option>
             <option value="properties">Java properties</option>
             <option value="arb">ARB (Flutter)</option>
             <option value="yaml">YAML</option>
@@ -78,8 +79,8 @@ interface CellState {
           </select>
           <button (click)="exportFile()">Export {{ formatLabel() }}</button>
           <button (click)="exportBundleFile()" title="Download every locale as one zip in the selected format">Export all (.zip)</button>
-          <label class="import">Import {{ formatLabel() }} <input type="file" name="importFile" accept=".json,.csv,.xml,.strings,.po,.xlf,.xliff,.properties,.arb,.yaml,.yml" (change)="importFile($event)" hidden /></label>
-          <label class="import">Preview import <input type="file" name="previewFile" accept=".json,.csv,.xml,.strings,.po,.xlf,.xliff,.properties,.arb,.yaml,.yml" (change)="previewFile($event)" hidden /></label>
+          <label class="import">Import {{ formatLabel() }} <input type="file" name="importFile" accept=".json,.csv,.xml,.strings,.po,.xlf,.xliff,.properties,.arb,.yaml,.yml,.resx" (change)="importFile($event)" hidden /></label>
+          <label class="import">Preview import <input type="file" name="previewFile" accept=".json,.csv,.xml,.strings,.po,.xlf,.xliff,.properties,.arb,.yaml,.yml,.resx" (change)="previewFile($event)" hidden /></label>
           <label class="import" title="Upload a store-only zip from Export all (.zip); compressed zips from other tools are rejected. Each locale imports independently: skipped entries and failed locales are reported, not rolled back.">Import bundle (.zip) <input type="file" name="bundleFile" accept=".zip" (change)="bundleFile($event)" hidden /></label>
           <div class="muted csv-note">.zip bundles: store-only archives from Export all (.zip) only - compressed zips are rejected. Each locale imports independently; skipped entries and failed locales are reported, not rolled back.</div>
           @if (ioFormat() === 'csv') {
@@ -270,7 +271,7 @@ export class EditorComponent implements OnInit {
   cells = new Map<string, WritableSignal<CellState>>();
   search = signal(''); newKey = signal(''); newLocale = signal(''); ioLocale = signal('en'); bulkStatus = signal('REVIEWED');
   branch = signal('main'); branches = signal<BranchInfo[]>([]); newBranch = signal('');
-  mergePreview = signal<{ branchId: string; from: string; lines: string[]; previewAt: string } | null>(null); ioFormat = signal<'json' | 'csv' | 'android' | 'ios' | 'po' | 'xliff' | 'properties' | 'arb' | 'yaml'>('json');
+  mergePreview = signal<{ branchId: string; from: string; lines: string[]; previewAt: string } | null>(null); ioFormat = signal<'json' | 'csv' | 'android' | 'ios' | 'po' | 'xliff' | 'properties' | 'arb' | 'yaml' | 'resx'>('json');
   ioFormatTouched = signal(false);
   importConflict = signal<{ filename: string; ext: string; detected: IoFormat; current: IoFormat; text: string; dryRun: boolean } | null>(null);
   glossary = signal<GlossaryTermItem[]>([]);
@@ -643,8 +644,8 @@ export class EditorComponent implements OnInit {
         type = 'text/csv'; ext = 'csv';
       } else {
         content = await this.api.exportText(this.projectId, locale, fmt, this.branch());
-        type = fmt === 'android' || fmt === 'xliff' ? 'text/xml' : fmt === 'arb' ? 'application/json' : fmt === 'yaml' ? 'text/yaml' : 'text/plain';
-        ext = fmt === 'android' ? 'xml' : fmt === 'po' ? 'po' : fmt === 'xliff' ? 'xlf' : fmt === 'properties' ? 'properties' : fmt === 'arb' ? 'arb' : fmt === 'yaml' ? 'yaml' : 'strings';
+        type = fmt === 'android' || fmt === 'xliff' || fmt === 'resx' ? 'text/xml' : fmt === 'arb' ? 'application/json' : fmt === 'yaml' ? 'text/yaml' : 'text/plain';
+        ext = fmt === 'android' ? 'xml' : fmt === 'po' ? 'po' : fmt === 'xliff' ? 'xlf' : fmt === 'properties' ? 'properties' : fmt === 'arb' ? 'arb' : fmt === 'yaml' ? 'yaml' : fmt === 'resx' ? 'resx' : 'strings';
       }
       const blob = new Blob([content], { type });
       const a = document.createElement('a');
@@ -655,7 +656,7 @@ export class EditorComponent implements OnInit {
     } catch (err) { this.error.set(err instanceof Error ? err.message : 'Export failed'); }
   }
   labelFor(fmt: IoFormat): string {
-    return fmt === 'json' ? 'JSON' : fmt === 'csv' ? 'CSV' : fmt === 'android' ? 'Android XML' : fmt === 'po' ? 'PO (gettext)' : fmt === 'xliff' ? 'XLIFF 1.2' : fmt === 'properties' ? 'Java properties' : fmt === 'arb' ? 'ARB (Flutter)' : fmt === 'yaml' ? 'YAML' : 'iOS strings';
+    return fmt === 'json' ? 'JSON' : fmt === 'csv' ? 'CSV' : fmt === 'android' ? 'Android XML' : fmt === 'po' ? 'PO (gettext)' : fmt === 'xliff' ? 'XLIFF 1.2' : fmt === 'properties' ? 'Java properties' : fmt === 'arb' ? 'ARB (Flutter)' : fmt === 'yaml' ? 'YAML' : fmt === 'resx' ? 'RESX (.NET)' : 'iOS strings';
   }
   formatLabel(): string {
     return this.labelFor(this.ioFormat());

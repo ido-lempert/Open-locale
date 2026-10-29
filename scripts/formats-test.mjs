@@ -434,6 +434,45 @@ try {
   const heAfterYamlLock = await (await fetch(`${API}${P}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
   check('YAML locked key keeps its value, unlocked key imported', heAfterYamlLock['yaml.title'] === 'My App ✓' && heAfterYamlLock['yaml.unlocked'] === 'lands', JSON.stringify({ title: heAfterYamlLock['yaml.title'], unlocked: heAfterYamlLock['yaml.unlocked'] }));
 
+  // --- RESX (.NET XML resources) ---
+  const resxImp = await call(`${P}/import/he`, { token: at, method: 'POST', body: { resx: '<root><data name="resx.title" xml:space="preserve"><value>My App ✓</value></data><data name="resx.chars"><value>A &amp; B &lt;C&gt;</value></data></root>' } });
+  check('RESX import lands values with unescaping', resxImp.status === 201 && resxImp.json.translationsUpserted === 2, JSON.stringify(resxImp.json));
+  const heAfterResx = await (await fetch(`${API}${P}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('RESX imported values readable', heAfterResx['resx.title'] === 'My App ✓' && heAfterResx['resx.chars'] === 'A & B <C>', JSON.stringify({ t: heAfterResx['resx.title'], c: heAfterResx['resx.chars'] }));
+  const resxOut = await (await fetch(`${API}${P}/export/he/resx`, { headers: { Authorization: `Bearer ${at}` } })).text();
+  check('RESX export has resheaders, xml:space and escaped values', resxOut.includes('<root>') && resxOut.includes('<resheader name="resmimetype">') && resxOut.includes('<data name="resx.chars" xml:space="preserve">') && resxOut.includes('<value>A &amp; B &lt;C&gt;</value>'), resxOut.split('\n').find((l) => l.includes('resx.chars')) ?? '');
+  const resxRound = await call(`${P}/import/he`, { token: at, method: 'POST', body: { resx: resxOut } });
+  check('RESX export -> import roundtrips unchanged', resxRound.status === 201 && resxRound.json.translationsUpserted === 0 && resxRound.json.unchangedSkipped >= 2, JSON.stringify(resxRound.json));
+  const resxBefore = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  const resxTyped = await call(`${P}/import/he`, { token: at, method: 'POST', body: { resx: '<root><data name="resx.bin" type="System.Drawing.Bitmap, System.Drawing"><value>QkFTRTY0</value></data><data name="resx.ok"><value>must not land</value></data></root>' } });
+  const resxAfterTyped = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('RESX typed resource rejected (400) and leaves keys unchanged', resxTyped.status === 400 && JSON.stringify(resxBefore) === JSON.stringify(resxAfterTyped) && resxAfterTyped['resx.ok'] === undefined, String(resxTyped.status));
+  const resxDup = await call(`${P}/import/he`, { token: at, method: 'POST', body: { resx: '<root><data name="resx.title"><value>1</value></data><data name="resx.title"><value>2</value></data></root>' } });
+  check('RESX duplicate name rejected (400)', resxDup.status === 400, String(resxDup.status));
+  const resxMeta = await call(`${P}/import/he`, { token: at, method: 'POST', body: { resx: '<root><metadata><data name="resx.m"><value>v</value></data></metadata></root>' } });
+  check('RESX metadata section rejected (400)', resxMeta.status === 400, String(resxMeta.status));
+  const resxDry = await call(`${P}/import/he?dryRun=true`, { token: at, method: 'POST', body: { resx: resxOut } });
+  check('RESX import previews through dry-run without writing', resxDry.status === 201 && resxDry.json.dryRun === true && resxDry.json.unchangedSkipped >= 2, JSON.stringify(resxDry.json));
+
+  const cResxEn = await call(`${P}/import/en`, { token: ct, method: 'POST', body: { resx: '<root><data name="resx.denied"><value>x</value></data></root>' } });
+  check('RESX import outside the member locale grant denied (403)', cResxEn.status === 403, String(cResxEn.status));
+  const cResxHe = await call(`${P}/import/he`, { token: ct, method: 'POST', body: { resx: '<root><data name="resx.memberok"><value>allowed</value></data></root>' } });
+  check('RESX import inside the member locale grant accepted', cResxHe.status === 201, String(cResxHe.status));
+  const keysForResxLock = (await call(`${P}/keys`, { token: at })).json;
+  await call(`${P}/tasks`, { token: at, method: 'POST', body: { title: 'Lock resx.title', lockKeys: true, keyIds: [keysForResxLock.find((k) => k.name === 'resx.title').id] } });
+  const resxLockImp = await call(`${P}/import/he`, { token: ct, method: 'POST', body: { resx: '<root><data name="resx.title"><value>changed under lock</value></data><data name="resx.unlocked"><value>lands</value></data></root>' } });
+  check('RESX import skips the locked key and reports it', resxLockImp.status === 201 && resxLockImp.json.failed === 1 && resxLockImp.json.translationsUpserted === 1, JSON.stringify(resxLockImp.json));
+  const heAfterResxLock = await (await fetch(`${API}${P}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('RESX locked key keeps its value, unlocked key imported', heAfterResxLock['resx.title'] === 'My App ✓' && heAfterResxLock['resx.unlocked'] === 'lands', JSON.stringify({ t: heAfterResxLock['resx.title'], u: heAfterResxLock['resx.unlocked'] }));
+
+  await call(`${P}/branches`, { token: at, method: 'POST', body: { name: 'resx-branch' } });
+  const impResxBr = await call(`${P}/import/en?branch=resx-branch`, { token: at, method: 'POST', body: { resx: '<root><data name="resx.branchonly"><value>branch value</value></data></root>' } });
+  const mainAfterResxBr = await (await fetch(`${API}${P}/export/en?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  const brAfterResxBr = await (await fetch(`${API}${P}/export/en?flat=true&branch=resx-branch`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('RESX import scopes to the named branch', impResxBr.status === 201 && mainAfterResxBr['resx.branchonly'] === undefined && brAfterResxBr['resx.branchonly'] === 'branch value', String(impResxBr.status));
+  const brResxOut = await (await fetch(`${API}${P}/export/en/resx?branch=resx-branch`, { headers: { Authorization: `Bearer ${at}` } })).text();
+  check('RESX export reads the named branch', brResxOut.includes('<data name="resx.branchonly" xml:space="preserve">'), '');
+
   // Import dry-run preview: same parsing/grants/locks as a real import, strictly read-only.
   await call(`${P}/import/he`, { token: at, method: 'POST', body: { entries: { 'pv.chg': 'old', 'pv.same': 'same', 'pv.lock': 'orig' } } });
   const pvKeys = (await call(`${P}/keys`, { token: at })).json;
@@ -479,7 +518,7 @@ try {
     }
     return out;
   };
-  const extFor = { csv: '.csv', android: '.xml', ios: '.strings', po: '.po', xliff: '.xlf', properties: '.properties', arb: '.arb', yaml: '.yaml' };
+  const extFor = { csv: '.csv', android: '.xml', ios: '.strings', po: '.po', xliff: '.xlf', properties: '.properties', arb: '.arb', yaml: '.yaml', resx: '.resx' };
   const bundleJson = await fetch(`${API}${P}/export-bundle/json`, { headers: { Authorization: `Bearer ${at}` } });
   const jsonEntries = readZip(Buffer.from(await bundleJson.arrayBuffer()));
   check('json bundle: zip content-type, attachment disposition, one entry per locale', bundleJson.status === 200 && (bundleJson.headers.get('content-type') || '').includes('application/zip') && (bundleJson.headers.get('content-disposition') || '').includes('fmt-json.zip') && jsonEntries.size === 2 && jsonEntries.has('en.json') && jsonEntries.has('he.json'), `${bundleJson.status} ${bundleJson.headers.get('content-disposition')} ${[...jsonEntries.keys()].join(',')}`);

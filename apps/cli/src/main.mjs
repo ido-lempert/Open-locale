@@ -5,7 +5,7 @@
 //
 //   open-locale push <file> --locale he          upload translations (atomic import; --dry-run previews)
 //   open-locale push <file.zip>                  import a store-only bundle (one entry per locale)
-//   open-locale pull --locale he [--format f] [-o file]   json|csv|android|ios|po|xliff|properties|arb|yaml
+//   open-locale pull --locale he [--format f] [-o file]   json|csv|android|ios|po|xliff|properties|arb|yaml|resx
 //   open-locale pull --all [--format f] -o <file.zip>     export every locale as one store-only zip
 //   open-locale keys [--search term]             list keys; every command accepts --branch <name>
 //   open-locale imports [--limit N]              audit recent import runs
@@ -68,8 +68,8 @@ async function api(path, { method = 'GET', body, raw = false, zip = false } = {}
   return json;
 }
 
-const FORMATS = new Set(['json', 'csv', 'android', 'ios', 'po', 'xliff', 'properties', 'arb', 'yaml']);
-const PUSH_EXTS = [['.xml', 'xml'], ['.strings', 'strings'], ['.csv', 'csv'], ['.po', 'po'], ['.xlf', 'xliff'], ['.xliff', 'xliff'], ['.properties', 'properties'], ['.arb', 'arb'], ['.yaml', 'yaml'], ['.yml', 'yaml']];
+const FORMATS = new Set(['json', 'csv', 'android', 'ios', 'po', 'xliff', 'properties', 'arb', 'yaml', 'resx']);
+const PUSH_EXTS = [['.xml', 'xml'], ['.strings', 'strings'], ['.csv', 'csv'], ['.po', 'po'], ['.xlf', 'xliff'], ['.xliff', 'xliff'], ['.properties', 'properties'], ['.arb', 'arb'], ['.yaml', 'yaml'], ['.yml', 'yaml'], ['.resx', 'resx']];
 
 async function push() {
   const file = args[1];
@@ -168,12 +168,12 @@ async function imports() {
 }
 
 const usage = `open-locale <command>
-  push <file> --locale <code>            import a translations file (json/xml/strings/csv/po/xlf/properties/arb/yaml)
+  push <file> --locale <code>            import a translations file (json/xml/strings/csv/po/xlf/properties/arb/yaml/resx)
   push <file> --locale <c> --dry-run     preview counts without writing (not available for bundle zip)
   push <file.zip> [--format f]           import a bundle zip: STORE-ONLY, as written by pull --all
                                          (compressed zips are rejected before any write; each locale
                                          imports independently, no rollback across locales)
-  pull --locale <code> [--format f] [-o file]   export translations (json|csv|android|ios|po|xliff|properties|arb|yaml)
+  pull --locale <code> [--format f] [-o file]   export translations (json|csv|android|ios|po|xliff|properties|arb|yaml|resx)
   pull --all [--format f] -o <file.zip>  export every locale as one store-only zip
   keys [--search term]                   list keys
   imports [--limit N]                    list recent import runs (newest first, API caps at 50)

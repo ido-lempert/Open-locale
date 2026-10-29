@@ -83,6 +83,11 @@ try {
   check('cli pull yaml prints the locale root', pullYaml.status === 0 && pullYaml.out.includes('he:'), pullYaml.out.trim().slice(0, 80));
   const pullArb = cli(['pull', '--locale', 'he', '--format', 'arb'], workDir);
   check('cli pull arb carries the locale marker', pullArb.status === 0 && pullArb.out.includes('"@@locale": "he"'), pullArb.out.trim().slice(0, 80));
+  writeFileSync(join(workDir, 'he.resx'), '<root><data name="app.title" xml:space="preserve"><value>רסקס</value></data></root>');
+  const pushResx = cli(['push', 'he.resx', '--locale', 'he'], workDir);
+  check('cli push imports a RESX file', pushResx.status === 0 && pushResx.out.includes('1 upserted'), pushResx.out.trim().slice(0, 120));
+  const pullResx = cli(['pull', '--locale', 'he', '--format', 'resx'], workDir);
+  check('cli pull resx prints the root and resheaders', pullResx.status === 0 && pullResx.out.includes('<root>') && pullResx.out.includes('resmimetype') && pullResx.out.includes('רסקס'), pullResx.out.trim().slice(0, 120));
   const badFmt = cli(['pull', '--locale', 'he', '--format', 'toml'], workDir);
   check('cli pull rejects an unknown format', badFmt.status === 1 && badFmt.out.includes('unknown format'), badFmt.out.trim());
 
@@ -150,7 +155,7 @@ try {
   const pushZipBr = cli(['push', 'bundle.zip', '--branch', 'cli-br'], workDir);
   const brHe = (await call(`/projects/${proj.json.id}/export/he?flat=true&branch=cli-br`, { jwt })).json;
   const mainHe = (await call(`/projects/${proj.json.id}/export/he?flat=true`, { jwt })).json;
-  check('cli bundle push --branch lands on the branch, main untouched', pushZipBr.status === 0 && brHe['app.title'] === 'כותרת פו' && mainHe['app.title'] === 'ראשי', JSON.stringify({ br: brHe['app.title'], main: mainHe['app.title'] }));
+  check('cli bundle push --branch lands on the branch, main untouched', pushZipBr.status === 0 && brHe['app.title'] === 'רסקס' && mainHe['app.title'] === 'ראשי', JSON.stringify({ br: brHe['app.title'], main: mainHe['app.title'] }));
 
   // Dry-run through the CLI: previews counts, writes nothing, bundle rejected.
   writeFileSync(join(workDir, 'dr.json'), JSON.stringify({ 'app.title': 'טיוטה', 'app.new': 'חדש' }));

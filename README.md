@@ -74,7 +74,7 @@ open-locale imports [--limit N]                 # audit recent import runs (newe
 open-locale docs                                # print the OpenAPI docs URL
 ```
 
-Formats: json, csv, android, ios, po, xliff, properties, arb, yaml. Each format
+Formats: json, csv, android, ios, po, xliff, properties, arb, yaml, resx. Each format
 is a subset: constructs outside the subset are rejected with an error rather
 than approximated. `push`, `pull` and `keys` accept `--branch <name>` to scope
 the read or write to a branch instead of main; import runs are not
