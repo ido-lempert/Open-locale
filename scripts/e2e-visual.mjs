@@ -472,13 +472,20 @@ try {
   mixZip.fill(0x66, heLocalOff + 30, heLocalOff + 31);
   mixZip.fill(0x72, heLocalOff + 31, heLocalOff + 32);
   writeFileSync('/tmp/e2e-bundle-mix.zip', mixZip);
+  // Change one en value after the export so the re-import performs a real
+  // write (1 updated) alongside the skipped entry.
+  const ownerTokBundle = await page.evaluate(() => localStorage.getItem('ol_token'));
+  const bundleKeys = await (await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/keys`, { headers: { Authorization: `Bearer ${ownerTokBundle}` } })).json();
+  const enFlat = await (await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/export/en?flat=true`, { headers: { Authorization: `Bearer ${ownerTokBundle}` } })).json();
+  const enTarget = Object.keys(enFlat).sort()[0]; // a key guaranteed to be in en.po
+  const enKey = bundleKeys.find((k) => k.name === enTarget);
+  const putRes = await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/keys/${enKey.id}/translations`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ownerTokBundle}` }, body: JSON.stringify({ locale: 'en', value: 'changed after bundle export' }) });
   const mixUpInput = await page.$('input[name=bundleFile]');
   await mixUpInput.uploadFile('/tmp/e2e-bundle-mix.zip');
-  const mixNotice = await page.waitForFunction(() => {
-    const t = document.querySelector('p.notice')?.textContent || '';
-    return t.includes('en:') && t.includes('skipped fr.po (no project locale matches the entry name)') && t.includes('not rolled back');
-  }, { timeout: 10000 }).then(() => true).catch(() => false);
-  check('mixed bundle outcome: en imported, fr.po skipped with reason, both in the notice', mixNotice);
+  await page.waitForFunction(() => (document.querySelector('p.notice')?.textContent || '').includes('Bundle import'), { timeout: 10000 }).catch(() => {});
+  const mixText = await page.evaluate(() => document.querySelector('p.notice')?.textContent || '');
+  const mixNotice = mixText.includes('en: 0 created, 1 updated') && mixText.includes('skipped fr.po (no project locale matches the entry name)') && mixText.includes('not rolled back');
+  check('mixed bundle outcome: en write (1 updated) alongside fr.po skip with reason, both in the notice', mixNotice, mixText.slice(0, 220));
   await page.evaluate(() => { document.querySelector('p.notice')?.scrollIntoView({ block: 'center' }); });
   await shot('editor-45-bundle-import-mixed.png');
   await page.setViewport({ width: 480, height: 800 });

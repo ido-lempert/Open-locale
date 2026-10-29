@@ -71,5 +71,7 @@ Two things this endpoint is NOT, stated plainly:
   also visible text under the import row (store-only, per-locale
   independence, no rollback), not only a tooltip - verified present and
   wrapped at 480px (editor-45b-bundle-note-480.png). Mixed outcome through
-  the UI: en imported, a renamed fr.po entry skipped with its reason, both in
-  the notice (editor-45-bundle-import-mixed.png).
+  the UI: one en value changed after export, so the re-import performs a
+  real write (en: 1 updated) while the renamed fr.po entry is skipped with
+  its reason - both in the same notice
+  (editor-45-bundle-import-mixed.png).
