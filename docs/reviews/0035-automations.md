@@ -25,16 +25,38 @@ implementation slice; nothing here reaches outside the project.
   - `task.create` creates a task titled from a template (`{key}` expands
     to the key name); nothing else.
 - Runs execute as the rule's creator with a LIVE permission re-check at
-  fire time: if the creator lost project access, the run fails visibly as
-  an `automation.run` activity event with the error, and the triggering
-  edit is unaffected (hooks are fire-and-forget after the write commits).
+  fire time: mt.pretranslate re-checks the creator's current locale grants
+  (assertLocaleWrite) and tasks.create re-checks membership on every run.
+  This is the explicit delegation model: creating a rule is an admin-only
+  act that delegates the creator's CURRENT authority to the rule. Any
+  member's edit can trigger a rule, but the rule acts as its creator, not
+  as the triggering editor - the editor gains no access from it. Demotion
+  or a narrowed locale grant takes effect on the very next run; if the
+  creator lost project access, the run fails visibly as an
+  `automation.run` activity event with the error, and the triggering edit
+  is unaffected (hooks are fire-and-forget after the write commits).
+- Audit: every `automation.run` event records `triggeredBy` (the user
+  whose write fired the rule) and `runAs` (the creator it executed as).
+- Task-explosion bound, scoped honestly: one OPEN task per resolved
+  title. Atomic check-then-create: a per-(project,title) advisory lock
+  (pg_advisory_xact_lock) inside one transaction serializes concurrent
+  fires, so two simultaneous triggers cannot both create. Titles
+  containing {key} still create one task per distinct key (by design),
+  and a task leaving OPEN frees the title for a new one - this is NOT a
+  global task-count cap. pretranslate is naturally idempotent
+  (conditional fill-empty write).
+- Durability, stated plainly: runs are BEST-EFFORT and in-process. There
+  is no durable queue and no retry, and event uniqueness is not enforced:
+  a write committed while the server restarts loses its run, and a
+  disable/delete takes effect at the next fire (an already-running rule
+  completes). This is a convenience feature, not reliable job execution.
 - Settings UI: Automations panel - rule list with enable/disable/remove,
   add form (trigger/action selects, provider + locale checkboxes for
   pretranslate, title template for task.create). Panel copy states the
   whitelist and the runs-as-creator rule explicitly.
 
 ## Verified
-scripts/automations-test.mjs - 18 checks, real PG + HTTP:
+scripts/automations-test.mjs - 23 checks, real PG + HTTP:
 - member create rejected (403); unknown trigger/action 400;
   key.created+pretranslate 400; foreign provider id 400; base locale in
   config.locales 400.
@@ -47,6 +69,16 @@ scripts/automations-test.mjs - 18 checks, real PG + HTTP:
   auto.two"); disabled rule does not fire; deleted rule does not fire.
 - creator removed from the project: the triggering write still commits
   (200), the run is recorded with an error, and nothing is filled.
+- re-enabled rule fires again; the run event records triggeredBy (writing
+  user) and runAs (creator).
+- repeated fire of the same task.create title dedupes to one OPEN task,
+  second run recorded with deduplicated: true.
+- concurrent fires (two parallel base writes, same title) produce exactly
+  one task total - the advisory lock serializes check-then-create; one
+  run is recorded deduplicated.
+- demotion: creator changed ADMIN -> MEMBER with a he-only grant after
+  creating the rule; the next run fills he and records an explicit error
+  for ar ("No write access for locale(s): ar").
 Fill-empty-only semantics of the pretranslate action itself (existing
 values untouched, conditional write, history/version) are those of the
 0034 runner and are verified in scripts/mt-test.mjs.

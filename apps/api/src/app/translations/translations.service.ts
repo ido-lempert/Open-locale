@@ -115,7 +115,7 @@ export class TranslationsService {
       // Automations fire-and-forget too; the service enforces the trigger
       // bounds (main branch, base locale) and never throws.
       this.automations.fire(projectId, 'translation.value', {
-        keyId, keyName: key.name, branchName: key.branch.name, localeCode: locale,
+        keyId, keyName: key.name, branchName: key.branch.name, localeCode: locale, actorId: userId,
       }).catch(() => {});
       return translation;
     });

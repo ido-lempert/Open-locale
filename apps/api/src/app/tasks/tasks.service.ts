@@ -12,7 +12,7 @@ export class TasksService {
     private readonly activity: ActivityService,
   ) {}
 
-  private async assertAssigneeMember(projectTeamId: string, assigneeId: string) {
+  async assertAssigneeMember(projectTeamId: string, assigneeId: string) {
     const member = await this.prisma.teamMember.findFirst({
       where: { teamId: projectTeamId, userId: assigneeId },
     });
@@ -39,23 +39,30 @@ export class TasksService {
   }) {
     const project = await this.projects.getFor(userId, projectId);
     if (input.assigneeId) await this.assertAssigneeMember(project.teamId, input.assigneeId);
+    return this.prisma.$transaction((tx) => this.createIn(tx, userId, projectId, input));
+  }
+
+  // Creates the task inside a caller-owned transaction (used by automations
+  // for atomic check-then-create under an advisory lock). The caller must
+  // already have validated membership and any assignee.
+  async createIn(tx: Prisma.TransactionClient, userId: string, projectId: string, input: {
+    title: string; description?: string; dueDate?: string; assigneeId?: string;
+  }) {
     const title = input.title.trim();
     if (!title) throw new BadRequestException('Title cannot be empty');
-    return this.prisma.$transaction(async (tx) => {
-      const task = await tx.task.create({
-        data: {
-          projectId, title, description: input.description?.trim() ?? '',
-          dueDate: input.dueDate ? new Date(input.dueDate) : null,
-          assigneeId: input.assigneeId ?? null, creatorId: userId,
-        },
-        include: this.includePeople,
-      });
-      await this.activity.record(tx, {
-        projectId, actorId: userId, action: 'task.created',
-        detail: { title: truncate(title, 80) },
-      });
-      return task;
+    const task = await tx.task.create({
+      data: {
+        projectId, title, description: input.description?.trim() ?? '',
+        dueDate: input.dueDate ? new Date(input.dueDate) : null,
+        assigneeId: input.assigneeId ?? null, creatorId: userId,
+      },
+      include: this.includePeople,
     });
+    await this.activity.record(tx, {
+      projectId, actorId: userId, action: 'task.created',
+      detail: { title: truncate(title, 80) },
+    });
+    return task;
   }
 
   async update(userId: string, projectId: string, taskId: string, input: {

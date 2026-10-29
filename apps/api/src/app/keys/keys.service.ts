@@ -77,7 +77,7 @@ export class KeysService {
       return created;
     });
     // Fire-and-forget: automations must never fail or delay the write.
-    this.automations.fire(projectId, 'key.created', { keyId: key.id, keyName: key.name, branchName: branch.name }).catch(() => {});
+    this.automations.fire(projectId, 'key.created', { keyId: key.id, keyName: key.name, branchName: branch.name, actorId: userId }).catch(() => {});
     return key;
   }
 

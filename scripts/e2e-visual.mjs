@@ -651,6 +651,15 @@ try {
   await page.evaluate(() => { [...document.querySelectorAll('h2')].find((h) => h.textContent === 'Automations')?.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70); });
   await new Promise((r) => setTimeout(r, 300));
   await shot('editor-29-automations.png');
+  // Narrow viewport: panel must stay usable (no clipped controls).
+  await page.setViewport({ width: 480, height: 800 });
+  await new Promise((r) => setTimeout(r, 400));
+  await page.evaluate(() => { [...document.querySelectorAll('h2')].find((h) => h.textContent === 'Automations')?.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70); });
+  await new Promise((r) => setTimeout(r, 300));
+  await shot('editor-29b-automations-narrow.png');
+  const clipped = await page.evaluate(() => [...document.querySelectorAll('.panel select, .panel input')].some((el) => el.getBoundingClientRect().right > document.documentElement.clientWidth));
+  check('automations panel usable at 480px (no control overflows viewport)', !clipped);
+  await page.setViewport({ width: 1280, height: 800 });
 
   // --- Progress report ---
   await page.setViewport({ width: 1280, height: 900 });

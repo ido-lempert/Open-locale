@@ -151,7 +151,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
         </section>
         <section class="panel">
           <h2>Automations</h2>
-          <p class="muted">Rules fire only on the whitelisted triggers - a new key, or a base-locale write on the main branch - and only do the whitelisted internal actions: fill empty cells with pseudo TEST DATA or create a task. They never call external services. Rules run as their creator: if the creator loses project access, the run fails visibly in the activity log and the triggering edit is unaffected.</p>
+          <p class="muted">Rules fire only on the whitelisted triggers - a new key, or a base-locale write on the main branch - and only do the whitelisted internal actions: fill empty cells with pseudo TEST DATA or create a task. They never call external services. Only project admins can create rules, and creating a rule delegates YOUR authority to it: any member's edit can trigger it, but the rule acts as you, with your CURRENT permissions re-checked on every run - not as the editor who triggered it. If you are demoted, lose a locale grant, or leave the project, the run narrows or fails visibly in the activity log and the triggering edit is unaffected. Runs are best-effort and in-process: no durable queue and no retry, and a write committed while the server restarts does not replay.</p>
           <ul class="locale-list">
             @for (r of autoRules(); track r.id) {
               <li>

@@ -97,7 +97,9 @@ textarea { resize: vertical; }
 .panel h2 { font-size: 1rem; margin: 0 0 0.75rem; }
 .panel label { display: block; margin-bottom: 0.75rem; font-size: 0.9rem; }
 .panel label input { margin-top: 0.2rem; }
-.panel .inline { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+.panel .inline { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.5rem; }
+.panel .inline select { min-width: 170px; max-width: 230px; }
+.panel .inline input:not([type=checkbox]) { min-width: 150px; flex: 0 1 auto; }
 .locale-list { list-style: none; margin: 0; padding: 0; }
 .locale-list li { display: flex; align-items: center; gap: 0.75rem; padding: 0.35rem 0; }
 .danger-zone { border-color: #f3c2c2; }

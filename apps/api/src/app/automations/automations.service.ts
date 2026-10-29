@@ -90,7 +90,7 @@ export class AutomationsService {
   // Called fire-and-forget from the write paths. Trigger bounds are enforced
   // here, not by callers: main branch only; translation.value only for
   // base-locale writes. Never throws.
-  async fire(projectId: string, trigger: string, ctx: { keyId: string; keyName: string; branchName: string; localeCode?: string }) {
+  async fire(projectId: string, trigger: string, ctx: { keyId: string; keyName: string; branchName: string; localeCode?: string; actorId?: string }) {
     try {
       if (ctx.branchName !== 'main') return;
       const rules = await this.prisma.automationRule.findMany({ where: { projectId, trigger, enabled: true } });
@@ -104,7 +104,7 @@ export class AutomationsService {
     } catch { /* automation must never fail the triggering write */ }
   }
 
-  private async runRule(projectId: string, baseLocale: string, rule: { id: string; name: string; action: string; config: Prisma.JsonValue; creatorId: string }, ctx: { keyId: string; keyName: string }) {
+  private async runRule(projectId: string, baseLocale: string, rule: { id: string; name: string; action: string; config: Prisma.JsonValue; creatorId: string }, ctx: { keyId: string; keyName: string; actorId?: string }) {
     const config = (rule.config ?? {}) as Record<string, unknown>;
     let detail: Record<string, unknown>;
     try {
@@ -123,18 +123,41 @@ export class AutomationsService {
         detail = { rule: rule.name, action: rule.action, key: ctx.keyName, results };
       } else {
         const title = String(config.title ?? '').split('{key}').join(ctx.keyName);
-        const task = await this.tasks.create(rule.creatorId, projectId, {
-          title, assigneeId: (config.assigneeId as string) ?? undefined,
+        // Task-explosion bound, scoped honestly: one OPEN task per resolved
+        // title. Atomic check-then-create: a per-(project,title) advisory
+        // lock inside one transaction serializes concurrent fires, so two
+        // simultaneous triggers cannot both create. Titles containing {key}
+        // still create one task per distinct key (by design), and a task
+        // leaving OPEN frees the title - this is not a global task cap.
+        const assigneeId = (config.assigneeId as string) ?? undefined;
+        const project = await this.projects.getFor(rule.creatorId, projectId);
+        if (assigneeId) await this.tasks.assertAssigneeMember(project.teamId, assigneeId);
+        const outcome = await this.prisma.$transaction(async (tx) => {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${projectId + '::' + title}))`;
+          const existing = await tx.task.findFirst({ where: { projectId, title, status: 'OPEN' } });
+          if (existing) return { task: existing, deduplicated: true };
+          return { task: await this.tasks.createIn(tx, rule.creatorId, projectId, { title, assigneeId }), deduplicated: false };
         });
-        detail = { rule: rule.name, action: rule.action, key: ctx.keyName, taskId: task.id, title: task.title };
+        detail = {
+          rule: rule.name, action: rule.action, key: ctx.keyName,
+          taskId: outcome.task.id, title,
+          ...(outcome.deduplicated ? { deduplicated: true } : {}),
+        };
       }
     } catch (e) {
       detail = { rule: rule.name, action: rule.action, key: ctx.keyName, error: e instanceof Error ? e.message : String(e) };
     }
+    // The run executes AS the creator (actorId = creator): creating a rule is
+    // an admin-only act that delegates the creator's authority to the rule.
+    // The creator's CURRENT grants are re-checked live inside mt.pretranslate
+    // (assertLocaleWrite) and tasks.create (membership) on every run, so
+    // demotion or a narrowed locale grant takes effect immediately. The
+    // trigger actor only causes the run; they gain no access from it. Their
+    // identity is recorded for audit.
     await this.prisma.$transaction(async (tx) => {
       await this.activity.record(tx, {
         projectId, actorId: rule.creatorId, action: 'automation.run', keyName: ctx.keyName,
-        detail: detail as Prisma.InputJsonValue,
+        detail: { ...detail, triggeredBy: ctx.actorId ?? null, runAs: rule.creatorId } as Prisma.InputJsonValue,
       });
     });
   }

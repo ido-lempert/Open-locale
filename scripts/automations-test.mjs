@@ -136,6 +136,62 @@ try {
   await new Promise((r) => setTimeout(r, 1000));
   const k5he = (await call(`/projects/${pid}/keys?branch=main`, { jwt })).json.find((k) => k.id === k5.id).translations.find((t) => t.localeCode === 'he');
   check('deleted rule does not fire', !k5he);
+
+  // Re-enabled rule fires again.
+  await call(`/projects/${pid}/automations/${taskRule.id}`, { jwt, method: 'PATCH', body: { enabled: true } });
+  const k6 = (await call(`/projects/${pid}/keys`, { jwt, method: 'POST', body: { name: 'auto.six' } })).json;
+  const task6 = await pollFor(async () => {
+    const tasks6 = (await call(`/projects/${pid}/tasks`, { jwt })).json;
+    return (Array.isArray(tasks6) ? tasks6 : tasks6.items || []).find((t) => t.title === 'Translate new key auto.six') || null;
+  });
+  check('re-enabled rule fires again', !!task6);
+
+  // Attribution: the run event records the trigger actor and the run-as creator.
+  const runSix = await pollFor(async () => (await runs()).find((a) => a.keyName === 'auto.six'));
+  check('run records trigger actor and run-as creator', !!runSix && runSix.detail.triggeredBy === owner.user.id && runSix.detail.runAs === owner.user.id, JSON.stringify(runSix && runSix.detail).slice(0, 160));
+
+  // Task-explosion bound: repeated fires with the same resolved title dedupe
+  // to a single OPEN task; later runs are recorded as deduplicated.
+  await call(`/projects/${pid}/automations`, { jwt, method: 'POST', body: { name: 'Review base change', trigger: 'translation.value', action: 'task.create', config: { title: 'Review base copy change' } } });
+  await call(`/projects/${pid}/keys/${k6.id}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value: 'v1' } });
+  await pollFor(async () => (await runs()).find((a) => a.detail && a.detail.title === 'Review base copy change'));
+  await call(`/projects/${pid}/keys/${k6.id}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value: 'v2' } });
+  const dedupeRun = await pollFor(async () => (await runs()).find((a) => a.detail && a.detail.deduplicated === true));
+  const allTasks = (await call(`/projects/${pid}/tasks`, { jwt })).json;
+  const openDupes = (Array.isArray(allTasks) ? allTasks : allTasks.items || []).filter((t) => t.title === 'Review base copy change');
+  check('repeated fire dedupes to one open task', !!dedupeRun && openDupes.length === 1, `tasks=${openDupes.length}`);
+
+  // Concurrent fires, deterministic sequencing: close the open task first,
+  // then two parallel base writes resolve the same title. The advisory lock
+  // must serialize check-then-create so exactly one new task appears.
+  const reviewRuns = async () => (await runs()).filter((a) => a.detail && a.detail.title === 'Review base copy change');
+  const reviewTask = (Array.isArray((await call(`/projects/${pid}/tasks?status=OPEN`, { jwt })).json) ? (await call(`/projects/${pid}/tasks?status=OPEN`, { jwt })).json : []).find((t) => t.title === 'Review base copy change');
+  await call(`/projects/${pid}/tasks/${reviewTask.id}`, { jwt, method: 'PATCH', body: { status: 'DONE' } });
+  const runsSoFar = (await reviewRuns()).length;
+  await Promise.all([
+    call(`/projects/${pid}/keys/${k6.id}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value: 'v5' } }),
+    call(`/projects/${pid}/keys/${k6.id}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value: 'v6' } }),
+  ]);
+  await pollFor(async () => ((await reviewRuns()).length >= runsSoFar + 2 ? true : null));
+  const reviewTasksAll = (Array.isArray((await call(`/projects/${pid}/tasks`, { jwt })).json) ? (await call(`/projects/${pid}/tasks`, { jwt })).json : []).filter((t) => t.title === 'Review base copy change');
+  const dedupeSeen = (await reviewRuns()).some((a) => a.detail.deduplicated === true);
+  check('concurrent fires create exactly one task (advisory lock)', reviewTasksAll.length === 2 && dedupeSeen, `tasks=${reviewTasksAll.length}`);
+
+  // Demotion: creator changed ADMIN -> MEMBER with a he-only grant after
+  // creating the rule. The next run fills he but ar fails visibly - the
+  // creator's CURRENT grants apply, not the grants at creation time.
+  await call(`/projects/${pid}/locales`, { jwt, method: 'POST', body: { code: 'ar' } });
+  const admin3 = (await call('/auth/signup', { method: 'POST', body: { email: `aud${ts}@t.dev`, password: 'pass1234', displayName: 'a3' } })).json;
+  await call(`/projects/${pid}/members`, { jwt, method: 'POST', body: { email: admin3.user.email, role: 'ADMIN', allowedLocales: [] } });
+  await call(`/projects/${pid}/automations`, { jwt: admin3.accessToken, method: 'POST', body: { name: 'A3 rule', trigger: 'translation.value', action: 'pretranslate', config: { providerId: provider.id, locales: ['he', 'ar'] } } });
+  await call(`/projects/${pid}/members/${admin3.user.id}`, { jwt, method: 'PATCH', body: { role: 'MEMBER', allowedLocales: ['he'] } });
+  const k7 = (await call(`/projects/${pid}/keys`, { jwt, method: 'POST', body: { name: 'auto.seven' } })).json;
+  await call(`/projects/${pid}/keys/${k7.id}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value: 'Source text' } });
+  const demoteRun = await pollFor(async () => (await runs()).find((a) => a.keyName === 'auto.seven' && a.detail && a.detail.results));
+  const k7rows = (await call(`/projects/${pid}/keys?branch=main`, { jwt })).json.find((k) => k.id === k7.id).translations;
+  const k7he = k7rows.find((t) => t.localeCode === 'he');
+  const k7ar = k7rows.find((t) => t.localeCode === 'ar');
+  check('demoted creator: granted locale fills, ungranted locale fails visibly', !!k7he && !k7ar && !!(demoteRun && demoteRun.detail.results.ar && demoteRun.detail.results.ar.error), JSON.stringify(demoteRun && demoteRun.detail.results).slice(0, 200));
 } finally {
   if (api) api.kill('SIGTERM');
   await pg.stop();
