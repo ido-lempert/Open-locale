@@ -546,10 +546,12 @@ try {
   await page.select('select[aria-label="Import/export format"]', 'json');
   const conflictPoInput = await page.$('input[type=file]');
   await conflictPoInput.uploadFile(conflictPoFile);
-  const bannerPo = await page.waitForFunction(() => (document.body.textContent || '').includes('looks like PO (gettext) but the format is set to JSON'), { timeout: 10000 }).then(() => true).catch(() => false);
+  const bannerPo = await page.waitForFunction(() => (document.body.textContent || '').includes('has a .po extension, which usually means PO (gettext), but the format is set to JSON'), { timeout: 10000 }).then(() => true).catch(() => false);
   const poAbsent = await page.evaluate(() => ![...document.querySelectorAll('.grid td.key')].some((el) => el.textContent.includes('conflict.po')));
   const selStillJson = await page.$eval('select[aria-label="Import/export format"]', (el) => el.value);
+  const staleNoticeGone = await page.evaluate(() => !document.querySelector('p.notice'));
   check('explicit JSON + .po file: conflict presented, nothing imported, selection kept', bannerPo && poAbsent && selStillJson === 'json', `banner=${bannerPo} absent=${poAbsent} select=${selStillJson}`);
+  check('a new conflicting pick clears the earlier success notice', staleNoticeGone);
   await page.evaluate(() => [...document.querySelectorAll('.import-conflict button')].find((b) => b.textContent.includes('Import as PO'))?.click());
   const poImported = await page.waitForFunction(() => (document.body.textContent || '').includes('(PO (gettext),'), { timeout: 10000 }).then(() => true).catch(() => false);
   check('resolving the conflict as the detected format imports the file', poImported && (await waitText('conflict.po')) && (await page.$eval('select[aria-label="Import/export format"]', (el) => el.value)) === 'po');
@@ -559,9 +561,19 @@ try {
   await page.select('select[aria-label="Import/export format"]', 'xliff');
   const conflictXmlInput = await page.$('input[type=file]');
   await conflictXmlInput.uploadFile(conflictXmlFile);
-  const bannerXml = await page.waitForFunction(() => (document.body.textContent || '').includes('looks like Android XML but the format is set to XLIFF 1.2'), { timeout: 10000 }).then(() => true).catch(() => false);
+  const bannerXml = await page.waitForFunction(() => (document.body.textContent || '').includes('has a .xml extension, which usually means Android XML, but the format is set to XLIFF 1.2'), { timeout: 10000 }).then(() => true).catch(() => false);
   check('explicit XLIFF + .xml file: ambiguous extension presented as a conflict, nothing imported', bannerXml && await page.evaluate(() => ![...document.querySelectorAll('.grid td.key')].some((el) => el.textContent.includes('conflict_xml'))));
   await shot('editor-40-import-conflict.png');
+  await page.setViewport({ width: 480, height: 800 });
+  await shot('editor-41-import-conflict-480.png');
+  const banner480 = await page.evaluate(() => {
+    const el = document.querySelector('.import-conflict');
+    if (!el) return 'missing';
+    const r = el.getBoundingClientRect();
+    return r.width <= 480 && r.left >= 0 && r.right <= 480 ? 'fits' : `overflow left=${r.left} right=${r.right}`;
+  });
+  check('conflict banner and both buttons fit the 480px viewport', banner480 === 'fits', banner480);
+  await page.setViewport({ width: 1280, height: 800 });
   await page.evaluate(() => [...document.querySelectorAll('.import-conflict button')].find((b) => b.textContent.includes('Keep XLIFF'))?.click());
   const errShown = await page.waitForFunction(() => (document.querySelector('p.error')?.textContent || '').length > 3, { timeout: 10000 }).then(() => true).catch(() => false);
   const xmlStillAbsent = await page.evaluate(() => ![...document.querySelectorAll('.grid td.key')].some((el) => el.textContent.includes('conflict_xml')));
@@ -573,10 +585,13 @@ try {
   await page.select('select[aria-label="Import/export format"]', 'arb');
   const conflictJsonInput = await page.$('input[type=file]');
   await conflictJsonInput.uploadFile(conflictJsonFile);
-  const bannerJson = await page.waitForFunction(() => (document.body.textContent || '').includes('looks like JSON but the format is set to ARB (Flutter)'), { timeout: 10000 }).then(() => true).catch(() => false);
+  const bannerJson = await page.waitForFunction(() => (document.body.textContent || '').includes('has a .json extension, which usually means JSON, but the format is set to ARB (Flutter)'), { timeout: 10000 }).then(() => true).catch(() => false);
   check('explicit ARB + .json file: ambiguous extension presented as a conflict, nothing imported', bannerJson && await page.evaluate(() => ![...document.querySelectorAll('.grid td.key')].some((el) => el.textContent.includes('conflict.json'))));
   await page.evaluate(() => [...document.querySelectorAll('.import-conflict button')].find((b) => b.textContent.includes('Import as JSON'))?.click());
-  check('resolving the ARB/JSON conflict as JSON imports the file', (await waitText('conflict.json')) && (await page.$eval('select[aria-label="Import/export format"]', (el) => el.value)) === 'json');
+  const resolvedOk = (await waitText('conflict.json')) && (await page.$eval('select[aria-label="Import/export format"]', (el) => el.value)) === 'json';
+  const errClearedAfterSuccess = await page.evaluate(() => !document.querySelector('p.error'));
+  check('resolving the ARB/JSON conflict as JSON imports the file', resolvedOk);
+  check('a successful import clears the earlier error notice', resolvedOk && errClearedAfterSuccess);
 
   const unknownFile = '/tmp/e2e-unknown.txt';
   writeFileSync(unknownFile, 'msgid "conflict.txt"\nmsgstr "unknown extension keeps the explicit format"\n');

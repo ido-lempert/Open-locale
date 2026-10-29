@@ -83,7 +83,7 @@ interface CellState {
           }
           @if (importConflict(); as c) {
             <div class="import-conflict" role="alert">
-              <span>{{ c.filename }} looks like {{ labelFor(c.detected) }} but the format is set to {{ labelFor(c.current) }}. Nothing was imported yet.</span>
+              <span>{{ c.filename }} has a .{{ c.ext }} extension, which usually means {{ labelFor(c.detected) }}, but the format is set to {{ labelFor(c.current) }}. Nothing was imported yet.</span>
               <button type="button" (click)="resolveImportConflict(true)">Import as {{ labelFor(c.detected) }}</button>
               <button type="button" (click)="resolveImportConflict(false)">Keep {{ labelFor(c.current) }}</button>
             </div>
@@ -267,7 +267,7 @@ export class EditorComponent implements OnInit {
   branch = signal('main'); branches = signal<BranchInfo[]>([]); newBranch = signal('');
   mergePreview = signal<{ branchId: string; from: string; lines: string[]; previewAt: string } | null>(null); ioFormat = signal<'json' | 'csv' | 'android' | 'ios' | 'po' | 'xliff' | 'properties' | 'arb' | 'yaml'>('json');
   ioFormatTouched = signal(false);
-  importConflict = signal<{ filename: string; detected: IoFormat; current: IoFormat; text: string } | null>(null);
+  importConflict = signal<{ filename: string; ext: string; detected: IoFormat; current: IoFormat; text: string } | null>(null);
   glossary = signal<GlossaryTermItem[]>([]);
   filterTag = signal(''); filterStatus = signal<'' | TranslationStatus>('');
   tagEditFor = signal<string | null>(null);
@@ -636,6 +636,10 @@ export class EditorComponent implements OnInit {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
+    // A new pick supersedes any earlier result: never let a stale success or
+    // error notice sit next to a new conflict prompt or import outcome.
+    this.notice.set('');
+    this.error.set('');
     const text = await file.text();
     input.value = '';
     // Extension detection never overrides a deliberate format choice. A
@@ -644,7 +648,7 @@ export class EditorComponent implements OnInit {
     const detected = detectImportFormat(file.name);
     if (detected && detected !== this.ioFormat()) {
       if (this.ioFormatTouched()) {
-        this.importConflict.set({ filename: file.name, detected, current: this.ioFormat(), text });
+        this.importConflict.set({ filename: file.name, ext: file.name.split('.').pop() ?? '', detected, current: this.ioFormat(), text });
         return;
       }
       this.ioFormat.set(detected);
@@ -655,6 +659,8 @@ export class EditorComponent implements OnInit {
     const c = this.importConflict();
     if (!c) return;
     this.importConflict.set(null);
+    this.notice.set('');
+    this.error.set('');
     if (useDetected) {
       this.ioFormat.set(c.detected);
       this.ioFormatTouched.set(true); // an explicit click on the banner choice
@@ -668,8 +674,9 @@ export class EditorComponent implements OnInit {
         : fmt === 'csv' ? { csv: text }
         : fmt === 'android' ? { xml: text } : fmt === 'po' ? { po: text } : fmt === 'xliff' ? { xliff: text } : fmt === 'properties' ? { properties: text } : fmt === 'arb' ? { arb: text } : fmt === 'yaml' ? { yaml: text } : { strings: text };
       const res = await this.api.importPayload(this.projectId, this.ioLocale(), payload, this.branch());
+      this.error.set('');
       this.notice.set(`Imported ${res.keysCreated} keys, ${res.translationsUpserted} translations (${this.formatLabel()}, ${this.ioLocale()}).`);
       await this.reload();
-    } catch (err) { this.error.set(err instanceof Error ? err.message : `Import failed: invalid ${this.formatLabel()}`); }
+    } catch (err) { this.notice.set(''); this.error.set(err instanceof Error ? err.message : `Import failed: invalid ${this.formatLabel()}`); }
   }
 }
