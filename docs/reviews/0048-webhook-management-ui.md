@@ -27,15 +27,28 @@ the project settings UI.
 
 - Create via UI: type URL, check project.restored, submit - one-time
   secret reveal appears; the row lists the URL and both events.
+- Failed create: a denied address (http://192.168.1.1/hook) is refused
+  with the reason visible in the page's error slot, the typed URL stays
+  in the input for correction, and no row appears. Scope note: this
+  verifies the UI surfacing of the existing create-time string
+  validation. The delivery-time egress rules (DNS pinning, redirect
+  refusal) are an existing API claim covered by the API-level webhook
+  suites; this web-only slice did not re-prove delivery.
 - The reveal is component state: after a fresh page load it is gone and
   the list carries only the public view (no secret) - asserted, and the
-  screenshot is taken only in that state (never captures a secret,
+  screenshots are taken only in that state (never captures a secret,
   matching the token-shot convention).
 - Disable shows the disabled badge; re-enable clears it.
+- 480px layout: a long unbroken URL wraps (overflow-wrap rule on the
+  hook URL span) and document.scrollWidth stays within the viewport;
+  editor-34b-webhooks-narrow.png pixel-inspected.
+- Member read-only view: a MEMBER-role account sees the rows but no
+  Disable/Enable/Delete buttons and no create form (UI gating;
+  mutations stay server-enforced by requireAdmin).
 - Delete asks inline confirmation; after confirming, the row disappears
-  and an independent API fetch agrees the webhook is gone.
-- editor-34-webhooks.png: pixel-inspected - heading fully visible, copy
-  and row readable at 1280, no truncation, no secret in frame.
+  and an independent API fetch agrees every test webhook is gone.
+- editor-34-webhooks.png (1280) pixel-inspected: heading fully visible,
+  copy and rows readable, no truncation, no secret in frame.
 
 ## Review pass notes
 
@@ -49,7 +62,8 @@ the project settings UI.
 - Security: the secret is never listed, never persisted in the
   component beyond the reveal, never screenshot; admin-only mutations
   stay server-enforced (requireAdmin), the UI gating is cosmetic.
-- QA/integration: e2e-visual +7 checks (create/reveal, listed, reveal
-  cleared on reload, disable badge, enable clears, delete confirm, API
-  agrees) = 138. No API-surface change, so the tasks/webhook API
-  suites run unchanged.
+- QA/integration: e2e-visual +15 checks (create/reveal, listed, failed
+  create reason/retention/no-row, reveal cleared on reload, disable
+  badge, enable clears, long-URL fixture, 480 no-overflow, member
+  list/no-controls/no-form, delete confirm, API agrees) = 146. No
+  API-surface change, so the tasks/webhook API suites run unchanged.

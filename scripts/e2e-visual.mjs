@@ -452,7 +452,18 @@ try {
   await shot('editor-10-tokens.png');
 
 
-  // --- Webhooks via UI: create (one-time secret reveal), disable/enable, delete ---
+  const loginAs = async (email, password) => {
+    await page.evaluate(() => localStorage.removeItem('ol_token'));
+    await page.goto(`${WEB}/login`, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('input[name=email]');
+    await page.type('input[name=email]', email);
+    await page.type('input[name=password]', password);
+    await page.click('button.primary');
+    await page.waitForFunction(() => location.pathname.includes('/projects') && !location.pathname.includes('/login'), { timeout: 15000 });
+  };
+
+  // --- Webhooks via UI: create (one-time secret reveal), failed-create
+  // feedback, disable/enable, 480 layout, member read-only view, delete ---
   await page.goto(`${WEB}/projects/${projId}/settings`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('input[aria-label="Webhook URL"]', { timeout: 10000 });
   await page.type('input[aria-label="Webhook URL"]', 'https://hooks.example.com/open-locale');
@@ -467,6 +478,27 @@ try {
     (await page.$eval('.token-reveal code', (el) => el.textContent)).length >= 32);
   await page.waitForFunction(() => [...document.querySelectorAll('.locale-list li')].some((el) => el.textContent.includes('hooks.example.com') && el.textContent.includes('translation.updated + project.restored')), { timeout: 10000 });
   check('webhook listed with URL and both events', true);
+
+  // Failed create: a denied address is refused with visible feedback, the
+  // typed URL is retained for correction, and no row appears. This verifies
+  // the UI surfacing of the existing create-time string validation; the
+  // delivery-time egress rules are covered by the API-level suites.
+  await page.evaluate(() => {
+    const input = document.querySelector('input[aria-label="Webhook URL"]');
+    input.value = ''; input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.type('input[aria-label="Webhook URL"]', 'http://192.168.1.1/hook');
+  await page.evaluate(() => { document.querySelector('input[aria-label="Webhook URL"]').closest('form').requestSubmit(); });
+  await page.waitForFunction(() => (document.querySelector('[role=alert]')?.textContent || '').includes('denied address range'), { timeout: 10000 });
+  check('failed webhook create shows the refusal reason', true);
+  check('failed webhook create retains the typed URL', (await page.$eval('input[aria-label="Webhook URL"]', (el) => el.value)) === 'http://192.168.1.1/hook');
+  check('refused webhook does not appear in the list', await page.evaluate(() => ![...document.querySelectorAll('.locale-list li')].some((el) => el.textContent.includes('192.168.1.1'))));
+  // Clear the retained failure text so later shots show a clean form.
+  await page.evaluate(() => {
+    const input = document.querySelector('input[aria-label="Webhook URL"]');
+    input.value = ''; input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+
   // Fresh page load: the reveal is component state, so it is gone; the list
   // only ever carries the public view (no secret) - safe to screenshot.
   await page.goto(`${WEB}/projects/${projId}/settings`, { waitUntil: 'networkidle0' });
@@ -487,25 +519,62 @@ try {
     return !!li && !li.textContent.includes('disabled');
   }, { timeout: 10000 });
   check('webhook re-enabled via UI clears the badge', true);
+
+  // Long-URL row for wrap verification (API fixture; UI creation proved above).
+  const ownerJwtWh = await page.evaluate(() => localStorage.getItem('ol_token'));
+  const longHook = await (await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/webhooks`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ownerJwtWh}` }, body: JSON.stringify({ url: 'https://hooks.example.com/open-locale/a/very/long/path/that/keeps/going/and/going/for/wrapping/verification', events: ['translation.updated'] }) })).json();
+  check('long-URL webhook fixture created', !!longHook.id);
+  await page.setViewport({ width: 480, height: 800 });
+  await page.goto(`${WEB}/projects/${projId}/settings`, { waitUntil: 'networkidle0' });
+  await page.waitForFunction(() => [...document.querySelectorAll('.locale-list li')].some((el) => el.textContent.includes('wrapping/verification')), { timeout: 10000 });
+  await page.evaluate(() => {
+    const h = [...document.querySelectorAll('h2')].find((x) => x.textContent === 'Webhooks');
+    h.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70);
+  });
+  check('480 webhook layout has no horizontal overflow', await page.evaluate(() => document.documentElement.scrollWidth <= 480));
+  await shot('editor-34b-webhooks-narrow.png');
+  await page.setViewport({ width: 1280, height: 800 });
+  await page.goto(`${WEB}/projects/${projId}/settings`, { waitUntil: 'networkidle0' });
+  await page.waitForFunction(() => [...document.querySelectorAll('.locale-list li')].some((el) => el.textContent.includes('wrapping/verification')), { timeout: 10000 });
   await page.evaluate(() => {
     const h = [...document.querySelectorAll('h2')].find((x) => x.textContent === 'Webhooks');
     h.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70);
   });
   await shot('editor-34-webhooks.png');
+
+  // Member read-only view: rows visible, no controls, no create form.
+  const whMember = await (await fetch(`http://127.0.0.1:${API_PORT}/api/auth/signup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: `whmember${Date.now()}@t.dev`, password: 'whmember-pass-1', displayName: 'Webhook Viewer' }) })).json();
+  await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/members`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ownerJwtWh}` }, body: JSON.stringify({ email: whMember.user.email, role: 'MEMBER', allowedLocales: [] }) });
+  await loginAs(whMember.user.email, 'whmember-pass-1');
+  await page.goto(`${WEB}/projects/${projId}/settings`, { waitUntil: 'networkidle0' });
+  await page.waitForFunction(() => [...document.querySelectorAll('.locale-list li')].some((el) => el.textContent.includes('hooks.example.com')), { timeout: 10000 });
+  check('member sees the webhook list', true);
+  check('member sees no webhook row controls', await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('.locale-list li')].filter((el) => el.textContent.includes('hooks.example.com'));
+    return rows.length > 0 && rows.every((el) => el.querySelectorAll('button').length === 0);
+  }));
+  check('member sees no webhook create form', await page.evaluate(() => !document.querySelector('input[aria-label="Webhook URL"]')));
+  await loginAs('demo@open-locale.dev', 'demo-password-1');
+
+  // Owner deletes the original hook through the UI; the long fixture is
+  // cleaned up through the API.
+  await page.goto(`${WEB}/projects/${projId}/settings`, { waitUntil: 'networkidle0' });
+  await page.waitForFunction(() => [...document.querySelectorAll('.locale-list li')].some((el) => el.textContent.includes('hooks.example.com')), { timeout: 10000 });
   await page.evaluate(() => {
-    const li = [...document.querySelectorAll('.locale-list li')].find((el) => el.textContent.includes('hooks.example.com'));
+    const li = [...document.querySelectorAll('.locale-list li')].find((el) => el.textContent.includes('hooks.example.com/open-locale') && !el.textContent.includes('wrapping'));
     [...li.querySelectorAll('button')].find((b) => b.textContent === 'Delete').click();
   });
   await page.waitForFunction(() => document.body.textContent.includes('Yes, delete'), { timeout: 5000 });
   await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Yes, delete').click());
-  await page.waitForFunction(() => ![...document.querySelectorAll('.locale-list li')].some((el) => el.textContent.includes('hooks.example.com')), { timeout: 10000 });
+  await page.waitForFunction(() => ![...document.querySelectorAll('.locale-list li')].some((el) => el.textContent.includes('hooks.example.com/open-locale') && !el.textContent.includes('wrapping')), { timeout: 10000 });
   check('webhook deleted via UI after inline confirm', true);
+  await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/webhooks/${longHook.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${ownerJwtWh}` } });
   const hooksAfter = await page.evaluate(async () => {
     const token = localStorage.getItem('ol_token');
     const pid = location.pathname.split('/')[2];
     return (await fetch(`/api/projects/${pid}/webhooks`, { headers: { Authorization: `Bearer ${token}` } })).json();
   });
-  check('API agrees the webhook is gone', Array.isArray(hooksAfter) && !hooksAfter.some((h) => h.url.includes('hooks.example.com')));
+  check('API agrees every test webhook is gone', Array.isArray(hooksAfter) && !hooksAfter.some((h) => h.url.includes('hooks.example.com')));
 
 
   // --- Groups: create via UI, union copy visible, desktop + narrow shots ---
@@ -603,15 +672,6 @@ try {
 
   // Low-role / effective-role sessions: a group-PROMOTED admin sees exactly
   // the controls their effective role permits; a plain member sees none.
-  const loginAs = async (email, password) => {
-    await page.evaluate(() => localStorage.removeItem('ol_token'));
-    await page.goto(`${WEB}/login`, { waitUntil: 'networkidle0' });
-    await page.waitForSelector('input[name=email]');
-    await page.type('input[name=email]', email);
-    await page.type('input[name=password]', password);
-    await page.click('button.primary');
-    await page.waitForFunction(() => location.pathname.includes('/projects') && !location.pathname.includes('/login'), { timeout: 15000 });
-  };
   // Owner grants user2 an ADMIN group (setup via API).
   const leads = await (await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/groups`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ownerJwt}` }, body: JSON.stringify({ name: 'leads', role: 'ADMIN' }) })).json();
   await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/groups/${leads.id}/members/${user2.user.id}`, { method: 'PUT', headers: { Authorization: `Bearer ${ownerJwt}` } });

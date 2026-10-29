@@ -92,7 +92,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           <ul class="locale-list">
             @for (h of webhooks(); track h.id) {
               <li>
-                <span>{{ h.url }}</span>
+                <span class="hook-url">{{ h.url }}</span>
                 <span class="muted">{{ h.events.join(' + ') }} · created {{ h.createdAt | date:'mediumDate' }}</span>
                 @if (!h.active) { <span class="badge">disabled</span> }
                 @if (isTeamAdmin()) {
