@@ -48,6 +48,20 @@ loopback-only too. To expose the API beyond localhost, set HOST explicitly toget
 with a real JWT_SECRET - the process refuses to bind a non-loopback address while
 running on the built-in development secret.
 
+## SDK
+
+`libs/sdk` (`@open-locale/sdk`) is a zero-dependency ESM client for the REST
+API v1 covering the core translation workflow - projects, keys, translations,
+import/export with branch scoping. It is not full API parity; other endpoints
+are reachable through its low-level `request` escape hatch. Private to the
+repo (not published). See docs/reviews/0062-sdk.md.
+
+```js
+import { createClient } from './libs/sdk/src/index.mjs';
+const ol = createClient({ url: 'http://localhost:3000', token: process.env.OPENLOCALE_TOKEN });
+const en = await ol.translations.get(projectId, 'en');
+```
+
 ## CLI
 
 The `open-locale` CLI uploads and downloads translation files from the terminal.

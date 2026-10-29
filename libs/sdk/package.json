@@ -1,0 +1,11 @@
+{
+  "name": "@open-locale/sdk",
+  "version": "0.1.0",
+  "description": "Thin zero-dependency JavaScript client for the Open-locale REST API v1 (core translation workflow; not full API parity)",
+  "type": "module",
+  "main": "src/index.mjs",
+  "types": "src/index.d.ts",
+  "exports": { ".": "./src/index.mjs" },
+  "engines": { "node": ">=20" },
+  "private": true
+}
