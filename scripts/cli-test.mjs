@@ -2,6 +2,7 @@
 // Run: node scripts/cli-test.mjs   (requires dist/apps/api built)
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import EmbeddedPostgres from 'embedded-postgres';
+import { PrismaClient } from '@prisma/client';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -32,9 +33,11 @@ const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-cli-'));
 const workDir = mkdtempSync(join(tmpdir(), 'ol-cli-work-'));
 const pg = new EmbeddedPostgres({ databaseDir: dataDir, user: 'postgres', password: 'postgres', port: PG_PORT, persistent: false });
 let api;
+let prisma;
 try {
   await pg.initialise(); await pg.start(); await pg.createDatabase('openlocale_cli');
   const url = `postgresql://postgres:postgres@localhost:${PG_PORT}/openlocale_cli`;
+  prisma = new PrismaClient({ datasources: { db: { url } } });
   execFileSync(join(root, 'node_modules', '.bin', 'prisma'), ['migrate', 'deploy'], {
     env: { ...process.env, DATABASE_URL: url }, stdio: 'pipe' });
   api = spawn(process.execPath, [join(root, 'dist', 'apps', 'api', 'main.js')], {
@@ -166,6 +169,18 @@ try {
   const runLines1 = imp1.out.split('\n').filter((l) => l.includes(' upserted, '));
   check('cli imports --limit caps the list', imp1.status === 0 && runLines1.length === 1 && imp1.out.includes('1 of'), `${runLines1.length} shown`);
 
+  // Terminal safety: server-supplied names with control characters are escaped.
+  await call(`/projects/${proj.json.id}/import/he`, { jwt, method: 'POST', body: { entries: { 'evil\nkey': 'x', 'esc\u001b[2Jclear': 'y' } } });
+  const keysHostile = cli(['keys'], workDir);
+  check('cli keys escapes control characters in server-supplied names', keysHostile.status === 0 && keysHostile.out.includes('\\x0a') && keysHostile.out.includes('\\x1b') && !keysHostile.out.includes('\u001b'), keysHostile.out.trim().slice(0, 160));
+
+  // Null actorId (actor row gone via SetNull) renders as unknown actor.
+  const latestRun = await prisma.importRun.findFirst({ where: { projectId: proj.json.id }, orderBy: { createdAt: 'desc' } });
+  await prisma.importRun.update({ where: { id: latestRun.id }, data: { actorId: null } });
+  const impNull = cli(['imports', '--limit', '50'], workDir);
+  const nullLine = impNull.out.split('\n').find((l) => l.includes(latestRun.id)) ?? '';
+  check('cli imports renders a null actor as unknown actor', impNull.status === 0 && nullLine.includes('unknown actor') && !impNull.out.includes('api token'), nullLine.trim().slice(0, 160));
+
   // read-only enforcement through the CLI
   const roTok = await call('/auth/tokens', { jwt, method: 'POST', body: { name: 'cli-ro', scopes: ['read'] } });
   writeFileSync(join(workDir, 'open-locale.json'), JSON.stringify({ url: `http://127.0.0.1:${API_PORT}`, token: roTok.json.token, project: proj.json.id }));
@@ -180,6 +195,7 @@ try {
   console.error('SUITE INCOMPLETE:', err);
   process.exit(1);
 } finally {
+  if (prisma) await prisma.$disconnect().catch(() => {});
   if (api) api.kill('SIGTERM');
   await pg.stop();
   rmSync(dataDir, { recursive: true, force: true });

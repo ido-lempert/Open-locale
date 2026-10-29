@@ -17,6 +17,10 @@ import { basename } from 'node:path';
 
 const fail = (msg, code = 1) => { console.error(`error: ${msg}`); process.exit(code); };
 const branchQuery = () => { const b = opt('branch'); return b ? `?branch=${encodeURIComponent(b)}` : ''; };
+// Server- and archive-supplied strings can carry control characters; render
+// them as visible escapes instead of letting them forge lines or drive the
+// terminal. Never applied to export payloads, only to status/audit lines.
+const vis = (v) => String(v).replace(/[\u0000-\u001f\u007f-\u009f]/g, (c) => `\\x${c.charCodeAt(0).toString(16).padStart(2, '0')}`);
 const queryString = (extra = {}) => {
   const params = new URLSearchParams();
   const b = opt('branch');
@@ -82,8 +86,8 @@ async function push() {
     console.error('note: bundle import accepts store-only zips from `pull --all` (compressed zips are rejected); each locale imports independently - skipped entries and failed locales are reported, not rolled back.');
     const result = await api(`/projects/${project}/import-bundle/${format}${bq}`, { method: 'POST', body: readFileSync(file), zip: true });
     for (const r of result.imported) console.log(`${r.locale}: ${r.translationsUpserted} upserted, ${r.keysCreated} key(s) created, ${r.unchangedSkipped} unchanged, ${r.failed} failed`);
-    for (const x of result.skipped) console.error(`skipped entry ${x.name} (not imported; exit stays 0 for skips alone): ${x.reason}`);
-    for (const x of result.failedLocales) console.error(`${x.locale} failed (${x.status}): ${x.error}`);
+    for (const x of result.skipped) console.error(`skipped entry ${vis(x.name)} (not imported; exit stays 0 for skips alone): ${vis(x.reason)}`);
+    for (const x of result.failedLocales) console.error(`${vis(x.locale)} failed (${x.status}): ${vis(x.error)}`);
     if (result.failedLocales.length > 0 || result.imported.some((r) => r.failed > 0)) process.exit(1);
     return;
   }
@@ -98,7 +102,7 @@ async function push() {
   if (dryRun) {
     console.log(`dry run ${result.status}: ${result.translationsUpserted} upserted, ${result.keysCreated} key(s) created, ` +
       `${result.unchangedSkipped} unchanged, ${result.failed} failed (preview only - nothing written; counts are a point-in-time snapshot)`);
-    for (const f of result.failures ?? []) console.error(`would fail: ${f}`);
+    for (const f of result.failures ?? []) console.error(`would fail: ${vis(f)}`);
     if (result.status === 'FAILED') process.exit(1);
     return;
   }
@@ -144,7 +148,7 @@ async function keys() {
   const ps = params.toString();
   const q = ps ? `?${ps}` : '';
   const list = await api(`/projects/${project}/keys${q}`);
-  for (const k of list) console.log(`${k.name}${k.description ? `\t${k.description}` : ''}`);
+  for (const k of list) console.log(`${vis(k.name)}${k.description ? `\t${vis(k.description)}` : ''}`);
   console.error(`${list.length} key(s)`);
 }
 
@@ -154,8 +158,10 @@ async function imports() {
   if (!Number.isInteger(limit) || limit < 1) fail('--limit must be a positive integer');
   const runs = await api(`/projects/${project}/imports`);
   for (const r of runs.slice(0, limit)) {
-    console.log(`${r.createdAt}  ${r.localeCode}  ${r.status}  ${r.translationsUpserted} upserted, ${r.keysCreated} key(s) created, ` +
-      `${r.unchangedSkipped} unchanged, ${r.failed} failed  ${r.actor?.email ?? 'api token'}  ${r.id}${r.error ? `  - ${r.error}` : ''}`);
+    // actorId is set for JWT and token imports alike; null means the actor
+    // user row no longer exists (SetNull on delete), never "token origin".
+    console.log(`${vis(r.createdAt)}  ${vis(r.localeCode)}  ${vis(r.status)}  ${r.translationsUpserted} upserted, ${r.keysCreated} key(s) created, ` +
+      `${r.unchangedSkipped} unchanged, ${r.failed} failed  ${vis(r.actor?.email ?? 'unknown actor')}  ${r.id}${r.error ? `  - ${vis(r.error)}` : ''}`);
   }
   console.error(`${Math.min(limit, runs.length)} of ${runs.length} import run(s) (newest first)`);
 }
