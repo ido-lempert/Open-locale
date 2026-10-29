@@ -15,6 +15,7 @@ const jwk = publicKey.export({ format: 'jwk' });
 jwk.kid = 'mock-1'; jwk.alg = 'RS256'; jwk.use = 'sig';
 
 const codes = new Map(); // code -> { challenge, nonce, claims, badSign }
+let lastTokenHost = null;
 
 const b64url = (x) => Buffer.from(x).toString('base64url');
 const mint = (claims, useBadKey) => {
@@ -27,16 +28,20 @@ const mint = (claims, useBadKey) => {
 createServer(async (req, res) => {
   const u = new URL(req.url, ISSUER);
   const json = (status, obj) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)); };
+  // Multi-alias: the issuer identity follows the Host header, so the same
+  // mock can serve APIs configured with 127.0.0.1 or localhost (the pinned
+  // connector preserves the original Host header on the pinned connection).
+  const issuer = `http://${req.headers.host || `127.0.0.1:${PORT}`}`;
   if (u.pathname === '/.well-known/openid-configuration') {
     if (process.env.MOCK_REDIRECT_METADATA) {
-      res.writeHead(302, { location: `${ISSUER}/elsewhere` });
+      res.writeHead(302, { location: `${issuer}/elsewhere` });
       return res.end();
     }
     return json(200, {
-      issuer: ISSUER,
-      authorization_endpoint: `${ISSUER}/authorize`,
-      token_endpoint: `${ISSUER}/token`,
-      jwks_uri: `${ISSUER}/jwks`,
+      issuer,
+      authorization_endpoint: `${issuer}/authorize`,
+      token_endpoint: `${issuer}/token`,
+      jwks_uri: `${issuer}/jwks`,
     });
   }
   if (u.pathname === '/jwks') return json(200, { keys: [jwk] });
@@ -63,6 +68,7 @@ createServer(async (req, res) => {
     return json(200, { code });
   }
   if (u.pathname === '/token' && req.method === 'POST') {
+    lastTokenHost = req.headers.host;
     const body = new URLSearchParams(await new Promise((r) => { let d = ''; req.on('data', (c) => (d += c)); req.on('end', () => r(d)); }));
     const code = body.get('code');
     const rec = codes.get(code);
@@ -74,7 +80,7 @@ createServer(async (req, res) => {
     }
     const now = Math.floor(Date.now() / 1000);
     const claims = {
-      iss: ISSUER,
+      iss: issuer,
       aud: body.get('client_id'),
       iat: now,
       exp: now + 300,
@@ -83,5 +89,6 @@ createServer(async (req, res) => {
     };
     return json(200, { id_token: mint(claims, rec.badSign), token_type: 'Bearer', expires_in: 300 });
   }
+  if (u.pathname === '/debug/last-token-host') return json(200, { host: lastTokenHost });
   json(404, { error: 'not found' });
 }).listen(PORT, '127.0.0.1', () => console.log(`mock oidc issuer on ${ISSUER}`));

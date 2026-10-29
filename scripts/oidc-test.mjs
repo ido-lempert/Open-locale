@@ -205,6 +205,61 @@ try {
   const status = await call('/auth/2fa/status', { jwt: done.json.accessToken });
   check('post-SSO MFA session can read 2FA status (mfa claim true)', status.status === 200, `got ${status.status}`);
 
+  // Pinned connection evidence: run the whole flow with the issuer given as
+  // a HOSTNAME (localhost) on a dedicated API instance; the mock confirms
+  // the token request arrived with the original Host header while the
+  // connector pinned the validated loopback address.
+  {
+    const apiLocal = spawn(process.execPath, [join(root, 'dist', 'apps', 'api', 'main.js')], {
+      env: { ...process.env, DATABASE_URL: url, JWT_SECRET: 'oidc-secret', TOTP_ENCRYPTION_KEY: 'oidc-test-key-0123456789', OIDC_ISSUER: 'http://localhost:5555', OIDC_CLIENT_ID: 'open-locale', OIDC_REDIRECT_URI: 'http://127.0.0.1:4200/auth/oidc/callback', PORT: '3011' }, stdio: 'pipe' });
+    try {
+      if (!(await waitFor('http://127.0.0.1:3011/api/projects', 30))) throw new Error('localhost-issuer API did not start');
+      const start = await (await fetch('http://127.0.0.1:3011/api/auth/oidc/start')).json();
+      const u = new URL(start.url);
+      u.search += `&fixture_sub=mock-user-local&fixture_email=local${ts}@t.dev`;
+      const authRes = await fetch(u, { redirect: 'manual' });
+      const loc = new URL(authRes.headers.get('location'));
+      const cb = await fetch('http://127.0.0.1:3011/api/auth/oidc/callback', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: loc.searchParams.get('code'), state: u.searchParams.get('state') }) });
+      check('pinned flow works with a hostname issuer', cb.status === 200, `got ${cb.status}`);
+      const seenHost = (await (await fetch('http://127.0.0.1:5555/debug/last-token-host')).json()).host;
+      check('original Host header preserved on pinned token request', seenHost === 'localhost:5555', `got ${seenHost}`);
+    } finally { apiLocal.kill('SIGTERM'); await new Promise((r) => setTimeout(r, 500)); }
+  }
+
+  // Shared persistent 2FA gate: SSO complete and password login draw on the
+  // same failure counters and lockout. Three failures over SSO + two over
+  // password login lock the account; even a correct code is then refused.
+  {
+    const daveEmail = `dave${ts}@t.dev`;
+    const dave = (await call('/auth/signup', { method: 'POST', body: { email: daveEmail, password: 'pass1234', displayName: 'dave' } })).json;
+    const dSetup = (await call('/auth/2fa/setup', { jwt: dave.accessToken, method: 'POST', body: { password: 'pass1234' } })).json;
+    await call('/auth/2fa/enable', { jwt: dave.accessToken, method: 'POST', body: { password: 'pass1234', code: totp(dSetup.secret) } });
+    const dLinkStart = await call('/auth/oidc/start-link', { jwt: dave.accessToken, method: 'POST', body: { password: 'pass1234' } });
+    check('start-link with the pre-enable revoked session rejected (401)', dLinkStart.status === 401, `got ${dLinkStart.status}`);
+    const dLogin = (await call('/auth/login', { method: 'POST', body: { email: daveEmail, password: 'pass1234', totpCode: totp(dSetup.secret, 1) } })).json;
+    const dStart = await call('/auth/oidc/start-link', { jwt: dLogin.accessToken, method: 'POST', body: { password: 'pass1234' } });
+    const du = new URL(dStart.json.url); du.search += `&fixture_sub=mock-user-dave&fixture_email=${encodeURIComponent(daveEmail)}`;
+    const dAuth = await fetch(du, { redirect: 'manual' });
+    const dCode = new URL(dAuth.headers.get('location')).searchParams.get('code');
+    const dCb = await call('/auth/oidc/callback', { method: 'POST', body: { code: dCode, state: du.searchParams.get('state') } });
+    check('SSO login to 2FA account pending', dCb.json && dCb.json.requiresTwoFactor === true);
+    const ssoFail = async () => {
+      const f = await runFlow({ fixture: `fixture_sub=mock-user-dave&fixture_email=${encodeURIComponent(daveEmail)}` });
+      const c = await call('/auth/oidc/callback', { method: 'POST', body: { code: f.code, state: f.state } });
+      await call('/auth/oidc/complete', { method: 'POST', body: { pendingToken: c.json.pendingToken, totpCode: '111111' } });
+    };
+    await ssoFail(); await ssoFail(); await ssoFail();
+    await call('/auth/login', { method: 'POST', body: { email: daveEmail, password: 'pass1234', totpCode: '222222' } });
+    const fifth = await call('/auth/login', { method: 'POST', body: { email: daveEmail, password: 'pass1234', totpCode: '222222' } });
+    check('5th cumulative failure rejects (trips the lock)', fifth.status === 401 && /invalid two-factor/i.test(fifth.json.message), `got ${fifth.status} ${fifth.json && fifth.json.message}`);
+    const sixth = await call('/auth/login', { method: 'POST', body: { email: daveEmail, password: 'pass1234', totpCode: totp(dSetup.secret, 1) } });
+    check('cumulative SSO+password failures lock the account (6th refused even if valid)', sixth.status === 401 && /later/i.test(sixth.json.message), `got ${sixth.status} ${sixth.json && sixth.json.message}`);
+    const lockedSso = await runFlow({ fixture: `fixture_sub=mock-user-dave&fixture_email=${encodeURIComponent(daveEmail)}` });
+    const lc = await call('/auth/oidc/callback', { method: 'POST', body: { code: lockedSso.code, state: lockedSso.state } });
+    const lockedComplete = await call('/auth/oidc/complete', { method: 'POST', body: { pendingToken: lc.json.pendingToken, totpCode: totp(dSetup.secret, 1) } });
+    check('lockout applies on the SSO path too (shared gate)', lockedComplete.status === 401 && /later/i.test(lockedComplete.json.message), `got ${lockedComplete.status} ${lockedComplete.json && lockedComplete.json.message}`);
+  }
+
   // Network guards at request time, each on its own API instance (metadata
   // is cached per instance): non-loopback http, private-range https DNS
   // result, production loopback, and a redirecting metadata endpoint.
@@ -221,11 +276,12 @@ try {
   };
   await guardCase('non-loopback http OIDC_ISSUER rejected', { OIDC_ISSUER: 'http://192.0.2.1:9', PORT: '3007' }, 400);
   await guardCase('issuer resolving to a private range rejected', { OIDC_ISSUER: 'https://10.255.255.1', PORT: '3008' }, 400);
+  await guardCase('IPv4-mapped IPv6 private literal rejected', { OIDC_ISSUER: 'https://[::ffff:10.1.2.3]', PORT: '3012' }, 400);
   await guardCase('loopback http issuer impossible in production', { OIDC_ISSUER: MOCK, NODE_ENV: 'production', PORT: '3009' }, 400);
   // Redirect refusal: a second mock whose metadata endpoint 302s.
   const mockRedir = spawn(process.execPath, [join(root, 'scripts', 'mock-oidc.mjs')], { env: { ...process.env, MOCK_OIDC_PORT: '5556', MOCK_REDIRECT_METADATA: '1' }, stdio: 'pipe' });
   await new Promise((r) => setTimeout(r, 800));
-  await guardCase('redirecting metadata endpoint refused (no redirect follow)', { OIDC_ISSUER: 'http://127.0.0.1:5556', PORT: '3010' }, 500);
+  await guardCase('redirecting metadata endpoint refused (no redirect follow)', { OIDC_ISSUER: 'http://127.0.0.1:5556', PORT: '3010' }, 400);
   mockRedir.kill('SIGTERM');
 } finally {
   if (prisma) await prisma.$disconnect();

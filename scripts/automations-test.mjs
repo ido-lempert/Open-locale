@@ -187,7 +187,10 @@ try {
   await call(`/projects/${pid}/members/${admin3.user.id}`, { jwt, method: 'PATCH', body: { role: 'MEMBER', allowedLocales: ['he'] } });
   const k7 = (await call(`/projects/${pid}/keys`, { jwt, method: 'POST', body: { name: 'auto.seven' } })).json;
   await call(`/projects/${pid}/keys/${k7.id}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value: 'Source text' } });
-  const demoteRun = await pollFor(async () => (await runs()).find((a) => a.keyName === 'auto.seven' && a.detail && a.detail.results));
+  // A2's rule also fires on this event and legitimately records an error
+  // (its creator was removed from the team) - select A3's run by runAs, not
+  // just keyName, or the check races the two runs' list order.
+  const demoteRun = await pollFor(async () => (await runs()).find((a) => a.keyName === 'auto.seven' && a.detail && a.detail.results && a.detail.runAs === admin3.user.id));
   const k7rows = (await call(`/projects/${pid}/keys?branch=main`, { jwt })).json.find((k) => k.id === k7.id).translations;
   const k7he = k7rows.find((t) => t.localeCode === 'he');
   const k7ar = k7rows.find((t) => t.localeCode === 'ar');

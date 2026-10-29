@@ -29,9 +29,19 @@ test users.
    /start fail, not follow), 5s timeout, 64KB response cap. The metadata's
    issuer must match the configured issuer exactly and authorization/token/
    JWKS endpoints must stay on the issuer origin (redirect allowlist).
-   Limit: resolution is checked, not pinned - a determined DNS-rebinding
-   attacker between check and connect is not defeated (documented; pinning
-   needs a custom connector, future work).
+   Pinning: all egress goes through apps/api/src/app/egress/pinned.ts - the
+   hostname is resolved, every address checked against the webhook deny
+   list (IPv4 ranges, IPv6 forms, IPv4-mapped/NAT64/6to4/Teredo), and the
+   connection is made to the validated IP itself, closing the
+   lookup->connect TOCTOU window. TLS authenticates the ORIGINAL hostname
+   (SNI + default certificate identity checks) while connected to the
+   pinned IP, with the default CA store. Unit evidence
+   (egress/pinned.spec.ts, openssl-generated CA + certs): good cert over
+   pinned IP succeeds, hostname-mismatched cert rejected, untrusted-CA
+   cert rejected, redirect refused, 64KB cap, timeout, mapped-IPv6
+   literal denied. Integration evidence: the full flow with the issuer as
+   a hostname (localhost) succeeds and the mock observes the original
+   Host header on the pinned token request.
 2. State: random 128-bit, single-use (synchronous consume-before-network,
    so concurrent callbacks have exactly one winner - tested), 10-minute
    TTL (OIDC_STATE_TTL_MS), in-memory so an API restart fails closed.
@@ -66,6 +76,12 @@ test users.
    with mfa=true (tested end-to-end, including wrong-code rejection, that
    the pending token is consumed on failure, and that simultaneous
    completes with the same pending token have exactly one winner).
+   Shared gate: SSO completion and password login use the SAME
+   attemptSecondFactor path - persistent lockout, atomic failure
+   increments, replay/counter and epoch enforcement all live on the user
+   row, so repeated SSO starts cannot farm unlimited TOTP attempts
+   (tested: 3 SSO + 2 password failures trip the shared lock; the 6th
+   attempt is refused on both paths even with a valid code).
    Passwordless accounts and 2FA management: password step-up on an
    SSO-only account returns a clear 403 ("This account has no password
    (SSO-only)...") instead of trapping the user in an unsatisfiable

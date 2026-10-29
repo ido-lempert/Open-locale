@@ -68,29 +68,7 @@ export class AuthService {
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return null;
     if (user.totpEnabled) {
-      if (user.totpLockedUntil && user.totpLockedUntil.getTime() > Date.now()) {
-        throw new UnauthorizedException('Too many failed two-factor attempts; try again later');
-      }
-      const passed = totpCode ? await this.checkSecondFactor(user, totpCode) : false;
-      if (!passed) {
-        // Atomic increment - concurrent failures can never lose a count.
-        const updated = await this.prisma.user.update({
-          where: { id: user.id },
-          data: { totpFailedAttempts: { increment: 1 } },
-          select: { totpFailedAttempts: true },
-        });
-        if (updated.totpFailedAttempts >= AuthService.TOTP_MAX_FAILURES) {
-          await this.prisma.user.update({
-            where: { id: user.id },
-            data: { totpLockedUntil: new Date(Date.now() + AuthService.TOTP_LOCK_MS), totpFailedAttempts: 0 },
-          });
-        }
-        throw new UnauthorizedException(totpCode ? 'Invalid two-factor code' : 'Two-factor code required');
-      }
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: { totpFailedAttempts: 0, totpLockedUntil: null },
-      });
+      await this.attemptSecondFactor(user, totpCode);
     }
     return this.issueTokens(user.id, user.email, user.totpEnabled, user.authEpoch);
   }
@@ -124,6 +102,39 @@ export class AuthService {
       data: { usedAt: new Date() },
     });
     return used.count === 1;
+  }
+
+  // The ONE second-factor gate: persistent lockout, atomic failure counting
+  // and counter reset, shared by password login and SSO completion so no
+  // entry point becomes a weaker path (e.g. repeated SSO starts cannot farm
+  // unlimited TOTP attempts - the counters live on the user row).
+  private async attemptSecondFactor(
+    user: { id: string; totpSecret: string | null; totpLastCounter: number | null; totpLockedUntil: Date | null },
+    code: string | undefined,
+  ): Promise<void> {
+    if (user.totpLockedUntil && user.totpLockedUntil.getTime() > Date.now()) {
+      throw new UnauthorizedException('Too many failed two-factor attempts; try again later');
+    }
+    const passed = code ? await this.checkSecondFactor(user, code) : false;
+    if (!passed) {
+      // Atomic increment - concurrent failures can never lose a count.
+      const updated = await this.prisma.user.update({
+        where: { id: user.id },
+        data: { totpFailedAttempts: { increment: 1 } },
+        select: { totpFailedAttempts: true },
+      });
+      if (updated.totpFailedAttempts >= AuthService.TOTP_MAX_FAILURES) {
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: { totpLockedUntil: new Date(Date.now() + AuthService.TOTP_LOCK_MS), totpFailedAttempts: 0 },
+        });
+      }
+      throw new UnauthorizedException(code ? 'Invalid two-factor code' : 'Two-factor code required');
+    }
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { totpFailedAttempts: 0, totpLockedUntil: null },
+    });
   }
 
   // Generates and encrypts a pending secret; does NOT enable 2FA until a
@@ -232,7 +243,8 @@ export class AuthService {
   async verifySecondFactorForUser(userId: string, code: string): Promise<boolean> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user || !user.totpEnabled) return false;
-    return this.checkSecondFactor(user, code);
+    await this.attemptSecondFactor(user, code); // throws on failure/lockout
+    return true;
   }
 
   async requireStepUp(userId: string, principal: AuthPrincipal) {

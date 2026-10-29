@@ -10,9 +10,8 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { createHash, createPublicKey, randomBytes, verify as cryptoVerify } from 'node:crypto';
-import { lookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
 import { PrismaService } from '../prisma/prisma.service';
+import { PinnedFetchError, pinnedRequest } from '../egress/pinned';
 import { AuthService } from './auth.service';
 
 interface OidcState {
@@ -32,31 +31,6 @@ interface OidcMetadata {
 
 const b64url = (b: Buffer) => b.toString('base64url');
 const LOOPBACK = ['127.0.0.1', '::1', 'localhost'];
-
-// Public-IP check for the DNS guard: rejects loopback, private (RFC1918),
-// link-local, CGNAT, multicast, unspecified and documentation ranges.
-function isPublicIp(addr: string): boolean {
-  const v4 = addr.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
-  if (v4) {
-    const [a, b] = [Number(v4[1]), Number(v4[2])];
-    if (a === 0 || a === 10 || a === 127 || a >= 224) return false;
-    if (a === 100 && b >= 64 && b <= 127) return false;
-    if (a === 169 && b === 254) return false;
-    if (a === 172 && b >= 16 && b <= 31) return false;
-    if (a === 192 && b === 168) return false;
-    if (a === 192 && b === 0) return false;
-    if (a === 192 && b === 0 && Number(v4[3]) === 2) return false;
-    if (a === 198 && (b === 18 || b === 19)) return false;
-    if (a === 198 && b === 51 && Number(v4[3]) === 100) return false;
-    if (a === 203 && b === 0 && Number(v4[3]) === 113) return false;
-    return true;
-  }
-  const a = addr.toLowerCase();
-  if (a === '::1' || a === '::') return false;
-  if (a.startsWith('fc') || a.startsWith('fd') || a.startsWith('fe80')) return false;
-  if (a.startsWith('::ffff:')) return isPublicIp(a.slice(7));
-  return true;
-}
 
 @Injectable()
 export class OidcService {
@@ -78,12 +52,10 @@ export class OidcService {
     };
   }
 
-  // Connection-level network guard, re-checked before EVERY outbound call
-  // (not just at startup): https everywhere; http+loopback is a development
-  // exception that cannot exist in production; non-loopback hostnames must
-  // resolve to public IPs only. Note: resolution is checked, not pinned -
-  // documented limit, see docs/reviews/0037.
-  private async assertIssuerAllowed(): Promise<void> {
+  // Scheme/environment rules for the configured issuer. Connection-level
+  // protection (deny-list + pinned connect + TLS hostname verification) is
+  // enforced by the pinned connector on every outbound call below.
+  private assertIssuerAllowed(): void {
     const u = new URL(this.config().issuer);
     const loopbackHost = LOOPBACK.includes(u.hostname);
     if (process.env.NODE_ENV === 'production') {
@@ -93,26 +65,29 @@ export class OidcService {
     } else if (u.protocol !== 'https:' && !(u.protocol === 'http:' && loopbackHost)) {
       throw new BadRequestException('OIDC_ISSUER must be https (http allowed only for loopback development)');
     }
-    if (!loopbackHost) {
-      const addrs = isIP(u.hostname) ? [u.hostname] : (await lookup(u.hostname, { all: true })).map((r) => r.address);
-      if (addrs.length === 0 || addrs.some((a) => !isPublicIp(a))) {
-        throw new BadRequestException('OIDC issuer host resolves to a non-public address');
-      }
-    }
   }
 
-  // Guarded fetch: DNS re-check, no redirects, 5s timeout, 64KB response cap.
+  // Every issuer call goes through the pinned connector: the hostname is
+  // resolved, all addresses are checked against the deny list, and the
+  // connection is made to the validated IP (no TOCTOU window) while TLS
+  // still authenticates the original hostname. Redirects are errors, 5s
+  // timeout, 64KB cap. The loopback mock exception is impossible in
+  // production (pinnedRequest drops allowPrivate there).
   private async guardedJson(url: string, init?: { method?: string; body?: string }) {
-    await this.assertIssuerAllowed();
-    const res = await fetch(url, {
-      ...init,
-      headers: init?.body ? { 'content-type': 'application/x-www-form-urlencoded' } : undefined,
-      redirect: 'error',
-      signal: AbortSignal.timeout(5000),
-    });
-    const text = await res.text();
-    if (text.length > 65536) throw new Error('OIDC response exceeds size limit');
-    return { ok: res.ok, status: res.status, json: () => JSON.parse(text) as Record<string, unknown> };
+    this.assertIssuerAllowed();
+    const loopbackHost = LOOPBACK.includes(new URL(url).hostname);
+    try {
+      const res = await pinnedRequest(url, {
+        method: init?.method,
+        body: init?.body,
+        headers: init?.body ? { 'content-type': 'application/x-www-form-urlencoded' } : undefined,
+        allowPrivate: loopbackHost,
+      });
+      return { ok: res.status >= 200 && res.status < 300, status: res.status, json: () => res.json() as Record<string, unknown> };
+    } catch (e) {
+      if (e instanceof PinnedFetchError) throw new BadRequestException(`OIDC egress refused: ${e.message}`);
+      throw e;
+    }
   }
 
   private async meta(): Promise<OidcMetadata> {
