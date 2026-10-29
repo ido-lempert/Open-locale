@@ -678,7 +678,9 @@ try {
     const r = el.getBoundingClientRect();
     return r.width <= 480 && r.left >= 0 && r.right <= 480 ? 'fits' : `overflow left=${r.left} right=${r.right}`;
   });
+  const keepLabel480 = await page.evaluate(() => [...document.querySelectorAll('.import-conflict button')].map((b) => b.textContent.trim()).join('|'));
   check('preview conflict banner with three buttons fits the 480px viewport', fits480 === 'fits', fits480);
+  check('preview-mode keep option names the read-only action (Preview as YAML, not Keep)', keepLabel480.includes('Preview as YAML'), keepLabel480);
   await page.setViewport({ width: 1280, height: 800 });
   await page.evaluate(() => [...document.querySelectorAll('.import-conflict button')]?.find((b) => b.textContent.trim() === 'Cancel')?.click());
 

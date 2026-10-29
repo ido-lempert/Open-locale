@@ -14,6 +14,7 @@
 - The preview response carries a `failures` list (up to 5) naming each failed key and its reason (locking task title, or the non-string rejection); the UI notice prints the count and reasons, not just successes.
 - Mode safety: dry-run is never a persisted mode - it lives only in the pick handler and an open conflict object. Any new file pick (either input) clears an open conflict banner and stale notices before acting, so a preview conflict can never leak into a later real import or vice versa. Verified both directions through the UI.
 - The conflict banner has a Cancel button: closes with no import and no residue.
+- In a preview conflict BOTH non-cancel buttons name the read-only action ("Preview as <detected>" / "Preview as <current>"); "Keep <current>" only appears for real imports.
 - Preview conflict banner verified at 480px: three buttons fit (bounding-box assertion + inspected capture editor-43-preview-480.png).
 
 ## Latent bug this slice exposed and fixed

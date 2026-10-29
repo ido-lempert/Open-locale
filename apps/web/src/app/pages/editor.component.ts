@@ -86,7 +86,7 @@ interface CellState {
             <div class="import-conflict" role="alert">
               <span>{{ c.filename }} has a .{{ c.ext }} extension, which usually means {{ labelFor(c.detected) }}, but the format is set to {{ labelFor(c.current) }}. Nothing was imported yet.</span>
               <button type="button" (click)="resolveImportConflict(true)">{{ c.dryRun ? 'Preview as' : 'Import as' }} {{ labelFor(c.detected) }}</button>
-              <button type="button" (click)="resolveImportConflict(false)">Keep {{ labelFor(c.current) }}</button>
+              <button type="button" (click)="resolveImportConflict(false)">{{ c.dryRun ? 'Preview as' : 'Keep' }} {{ labelFor(c.current) }}</button>
               <button type="button" (click)="importConflict.set(null)">Cancel</button>
             </div>
           }
