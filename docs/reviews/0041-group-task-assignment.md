@@ -39,7 +39,9 @@ with) an individual member.
 
 ## Limits
 
-- "My tasks" style filtering by group membership is not added; group
-  assignment is a display/ownership marker, not a notification channel.
-- Deleting a group SET NULLs task assignment (task becomes unassigned);
-  this is audited only as the group.deleted event, not per-task updates.
+- ~~"My tasks" style filtering by group membership is not added~~ Stale:
+  closed by 26de02e (mine = direct OR current group membership) and
+  e97a09c (same-token join/leave flips results immediately).
+- ~~Deleting a group audits only the group.deleted event~~ Closed by the
+  0046 follow-up: each unassigned task gets its own task.updated audit
+  row, and group.deleted carries unassigned counts.

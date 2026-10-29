@@ -326,6 +326,23 @@ try {
   const after = (await call(base, { token: at })).json;
   check('deleted task gone', after.length === 0);
 
+  // Group deletion: assigned tasks are SET NULL and each gets an audit row
+  // (0041 limit): the feed must show the per-task change, not only the
+  // group.deleted event. Own throwaway group + task; cleaned up after.
+  const g2 = (await call(`/projects/${proj.id}/groups`, { token: at, method: 'POST', body: { name: 'del-audit', role: 'MEMBER', allowedLocales: [] } })).json;
+  const gt = (await call(base, { token: at, method: 'POST', body: { title: 'Group assigned task', assigneeGroupId: g2.id } })).json;
+  const gdel = await call(`/projects/${proj.id}/groups/${g2.id}`, { token: at, method: 'DELETE' });
+  check('group delete accepted', gdel.status === 200, `got ${gdel.status}`);
+  const gtAfter = (await call(base, { token: at })).json.find((t) => t.id === gt.id);
+  check('deleted group unassigns its tasks (SET NULL)', !!gtAfter && gtAfter.assigneeGroup === null, JSON.stringify(gtAfter?.assigneeGroup));
+  const unassignAudit = (await call(`/projects/${proj.id}/activity?action=task.updated`, { token: at })).json.items
+    .find((e) => e.detail?.title === 'Group assigned task' && e.detail?.changes?.assigneeGroup);
+  check('group delete audits per-task unassignment', unassignAudit?.detail?.changes?.assigneeGroup?.from === 'del-audit' && unassignAudit?.detail?.changes?.assigneeGroup?.to === null, JSON.stringify(unassignAudit?.detail?.changes));
+  const gdelAudit = (await call(`/projects/${proj.id}/activity?action=group.deleted`, { token: at })).json.items
+    .find((e) => e.detail?.name === 'del-audit');
+  check('group.deleted detail counts unassigned tasks', gdelAudit?.detail?.tasksUnassigned === 1 && gdelAudit?.detail?.tasksAudited === 1, JSON.stringify(gdelAudit?.detail));
+  await call(`${base}/${gt.id}`, { token: at, method: 'DELETE' });
+
   const feed = (await call(`/projects/${proj.id}/activity`, { token: at })).json;
   const acts = feed.items.map((e) => e.action);
   check('activity has task.created/updated/deleted', acts.includes('task.created') && acts.includes('task.updated') && acts.includes('task.deleted'));

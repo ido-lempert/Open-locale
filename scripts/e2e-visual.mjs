@@ -895,6 +895,13 @@ try {
   await new Promise((r) => setTimeout(r, 1500));
   check('rejected cycle change reverts the select', (await selectedDepends('Lock home.title')) === 'no predecessor');
 
+  // The activity feed now renders task.updated change detail generically
+  // (was a blank detail); the dependency edits above give it real data.
+  await page.goto(`${WEB}/projects/${projId}/activity`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.activity-list', { timeout: 10000 });
+  check('activity feed renders task dependency change detail', await page.evaluate(() =>
+    (document.body.textContent || '').includes('dependsOn:')));
+
 
   // --- Branches: create via UI, isolation, merge into main ---
   await page.goto(`${WEB}/projects/${projId}`, { waitUntil: 'networkidle0' });

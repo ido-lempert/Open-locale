@@ -116,8 +116,17 @@ export class ActivityComponent implements OnInit {
         if (JSON.stringify(f.allowedLocales) !== JSON.stringify(t.allowedLocales)) parts.push(`locales ${f.allowedLocales.join(',') || 'all'} → ${t.allowedLocales.join(',') || 'all'}`);
         return `"${d['name']}"${parts.length ? ': ' + parts.join(', ') : ''}`;
       }
-      case 'group.deleted':
-        return `"${d['name']}" (was ${String(d['role']).toLowerCase()}, ${d['members']} member(s))`;
+      case 'group.deleted': {
+        const unassigned = typeof d['tasksUnassigned'] === 'number' ? d['tasksUnassigned'] as number : 0;
+        return `"${d['name']}" (was ${String(d['role']).toLowerCase()}, ${d['members']} member(s)${unassigned ? `, ${unassigned} task(s) unassigned` : ''})`;
+      }
+      case 'task.updated': {
+        const changes = (d['changes'] ?? {}) as Record<string, { from?: unknown; to?: unknown }>;
+        const fmt = (v: unknown): string => v === null || v === undefined ? 'none'
+          : Array.isArray(v) ? (v.length ? (v as unknown[]).join(', ') : 'none') : String(v);
+        const parts = Object.entries(changes).map(([k, c]) => `${k}: ${fmt(c?.from)} → ${fmt(c?.to)}`);
+        return `${String(d['title'] ?? '')}${parts.length ? ' - ' + parts.join('; ') : ''}`;
+      }
       case 'group.member.added':
       case 'group.member.removed':
         return `${d['member']} ${ev.action === 'group.member.added' ? '→' : '←'} ${d['group']}`;

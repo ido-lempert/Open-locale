@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { ActivityService } from '../activity/activity.service';
+import { ActivityService, truncate } from '../activity/activity.service';
 
 @Injectable()
 export class ProjectsService {
@@ -236,10 +236,24 @@ export class ProjectsService {
   async deleteGroup(userId: string, projectId: string, groupId: string) {
     const { group } = await this.groupFor(userId, projectId, groupId);
     await this.prisma.$transaction(async (tx) => {
+      // Tasks assigned to the group lose the assignment via ON DELETE SET
+      // NULL. Audit each affected task (capped at 50) so the feed shows the
+      // per-task change, not only the group deletion.
+      const total = await tx.task.count({ where: { assigneeGroupId: groupId } });
+      const affected = await tx.task.findMany({
+        where: { assigneeGroupId: groupId }, select: { id: true, title: true },
+        orderBy: { createdAt: 'asc' }, take: 50,
+      });
       await tx.group.delete({ where: { id: group.id } });
+      for (const t of affected) {
+        await this.activity.record(tx, {
+          projectId, actorId: userId, action: 'task.updated',
+          detail: { title: truncate(t.title, 80), changes: { assigneeGroup: { from: group.name, to: null } } },
+        });
+      }
       await this.activity.record(tx, {
         projectId, actorId: userId, action: 'group.deleted',
-        detail: { name: group.name, role: group.role, members: group.members.length },
+        detail: { name: group.name, role: group.role, members: group.members.length, tasksUnassigned: total, tasksAudited: affected.length },
       });
     });
     return { ok: true };
