@@ -36,6 +36,7 @@ export interface MtPretranslateResult {
   translated: number; skippedExisting: number; skippedNoSource: number; totalKeys: number;
 }
 export interface OtaPublicationInfo { id: string; version: number; branch: string; createdAt: string; locales: string[]; translations: number; }
+export interface WebhookInfo { id: string; url: string; events: string[]; active: boolean; createdAt: string; }
 
 export interface BranchInfo { id: string; name: string; createdAt: string; _count?: { keys: number }; }
 
@@ -233,6 +234,18 @@ export class ApiService {
   }
   publishOta(projectId: string, branch?: string) {
     return this.request<OtaPublicationInfo>(`/projects/${projectId}/ota/publish`, { method: 'POST', body: JSON.stringify(branch ? { branch } : {}) });
+  }
+  listWebhooks(projectId: string) {
+    return this.request<WebhookInfo[]>(`/projects/${projectId}/webhooks`);
+  }
+  createWebhook(projectId: string, input: { url: string; events: string[] }) {
+    return this.request<WebhookInfo & { secret: string }>(`/projects/${projectId}/webhooks`, { method: 'POST', body: JSON.stringify(input) });
+  }
+  updateWebhook(projectId: string, hookId: string, input: { url?: string; events?: string[]; active?: boolean }) {
+    return this.request<WebhookInfo>(`/projects/${projectId}/webhooks/${hookId}`, { method: 'PATCH', body: JSON.stringify(input) });
+  }
+  deleteWebhook(projectId: string, hookId: string) {
+    return this.request<{ removed: string }>(`/projects/${projectId}/webhooks/${hookId}`, { method: 'DELETE' });
   }
   listBranches(projectId: string) {
     return this.request<BranchInfo[]>(`/projects/${projectId}/branches`);

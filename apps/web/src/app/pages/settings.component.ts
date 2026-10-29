@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicationInfo, ApiTokenInfo, GroupInfo, MemberInfo, Project } from '../api.service';
+import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicationInfo, ApiTokenInfo, GroupInfo, MemberInfo, Project, WebhookInfo } from '../api.service';
 
 @Component({
   selector: 'ol-settings',
@@ -80,6 +80,43 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             </select>
             <button type="submit" [disabled]="busy()">Create</button>
           </form>
+        </section>
+        <section class="panel">
+          <h2>Webhooks</h2>
+          <p class="muted">Signed POSTs to a public http(s) URL when project events happen. Each delivery carries X-OpenLocale-Event and X-OpenLocale-Signature (HMAC-SHA256 of the raw body with the signing secret). Private and internal addresses are refused.</p>
+          @if (createdWebhook(); as w) {
+            <p class="notice">Webhook created. Copy the signing secret now - it will not be shown again.</p>
+            <p class="token-reveal"><code>{{ w.secret }}</code>
+              <button type="button" (click)="copyToken(w.secret)">Copy</button></p>
+          }
+          <ul class="locale-list">
+            @for (h of webhooks(); track h.id) {
+              <li>
+                <span>{{ h.url }}</span>
+                <span class="muted">{{ h.events.join(' + ') }} · created {{ h.createdAt | date:'mediumDate' }}</span>
+                @if (!h.active) { <span class="badge">disabled</span> }
+                @if (isTeamAdmin()) {
+                  @if (confirmingHook() === h.id) {
+                    <span>Delete this webhook? Deliveries stop immediately.</span>
+                    <button class="danger" (click)="removeHook(h.id)">Yes, delete</button>
+                    <button (click)="confirmingHook.set(null)">Cancel</button>
+                  } @else {
+                    <button (click)="toggleHook(h)">{{ h.active ? 'Disable' : 'Enable' }}</button>
+                    <button class="danger" (click)="confirmingHook.set(h.id)">Delete</button>
+                  }
+                }
+              </li>
+            }
+            @if (!webhooks().length) { <li class="muted">No webhooks yet.</li> }
+          </ul>
+          @if (isTeamAdmin()) {
+          <form class="inline" (ngSubmit)="createWebhook()">
+            <input type="url" aria-label="Webhook URL" placeholder="https://example.com/hook" [ngModel]="hookUrl()" (ngModelChange)="hookUrl.set($event)" name="hookUrl" required />
+            <label><input type="checkbox" [ngModel]="hookTranslationUpdated()" (ngModelChange)="hookTranslationUpdated.set($event)" name="hookEvTx" /> translation.updated</label>
+            <label><input type="checkbox" [ngModel]="hookProjectRestored()" (ngModelChange)="hookProjectRestored.set($event)" name="hookEvRestore" /> project.restored</label>
+            <button type="submit" [disabled]="busy()">Create</button>
+          </form>
+          }
         </section>
         <section class="panel">
           <h2>Review statuses</h2>
@@ -328,6 +365,10 @@ export class SettingsComponent implements OnInit {
   createdToken = signal<{ id: string; name: string; token: string } | null>(null);
   tokenName = signal(''); tokenScope = signal('read,write');
   confirmingToken = signal<string | null>(null);
+  webhooks = signal<WebhookInfo[]>([]);
+  createdWebhook = signal<{ id: string; secret: string } | null>(null);
+  hookUrl = signal(''); hookTranslationUpdated = signal(true); hookProjectRestored = signal(false);
+  confirmingHook = signal<string | null>(null);
   confirmingLocale = signal<string | null>(null);
   members = signal<MemberInfo[]>([]);
   groups = signal<GroupInfo[]>([]);
@@ -348,6 +389,7 @@ export class SettingsComponent implements OnInit {
       this.project.set(p);
       this.name.set(p.name); this.description.set(p.description);
       this.tokens.set(await this.api.listTokens());
+      this.webhooks.set(await this.api.listWebhooks(this.projectId));
       this.members.set(await this.api.listMembers(this.projectId));
       this.groups.set(await this.api.listGroups(this.projectId));
       this.otaPubs.set(await this.api.listOtaPublications(this.projectId));
@@ -385,6 +427,37 @@ export class SettingsComponent implements OnInit {
   }
   async copyToken(value: string) {
     try { await navigator.clipboard.writeText(value); } catch { /* clipboard unavailable */ }
+  }
+  async createWebhook() {
+    this.busy.set(true); this.error.set('');
+    const events = [
+      ...(this.hookTranslationUpdated() ? ['translation.updated'] : []),
+      ...(this.hookProjectRestored() ? ['project.restored'] : []),
+    ];
+    if (!events.length) { this.error.set('Pick at least one event'); this.busy.set(false); return; }
+    try {
+      const res = await this.api.createWebhook(this.projectId, { url: this.hookUrl().trim(), events });
+      this.createdWebhook.set({ id: res.id, secret: res.secret });
+      this.hookUrl.set('');
+      await this.reload();
+    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+    finally { this.busy.set(false); }
+  }
+  async toggleHook(h: WebhookInfo) {
+    this.busy.set(true); this.error.set('');
+    try { await this.api.updateWebhook(this.projectId, h.id, { active: !h.active }); await this.reload(); }
+    catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+    finally { this.busy.set(false); }
+  }
+  async removeHook(id: string) {
+    this.busy.set(true); this.error.set('');
+    try {
+      await this.api.deleteWebhook(this.projectId, id);
+      this.confirmingHook.set(null);
+      if (this.createdWebhook()?.id === id) this.createdWebhook.set(null);
+      await this.reload();
+    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+    finally { this.busy.set(false); }
   }
   async revokeToken(id: string) {
     this.busy.set(true); this.error.set('');

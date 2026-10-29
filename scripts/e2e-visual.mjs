@@ -452,6 +452,62 @@ try {
   await shot('editor-10-tokens.png');
 
 
+  // --- Webhooks via UI: create (one-time secret reveal), disable/enable, delete ---
+  await page.goto(`${WEB}/projects/${projId}/settings`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('input[aria-label="Webhook URL"]', { timeout: 10000 });
+  await page.type('input[aria-label="Webhook URL"]', 'https://hooks.example.com/open-locale');
+  // translation.updated is pre-checked; also check project.restored.
+  await page.evaluate(() => {
+    const cb = document.querySelector('input[name=hookEvRestore]');
+    if (!cb.checked) cb.click();
+  });
+  await page.evaluate(() => { document.querySelector('input[aria-label="Webhook URL"]').closest('form').requestSubmit(); });
+  await page.waitForSelector('.token-reveal code', { timeout: 10000 });
+  check('webhook created via UI with one-time secret reveal',
+    (await page.$eval('.token-reveal code', (el) => el.textContent)).length >= 32);
+  await page.waitForFunction(() => [...document.querySelectorAll('.locale-list li')].some((el) => el.textContent.includes('hooks.example.com') && el.textContent.includes('translation.updated + project.restored')), { timeout: 10000 });
+  check('webhook listed with URL and both events', true);
+  // Fresh page load: the reveal is component state, so it is gone; the list
+  // only ever carries the public view (no secret) - safe to screenshot.
+  await page.goto(`${WEB}/projects/${projId}/settings`, { waitUntil: 'networkidle0' });
+  await page.waitForFunction(() => [...document.querySelectorAll('.locale-list li')].some((el) => el.textContent.includes('hooks.example.com')), { timeout: 10000 });
+  check('secret reveal does not persist across reloads', await page.evaluate(() => !document.querySelector('.token-reveal')));
+  await page.evaluate(() => {
+    const li = [...document.querySelectorAll('.locale-list li')].find((el) => el.textContent.includes('hooks.example.com'));
+    [...li.querySelectorAll('button')].find((b) => b.textContent === 'Disable').click();
+  });
+  await page.waitForFunction(() => [...document.querySelectorAll('.locale-list li')].some((el) => el.textContent.includes('hooks.example.com') && el.textContent.includes('disabled')), { timeout: 10000 });
+  check('webhook disabled via UI shows the disabled badge', true);
+  await page.evaluate(() => {
+    const li = [...document.querySelectorAll('.locale-list li')].find((el) => el.textContent.includes('hooks.example.com'));
+    [...li.querySelectorAll('button')].find((b) => b.textContent === 'Enable').click();
+  });
+  await page.waitForFunction(() => {
+    const li = [...document.querySelectorAll('.locale-list li')].find((el) => el.textContent.includes('hooks.example.com'));
+    return !!li && !li.textContent.includes('disabled');
+  }, { timeout: 10000 });
+  check('webhook re-enabled via UI clears the badge', true);
+  await page.evaluate(() => {
+    const h = [...document.querySelectorAll('h2')].find((x) => x.textContent === 'Webhooks');
+    h.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70);
+  });
+  await shot('editor-34-webhooks.png');
+  await page.evaluate(() => {
+    const li = [...document.querySelectorAll('.locale-list li')].find((el) => el.textContent.includes('hooks.example.com'));
+    [...li.querySelectorAll('button')].find((b) => b.textContent === 'Delete').click();
+  });
+  await page.waitForFunction(() => document.body.textContent.includes('Yes, delete'), { timeout: 5000 });
+  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Yes, delete').click());
+  await page.waitForFunction(() => ![...document.querySelectorAll('.locale-list li')].some((el) => el.textContent.includes('hooks.example.com')), { timeout: 10000 });
+  check('webhook deleted via UI after inline confirm', true);
+  const hooksAfter = await page.evaluate(async () => {
+    const token = localStorage.getItem('ol_token');
+    const pid = location.pathname.split('/')[2];
+    return (await fetch(`/api/projects/${pid}/webhooks`, { headers: { Authorization: `Bearer ${token}` } })).json();
+  });
+  check('API agrees the webhook is gone', Array.isArray(hooksAfter) && !hooksAfter.some((h) => h.url.includes('hooks.example.com')));
+
+
   // --- Groups: create via UI, union copy visible, desktop + narrow shots ---
   await page.goto(`${WEB}/projects/${projId}/settings`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('input[aria-label="Group name"]', { timeout: 10000 });
