@@ -531,6 +531,23 @@ try {
     window.scrollTo(0, 0);
   });
 
+  // --- Import format auto-detection from file extension ---
+  const autoPoFile = '/tmp/e2e-autodetect.po';
+  writeFileSync(autoPoFile, 'msgid "auto.po"\nmsgstr "detected from extension"\n');
+  await page.select('select[aria-label="Import/export format"]', 'json');
+  const autoPoInput = await page.$('input[type=file]');
+  await autoPoInput.uploadFile(autoPoFile);
+  const autoPoNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('(PO (gettext),'), { timeout: 10000 }).then(() => true).catch(() => false);
+  const selAfterPo = await page.$eval('select[aria-label="Import/export format"]', (el) => el.value);
+  check('format auto-detects PO from .po extension (overrides explicit JSON selection)', autoPoNotice && selAfterPo === 'po', `select=${selAfterPo} notice=${autoPoNotice}`);
+  const autoYmlFile = '/tmp/e2e-autodetect.yml';
+  writeFileSync(autoYmlFile, '"auto":\n  "yml": "yml detect ✓"\n');
+  const autoYmlInput = await page.$('input[type=file]');
+  await autoYmlInput.uploadFile(autoYmlFile);
+  const autoYmlNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('(YAML,'), { timeout: 10000 }).then(() => true).catch(() => false);
+  const selAfterYml = await page.$eval('select[aria-label="Import/export format"]', (el) => el.value);
+  check('format auto-detects YAML from .yml extension (overrides prior PO selection)', autoYmlNotice && selAfterYml === 'yaml' && (await waitText('auto.yml')), `select=${selAfterYml} notice=${autoYmlNotice}`);
+
   // Settings screen: rename, add locale, verify grid column appears (on the editor)
   await page.click('.settings-link');
   await page.waitForSelector('.panel', { timeout: 10000 });

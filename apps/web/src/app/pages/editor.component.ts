@@ -3,6 +3,7 @@ import { Component, OnInit, signal, WritableSignal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { hintsForTarget, GlossaryHint } from '../glossary-match';
+import { detectImportFormat } from '../import-format';
 import { ApiService, BranchInfo, ScreenshotMeta, TmSuggestion, GlossaryTermItem, CommentEntry, HistoryEntry, Key, Project, TranslationStatus } from '../api.service';
 
 interface CellState {
@@ -618,6 +619,10 @@ export class EditorComponent implements OnInit {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
+    // Auto-detect the format from the file extension; an unknown extension
+    // keeps the user's explicit selection (no content sniffing).
+    const detected = detectImportFormat(file.name);
+    if (detected) this.ioFormat.set(detected);
     const fmt = this.ioFormat();
     try {
       const text = await file.text();
