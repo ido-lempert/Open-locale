@@ -188,6 +188,71 @@ try {
   const heAfterLock = await (await fetch(`${API}${P}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
   check('locked key keeps its value, unlocked key imported', heAfterLock['po.title'] === 'My "App"' && heAfterLock['po.unlocked'] === 'lands', JSON.stringify({ title: heAfterLock['po.title'], unlocked: heAfterLock['po.unlocked'] }));
 
+  // XLIFF 1.2 round-trip, rejection and the shared boundaries.
+  const xliffIn = [
+    '<?xml version="1.0" encoding="utf-8"?>',
+    '<xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2">',
+    '  <file source-language="en" target-language="he" datatype="plaintext" original="open-locale">',
+    '    <body>',
+    '      <trans-unit id="xliff.title">',
+    '        <source>My "App"</source>',
+    '        <target>My &quot;App&quot; ✓</target>',
+    '      </trans-unit>',
+    '      <trans-unit id="xliff.chars">',
+    '        <source>chars</source>',
+    '        <target>A &amp; B &lt;C&gt;</target>',
+    '      </trans-unit>',
+    '      <trans-unit id="xliff.multi">',
+    '        <source>line1 line2</source>',
+    '        <target>line1',
+    'line2</target>',
+    '      </trans-unit>',
+    '      <trans-unit id="xliff.untranslated">',
+    '        <source>only source</source>',
+    '      </trans-unit>',
+    '    </body>',
+    '  </file>',
+    '</xliff>',
+  ].join('\n');
+  const impXl = await call(`${P}/import/he`, { token: at, method: 'POST', body: { xliff: xliffIn } });
+  check('XLIFF import accepted (untranslated unit skipped, not wiped)', impXl.status === 201 && impXl.json.translationsUpserted === 3 && impXl.json.untranslatedSkipped === 1, JSON.stringify(impXl.json));
+  const xlRes = await fetch(`${API}${P}/export/he/xliff`, { headers: { Authorization: `Bearer ${at}` } });
+  const xlOut = await xlRes.text();
+  check('XLIFF export content-type', (xlRes.headers.get('content-type') || '').includes('x-xliff+xml'), xlRes.headers.get('content-type') ?? '');
+  check('XLIFF export has languages and correct escaping', xlOut.includes('source-language="en"') && xlOut.includes('target-language="he"') && xlOut.includes('<target>My "App" ✓</target>') && xlOut.includes('<target>A &amp; B &lt;C&gt;</target>') && xlOut.includes('<target>line1\nline2</target>'), xlOut.split('\n').find((l) => l.includes('xliff.chars')) ?? '');
+  const xlRound = await call(`${P}/import/he`, { token: at, method: 'POST', body: { xliff: xlOut } });
+  check('XLIFF export-import roundtrip stable', xlRound.status === 201 && xlRound.json.unchangedSkipped >= 3, JSON.stringify(xlRound.json));
+  const xlBefore = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  const xlGroup = await call(`${P}/import/he`, { token: at, method: 'POST', body: { xliff: '<xliff version="1.2"><file><body><group id="g"><trans-unit id="xliff.grouped"><source>s</source><target>should not land</target></trans-unit></group></body></file></xliff>' } });
+  const xlAfterGroup = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('XLIFF group nesting rejected (400) and leaves keys unchanged', xlGroup.status === 400 && JSON.stringify(xlBefore) === JSON.stringify(xlAfterGroup) && xlAfterGroup['xliff.grouped'] === undefined, String(xlGroup.status));
+  const xlMarkup = await call(`${P}/import/he`, { token: at, method: 'POST', body: { xliff: '<xliff version="1.2"><file><body><trans-unit id="xliff.markup"><source>a<g id="1">bad</g></source><target>x</target></trans-unit></body></file></xliff>' } });
+  check('XLIFF inline markup rejected (400)', xlMarkup.status === 400, String(xlMarkup.status));
+
+  await call(`${P}/branches`, { token: at, method: 'POST', body: { name: 'xliff-branch' } });
+  const impXlBr = await call(`${P}/import/en?branch=xliff-branch`, { token: at, method: 'POST', body: { xliff: '<xliff version="1.2"><file><body><trans-unit id="xliff.branchonly"><source>s</source><target>branch value</target></trans-unit></body></file></xliff>' } });
+  check('XLIFF import scopes to the named branch', impXlBr.status === 201, JSON.stringify(impXlBr.json));
+  const mainAfterXlBr = await (await fetch(`${API}${P}/export/en?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  const brAfterXlBr = await (await fetch(`${API}${P}/export/en?flat=true&branch=xliff-branch`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('XLIFF branch import invisible on main, present on the branch', mainAfterXlBr['xliff.branchonly'] === undefined && brAfterXlBr['xliff.branchonly'] === 'branch value');
+  const brXlOut = await (await fetch(`${API}${P}/export/en/xliff?branch=xliff-branch`, { headers: { Authorization: `Bearer ${at}` } })).text();
+  check('XLIFF export reads the named branch', brXlOut.includes('id="xliff.branchonly"'));
+
+  const cXlEn = await call(`${P}/import/en`, { token: ct, method: 'POST', body: { xliff: '<xliff version="1.2"><file><body><trans-unit id="xliff.denied"><source>s</source><target>x</target></trans-unit></body></file></xliff>' } });
+  check('XLIFF import outside the member locale grant denied (403)', cXlEn.status === 403, String(cXlEn.status));
+  const cXlHe = await call(`${P}/import/he`, { token: ct, method: 'POST', body: { xliff: '<xliff version="1.2"><file><body><trans-unit id="xliff.memberok"><source>s</source><target>allowed</target></trans-unit></body></file></xliff>' } });
+  check('XLIFF import inside the member locale grant accepted', cXlHe.status === 201, String(cXlHe.status));
+  const cXlExport = await fetch(`${API}${P}/export/en/xliff`, { headers: { Authorization: `Bearer ${ct}` } });
+  check('XLIFF export not narrowed by locale write grants', cXlExport.status === 200, String(cXlExport.status));
+
+  const keysForXlLock = (await call(`${P}/keys`, { token: at })).json;
+  const lockXlKey = keysForXlLock.find((k) => k.name === 'xliff.title');
+  await call(`${P}/tasks`, { token: at, method: 'POST', body: { title: 'Lock xliff.title', lockKeys: true, keyIds: [lockXlKey.id] } });
+  const xlLockImp = await call(`${P}/import/he`, { token: ct, method: 'POST', body: { xliff: '<xliff version="1.2"><file><body><trans-unit id="xliff.title"><source>s</source><target>changed under lock</target></trans-unit><trans-unit id="xliff.unlocked"><source>s</source><target>lands</target></trans-unit></body></file></xliff>' } });
+  check('XLIFF import skips the locked key and reports it', xlLockImp.status === 201 && xlLockImp.json.failed === 1 && xlLockImp.json.translationsUpserted === 1, JSON.stringify(xlLockImp.json));
+  const heAfterXlLock = await (await fetch(`${API}${P}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('XLIFF locked key keeps its value, unlocked key imported', heAfterXlLock['xliff.title'] === 'My "App" ✓' && heAfterXlLock['xliff.unlocked'] === 'lands', JSON.stringify({ title: heAfterXlLock['xliff.title'], unlocked: heAfterXlLock['xliff.unlocked'] }));
+
   const runs = (await call(`${P}/imports`, { token: at })).json;
   check('CSV imports recorded as import runs', Array.isArray(runs) ? runs.length >= 2 : (runs.items?.length ?? 0) >= 2, JSON.stringify(runs).slice(0, 120));
 

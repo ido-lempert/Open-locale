@@ -391,6 +391,49 @@ try {
     window.scrollTo(0, 0);
   });
 
+  // --- XLIFF via UI: import a new key, export capture verifies content ---
+  const xliffFile = '/tmp/e2e-import.xlf';
+  writeFileSync(xliffFile, [
+    '<?xml version="1.0" encoding="utf-8"?>',
+    '<xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2">',
+    '  <file source-language="en" target-language="en" datatype="plaintext" original="open-locale">',
+    '    <body>',
+    '      <trans-unit id="xliff.demo">',
+    '        <source>demo</source>',
+    '        <target>Proof of XLIFF &quot;escapes&quot;</target>',
+    '      </trans-unit>',
+    '    </body>',
+    '  </file>',
+    '</xliff>',
+  ].join('\n'));
+  await page.select('select[aria-label="Import/export format"]', 'xliff');
+  const xliffInput = await page.$('input[type=file]');
+  await xliffInput.uploadFile(xliffFile);
+  const xliffNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('(XLIFF 1.2,'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('XLIFF import via UI shows summary notice', xliffNotice);
+  check('XLIFF-imported key appears in grid', await waitText('xliff.demo'));
+  await page.evaluate(() => {
+    window.__xliffCapture = null;
+    const orig = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (b) => { window.__xliffCapture = b; return orig(b); };
+  });
+  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.startsWith('Export'))?.click());
+  await page.waitForFunction(() => !!window.__xliffCapture, { timeout: 10000 });
+  const xliffExport = await page.evaluate(() => window.__xliffCapture.text());
+  check('XLIFF export via UI emits trans-unit for existing keys',
+    xliffExport.includes('<xliff version="1.2"') && xliffExport.includes('<trans-unit id="xliff.demo">') && xliffExport.includes('<target>Proof of XLIFF "escapes"</target>'),
+    xliffExport.split('\n').find((l) => l.includes('xliff.demo')) ?? '');
+  await page.evaluate(() => {
+    document.body.style.paddingBottom = '60vh';
+    const cell = [...document.querySelectorAll('.grid td.key')].find((el) => el.textContent.includes('xliff.demo'));
+    cell?.scrollIntoView({ block: 'center' });
+  });
+  await shot('editor-36-xliff.png');
+  await page.evaluate(() => {
+    document.body.style.paddingBottom = '';
+    window.scrollTo(0, 0);
+  });
+
   // Settings screen: rename, add locale, verify grid column appears (on the editor)
   await page.click('.settings-link');
   await page.waitForSelector('.panel', { timeout: 10000 });

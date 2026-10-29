@@ -14,6 +14,7 @@ import { flattenJson, unflattenJson } from './json-flatten';
 import { parseCsv, toCsv } from './csv';
 import { parseAndroidXml, toAndroidXml } from './android-xml';
 import { parsePo, toPo } from './po';
+import { parseXliff, toXliff } from './xliff';
 import { parseIosStrings, toIosStrings } from './ios-strings';
 
 // Statuses every project supports; a project may extend this list with
@@ -338,6 +339,12 @@ export class TranslationsService {
     return toPo(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)));
   }
 
+  async exportXliff(userId: string, projectId: string, locale: string, branch?: string) {
+    const flat = (await this.exportJson(userId, projectId, locale, true, branch)) as Record<string, string>;
+    const project = await this.projects.getFor(userId, projectId);
+    return toXliff(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)), project.baseLocale, locale);
+  }
+
   async importAndroid(userId: string, projectId: string, locale: string, xml: string, branch?: string) {
     const { rows, rejected } = parseAndroidXml(xml);
     if (rejected > 0) {
@@ -360,6 +367,15 @@ export class TranslationsService {
       throw new BadRequestException(`${rejected} PO ${rejected === 1 ? 'entry' : 'entries'} rejected: plurals (msgid_plural/msgstr[n]), contexts (msgctxt) and malformed strings are not supported`);
     }
     return this.importJson(userId, projectId, locale, Object.fromEntries(rows), branch);
+  }
+
+  async importXliff(userId: string, projectId: string, locale: string, xliff: string, branch?: string) {
+    const { rows, rejected, skipped } = parseXliff(xliff);
+    if (rejected > 0) {
+      throw new BadRequestException(`${rejected} XLIFF trans-unit(s) rejected: group nesting, inline markup, alt-trans/seg-source and duplicate or missing ids are not supported`);
+    }
+    const res = await this.importJson(userId, projectId, locale, Object.fromEntries(rows), branch);
+    return { ...res, untranslatedSkipped: skipped };
   }
 
   async importCsv(userId: string, projectId: string, locale: string, csv: string, branch?: string) {
