@@ -475,6 +475,10 @@ try {
   const potPlural = await call(`${P}/import/he`, { token: at, method: 'POST', body: { pot: 'msgid "p"\nmsgid_plural "ps"\nmsgstr[0] ""\nmsgstr[1] ""' } });
   const potAfterPlural = await (await fetch(`${API}${P}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
   check('POT plural entry rejected (400) and leaves keys unchanged', potPlural.status === 400 && JSON.stringify(heAfterPotRound) === JSON.stringify(potAfterPlural) && potAfterPlural['p'] === undefined, String(potPlural.status));
+  const potPreserve = await call(`${P}/import/he`, { token: at, method: 'POST', body: { pot: 'msgid "resx.title"\nmsgstr ""\n\nmsgid "pot.fresh"\nmsgstr ""' } });
+  const heAfterPreserve = await (await fetch(`${API}${P}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('POT blank template entries never erase existing translations', potPreserve.status === 201 && potPreserve.json.translationsUpserted === 1 && potPreserve.json.unchangedSkipped === 1 && heAfterPreserve['resx.title'] === 'My App ✓' && heAfterPreserve['pot.fresh'] === '', JSON.stringify(potPreserve.json));
+
   const potMember = await call(`${P}/import/en`, { token: ct, method: 'POST', body: { pot: 'msgid "pot.member"\nmsgstr ""' } });
   check('POT import outside the member locale grant denied (403)', potMember.status === 403, String(potMember.status));
   await call(`${P}/branches`, { token: at, method: 'POST', body: { name: 'pot-branch' } });

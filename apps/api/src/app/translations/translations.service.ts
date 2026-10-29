@@ -584,7 +584,9 @@ export class TranslationsService {
   }
 
   async importPot(userId: string, projectId: string, locale: string, pot: string, branch?: string) {
-    return this.importJson(userId, projectId, locale, this.parseImport({ pot }).entries, branch);
+    // POT is a template: blank msgstr entries create keys and fill empty
+    // translations, but never overwrite an existing translation.
+    return this.importJson(userId, projectId, locale, this.parseImport({ pot }).entries, branch, { preserveOnBlank: true });
   }
 
   async importXliff(userId: string, projectId: string, locale: string, xliff: string, branch?: string) {
@@ -667,7 +669,7 @@ export class TranslationsService {
     };
   }
 
-  async importJson(userId: string, projectId: string, locale: string, entries: Record<string, unknown>, branch?: string) {
+  async importJson(userId: string, projectId: string, locale: string, entries: Record<string, unknown>, branch?: string, opts?: { preserveOnBlank?: boolean }) {
     await this.projects.assertLocaleWrite(userId, projectId, [locale]);
     const b = await this.branches.branchFor(projectId, branch);
     const project = await this.projects.getFor(userId, projectId);
@@ -680,13 +682,13 @@ export class TranslationsService {
     // state. Single-instance in-process mutex; see LocksService for why not a
     // Postgres advisory lock and what multi-instance needs.
     return this.locks.withProjectLock(projectId, () =>
-      this.importJsonLocked(userId, projectId, locale, project.baseLocale, entries, flat, rejected, b.id));
+      this.importJsonLocked(userId, projectId, locale, project.baseLocale, entries, flat, rejected, b.id, opts));
   }
 
   private async importJsonLocked(
     userId: string, projectId: string, locale: string, baseLocale: string,
     entries: Record<string, unknown>, flat: Record<string, string>, rejected: string[],
-    branchId: string,
+    branchId: string, opts?: { preserveOnBlank?: boolean },
   ) {
     // Restorable auto snapshot BEFORE anything mutates: every import leaves the
     // pre-import state recoverable from the snapshots list.
@@ -726,6 +728,17 @@ export class TranslationsService {
             where: { keyId_localeCode: { keyId: key.id, localeCode: locale } },
           });
           if (existing && existing.value === value) {
+            await tx.importRun.update({
+              where: { id: run.id }, data: { unchangedSkipped: { increment: 1 } },
+            });
+            return;
+          }
+          if (opts?.preserveOnBlank && value === '' && existing && existing.value !== '') {
+            // Template semantics (POT): a blank template entry must never
+            // erase an existing translation. Checked against the row inside
+            // the same transaction that would otherwise write, so a
+            // concurrent edit cannot be blanked either. Counted as unchanged:
+            // nothing changed.
             await tx.importRun.update({
               where: { id: run.id }, data: { unchangedSkipped: { increment: 1 } },
             });
