@@ -16,11 +16,13 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
       @if (project(); as p) {
         <section class="panel">
           <h2>General</h2>
+          @if (isTeamAdmin()) {
           <form (ngSubmit)="rename()">
             <label>Name <input [ngModel]="name()" (ngModelChange)="name.set($event)" name="name" required /></label>
             <label>Description <input [ngModel]="description()" (ngModelChange)="description.set($event)" name="description" /></label>
             <button class="primary" type="submit" [disabled]="busy()">Save</button>
           </form>
+          }
           <p class="muted">Slug: <code>{{ p.slug }}</code> · Base locale: <code>{{ p.baseLocale }}</code></p>
         </section>
         <section class="panel">
@@ -36,14 +38,16 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                   <button class="danger" (click)="removeLocale(l.code)">Yes, remove</button>
                   <button (click)="confirmingLocale.set(null)">Cancel</button>
                 }
-                @else { <button class="danger" (click)="askRemoveLocale(l.code)">Remove</button> }
+                @else if (isTeamAdmin()) { <button class="danger" (click)="askRemoveLocale(l.code)">Remove</button> }
               </li>
             }
           </ul>
+          @if (isTeamAdmin()) {
           <form class="inline" (ngSubmit)="addLocale()">
             <input aria-label="Add locale" placeholder="Add locale (e.g. fr)" [ngModel]="newLocale()" (ngModelChange)="newLocale.set($event)" name="newLocale" required maxlength="10" />
             <button type="submit" [disabled]="busy()">Add</button>
           </form>
+          }
         </section>
         <section class="panel">
           <h2>API tokens</h2>
@@ -84,14 +88,16 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             @for (st of project()?.customStatuses ?? []; track st) {
               <li>
                 <span class="badge">{{ st.toLowerCase() }}</span>
-                <button class="danger" (click)="removeStatus(st)">Remove</button>
+                @if (isTeamAdmin()) { <button class="danger" (click)="removeStatus(st)">Remove</button> }
               </li>
             }
           </ul>
+          @if (isTeamAdmin()) {
           <form class="inline" (ngSubmit)="addStatus()">
             <input aria-label="New custom status" placeholder="e.g. NEEDS_WORK (A-Z, 0-9, _)" [ngModel]="newStatus()" (ngModelChange)="newStatus.set($event)" name="newStatus" required maxlength="24" />
             <button type="submit" [disabled]="busy()">Add</button>
           </form>
+          }
           <p class="muted">Custom statuses appear in the editor status dropdowns and the review queue. Removing one does not change translations already carrying it.</p>
         </section>
         <section class="panel">
@@ -101,15 +107,17 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             @for (o of project()?.embedOrigins ?? []; track o) {
               <li>
                 <code>{{ o }}</code>
-                <button class="danger" (click)="removeOrigin(o)">Remove</button>
+                @if (isTeamAdmin()) { <button class="danger" (click)="removeOrigin(o)">Remove</button> }
               </li>
             }
             @if (!(project()?.embedOrigins ?? []).length) { <li class="muted">No origins allowlisted - the embed endpoint answers nothing yet.</li> }
           </ul>
+          @if (isTeamAdmin()) {
           <form class="inline" (ngSubmit)="addOrigin()">
             <input aria-label="New embed origin" placeholder="https://app.example.com" [ngModel]="newOrigin()" (ngModelChange)="newOrigin.set($event)" name="newOrigin" required />
             <button type="submit" [disabled]="busy()">Add origin</button>
           </form>
+          }
         </section>
         <section class="panel">
           <h2>Machine translation (pseudo test data)</h2>
@@ -119,11 +127,12 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
               <li>
                 <span>{{ p.name }} <span class="muted">{{ p.type }}</span></span>
                 <button (click)="toggleMtProvider(p)">{{ p.enabled ? 'Disable' : 'Enable' }}</button>
-                <button class="danger" (click)="removeMtProvider(p)">Remove</button>
+                @if (isTeamAdmin()) { <button class="danger" (click)="removeMtProvider(p)">Remove</button> }
               </li>
             }
             @if (!mtProviders().length) { <li class="muted">No providers yet - add the pseudo provider to pre-translate empty cells.</li> }
           </ul>
+          @if (isTeamAdmin()) {
           <form class="inline" (ngSubmit)="addMtProvider()">
             <input aria-label="New provider name" placeholder="Provider name" [ngModel]="newMtName()" (ngModelChange)="newMtName.set($event)" name="newMtName" required />
             <select aria-label="Provider type" [ngModel]="newMtType()" (ngModelChange)="newMtType.set($event)" name="newMtType">
@@ -131,8 +140,10 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             </select>
             <button type="submit" [disabled]="busy()">Add provider</button>
           </form>
+          }
           @if (mtProviders().length) {
-            <form class="inline" (ngSubmit)="runPretranslate()">
+            @if (isTeamAdmin()) {
+          <form class="inline" (ngSubmit)="runPretranslate()">
               <select aria-label="Pre-translate provider" [ngModel]="mtProviderId()" (ngModelChange)="mtProviderId.set($event)" name="mtProviderId">
                 @for (p of mtProviders(); track p.id) { <option [value]="p.id" [disabled]="!p.enabled">{{ p.name }}</option> }
               </select>
@@ -146,6 +157,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
               </select>
               <button type="submit" [disabled]="busy()" title="Fill empty cells with pseudo test data">Fill empty</button>
             </form>
+          }
             @if (mtResult()) { <p class="muted" role="status">{{ mtResult() }}</p> }
           }
         </section>
@@ -156,12 +168,13 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             @for (r of autoRules(); track r.id) {
               <li>
                 <span>{{ r.name }} <span class="muted">{{ r.trigger }} &rarr; {{ ruleSummary(r) }}</span></span>
-                <button (click)="toggleRule(r)">{{ r.enabled ? 'Disable' : 'Enable' }}</button>
-                <button class="danger" (click)="removeRule(r)">Remove</button>
+                @if (isTeamAdmin()) { <button (click)="toggleRule(r)">{{ r.enabled ? 'Disable' : 'Enable' }}</button> }
+                @if (isTeamAdmin()) { <button class="danger" (click)="removeRule(r)">Remove</button> }
               </li>
             }
             @if (!autoRules().length) { <li class="muted">No rules yet.</li> }
           </ul>
+          @if (isTeamAdmin()) {
           <form class="inline" (ngSubmit)="addRule()">
             <input aria-label="Rule name" placeholder="Rule name" [ngModel]="newRuleName()" (ngModelChange)="newRuleName.set($event)" name="newRuleName" required />
             <select aria-label="Trigger" [ngModel]="newRuleTrigger()" (ngModelChange)="newRuleTrigger.set($event)" name="newRuleTrigger">
@@ -186,6 +199,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             }
             <button type="submit" [disabled]="busy()">Add rule</button>
           </form>
+          }
         </section>
         <section class="panel">
           <h2>Members</h2>
@@ -196,7 +210,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                 <span class="role-badge">{{ m.role.toLowerCase() }}</span>
                 <span class="muted">{{ m.role === 'MEMBER' && m.allowedLocales.length ? 'locales: ' + m.allowedLocales.join(', ') : 'all locales' }}</span>
                 @if (effectiveNote(m); as note) { <span class="muted" aria-label="Effective grant">{{ note }}</span> }
-                @if (m.role !== 'OWNER') {
+                @if (m.role !== 'OWNER' && isTeamAdmin()) {
                   <select aria-label="Role" [ngModel]="m.role" (ngModelChange)="setRole(m, $event)" name="role-{{m.id}}">
                     <option value="MEMBER">member</option>
                     <option value="ADMIN">admin</option>
@@ -206,6 +220,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
               </li>
             }
           </ul>
+          @if (isTeamAdmin()) {
           <form class="inline" (ngSubmit)="addMember()">
             <input aria-label="Member email" placeholder="User email" [ngModel]="memberEmail()" (ngModelChange)="memberEmail.set($event)" name="memberEmail" required />
             <select aria-label="New member role" [ngModel]="memberRole()" (ngModelChange)="memberRole.set($event)" name="memberRole">
@@ -215,6 +230,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             <input aria-label="Allowed locales" placeholder="Locales (e.g. he,fr) - blank = all" [ngModel]="memberLocales()" (ngModelChange)="memberLocales.set($event)" name="memberLocales" />
             <button type="submit" [disabled]="busy()">Add</button>
           </form>
+          }
           <p class="muted">Members join this team and can access every project in it. A locale list limits their translation writes across all of the team's projects. Project administration (settings, locales, webhooks, restores, members) requires admin.</p>
         </section>
         <section class="panel">
@@ -226,7 +242,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                 <span><strong>{{ g.name }}</strong></span>
                 <span class="role-badge">{{ g.role.toLowerCase() }}</span>
                 <span class="muted">{{ g.role === 'MEMBER' && g.allowedLocales.length ? 'locales: ' + g.allowedLocales.join(', ') : 'all locales' }}</span>
-                @if (isTeamAdmin()) {
+                @if (canManageGroup(g)) {
                   <select aria-label="Group role" [ngModel]="g.role" (ngModelChange)="setGroupRole(g, $event)" name="grole-{{g.id}}">
                     <option value="MEMBER">member</option>
                     <option value="ADMIN">admin</option>
@@ -237,9 +253,9 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
               <li class="muted group-members" style="padding-left: 1rem;">
                 Members: {{ g.members.length ? '' : 'none' }}
                 @for (gm of g.members; track gm.userId) {
-                  <span>{{ gm.user.displayName }} @if (isTeamAdmin()) { <button class="danger" aria-label="Remove from group" (click)="removeGroupMember(g, gm.userId)">x</button> }</span>
+                  <span>{{ gm.user.displayName }} @if (canManageGroup(g)) { <button class="danger" aria-label="Remove from group" (click)="removeGroupMember(g, gm.userId)">x</button> }</span>
                 }
-                @if (isTeamAdmin()) {
+                @if (canManageGroup(g)) {
                   <select aria-label="Add member to group" name="gadd-{{g.id}}" [ngModel]="groupPick()[g.id] ?? ''" (ngModelChange)="addGroupMember(g, $event)">
                     <option value="">add member…</option>
                     @for (m of members(); track m.id) {
@@ -256,7 +272,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             <input aria-label="Group name" placeholder="Group name" [ngModel]="groupName()" (ngModelChange)="groupName.set($event)" name="groupName" required />
             <select aria-label="New group role" [ngModel]="groupRole()" (ngModelChange)="groupRole.set($event)" name="groupRole">
               <option value="MEMBER">member</option>
-              <option value="ADMIN">admin</option>
+              @if (isTeamOwner()) { <option value="ADMIN">admin</option> }
             </select>
             <input aria-label="Group locales" placeholder="Locales (e.g. he,fr) - blank = all" [ngModel]="groupLocales()" (ngModelChange)="groupLocales.set($event)" name="groupLocales" />
             <button type="submit" [disabled]="busy()">Add group</button>
@@ -275,14 +291,17 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             }
             @if (!otaPubs().length) { <li class="muted">No publications yet.</li> }
           </ul>
+          @if (isTeamAdmin()) {
           <form class="inline" (ngSubmit)="publishOta()">
             <select aria-label="OTA branch" [ngModel]="otaBranch()" (ngModelChange)="otaBranch.set($event)" name="otaBranch">
               @for (b of branches(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }
             </select>
             <button type="submit" [disabled]="busy()">Publish bundle</button>
           </form>
+          }
           @if (otaNotice()) { <p class="notice">{{ otaNotice() }}</p> }
         </section>
+        @if (isTeamAdmin()) {
         <section class="panel danger-zone">
           <h2>Danger zone</h2>
           @if (!confirming()) {
@@ -293,6 +312,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             <button (click)="confirming.set(false)">Cancel</button>
           }
         </section>
+        }
         @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
       } @else {
         <p class="muted">Loading…</p>
@@ -554,13 +574,27 @@ export class SettingsComponent implements OnInit {
   myEmail(): string {
     try { return JSON.parse(atob((this.api.token ?? '').split('.')[1])).email ?? ''; } catch { return ''; }
   }
-  // Management controls are shown only to team admins/owners. A read-only
-  // member can see groups (the API allows listing) but gets no mutation
-  // controls; the server still enforces every rule on its own.
-  isTeamAdmin(): boolean {
-    const me = this.members().find((m) => m.email.toLowerCase() === this.myEmail().toLowerCase());
-    return !!me && me.role !== 'MEMBER';
+  private static readonly RANK: Record<string, number> = { OWNER: 3, ADMIN: 2, MEMBER: 1 };
+  private grantsFor(m: MemberInfo) {
+    return [{ role: m.role, allowedLocales: m.allowedLocales },
+      ...this.groups().filter((g) => g.members.some((gm) => gm.userId === m.id)).map((g) => ({ role: g.role, allowedLocales: g.allowedLocales }))];
   }
+  // Effective role = strongest across direct + group grants, mirroring the
+  // server. A group-promoted admin therefore sees the controls they are
+  // actually permitted to use.
+  effectiveRoleOf(m: MemberInfo): string {
+    return this.grantsFor(m).reduce((a, b) => (SettingsComponent.RANK[b.role] > SettingsComponent.RANK[a.role] ? b : a)).role;
+  }
+  private meRank(): number {
+    const me = this.members().find((m) => m.email.toLowerCase() === this.myEmail().toLowerCase());
+    return me ? SettingsComponent.RANK[this.effectiveRoleOf(me)] : 0;
+  }
+  isTeamAdmin(): boolean { return this.meRank() >= 2; }
+  isTeamOwner(): boolean { return this.meRank() >= 3; }
+  // Managing a group needs a role strictly above the group's role (same
+  // rule the server enforces), so a direct admin gets no controls on an
+  // ADMIN group.
+  canManageGroup(g: GroupInfo): boolean { return this.meRank() > SettingsComponent.RANK[g.role]; }
 
   effectiveNote(m: MemberInfo): string | null {
     const rank: Record<string, number> = { OWNER: 3, ADMIN: 2, MEMBER: 1 };

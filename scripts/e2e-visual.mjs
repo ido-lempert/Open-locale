@@ -545,37 +545,77 @@ try {
   const dupCount = await page.evaluate(() => [...document.querySelectorAll('.locale-list li strong')].filter((el) => el.textContent === 'dup').length);
   check('failed mutation changed nothing (one dup group)', dupCount === 1, `count=${dupCount}`);
 
-  // Low-role session: a plain member sees groups but no mutation controls.
-  await page.evaluate(() => localStorage.removeItem('ol_token'));
-  await page.goto(`${WEB}/login`, { waitUntil: 'networkidle0' });
-  await page.waitForSelector('input[name=email]');
-  await page.type('input[name=email]', user2.user.email);
-  await page.type('input[name=password]', 'member-pass-1');
-  await page.click('button.primary');
-  await page.waitForFunction(() => location.pathname.includes('/projects') && !location.pathname.includes('/login'), { timeout: 15000 });
+  // Low-role / effective-role sessions: a group-PROMOTED admin sees exactly
+  // the controls their effective role permits; a plain member sees none.
+  const loginAs = async (email, password) => {
+    await page.evaluate(() => localStorage.removeItem('ol_token'));
+    await page.goto(`${WEB}/login`, { waitUntil: 'networkidle0' });
+    await page.waitForSelector('input[name=email]');
+    await page.type('input[name=email]', email);
+    await page.type('input[name=password]', password);
+    await page.click('button.primary');
+    await page.waitForFunction(() => location.pathname.includes('/projects') && !location.pathname.includes('/login'), { timeout: 15000 });
+  };
+  // Owner grants user2 an ADMIN group (setup via API).
+  const leads = await (await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/groups`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ownerJwt}` }, body: JSON.stringify({ name: 'leads', role: 'ADMIN' }) })).json();
+  await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/groups/${leads.id}/members/${user2.user.id}`, { method: 'PUT', headers: { Authorization: `Bearer ${ownerJwt}` } });
+
+  await loginAs(user2.user.email, 'member-pass-1');
   await page.goto(`${WEB}/projects/${projId}/settings`, { waitUntil: 'networkidle0' });
   await page.waitForFunction(() => (document.body.textContent || '').includes('Groups'), { timeout: 10000 });
-  const memberSeesList = await page.evaluate(() => (document.body.textContent || '').includes('dup'));
-  const memberControls = await page.evaluate(() => ({
+  const promotedView = await page.evaluate(() => {
+    const rowOf = (name) => [...document.querySelectorAll('.locale-list li')].find((li) => li.querySelector('strong')?.textContent === name);
+    return {
+      createForm: !!document.querySelector('input[aria-label="Group name"]'),
+      dupSelect: !!rowOf('dup')?.querySelector('select[aria-label="Group role"]'),
+      dupDelete: !!rowOf('dup')?.querySelector('button.danger'),
+      leadsSelect: !!rowOf('leads')?.querySelector('select[aria-label="Group role"]'),
+      leadsDelete: !!rowOf('leads')?.querySelector('button.danger'),
+      publishBtn: [...document.querySelectorAll('button')].some((b) => b.textContent === 'Publish bundle'),
+      dangerZone: (document.body.textContent || '').includes('Danger zone'),
+    };
+  });
+  check('group-promoted admin sees the create form', promotedView.createForm);
+  check('group-promoted admin can manage a MEMBER group (controls shown)', promotedView.dupSelect && promotedView.dupDelete, JSON.stringify(promotedView));
+  check('group-promoted admin gets NO controls on an ADMIN group at own rank', !promotedView.leadsSelect && !promotedView.leadsDelete);
+  check('admin-level controls consistent: publish + danger zone visible to effective admin', promotedView.publishBtn && promotedView.dangerZone);
+
+  // Plain member (no groups): view-only, admin controls absent everywhere.
+  const user3 = await (await fetch(`http://127.0.0.1:${API_PORT}/api/auth/signup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: `plain${Date.now()}@t.dev`, password: 'plain-pass-1', displayName: 'Plain Member' }) })).json();
+  await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/members`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ownerJwt}` }, body: JSON.stringify({ email: user3.user.email, role: 'MEMBER', allowedLocales: [] }) });
+  const u3 = await fetch(`http://127.0.0.1:${API_PORT}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: user3.user.email, password: 'plain-pass-1' }) });
+  const u3jwt = (await u3.json()).accessToken;
+  const pubAsMember = await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/ota/publish`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${u3jwt}` }, body: JSON.stringify({}) });
+  check('server still rejects OTA publish by a plain member (403)', pubAsMember.status === 403, String(pubAsMember.status));
+  const delAsMember = await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${u3jwt}` } });
+  check('server still rejects project delete by a plain member (403)', delAsMember.status === 403, String(delAsMember.status));
+  await loginAs(user3.user.email, 'plain-pass-1');
+  await page.goto(`${WEB}/projects/${projId}/settings`, { waitUntil: 'networkidle0' });
+  await page.waitForFunction(() => (document.body.textContent || '').includes('Groups'), { timeout: 10000 });
+  const plainView = await page.evaluate(() => ({
+    seesList: (document.body.textContent || '').includes('dup'),
     create: !!document.querySelector('input[aria-label="Group name"]'),
-    del: [...document.querySelectorAll('button')].some((b) => b.textContent === 'Delete'),
+    del: [...document.querySelectorAll('.locale-list button')].some((b) => b.textContent === 'Delete'),
     add: !!document.querySelector('select[aria-label="Add member to group"]'),
+    roleSelect: !!document.querySelector('select[aria-label="Group role"]'),
+    publishBtn: [...document.querySelectorAll('button')].some((b) => b.textContent === 'Publish bundle'),
+    dangerZone: (document.body.textContent || '').includes('Danger zone'),
   }));
-  check('member session can view the groups list', memberSeesList);
-  check('member session has NO group mutation controls', !memberControls.create && !memberControls.del && !memberControls.add, JSON.stringify(memberControls));
+  check('plain member can view the groups list', plainView.seesList);
+  check('plain member has NO group mutation controls', !plainView.create && !plainView.del && !plainView.add && !plainView.roleSelect, JSON.stringify(plainView));
+  check('plain member has no publish button or danger zone', !plainView.publishBtn && !plainView.dangerZone);
+  const plainMemberControls = await page.evaluate(() => ({
+    addForm: !!document.querySelector('input[aria-label="Member email"]'),
+    roleSelect: !!document.querySelector('select[aria-label="Role"]'),
+    removeBtn: [...document.querySelectorAll('.locale-list button.danger')].some((b) => b.textContent === 'Remove'),
+  }));
+  check('plain member has NO member-management controls either', !plainMemberControls.addForm && !plainMemberControls.roleSelect && !plainMemberControls.removeBtn, JSON.stringify(plainMemberControls));
   await page.evaluate(() => {
     const h = [...document.querySelectorAll('h2')].find((x) => x.textContent === 'Groups');
     h.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70);
   });
   await shot('editor-24c-groups-member-view.png');
-  await page.evaluate(() => localStorage.removeItem('ol_token'));
-  await page.goto(`${WEB}/login`, { waitUntil: 'networkidle0' });
-  await page.waitForSelector('input[name=email]');
-  await page.type('input[name=email]', 'demo@open-locale.dev');
-  await page.type('input[name=password]', 'demo-password-1');
-  await page.click('button.primary');
-  await page.waitForFunction(() => location.pathname.includes('/projects') && !location.pathname.includes('/login'), { timeout: 15000 });
-
+  await loginAs('demo@open-locale.dev', 'demo-password-1');
 
 
   // --- Branches: create via UI, isolation, merge into main ---
@@ -788,8 +828,10 @@ try {
   await page.evaluate(() => { [...document.querySelectorAll('h2')].find((h) => h.textContent === 'Automations')?.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70); });
   await new Promise((r) => setTimeout(r, 300));
   await shot('editor-29b-automations-narrow.png');
-  const clipped = await page.evaluate(() => [...document.querySelectorAll('.panel select, .panel input')].some((el) => el.getBoundingClientRect().right > document.documentElement.clientWidth));
-  check('automations panel usable at 480px (no control overflows viewport)', !clipped);
+  const clippedEls = await page.evaluate(() => [...document.querySelectorAll('.panel select, .panel input')]
+    .filter((el) => el.getBoundingClientRect().right > document.documentElement.clientWidth)
+    .map((el) => `${el.tagName}[${el.getAttribute('aria-label') || el.name || '?'}] right=${Math.round(el.getBoundingClientRect().right)}`));
+  check('automations panel usable at 480px (no control overflows viewport)', clippedEls.length === 0, clippedEls.join(';'));
   await page.setViewport({ width: 1280, height: 800 });
 
   // --- 2FA: enable via projects-page security panel, log out, log in with code ---
