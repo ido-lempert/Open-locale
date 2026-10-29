@@ -4,9 +4,10 @@ import { SnapshotsController } from './snapshots.controller';
 import { AuthModule } from '../auth/auth.module';
 import { ProjectsModule } from '../projects/projects.module';
 import { WebhooksModule } from '../webhooks/webhooks.module';
+import { TasksModule } from '../tasks/tasks.module';
 
 @Module({
-  imports: [AuthModule, ProjectsModule, WebhooksModule],
+  imports: [AuthModule, ProjectsModule, WebhooksModule, TasksModule],
   controllers: [SnapshotsController],
   providers: [SnapshotsService],
   exports: [SnapshotsService],

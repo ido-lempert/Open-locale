@@ -184,7 +184,10 @@ span.review { font-size: 0.72rem; padding: 0.05rem 0.4rem; border: 1px solid var
 
 /* Tasks */
 .bar select { width: auto; }
-.task-form { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.task-form { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-start; }
+.task-form select[multiple] { flex: 0 1 14rem; }
+.lock-scope-note { flex: 1 1 100%; font-size: 0.75rem; }
+.cell-error-reason { display: block; color: #b91c1c; font-size: 0.72rem; max-width: 14rem; overflow-wrap: anywhere; }
 .task-form input, .task-form select { width: auto; }
 .task-form input[name=taskTitle] { flex: 2 1 16rem; }
 .task-form input[name=taskDescription] { flex: 3 1 20rem; }

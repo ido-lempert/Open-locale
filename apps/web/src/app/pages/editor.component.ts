@@ -8,6 +8,7 @@ import { ApiService, BranchInfo, ScreenshotMeta, TmSuggestion, GlossaryTermItem,
 interface CellState {
   value: string; saved: string;
   status: 'idle' | 'saving' | 'saved' | 'error';
+  errorMsg: string;
   review: TranslationStatus;
 }
 
@@ -136,6 +137,9 @@ interface CellState {
                       </select>
                       @if (cell(k.id, l.code)().status === 'error') {
                         <button class="cell-status retry" (click)="save(k, l.code, true)">save failed - retry</button>
+                        @if (cell(k.id, l.code)().errorMsg) {
+                          <span class="cell-error-reason">{{ cell(k.id, l.code)().errorMsg }}</span>
+                        }
                       } @else {
                         <span class="cell-status">{{ statusText(k.id, l.code) }}</span>
                       }
@@ -303,14 +307,14 @@ export class EditorComponent implements OnInit {
       this.cells.clear();
       for (const k of keys) for (const t of k.translations) {
         this.cells.set(`${k.id}:${t.localeCode}`,
-          signal({ value: t.value, saved: t.value, status: 'idle', review: t.status ?? 'UNVERIFIED' }));
+          signal({ value: t.value, saved: t.value, status: 'idle', errorMsg: '', review: t.status ?? 'UNVERIFIED' }));
       }
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load keys'); }
   }
   cell(keyId: string, locale: string): WritableSignal<CellState> {
     let s = this.cells.get(`${keyId}:${locale}`);
     if (!s) {
-      s = signal<CellState>({ value: '', saved: '', status: 'idle', review: 'UNVERIFIED' });
+      s = signal<CellState>({ value: '', saved: '', status: 'idle', errorMsg: '', review: 'UNVERIFIED' });
       this.cells.set(`${keyId}:${locale}`, s);
     }
     return s;
@@ -331,16 +335,19 @@ export class EditorComponent implements OnInit {
       const newerReview = latest.review !== reviewAtSend;
       // A review the user chose while the save was in flight wins over the
       // (older) save response, and is re-sent so the server ends consistent.
-      sig.set({ value: latest.value, saved: c.value,
+      sig.set({ value: latest.value, saved: c.value, errorMsg: '',
         status: latest.value === c.value ? 'saved' : 'idle',
         review: newerReview ? latest.review : (res.status ?? 'UNVERIFIED') });
       if (newerReview) {
         const st = await this.api.setStatus(this.projectId, k.id, locale, latest.review);
         sig.update((cur) => ({ ...cur, review: st.status }));
       }
-    } catch {
-      // Keep saved pointing at what the server actually holds so a retry re-sends.
-      sig.update((cur) => ({ ...cur, status: 'error' }));
+    } catch (e) {
+      // Keep saved pointing at what the server actually holds so a retry
+      // re-sends. Surface the server's reason (e.g. a task key lock) so the
+      // user can resolve the cause instead of blind-retrying.
+      const msg = e instanceof Error && e.message ? e.message : 'save failed';
+      sig.update((cur) => ({ ...cur, status: 'error', errorMsg: msg }));
     }
   }
   statusText(keyId: string, locale: string): string {

@@ -5,6 +5,7 @@ import { ProjectsService } from '../projects/projects.service';
 import { ActivityService } from '../activity/activity.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { LocksService } from '../locks/locks.service';
+import { TasksService } from '../tasks/tasks.service';
 
 interface SnapshotKey {
   name: string;
@@ -35,6 +36,7 @@ export class SnapshotsService {
     private readonly activity: ActivityService,
     private readonly webhooks: WebhooksService,
     private readonly locks: LocksService,
+    private readonly tasks: TasksService,
   ) {}
 
   private async capture(projectId: string, label: string, automatic: boolean, actorId: string | null) {
@@ -146,11 +148,14 @@ export class SnapshotsService {
       let keysRemoved = 0;
       let valuesChanged = 0;
 
-      for (const key of existing) {
-        if (!keepKeys.has(`${key.branch.name}${key.name}`)) {
-          await tx.key.delete({ where: { id: key.id } });
-          keysRemoved += 1;
-        }
+      const toDelete = existing.filter((key) => !keepKeys.has(`${key.branch.name}${key.name}`)).map((key) => key.id);
+      // Task key locks are checked BEFORE anything is deleted or written:
+      // a denial rolls the whole restore back atomically, before data loss,
+      // not after.
+      if (toDelete.length) await this.tasks.assertKeysEditable(tx, userId, projectId, toDelete);
+      for (const keyId of toDelete) {
+        await tx.key.delete({ where: { id: keyId } });
+        keysRemoved += 1;
       }
       const branchIdByName = new Map<string, string>();
       for (const sk of snapKeys) {
@@ -179,6 +184,9 @@ export class SnapshotsService {
         if (!keyId) continue; // translation for a key not in the snapshot: ignore defensively
         const before = byName.get(`${st.branch ?? 'main'}${st.keyName}`)?.translations.find((t) => t.localeCode === st.localeCode);
         if (before && before.value === st.value && before.status === st.status) continue;
+        // Task key locks apply to snapshot restores too (per actual write,
+        // after the no-op skip above).
+        await this.tasks.assertKeysEditable(tx, userId, projectId, [keyId]);
         await tx.translation.upsert({
           where: { keyId_localeCode: { keyId, localeCode: st.localeCode } },
           create: { keyId, projectId, localeCode: st.localeCode, value: st.value, status: st.status as never, version: 1 },

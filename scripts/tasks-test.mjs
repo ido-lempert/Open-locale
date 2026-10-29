@@ -265,6 +265,50 @@ try {
   const bobAfterDelete = await call(`/projects/${proj.id}/keys/${k1.id}/translations`, { token: bt, method: 'PUT', body: { locale: 'he', value: 'bob after delete' } });
   check('deleting the task releases the lock', bobAfterDelete.status === 200, `got ${bobAfterDelete.status}`);
 
+  // Lock coverage across the other writers
+  const k3 = (await call(`/projects/${proj.id}/keys`, { token: at, method: 'POST', body: { name: 'mt.target' } })).json;
+  // MT fills only keys with a base-locale source: give it one first.
+  await call(`/projects/${proj.id}/keys/${k3.id}/translations`, { token: at, method: 'PUT', body: { locale: 'en', value: 'Source text' } });
+  const lock2 = (await call(base, { token: at, method: 'POST', body: { title: 'Lock mt target', lockKeys: true, keyIds: [k3.id], assigneeId: a.user.id } })).json;
+
+  const provider = (await call(`/projects/${proj.id}/mt/providers`, { token: at, method: 'POST', body: { name: 'Pseudo', type: 'pseudo' } })).json;
+  const bobMt = await call(`/projects/${proj.id}/mt/pretranslate`, { token: bt, method: 'POST', body: { providerId: provider.id, locale: 'he' } });
+  check('MT pre-translate over a locked key rejected (403)', bobMt.status === 403, `got ${bobMt.status}`);
+  const aliceMt = await call(`/projects/${proj.id}/mt/pretranslate`, { token: at, method: 'POST', body: { providerId: provider.id, locale: 'he' } });
+  check('assignee MT pre-translate allowed', aliceMt.status === 200 || aliceMt.status === 201, `got ${aliceMt.status}`);
+
+  // Import is intentionally per-key: the locked key fails, others import.
+  const k4 = (await call(`/projects/${proj.id}/keys`, { token: at, method: 'POST', body: { name: 'import.free' } })).json;
+  const bobImport = await call(`/projects/${proj.id}/import/he`, { token: bt, method: 'POST', body: { entries: { 'mt.target': 'bob import', 'import.free': 'free value' } } });
+  const freeKey = (await call(`/projects/${proj.id}/keys?search=import.free`, { token: at })).json;
+  const freeHe = freeKey[0]?.translations?.find((t) => t.localeCode === 'he')?.value ?? '';
+  const lockedAfterImport = (await call(`/projects/${proj.id}/keys/${k3.id}/translations/he/history`, { token: at })).json;
+  check('import accepted with per-key failure for the locked key', bobImport.status === 200 || bobImport.status === 201, `got ${bobImport.status}`);
+  check('locked key unchanged by import, free key imported',
+    !lockedAfterImport.some((h) => h.value === 'bob import') && freeHe === 'free value',
+    `history=${lockedAfterImport.length} freeHe=${freeHe}`);
+
+  const bobDelKey = await call(`/projects/${proj.id}/keys/${k3.id}`, { token: bt, method: 'DELETE' });
+  check('plain member cannot delete a locked key (403)', bobDelKey.status === 403, `got ${bobDelKey.status}`);
+  const aliceDelKey = await call(`/projects/${proj.id}/keys/${k3.id}`, { token: at, method: 'DELETE' });
+  check('assignee/admin can delete a locked key', aliceDelKey.status === 200, `got ${aliceDelKey.status}`);
+
+  // Serialization, both orderings: a lock created concurrently with a write
+  // either denies the write (403) or commits after it - never missed after
+  // both settle. Pre-existing-lock denial is covered by the checks above.
+  const k5 = (await call(`/projects/${proj.id}/keys`, { token: at, method: 'POST', body: { name: 'race.key' } })).json;
+  let raceLockId;
+  const [raceLock, raceWrite] = await Promise.all([
+    call(base, { token: at, method: 'POST', body: { title: 'Race lock', lockKeys: true, keyIds: [k5.id] } }),
+    call(`/projects/${proj.id}/keys/${k5.id}/translations`, { token: bt, method: 'PUT', body: { locale: 'he', value: 'race write' } }),
+  ]);
+  check('lock-vs-write race: write is denied or commits before the lock', [200, 201, 403].includes(raceWrite.status) && (raceLock.status === 200 || raceLock.status === 201), `write=${raceWrite.status} lock=${raceLock.status}`);
+  const afterRace = await call(`/projects/${proj.id}/keys/${k5.id}/translations`, { token: bt, method: 'PUT', body: { locale: 'he', value: 'post settle' } });
+  check('after both settle the lock is effective (403)', afterRace.status === 403, `got ${afterRace.status}`);
+  raceLockId = raceLock.json?.id;
+
+  for (const id of [lock2.id, raceLockId].filter(Boolean)) await call(`${base}/${id}`, { token: at, method: 'DELETE' });
+
   const ro = (await call('/auth/tokens', { token: at, method: 'POST', body: { name: 'ro', scopes: ['read'] } })).json;
   const roRead = await call(base, { apiKey: ro.token });
   const roWrite = await call(base, { apiKey: ro.token, method: 'POST', body: { title: 'x' } });

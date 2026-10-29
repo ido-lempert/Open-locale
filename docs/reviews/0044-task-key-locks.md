@@ -20,21 +20,28 @@ capability map's "tasks with locks and chaining".
   and bulk status commit (throws inside the transaction, so a bulk
   move touching a locked key rolls back completely). 403 message names
   the locking task.
-- Exact enforcement scope (grounded by grepping every translation
-  write in the API): the guard covers `TranslationsService.upsert`
-  (editor cell saves and TM-suggestion applies, which go through
-  upsert), `setStatus`, and `bulkSetStatus`. It does NOT yet cover:
-  file imports (`translations.service` import paths), MT/pseudo fills
-  (`mt.service`), branch merges (`branches.service`, 2 write sites),
-  snapshot restores (`snapshots.service`), or key deletion/rename
-  (`keys.service`). "Locked" therefore means exactly those three
-  routes today; extending the guard to the remaining writers is
-  follow-up work, not claimed here.
-- Concurrency: the guard is check-then-act at request time with no
-  shared serialization against a concurrent lock-task create/update -
-  an in-flight write can miss a lock committed mid-flight (same class
-  of limit as the other permission checks; called out explicitly
-  rather than claimed race-free).
+- Enforcement scope (grounded by grepping every translation write in
+  the API): editor upsert (also covers TM-suggestion applies), single
+  status change, bulk status (whole bulk rolls back), file imports
+  (intentionally per-key: a locked key fails its own transaction, the
+  run row records the failure, the rest of the file imports), MT
+  pre-translate (whole run rejected), branch merge (guarded at the
+  first actual write per key - a merge whose rows for a locked key are
+  all no-ops is not denied; a denial rolls the whole merge back
+  atomically), snapshot restore (locked keys about to be DELETED are
+  guarded before anything is touched, writes guarded per actual
+  change; one transaction, atomic rollback), and key deletion.
+- Serialization: the guard takes `pg_advisory_xact_lock_shared` on
+  `hashtext(projectId || '::task-locks')` inside the writer's own
+  transaction; task create/update/remove take the exclusive side when
+  they create, change or release a lock (flag, key set, status of a
+  locking task, deletion). A lock committed concurrently with a write
+  is therefore never missed after both settle: either the write
+  committed first (valid ordering, not retroactively cancelled) or it
+  is denied. Lock ordering against the dependency-graph lock is fixed:
+  graphLock always precedes lockMutationLock, and no path takes them
+  in the opposite order (verified by inspection of the two sites that
+  can hold both, create and update).
 - No ghost locks: `task_keys` rows cascade on task delete and on key
   delete, and a DONE task no longer matches the guard query (all three
   release paths tested).
@@ -54,8 +61,13 @@ capability map's "tasks with locks and chaining".
   the chaining gate treats status. Deleting the task releases its keys
   (cascade). An open lock task with an empty key set locks nothing.
 - Designer: the multi-select reuses the form's existing select
-  styling; the chip is a muted line consistent with "waits on". No
-  layout changes at 1280 or 480 widths (e2e overflow check).
+  styling; the chip is a muted line consistent with "waits on". A
+  scope note under the toggle states exactly what a lock blocks and
+  for whom. A rejected editor save keeps the unsaved text and shows
+  the server's reason under "save failed - retry", so the user can
+  resolve the cause instead of blind-retrying. Single selects keep
+  their own height next to the multi-select at 480px (flex alignment
+  fix, e2e height assertion).
 - Security: cross-project key ids rejected (400); a non-assignee
   MEMBER gets 403 naming the task (no key content leaks); group
   membership changes take effect on the next request (live query, no
@@ -64,7 +76,9 @@ capability map's "tasks with locks and chaining".
   time; a lock created concurrently with an in-flight bulk write can
   be missed by that write (accepted check-then-act limit, same class
   as the other permission checks).
-- QA/integration: tasks-test.mjs +17 checks (create, non-assignee
+- QA/integration: tasks-test.mjs +25 checks (adds MT 403/200, import
+  per-key failure with locked value untouched, key delete 403/200,
+  lock-vs-write race with post-settle denial) (create, non-assignee
   403, assignee 200, status 403, bulk 403 + rollback probe, group
   member 200, group leave immediate 403, owner override 200, set
   empty/re-add, audit event, DONE release, reopen re-lock,

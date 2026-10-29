@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { TasksService } from '../tasks/tasks.service';
 import { ProjectsService } from '../projects/projects.service';
 import { ActivityService } from '../activity/activity.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
@@ -14,6 +15,7 @@ export class MtService {
     private readonly projects: ProjectsService,
     private readonly activity: ActivityService,
     private readonly webhooks: WebhooksService,
+    private readonly tasks: TasksService,
   ) {}
 
   async listProviders(userId: string, projectId: string) {
@@ -112,6 +114,8 @@ export class MtService {
 
     let written = 0;
     await this.prisma.$transaction(async (tx) => {
+      // Task key locks apply to MT fills too: one locked key rejects the run.
+      await this.tasks.assertKeysEditable(tx, userId, projectId, work.map((w) => w.keyId));
       for (let i = 0; i < work.length; i++) {
         // Conditional check-and-write in the writing statement itself: only
         // rows that are STILL empty (or still absent) accept the MT value.

@@ -5,6 +5,7 @@ import { ProjectsService } from '../projects/projects.service';
 import { ActivityService } from '../activity/activity.service';
 import { LocksService } from '../locks/locks.service';
 import { SnapshotsService } from '../snapshots/snapshots.service';
+import { TasksService } from '../tasks/tasks.service';
 
 export const DEFAULT_BRANCH = 'main';
 const BRANCH_NAME = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,39}$/;
@@ -17,6 +18,7 @@ export class BranchesService {
     private readonly activity: ActivityService,
     private readonly locks: LocksService,
     private readonly snapshots: SnapshotsService,
+    private readonly tasks: TasksService,
   ) {}
 
   // Resolve a branch by name for a project; default is 'main'. Unknown branch
@@ -137,6 +139,7 @@ export class BranchesService {
         // changed and changed back is still skipped.
         const cutoff = previewedAt ?? null;
         let keysMerged = 0, keysSkipped = 0, translationsMerged = 0, translationsSkipped = 0;
+        const lockGuarded = new Set<string>();
         for (const sk of sourceKeys) {
           // Atomic check-and-write, never read-then-write: every target write
           // carries its freshness condition in the same statement, so a
@@ -190,6 +193,13 @@ export class BranchesService {
               WHERE "keyId" = ${tkId}::uuid AND "localeCode" = ${tr.localeCode} FOR UPDATE`);
             const existing = existingRows[0] ?? null;
             if (existing && existing.value === tr.value && existing.status === tr.status) continue;
+            // Task key locks apply to merge writes. Guarded at the first
+            // actual write per key (after the no-op skip above), inside this
+            // transaction: a denial rolls the whole merge back atomically.
+            if (!lockGuarded.has(tkId)) {
+              await this.tasks.assertKeysEditable(tx, userId, projectId, [tkId]);
+              lockGuarded.add(tkId);
+            }
             // INSERT ... ON CONFLICT ... DO UPDATE ... WHERE is one atomic
             // statement: the conflict target row is locked while the freshness
             // WHERE is evaluated, so a concurrent post-preview edit makes THIS

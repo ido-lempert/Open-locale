@@ -4,6 +4,7 @@ import { ProjectsService } from '../projects/projects.service';
 import { BranchesService } from '../branches/branches.service';
 import { AutomationsService } from '../automations/automations.service';
 import { LocksService } from '../locks/locks.service';
+import { TasksService } from '../tasks/tasks.service';
 import { ActivityService, truncate } from '../activity/activity.service';
 
 @Injectable()
@@ -15,6 +16,7 @@ export class KeysService {
     private readonly branches: BranchesService,
     private readonly locks: LocksService,
     private readonly automations: AutomationsService,
+    private readonly tasks: TasksService,
   ) {}
 
   async list(userId: string, projectId: string, filters: {
@@ -100,6 +102,9 @@ export class KeysService {
     // Serialized with merges/restores/imports: a key (and its translations)
     // cannot vanish mid-merge.
     await this.locks.withProjectLock(projectId, () => this.prisma.$transaction(async (tx) => {
+      // A key locked by an open task can only be deleted by the task's
+      // assignee (direct/group) or an admin - same rule as editing it.
+      await this.tasks.assertKeysEditable(tx, userId, projectId, [keyId]);
       await tx.key.delete({ where: { id: keyId } });
       await this.activity.record(tx, {
         projectId, actorId: userId, action: 'key.deleted', keyName: existing.name,

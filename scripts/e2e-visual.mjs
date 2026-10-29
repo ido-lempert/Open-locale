@@ -641,6 +641,8 @@ try {
     () => [...document.querySelectorAll('.lock-chip')].some((e) => e.textContent.includes('locks 1 key(s)') && e.textContent.includes('home.title')),
     { timeout: 10000 }).then(() => true).catch(() => false);
   check('lock chip lists the locked key on the task row', chipOk);
+  const caveatOk = await page.evaluate(() => (document.body.textContent || '').includes('branch merges, snapshot restores and key deletion'));
+  check('lock toggle shows the full enforcement scope note', caveatOk);
   await page.evaluate(() => {
     const chip = document.querySelector('.lock-chip');
     if (chip) { chip.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70); }
@@ -649,6 +651,8 @@ try {
   await page.setViewport({ width: 480, height: 800 });
   const lockNarrowOk = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
   check('tasks lock UI fits narrow viewport without horizontal overflow', lockNarrowOk === true);
+  const depHeight = await page.evaluate(() => document.querySelector('select[name=taskDependsOn]').getBoundingClientRect().height);
+  check('predecessor select keeps single-line height at 480px', depHeight > 0 && depHeight < 60, `height=${depHeight}`);
   await shot('editor-31b-tasks-lock-narrow.png');
   await page.setViewport({ width: 1280, height: 800 });
 
@@ -666,6 +670,16 @@ try {
     return [...row.querySelectorAll('.cell-status')].some((e) => /save failed/i.test(e.textContent));
   }, { timeout: 10000 }).then(() => true).catch(() => false);
   check('locked key: plain member editor save rejected (save failed)', saveFailed);
+  const reasonShown = await page.waitForFunction(() =>
+    [...document.querySelectorAll('.cell-error-reason')].some((e) => e.textContent.includes('locked by task')),
+    { timeout: 5000 }).then(() => true).catch(() => false);
+  check('cell shows the server lock reason (not a blind retry)', reasonShown);
+  await page.evaluate(() => {
+    // The locked row is the grid's last: align the reason's bottom edge so
+    // the full message is inside the viewport (top-align clamps short).
+    const el = document.querySelector('.cell-error-reason') ?? document.querySelector('.cell-status.retry');
+    if (el) el.scrollIntoView({ block: 'end' });
+  });
   await shot('editor-32-lock-save-failed.png');
 
   const lockTasks = await (await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/tasks`, { headers: { Authorization: `Bearer ${ownerJwt}` } })).json();

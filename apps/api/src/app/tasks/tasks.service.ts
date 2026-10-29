@@ -50,9 +50,14 @@ export class TasksService {
   // Task key locks: while a lockKeys task is not DONE, only its assignee
   // (direct or via the assigned group) or a team ADMIN/OWNER may edit the
   // covered keys' translations. Called from the translations write paths.
-  async assertKeysEditable(userId: string, projectId: string, keyIds: string[]) {
+  async assertKeysEditable(db: Prisma.TransactionClient, userId: string, projectId: string, keyIds: string[]) {
     if (keyIds.length === 0) return;
-    const locking = await this.prisma.task.findFirst({
+    // Shared side of the task-locks advisory pair, held for the rest of the
+    // caller's transaction: serialized against any concurrent lock
+    // create/update/release (exclusive side below), so a lock committed
+    // mid-write can never be missed by this check.
+    await db.$executeRaw`SELECT pg_advisory_xact_lock_shared(hashtext(${projectId + '::task-locks'})::bigint)`;
+    const locking = await db.task.findFirst({
       where: { projectId, lockKeys: true, status: { not: 'DONE' }, keys: { some: { keyId: { in: keyIds } } } },
       select: {
         title: true, assigneeId: true,
@@ -72,6 +77,13 @@ export class TasksService {
     if (found !== new Set(keyIds).size) {
       throw new BadRequestException('Locked keys must belong to this project');
     }
+  }
+
+  // Exclusive side of the task-locks pair: taken by any mutation that
+  // creates, changes or releases a key lock (flag, key set, status of a
+  // locking task, or deletion of one).
+  private async lockMutationLock(tx: Prisma.TransactionClient, projectId: string) {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${projectId + '::task-locks'})::bigint)`;
   }
 
   // Per-project advisory lock serializing dependency-graph mutations
@@ -123,6 +135,7 @@ export class TasksService {
         await this.graphLock(tx, projectId);
         await this.assertDependency(tx, projectId, input.dependsOnId, null);
       }
+      if (input.lockKeys) await this.lockMutationLock(tx, projectId);
       if (input.keyIds?.length) await this.assertKeysInProject(tx, projectId, input.keyIds);
       return this.createIn(tx, userId, projectId, input);
     });
@@ -187,6 +200,9 @@ export class TasksService {
       // committed state.
       const touchesGraph = input.dependsOnId !== undefined || (input.status !== undefined && input.status !== existing.status);
       if (touchesGraph) await this.graphLock(tx, projectId);
+      if (existing.lockKeys || input.lockKeys !== undefined || input.keyIds !== undefined) {
+        await this.lockMutationLock(tx, projectId);
+      }
       if (input.dependsOnId) await this.assertDependency(tx, projectId, input.dependsOnId, taskId);
       // The chain gates every forward transition out of OPEN (starting OR
       // completing), and also attaching/changing the predecessor on a
@@ -279,6 +295,7 @@ export class TasksService {
     const existing = await this.prisma.task.findFirst({ where: { id: taskId, projectId } });
     if (!existing) throw new NotFoundException('Task not found');
     await this.prisma.$transaction(async (tx) => {
+      if (existing.lockKeys) await this.lockMutationLock(tx, projectId);
       await tx.task.delete({ where: { id: taskId } });
       await this.activity.record(tx, {
         projectId, actorId: userId, action: 'task.deleted',

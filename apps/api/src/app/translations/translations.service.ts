@@ -47,10 +47,10 @@ export class TranslationsService {
     }
     const key = await this.prisma.key.findFirst({ where: { id: keyId, projectId }, include: { branch: true } });
     if (!key) throw new NotFoundException('Key not found');
-    // Task key lock: rejects when an open lockKeys task covers this key and
-    // the caller is neither its assignee (direct/group) nor an admin.
-    await this.tasks.assertKeysEditable(userId, projectId, [keyId]);
     return this.prisma.$transaction(async (tx) => {
+      // Task key lock: rejects when an open lockKeys task covers this key
+      // and the caller is neither its assignee (direct/group) nor an admin.
+      await this.tasks.assertKeysEditable(tx, userId, projectId, [keyId]);
       let existing: { value: string; status: string; version: number; rowId?: string } | null;
       if (expectedVersion !== undefined) {
         // Optimistic concurrency: lock the row first, then compare the locked
@@ -188,7 +188,7 @@ export class TranslationsService {
         Prisma.sql`UPDATE "translations" t SET "status" = ${status}, "version" = t."version" + 1 WHERE ${where} RETURNING t."keyId" AS "keyId", t."value" AS "value"`);
       // Task key locks apply to bulk status moves too; a violation throws
       // and rolls the whole UPDATE back (no partial bulk commit).
-      if (updated.length) await this.tasks.assertKeysEditable(userId, projectId, updated.map((t) => t.keyId));
+      if (updated.length) await this.tasks.assertKeysEditable(tx, userId, projectId, updated.map((t) => t.keyId));
       if (updated.length) {
         await tx.translationHistory.createMany({
           data: updated.map((t) => ({ keyId: t.keyId, localeCode: locale, value: t.value, previousValue: t.value, status, changedById: userId })),
@@ -213,8 +213,8 @@ export class TranslationsService {
     if (!existing || existing.projectId !== projectId) {
       throw new NotFoundException('Translation not found');
     }
-    await this.tasks.assertKeysEditable(userId, projectId, [keyId]);
     return this.prisma.$transaction(async (tx) => {
+      await this.tasks.assertKeysEditable(tx, userId, projectId, [keyId]);
       const translation = await tx.translation.update({
         where: { keyId_localeCode: { keyId, localeCode: locale } },
         // Status changes bump the value-conflict token too: an in-context
@@ -400,6 +400,9 @@ export class TranslationsService {
             update: {},
           });
           const keyCreated = key.createdAt.getTime() === key.updatedAt.getTime();
+          // Locked keys fail their own per-key transaction (the run row
+          // records the failure); the rest of the import continues.
+          await this.tasks.assertKeysEditable(tx, userId, projectId, [key.id]);
           const existing = await tx.translation.findUnique({
             where: { keyId_localeCode: { keyId: key.id, localeCode: locale } },
           });
