@@ -359,6 +359,26 @@ try {
   const resxSel = await page.$eval('select[aria-label="Import/export format"]', (el) => el.value);
   const resxAccept = await page.$eval('input[type=file]', (el) => el.accept || '');
   check('format picker offers RESX, selection sticks, file input accepts .resx', resxSel === 'resx' && resxAccept.includes('.resx'), `select=${resxSel} accept=${resxAccept}`);
+  // Real RESX import through the UI: upload a file, summary notice + grid row.
+  const resxFile = '/tmp/e2e-import.resx';
+  writeFileSync(resxFile, '<?xml version="1.0" encoding="utf-8"?>\n<root>\n  <data name="resx.uikey" xml:space="preserve">\n    <value>resx ui value ✓</value>\n  </data>\n</root>\n');
+  const resxInput = await page.$('input[name=importFile]');
+  await resxInput.uploadFile(resxFile);
+  const resxNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('(RESX (.NET),'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('RESX import via UI shows summary notice', resxNotice);
+  check('RESX-imported key appears in grid', await waitText('resx.uikey'));
+  // RESX export through the UI: capture the generated blob and verify content.
+  await page.evaluate(() => {
+    window.__resxCapture = null;
+    const orig = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (b) => { window.__resxCapture = b; return orig(b); };
+  });
+  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.startsWith('Export'))?.click());
+  await page.waitForFunction(() => !!window.__resxCapture, { timeout: 10000 });
+  const resxExport = await page.evaluate(() => window.__resxCapture.text());
+  check('RESX export via UI emits resheaders and the imported key',
+    resxExport.includes('<resheader name="resmimetype">') && resxExport.includes('<data name="resx.uikey" xml:space="preserve">') && resxExport.includes('<value>resx ui value ✓</value>'),
+    resxExport.split('\n').find((l) => l.includes('resx.uikey')) ?? '');
   const csvFile = '/tmp/e2e-import.csv';
   writeFileSync(csvFile, 'key,value\napp.subtitle,"Welcome, friend"\n');
   // The IO toolbar has a format picker; select CSV first so the import input and the safe/raw note apply to CSV.

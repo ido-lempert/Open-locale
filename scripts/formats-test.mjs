@@ -451,6 +451,15 @@ try {
   check('RESX duplicate name rejected (400)', resxDup.status === 400, String(resxDup.status));
   const resxMeta = await call(`${P}/import/he`, { token: at, method: 'POST', body: { resx: '<root><metadata><data name="resx.m"><value>v</value></data></metadata></root>' } });
   check('RESX metadata section rejected (400)', resxMeta.status === 400, String(resxMeta.status));
+  const resxDtd = await call(`${P}/import/he`, { token: at, method: 'POST', body: { resx: '<!DOCTYPE root [ <!ENTITY xxe SYSTEM "file:///etc/passwd"> ]><root><data name="resx.xxe"><value>&xxe;</value></data></root>' } });
+  const resxAfterDtd = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('RESX DOCTYPE/ENTITY declaration rejected (400) and leaves keys unchanged', resxDtd.status === 400 && JSON.stringify(resxAfterTyped) === JSON.stringify(resxAfterDtd) && resxAfterDtd['resx.xxe'] === undefined, String(resxDtd.status));
+  const resxEnt = await call(`${P}/import/he`, { token: at, method: 'POST', body: { resx: '<root><data name="resx.ent"><value>a &custom; b</value></data></root>' } });
+  check('RESX unknown entity reference rejected (400)', resxEnt.status === 400, String(resxEnt.status));
+  const resxNum = await call(`${P}/import/he`, { token: at, method: 'POST', body: { resx: '<root><data name="resx.num"><value>&#65;</value></data></root>' } });
+  check('RESX numeric character reference rejected (400)', resxNum.status === 400, String(resxNum.status));
+  const resxNs = await call(`${P}/import/he`, { token: at, method: 'POST', body: { resx: '<root xmlns="urn:x"><data name="resx.ns"><value>v</value></data></root>' } });
+  check('RESX namespaced root rejected (400)', resxNs.status === 400, String(resxNs.status));
   const resxDry = await call(`${P}/import/he?dryRun=true`, { token: at, method: 'POST', body: { resx: resxOut } });
   check('RESX import previews through dry-run without writing', resxDry.status === 201 && resxDry.json.dryRun === true && resxDry.json.unchangedSkipped >= 2, JSON.stringify(resxDry.json));
 

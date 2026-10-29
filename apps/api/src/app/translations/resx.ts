@@ -5,11 +5,14 @@
 // Typed or binary resources (type/mimetype attributes), <metadata> sections,
 // assembly references and inner markup inside <value> are rejected, never
 // silently dropped. The reader is a lexical scan, not an XML parser: it has
-// no DTD or entity processing at all, so DOCTYPE declarations are inert and
-// entity references beyond the five predefined ones stay literal text; no
-// external resolution is possible. Whitespace inside <value> is preserved
-// verbatim on import regardless of xml:space, and export always emits
-// xml:space="preserve" so the round trip keeps it.
+// no DTD or entity processing at all, so anything that would require it is
+// rejected fail-closed rather than resolved or left literal: any DOCTYPE or
+// ENTITY declaration rejects the whole document, and any entity reference
+// beyond the five predefined XML ones (including numeric character
+// references) rejects the entry. No external resolution is possible.
+// Whitespace inside <value> is preserved verbatim on import regardless of
+// xml:space, and export always emits xml:space="preserve" so the round trip
+// keeps it.
 
 const xmlEscape = (v: string) =>
   v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -45,6 +48,7 @@ const INNER_MARKUP_RE = /<[a-zA-Z/]/;
 export function parseResx(text: string): { rows: [string, string][]; rejected: number } {
   const rows: [string, string][] = [];
   let rejected = 0;
+  const unknownEntity = (raw: string) => /&(?!amp;|lt;|gt;|quot;|apos;)/.test(raw);
   const rootMatch = /<root(\s[^>]*)?>/.exec(text);
   if (!rootMatch) {
     // No RESX root element: not a RESX document at all. Reject instead of
@@ -54,6 +58,11 @@ export function parseResx(text: string): { rows: [string, string][]; rejected: n
   if (/\bxmlns[:=]/.test(rootMatch[1] ?? '')) {
     // Namespaced root: outside the subset. Reject rather than guess at
     // namespace semantics we do not implement.
+    return { rows, rejected: 1 };
+  }
+  if (/<!DOCTYPE|<!ENTITY/i.test(text)) {
+    // DTDs are outside the subset and would change parsing semantics (entity
+    // expansion, external resolution): reject the document outright.
     return { rows, rejected: 1 };
   }
   if (/<metadata[\s>]|<assembly[\s>]/.test(text)) {
@@ -67,12 +76,14 @@ export function parseResx(text: string): { rows: [string, string][]; rejected: n
     const body = m[2] ?? '';
     const nameMatch = NAME_RE.exec(attrs);
     if (!nameMatch || nameMatch[1] === '') { rejected++; continue; }
+    if (unknownEntity(nameMatch[1])) { rejected++; continue; } // unresolvable entity in name
     if (TYPED_RE.test(attrs)) { rejected++; continue; } // typed/binary resource
     const key = xmlUnescape(nameMatch[1]);
     if (seen.has(key)) { rejected++; continue; }
     const valueMatch = VALUE_RE.exec(body);
     if (!valueMatch) { rejected++; continue; }
     const value = valueMatch[1] ?? '';
+    if (unknownEntity(value)) { rejected++; continue; } // unresolvable entity reference
     if (INNER_MARKUP_RE.test(value)) { rejected++; continue; }
     seen.add(key);
     rows.push([key, xmlUnescape(value)]);

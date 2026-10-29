@@ -714,7 +714,7 @@ export class EditorComponent implements OnInit {
     try {
       const payload = fmt === 'json' ? { entries: JSON.parse(text) }
         : fmt === 'csv' ? { csv: text }
-        : fmt === 'android' ? { xml: text } : fmt === 'po' ? { po: text } : fmt === 'xliff' ? { xliff: text } : fmt === 'properties' ? { properties: text } : fmt === 'arb' ? { arb: text } : fmt === 'yaml' ? { yaml: text } : { strings: text };
+        : fmt === 'android' ? { xml: text } : fmt === 'po' ? { po: text } : fmt === 'xliff' ? { xliff: text } : fmt === 'properties' ? { properties: text } : fmt === 'arb' ? { arb: text } : fmt === 'yaml' ? { yaml: text } : fmt === 'resx' ? { resx: text } : { strings: text };
       const res = await this.api.importPayload(this.projectId, this.ioLocale(), payload, this.branch(), dryRun);
       this.error.set('');
       this.notice.set(dryRun

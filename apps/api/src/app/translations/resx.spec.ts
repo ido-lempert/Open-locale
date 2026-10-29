@@ -46,16 +46,28 @@ describe('RESX (.NET) interchange', () => {
     expect(parseResx('<root><assembly alias="x" name="Lib"/><data name="k"><value>v</value></data></root>').rejected).toBe(1);
   });
 
-  it('treats DOCTYPE and entity declarations as inert: no resolution, entities stay literal', () => {
+  it('rejects DOCTYPE and ENTITY declarations outright (no resolution, no literal passthrough)', () => {
     const xxe = `<?xml version="1.0"?>
 <!DOCTYPE root [ <!ENTITY xxe SYSTEM "file:///etc/passwd"> ]>
 <root><data name="k"><value>&xxe;</value></data><data name="ok"><value>fine</value></data></root>`;
-    const back = parseResx(xxe);
-    expect(back.rows).toContainEqual(['ok', 'fine']);
-    // The entity reference is never resolved or expanded; it stays literal text.
-    expect(back.rows).toContainEqual(['k', '&xxe;']);
+    expect(parseResx(xxe)).toEqual({ rows: [], rejected: 1 });
     const internal = `<!DOCTYPE root [ <!ENTITY brand "Acme"> ]><root><data name="k"><value>&brand;</value></data></root>`;
-    expect(parseResx(internal).rows).toEqual([['k', '&brand;']]);
+    expect(parseResx(internal)).toEqual({ rows: [], rejected: 1 });
+    expect(parseResx('<!DOCTYPE root><root><data name="k"><value>v</value></data></root>')).toEqual({ rows: [], rejected: 1 });
+  });
+
+  it('rejects entity references beyond the five predefined ones, in names and values', () => {
+    const badValue = `<root><data name="ok"><value>fine</value></data><data name="k"><value>a &foo; b</value></data></root>`;
+    const vb = parseResx(badValue);
+    expect(vb.rows).toEqual([['ok', 'fine']]);
+    expect(vb.rejected).toBe(1);
+    // Numeric character references are also unresolvable by this reader: reject, never leave literal.
+    expect(parseResx('<root><data name="k"><value>&#65;</value></data></root>').rejected).toBe(1);
+    expect(parseResx('<root><data name="a&bar;b"><value>v</value></data></root>').rejected).toBe(1);
+    // The five predefined entities remain supported in both places.
+    const ok = parseResx('<root><data name="a&amp;b"><value>x &lt;tag&gt; &quot;q&quot; &apos;a&apos;</value></data></root>');
+    expect(ok.rows).toEqual([['a&b', 'x <tag> "q" \'a\'']]);
+    expect(ok.rejected).toBe(0);
   });
 
   it('rejects namespaced roots in both prefix and default-xmlns forms', () => {
