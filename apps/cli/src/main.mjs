@@ -37,12 +37,12 @@ function config() {
   return { url: url.replace(/\/$/, ''), token, project };
 }
 
-async function api(path, { method = 'GET', body, raw = false } = {}) {
+async function api(path, { method = 'GET', body, raw = false, zip = false } = {}) {
   const { url, token } = config();
   const res = await fetch(`${url}/api${path}`, {
     method,
-    headers: { 'Content-Type': 'application/json', 'X-Api-Key': token },
-    body: body ? JSON.stringify(body) : undefined,
+    headers: { 'Content-Type': zip ? 'application/zip' : 'application/json', 'X-Api-Key': token },
+    body: zip ? body : body ? JSON.stringify(body) : undefined,
   });
   if (res.status === 401) fail('authentication failed (401): check the API token');
   if (res.status === 403) fail('not permitted (403): the token lacks the needed scope or role');
@@ -52,20 +52,33 @@ async function api(path, { method = 'GET', body, raw = false } = {}) {
   return json;
 }
 
-const FORMATS = new Set(['json', 'csv', 'android', 'ios']);
+const FORMATS = new Set(['json', 'csv', 'android', 'ios', 'po', 'xliff', 'properties', 'arb', 'yaml']);
+const PUSH_EXTS = [['.xml', 'xml'], ['.strings', 'strings'], ['.csv', 'csv'], ['.po', 'po'], ['.xlf', 'xliff'], ['.xliff', 'xliff'], ['.properties', 'properties'], ['.arb', 'arb'], ['.yaml', 'yaml'], ['.yml', 'yaml']];
 
 async function push() {
   const file = args[1];
   const locale = opt('locale');
   if (!file || !existsSync(file)) fail('push needs an existing file: open-locale push <file> --locale he');
-  if (!locale) fail('push needs --locale <code>');
   const { project } = config();
+  // A .zip file is a bundle import: one entry per locale, no --locale.
+  if (file.toLowerCase().endsWith('.zip')) {
+    if (locale) fail('bundle push imports every locale in the archive; drop --locale');
+    const format = opt('format', 'json');
+    if (!FORMATS.has(format)) fail(`unknown format ${format} (${[...FORMATS].join('|')})`);
+    console.error('note: bundle import accepts store-only zips from `pull --all` (compressed zips are rejected); each locale imports independently - skipped entries and failed locales are reported, not rolled back.');
+    const result = await api(`/projects/${project}/import-bundle/${format}`, { method: 'POST', body: readFileSync(file), zip: true });
+    for (const r of result.imported) console.log(`${r.locale}: ${r.translationsUpserted} upserted, ${r.keysCreated} key(s) created, ${r.unchangedSkipped} unchanged, ${r.failed} failed`);
+    for (const x of result.skipped) console.error(`skipped ${x.name}: ${x.reason}`);
+    for (const x of result.failedLocales) console.error(`${x.locale} failed (${x.status}): ${x.error}`);
+    if (result.failedLocales.length > 0 || result.imported.some((r) => r.failed > 0)) process.exit(1);
+    return;
+  }
+  if (!locale) fail('push needs --locale <code>');
   const text = readFileSync(file, 'utf8');
-  const ext = file.toLowerCase().endsWith('.xml') ? 'xml'
-    : file.toLowerCase().endsWith('.strings') ? 'strings'
-    : file.toLowerCase().endsWith('.csv') ? 'csv' : 'json';
-  const body = ext === 'json' ? { entries: JSON.parse(text) } : ext === 'xml' ? { xml: text }
-    : ext === 'strings' ? { strings: text } : { csv: text };
+  const lower = file.toLowerCase();
+  const hit = PUSH_EXTS.find(([ext]) => lower.endsWith(ext));
+  const ext = hit ? hit[1] : 'json';
+  const body = ext === 'json' ? { entries: JSON.parse(text) } : { [ext]: text };
   const result = await api(`/projects/${project}/import/${locale}`, { method: 'POST', body });
   console.log(`import ${result.status}: ${result.translationsUpserted} upserted, ${result.keysCreated} key(s) created, ` +
     `${result.unchangedSkipped} unchanged, ${result.failed} failed (run ${result.importId})`);
@@ -77,9 +90,20 @@ async function pull() {
   const locale = opt('locale');
   const format = opt('format', 'json');
   const out = opt('o');
-  if (!locale) fail('pull needs --locale <code>');
-  if (!FORMATS.has(format)) fail(`unknown format ${format} (json|csv|android|ios)`);
+  const all = args.includes('--all');
+  if (!FORMATS.has(format)) fail(`unknown format ${format} (${[...FORMATS].join('|')})`);
   const { project } = config();
+  if (all) {
+    if (locale) fail('pull --all exports every locale into one zip; drop --locale');
+    if (!out) fail('pull --all needs -o <file.zip> (binary output)');
+    const res = await api(`/projects/${project}/export-bundle/${format}`, { raw: true });
+    if (!res.ok) fail(`export-bundle -> ${res.status}`);
+    const buf = Buffer.from(await res.arrayBuffer());
+    writeFileSync(out, buf);
+    console.log(`wrote ${out} (${buf.length} bytes, all locales, ${format}, store-only zip)`);
+    return;
+  }
+  if (!locale) fail('pull needs --locale <code> (or --all for a bundle zip)');
   const suffix = format === 'json' ? '' : `/${format}`;
   const res = await api(`/projects/${project}/export/${locale}${suffix}`, { raw: true });
   if (!res.ok) fail(`export -> ${res.status}`);
@@ -98,8 +122,10 @@ async function keys() {
 }
 
 const usage = `open-locale <command>
-  push <file> --locale <code>            import a translations file (json/xml/strings/csv)
-  pull --locale <code> [--format f] [-o file]   export translations (json|csv|android|ios)
+  push <file> --locale <code>            import a translations file (json/xml/strings/csv/po/xlf/properties/arb/yaml)
+  push <file.zip> [--format f]           import a bundle zip (store-only, from pull --all; per-locale partial)
+  pull --locale <code> [--format f] [-o file]   export translations (json|csv|android|ios|po|xliff|properties|arb|yaml)
+  pull --all [--format f] -o <file.zip>  export every locale as one store-only zip
   keys [--search term]                   list keys
   docs                                   print the OpenAPI docs URL`;
 if (!cmd || cmd === 'help' || cmd === '--help') { console.log(usage); process.exit(cmd ? 0 : 1); }

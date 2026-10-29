@@ -1,6 +1,6 @@
 // CLI end-to-end: real PostgreSQL + real built API + the real CLI as a child process.
 // Run: node scripts/cli-test.mjs   (requires dist/apps/api built)
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import EmbeddedPostgres from 'embedded-postgres';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -22,12 +22,10 @@ async function call(path, { jwt, method = 'GET', body } = {}) {
   return { status: res.status, json: await res.json().catch(() => null) };
 }
 const cli = (args, cwd) => {
-  try {
-    const out = execFileSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
-    return { status: 0, out };
-  } catch (e) {
-    return { status: e.status ?? 1, out: `${e.stdout ?? ''}${e.stderr ?? ''}` };
-  }
+  // stdout and stderr are always merged: skip/failure detail goes to stderr
+  // even on a zero exit, and assertions read the full picture.
+  const r = spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: 'utf8' });
+  return { status: r.status ?? 1, out: `${r.stdout ?? ''}${r.stderr ?? ''}` };
 };
 
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-cli-'));
@@ -73,6 +71,41 @@ try {
   // pull android to stdout
   const pullA = cli(['pull', '--locale', 'he', '--format', 'android'], workDir);
   check('cli pull android prints strings.xml', pullA.status === 0 && pullA.out.includes('<string'), pullA.out.trim().slice(0, 120));
+
+  // additional formats
+  writeFileSync(join(workDir, 'he.po'), 'msgid "app.title"\nmsgstr "כותרת פו"\n');
+  const pushPo = cli(['push', 'he.po', '--locale', 'he'], workDir);
+  check('cli push imports a PO file', pushPo.status === 0 && pushPo.out.includes('1 upserted'), pushPo.out.trim());
+  const pullYaml = cli(['pull', '--locale', 'he', '--format', 'yaml'], workDir);
+  check('cli pull yaml prints the locale root', pullYaml.status === 0 && pullYaml.out.includes('he:'), pullYaml.out.trim().slice(0, 80));
+  const pullArb = cli(['pull', '--locale', 'he', '--format', 'arb'], workDir);
+  check('cli pull arb carries the locale marker', pullArb.status === 0 && pullArb.out.includes('"@@locale": "he"'), pullArb.out.trim().slice(0, 80));
+  const badFmt = cli(['pull', '--locale', 'he', '--format', 'toml'], workDir);
+  check('cli pull rejects an unknown format', badFmt.status === 1 && badFmt.out.includes('unknown format'), badFmt.out.trim());
+
+  // bundle round-trip through the CLI
+  const pullAll = cli(['pull', '--all', '--format', 'json', '-o', 'bundle.zip'], workDir);
+  const bundleBuf = existsSync(join(workDir, 'bundle.zip')) ? readFileSync(join(workDir, 'bundle.zip')) : Buffer.alloc(0);
+  const entryCount = bundleBuf.length > 22 && bundleBuf.readUInt32LE(bundleBuf.length - 22) === 0x06054b50 ? bundleBuf.readUInt16LE(bundleBuf.length - 12) : 0;
+  check('cli pull --all writes a store-only zip with one entry per locale', pullAll.status === 0 && entryCount === 2, pullAll.out.trim());
+  const pushZip = cli(['push', 'bundle.zip'], workDir);
+  check('cli push bundle imports every locale with a per-locale summary', pushZip.status === 0 && pushZip.out.includes('en:') && pushZip.out.includes('he:') && pushZip.out.includes('store-only'), pushZip.out.trim().slice(0, 200));
+  const tamperedZip = Buffer.from(bundleBuf);
+  tamperedZip[30 + 'en.json'.length] ^= 0xff;
+  writeFileSync(join(workDir, 'bad.zip'), tamperedZip);
+  const pushBad = cli(['push', 'bad.zip'], workDir);
+  check('cli push of a CRC-tampered bundle fails nonzero with the reason', pushBad.status === 1 && pushBad.out.includes('CRC mismatch'), pushBad.out.trim().slice(0, 160));
+  const mixZip = Buffer.from(bundleBuf);
+  const cdBase = mixZip.length - 22 - 2 * (46 + 'en.json'.length);
+  const heRec = cdBase + 46 + 'en.json'.length;
+  mixZip.fill(0x66, heRec + 46, heRec + 47); // 'h' -> 'f'
+  mixZip.fill(0x72, heRec + 47, heRec + 48); // 'e' -> 'r'
+  const heLocal = mixZip.readUInt32LE(heRec + 42);
+  mixZip.fill(0x66, heLocal + 30, heLocal + 31);
+  mixZip.fill(0x72, heLocal + 31, heLocal + 32);
+  writeFileSync(join(workDir, 'mix.zip'), mixZip);
+  const pushMix = cli(['push', 'mix.zip'], workDir);
+  check('cli push bundle reports an unmatched entry as skipped, exit 0', pushMix.status === 0 && pushMix.out.includes('skipped fr.json') && pushMix.out.includes('en:'), pushMix.out.trim().slice(0, 200));
 
   // read-only enforcement through the CLI
   const roTok = await call('/auth/tokens', { jwt, method: 'POST', body: { name: 'cli-ro', scopes: ['read'] } });
