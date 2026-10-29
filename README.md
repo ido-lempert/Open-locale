@@ -48,28 +48,57 @@ loopback-only too. To expose the API beyond localhost, set HOST explicitly toget
 with a real JWT_SECRET - the process refuses to bind a non-loopback address while
 running on the built-in development secret.
 
+## CLI
+
+The `open-locale` CLI uploads and downloads translation files from the terminal.
+It is zero-dependency (Node 20+) and talks to the REST API with a personal API
+token (create one in project settings). `npm install` exposes the bin through
+the workspace, so `npx open-locale <command>` works from the repo root.
+
+Config comes from `./open-locale.json` or environment variables
+(`OPENLOCALE_URL`, `OPENLOCALE_TOKEN`, `OPENLOCALE_PROJECT` override the file):
+
+```json
+{ "url": "http://localhost:3000", "token": "<api token>", "project": "<project id>" }
+```
+
+```bash
+open-locale push <file> --locale he             # import one locale (format from the file extension)
+open-locale push <file> --locale he --dry-run   # preview counts, writes nothing
+open-locale push <file.zip>                     # import a bundle (one entry per locale)
+open-locale pull --locale he [--format f] [-o file]   # export one locale
+open-locale pull --all [--format f] -o bundle.zip     # export every locale as one zip
+open-locale keys [--search term]                # list keys
+open-locale docs                                # print the OpenAPI docs URL
+```
+
+Formats: json, csv, android, ios, po, xliff, properties, arb, yaml. Each format
+is a subset: constructs outside the subset are rejected with an error rather
+than approximated. Every command accepts `--branch <name>` to scope the read or
+write to a branch instead of main.
+
+Bundle zips are store-only, as written by `pull --all`; compressed zips are
+rejected before any write. A bundle import runs per locale independently:
+entries with no matching locale are skipped, failed locales are reported, and
+nothing is rolled back across locales. Exit codes: 0 on success (skipped bundle
+entries keep exit 0 and are listed on stderr), 1 on any failed key or locale.
+`--dry-run` prints the same counters as a point-in-time preview without
+writing; it is not available for bundle zips.
+
 ## Tests
 
 Every database-backed suite starts its own real PostgreSQL automatically; no Docker
 required. Each suite exits non-zero if any check fails.
 
 ```bash
-npx nx test api && npx nx test web          # unit tests
-npm run test:integration                    # phase 0 foundation
-npm run test:authz                          # auth, tokens, authorization
-npm run test:statuses                       # review statuses + history
-npm run test:tags                           # tags + filters
-npm run test:comments                       # comments
-npm run test:activity                       # activity log
-npm run test:imports                        # JSON import + ImportRun recovery
-npm run test:screenshots                    # screenshot upload validation
-npm run test:tasks                          # tasks
-npm run test:tm                             # translation memory
-npm run test:glossary                       # glossary
-npm run test:qa                             # QA checks
-npm run test:formats                        # CSV import/export
+bash scripts/sweep.sh                       # everything: 32 database-backed suites,
+                                            # unit tests and production builds (36 legs)
+npx nx test api && npx nx test web          # unit tests only
 node scripts/e2e-visual.mjs                 # full UI pass in headless Chrome
+npm run test:cli                            # one suite - see package.json for the full list
 ```
+
+The sweep fails if any leg exits non-zero, prints a FAIL line or runs zero checks.
 
 ## Development process
 

@@ -3,9 +3,11 @@
 // an X-Api-Key token. Config lives in ./open-locale.json or env vars so the
 // token never appears in shell history unless the user chooses env.
 //
-//   open-locale push <file> --locale he          upload translations (atomic import)
-//   open-locale pull --locale he [--format json|csv|android|ios] [-o file]
-//   open-locale keys [--search term]             list keys
+//   open-locale push <file> --locale he          upload translations (atomic import; --dry-run previews)
+//   open-locale push <file.zip>                  import a store-only bundle (one entry per locale)
+//   open-locale pull --locale he [--format f] [-o file]   json|csv|android|ios|po|xliff|properties|arb|yaml
+//   open-locale pull --all [--format f] -o <file.zip>     export every locale as one store-only zip
+//   open-locale keys [--search term]             list keys; every command accepts --branch <name>
 //
 // Config: OPENLOCALE_URL (default http://localhost:3000), OPENLOCALE_TOKEN,
 // OPENLOCALE_PROJECT; or { "url", "token", "project" } in open-locale.json.
@@ -152,10 +154,11 @@ const usage = `open-locale <command>
                                          (compressed zips are rejected before any write; each locale
                                          imports independently, no rollback across locales)
   pull --locale <code> [--format f] [-o file]   export translations (json|csv|android|ios|po|xliff|properties|arb|yaml)
-  all commands accept [--branch name]        scope the read or write to a branch (default: main)
   pull --all [--format f] -o <file.zip>  export every locale as one store-only zip
   keys [--search term]                   list keys
   docs                                   print the OpenAPI docs URL
+options: every command accepts [--branch name] to scope the read or write to a
+  branch (default: main)
 exit codes: 0 = success (bundle entries with no matching locale are skipped and listed
   on stderr; skips alone keep exit 0); 1 = any failed key or locale, details on stderr`;
 if (!cmd || cmd === 'help' || cmd === '--help') { console.log(usage); process.exit(cmd ? 0 : 1); }
