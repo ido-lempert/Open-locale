@@ -25,6 +25,10 @@ export interface Key {
 export interface LocaleProgress { locale: string; base: boolean; total: number; translated: number; untranslated: number; percent: number; byStatus: Record<string, number>; }
 export interface ProgressReport { branch: string; totalKeys: number; locales: LocaleProgress[]; }
 
+export interface AutomationRuleInfo {
+  id: string; name: string; trigger: string; action: string;
+  config: Record<string, unknown>; enabled: boolean; createdAt: string;
+}
 export interface MtProviderInfo {
   id: string; name: string; type: string; enabled: boolean; createdAt: string;
 }
@@ -180,6 +184,18 @@ export class ApiService {
   }
   getProgress(projectId: string, branch?: string) {
     return this.request<ProgressReport>(`/projects/${projectId}/reports/progress${branch ? `?branch=${encodeURIComponent(branch)}` : ''}`);
+  }
+  listAutomationRules(projectId: string) {
+    return this.request<AutomationRuleInfo[]>(`/projects/${projectId}/automations`);
+  }
+  createAutomationRule(projectId: string, rule: { name: string; trigger: string; action: string; config: Record<string, unknown> }) {
+    return this.request<AutomationRuleInfo>(`/projects/${projectId}/automations`, { method: 'POST', body: JSON.stringify(rule) });
+  }
+  updateAutomationRule(projectId: string, ruleId: string, patch: { enabled?: boolean }) {
+    return this.request<AutomationRuleInfo>(`/projects/${projectId}/automations/${ruleId}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  }
+  deleteAutomationRule(projectId: string, ruleId: string) {
+    return this.request<{ deleted: boolean }>(`/projects/${projectId}/automations/${ruleId}`, { method: 'DELETE' });
   }
   listMtProviders(projectId: string) {
     return this.request<MtProviderInfo[]>(`/projects/${projectId}/mt/providers`);

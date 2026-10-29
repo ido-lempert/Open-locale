@@ -10,5 +10,6 @@ import { AuthModule } from '../auth/auth.module';
   imports: [ProjectsModule, ActivityModule, WebhooksModule, AuthModule],
   controllers: [MtController],
   providers: [MtService],
+  exports: [MtService],
 })
 export class MtModule {}

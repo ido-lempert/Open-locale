@@ -31,6 +31,7 @@ export const ACTIVITY_ACTIONS = [
   'ota.published',
   'project.embedOrigins.updated',
   'mt.pretranslate',
+  'automation.run',
 ] as const;
 
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];

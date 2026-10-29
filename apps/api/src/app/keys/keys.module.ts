@@ -5,9 +5,10 @@ import { AuthModule } from '../auth/auth.module';
 import { ProjectsModule } from '../projects/projects.module';
 import { BranchesModule } from '../branches/branches.module';
 import { LocksModule } from '../locks/locks.module';
+import { AutomationsModule } from '../automations/automations.module';
 
 @Module({
-  imports: [AuthModule, ProjectsModule, BranchesModule, LocksModule],
+  imports: [AuthModule, ProjectsModule, BranchesModule, LocksModule, AutomationsModule],
   controllers: [KeysController],
   providers: [KeysService],
 })

@@ -429,6 +429,7 @@ try {
     return { get: get.status, write: write.status };
   }, rawToken);
   check('read-only token: GET 200, write 403', tokenExercise.get === 200 && tokenExercise.write === 403, JSON.stringify(tokenExercise));
+  await page.waitForFunction(() => [...document.querySelectorAll('.locale-list li')].some((el) => el.textContent.includes('ci') && [...el.querySelectorAll('button')].some((b) => b.textContent === 'Revoke')), { timeout: 10000 });
   await page.evaluate(() => {
     const li = [...document.querySelectorAll('.locale-list li')].find((el) => el.textContent.includes('ci'));
     [...li.querySelectorAll('button')].find((b) => b.textContent === 'Revoke').click();
@@ -603,9 +604,53 @@ try {
   check('panel labels the output as TEST DATA, not translation', await page.evaluate(() => (document.body.textContent || '').includes('TEST DATA') && (document.body.textContent || '').includes('NOT available in this slice')));
   const mtLine = await page.evaluate(() => document.querySelector('p[role=status]')?.textContent || '');
   check('pre-translate filled at least one empty cell', /: ([1-9]\d*) filled/.test(mtLine), mtLine);
-  await page.evaluate(() => document.querySelector('p[role=status]')?.scrollIntoView({ block: 'center' }));
+  await page.evaluate(() => { [...document.querySelectorAll('h2')].find((h) => h.textContent.startsWith('Machine translation'))?.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70); });
   await new Promise((r) => setTimeout(r, 300));
   await shot('editor-28-mt.png');
+
+  // --- Automations: add a task.create rule via settings UI, then fire it ---
+  await page.goto(`${WEB}/projects/${projId}/settings`, { waitUntil: 'networkidle0' });
+  const autoPanel = await page.waitForSelector('input[name=newRuleName]', { timeout: 15000 }).then(() => true).catch(() => false);
+  if (!autoPanel) {
+    const h2s = await page.$$eval('section.panel h2', (els) => els.map((e) => e.textContent));
+    console.log('DEBUG settings panels:', JSON.stringify(h2s));
+  }
+  check('automations panel renders in settings', autoPanel);
+  await page.evaluate(() => {
+    const setVal = (el, v) => {
+      const proto = el.tagName === 'SELECT' ? window.HTMLSelectElement.prototype : window.HTMLInputElement.prototype;
+      Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, v);
+      el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true }));
+    };
+    setVal(document.querySelector('input[name=newRuleName]'), 'Task on new key');
+    setVal(document.querySelector('select[name=newRuleTrigger]'), 'key.created');
+    setVal(document.querySelector('select[name=newRuleAction]'), 'task.create');
+  });
+  await page.waitForSelector('input[name=newRuleTitle]', { timeout: 10000 });
+  await page.evaluate(() => {
+    const el = document.querySelector('input[name=newRuleTitle]');
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(el, 'Translate new key {key}');
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await new Promise((r) => setTimeout(r, 400));
+  await page.evaluate(() => document.querySelector('input[name=newRuleName]').closest('form').requestSubmit());
+  const ruleListed = await page.waitForFunction(() => [...document.querySelectorAll('li')].some((li) => li.textContent.includes('Task on new key')), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('automation rule added via settings UI and listed', ruleListed);
+  await page.evaluate(async (pid) => {
+    const token = localStorage.getItem('ol_token');
+    await fetch(`/api/projects/${pid}/keys`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ name: 'auto.fired' }) });
+  }, projId);
+  const taskFired = await page.waitForFunction(async () => {
+    const pid = location.pathname.split('/')[2];
+    const token = localStorage.getItem('ol_token');
+    const res = await fetch(`/api/projects/${pid}/tasks`, { headers: { Authorization: `Bearer ${token}` } });
+    const tasks = await res.json();
+    return (Array.isArray(tasks) ? tasks : tasks.items || []).some((t) => t.title === 'Translate new key auto.fired');
+  }, { timeout: 10000, polling: 500 }).then(() => true).catch(() => false);
+  check('creating a key fired the rule and created the task', taskFired);
+  await page.evaluate(() => { [...document.querySelectorAll('h2')].find((h) => h.textContent === 'Automations')?.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70); });
+  await new Promise((r) => setTimeout(r, 300));
+  await shot('editor-29-automations.png');
 
   // --- Progress report ---
   await page.setViewport({ width: 1280, height: 900 });

@@ -8,6 +8,7 @@ import { ActivityService, truncate } from '../activity/activity.service';
 import { SnapshotsService } from '../snapshots/snapshots.service';
 import { LocksService } from '../locks/locks.service';
 import { BranchesService } from '../branches/branches.service';
+import { AutomationsService } from '../automations/automations.service';
 import { flattenJson, unflattenJson } from './json-flatten';
 import { parseCsv, toCsv } from './csv';
 import { parseAndroidXml, toAndroidXml } from './android-xml';
@@ -33,6 +34,7 @@ export class TranslationsService {
     private readonly locks: LocksService,
     private readonly webhooks: WebhooksService,
     private readonly branches: BranchesService,
+    private readonly automations: AutomationsService,
   ) {}
 
   async upsert(userId: string, projectId: string, keyId: string, locale: string, value: string, expectedVersion?: number, expectedRowId?: string) {
@@ -41,7 +43,7 @@ export class TranslationsService {
     if (!project.locales.some((l) => l.code === locale)) {
       throw new BadRequestException(`Locale ${locale} is not part of this project`);
     }
-    const key = await this.prisma.key.findFirst({ where: { id: keyId, projectId } });
+    const key = await this.prisma.key.findFirst({ where: { id: keyId, projectId }, include: { branch: true } });
     if (!key) throw new NotFoundException('Key not found');
     return this.prisma.$transaction(async (tx) => {
       let existing: { value: string; status: string; version: number; rowId?: string } | null;
@@ -109,6 +111,11 @@ export class TranslationsService {
       // Webhooks are fire-and-forget: delivery must never fail the write.
       this.webhooks.deliver(projectId, 'translation.updated', {
         key: key.name, locale, value,
+      }).catch(() => {});
+      // Automations fire-and-forget too; the service enforces the trigger
+      // bounds (main branch, base locale) and never throws.
+      this.automations.fire(projectId, 'translation.value', {
+        keyId, keyName: key.name, branchName: key.branch.name, localeCode: locale,
       }).catch(() => {});
       return translation;
     });

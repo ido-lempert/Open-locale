@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
 import { BranchesService } from '../branches/branches.service';
+import { AutomationsService } from '../automations/automations.service';
 import { LocksService } from '../locks/locks.service';
 import { ActivityService, truncate } from '../activity/activity.service';
 
@@ -13,6 +14,7 @@ export class KeysService {
     private readonly activity: ActivityService,
     private readonly branches: BranchesService,
     private readonly locks: LocksService,
+    private readonly automations: AutomationsService,
   ) {}
 
   async list(userId: string, projectId: string, filters: {
@@ -56,8 +58,8 @@ export class KeysService {
   }) {
     await this.projects.getFor(userId, projectId);
     const branch = await this.branches.branchFor(projectId, input.branch);
-    return this.prisma.$transaction(async (tx) => {
-      const key = await tx.key.create({
+    const key = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.key.create({
         data: {
           projectId,
           branchId: branch.id,
@@ -72,8 +74,11 @@ export class KeysService {
       await this.activity.record(tx, {
         projectId, actorId: userId, action: 'key.created', keyName: input.name,
       });
-      return key;
+      return created;
     });
+    // Fire-and-forget: automations must never fail or delay the write.
+    this.automations.fire(projectId, 'key.created', { keyId: key.id, keyName: key.name, branchName: branch.name }).catch(() => {});
+    return key;
   }
 
   async update(userId: string, projectId: string, keyId: string, input: {

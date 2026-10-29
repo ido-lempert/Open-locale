@@ -77,6 +77,14 @@ export const OPENAPI = {
     '/api/projects/{projectId}/branches/{branchId}/merge': {
       post: p('Merge a branch into another: pre-merge snapshot, copy keys and translations with history attribution, target-only keys kept, post-preview edits skipped (admin)', 'branches', true),
     },
+    '/api/projects/{projectId}/automations': {
+      get: p('List automation rules (explicit trigger/action whitelist, internal effects only)', 'automations'),
+      post: p('Create an automation rule (admin). Triggers: key.created, translation.value (base locale, main branch). Actions: pretranslate, task.create', 'automations', true),
+    },
+    '/api/projects/{projectId}/automations/{ruleId}': {
+      patch: p('Update a rule (admin): rename, enable/disable, config', 'automations', true),
+      delete: p('Delete a rule (admin)', 'automations', true),
+    },
     '/api/projects/{projectId}/mt/providers': {
       get: p('List machine-translation providers for the project', 'mt'),
       post: p('Create an MT provider (admin; built-in type: pseudo)', 'mt', true),

@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { ApiService, BranchInfo, MtProviderInfo, OtaPublicationInfo, ApiTokenInfo, MemberInfo, Project } from '../api.service';
+import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicationInfo, ApiTokenInfo, MemberInfo, Project } from '../api.service';
 
 @Component({
   selector: 'ol-settings',
@@ -150,6 +150,44 @@ import { ApiService, BranchInfo, MtProviderInfo, OtaPublicationInfo, ApiTokenInf
           }
         </section>
         <section class="panel">
+          <h2>Automations</h2>
+          <p class="muted">Rules fire only on the whitelisted triggers - a new key, or a base-locale write on the main branch - and only do the whitelisted internal actions: fill empty cells with pseudo TEST DATA or create a task. They never call external services. Rules run as their creator: if the creator loses project access, the run fails visibly in the activity log and the triggering edit is unaffected.</p>
+          <ul class="locale-list">
+            @for (r of autoRules(); track r.id) {
+              <li>
+                <span>{{ r.name }} <span class="muted">{{ r.trigger }} &rarr; {{ ruleSummary(r) }}</span></span>
+                <button (click)="toggleRule(r)">{{ r.enabled ? 'Disable' : 'Enable' }}</button>
+                <button class="danger" (click)="removeRule(r)">Remove</button>
+              </li>
+            }
+            @if (!autoRules().length) { <li class="muted">No rules yet.</li> }
+          </ul>
+          <form class="inline" (ngSubmit)="addRule()">
+            <input aria-label="Rule name" placeholder="Rule name" [ngModel]="newRuleName()" (ngModelChange)="newRuleName.set($event)" name="newRuleName" required />
+            <select aria-label="Trigger" [ngModel]="newRuleTrigger()" (ngModelChange)="newRuleTrigger.set($event)" name="newRuleTrigger">
+              <option value="translation.value">base-locale write (main)</option>
+              <option value="key.created">key created (main)</option>
+            </select>
+            <select aria-label="Action" [ngModel]="newRuleAction()" (ngModelChange)="newRuleAction.set($event)" name="newRuleAction">
+              <option value="pretranslate">fill empty cells with test data</option>
+              <option value="task.create">create a task</option>
+            </select>
+            @if (newRuleAction() === 'pretranslate') {
+              <select aria-label="Rule provider" [ngModel]="newRuleProvider()" (ngModelChange)="newRuleProvider.set($event)" name="newRuleProvider">
+                @for (p of mtProviders(); track p.id) { <option [value]="p.id">{{ p.name }}</option> }
+              </select>
+              @for (l of project()?.locales ?? []; track l.code) {
+                @if (l.code !== project()?.baseLocale) {
+                  <label><input type="checkbox" [checked]="newRuleLocales().includes(l.code)" (change)="toggleRuleLocale(l.code)" name="ruleLoc-{{ l.code }}" /> {{ l.code }}</label>
+                }
+              }
+            } @else {
+              <input aria-label="Task title" placeholder="Task title ({key} = key name)" [ngModel]="newRuleTitle()" (ngModelChange)="newRuleTitle.set($event)" name="newRuleTitle" />
+            }
+            <button type="submit" [disabled]="busy()">Add rule</button>
+          </form>
+        </section>
+        <section class="panel">
           <h2>Members</h2>
           <ul class="locale-list">
             @for (m of members(); track m.id) {
@@ -244,7 +282,9 @@ export class SettingsComponent implements OnInit {
       this.otaPubs.set(await this.api.listOtaPublications(this.projectId));
       this.branches.set(await this.api.listBranches(this.projectId));
       this.mtProviders.set(await this.api.listMtProviders(this.projectId));
+      this.autoRules.set(await this.api.listAutomationRules(this.projectId));
       if (!this.mtProviderId() && this.mtProviders().length) this.mtProviderId.set(this.mtProviders()[0].id);
+      if (!this.newRuleProvider() && this.mtProviders().length) this.newRuleProvider.set(this.mtProviders()[0].id);
       if (!this.mtLocale()) {
         const first = (this.project()?.locales ?? []).find((l) => l.code !== this.project()?.baseLocale);
         if (first) this.mtLocale.set(first.code);
@@ -320,6 +360,9 @@ export class SettingsComponent implements OnInit {
   mtProviders = signal<MtProviderInfo[]>([]);
   newMtName = signal(''); newMtType = signal('pseudo');
   mtProviderId = signal(''); mtLocale = signal(''); mtBranch = signal('main'); mtResult = signal('');
+  autoRules = signal<AutomationRuleInfo[]>([]);
+  newRuleName = signal(''); newRuleTrigger = signal('translation.value'); newRuleAction = signal('pretranslate');
+  newRuleProvider = signal(''); newRuleLocales = signal<string[]>([]); newRuleTitle = signal('');
 
   async addOrigin() {
     const origin = this.newOrigin().trim();
@@ -376,6 +419,50 @@ export class SettingsComponent implements OnInit {
     try {
       const r = await this.api.pretranslate(this.projectId, this.mtProviderId(), this.mtLocale(), this.mtBranch());
       this.mtResult.set(`Pseudo test data (${this.mtLocale()} on ${this.mtBranch()}): ${r.translated} filled, ${r.skippedExisting} already translated (untouched), ${r.skippedNoSource} without source text. Filled rows are UNVERIFIED pseudo-localization TEST DATA, not real translations.`);
+    } catch (e) { this.error.set(e instanceof Error ? e.message : String(e)); } finally { this.busy.set(false); }
+  }
+
+  ruleSummary(r: AutomationRuleInfo): string {
+    if (r.action === 'pretranslate') {
+      const locales = Array.isArray(r.config['locales']) ? (r.config['locales'] as string[]).join(', ') : '';
+      return `fill ${locales} with test data`;
+    }
+    return `task: ${String(r.config['title'] ?? '')}`;
+  }
+
+  toggleRuleLocale(code: string) {
+    this.newRuleLocales.set(this.newRuleLocales().includes(code)
+      ? this.newRuleLocales().filter((l) => l !== code)
+      : [...this.newRuleLocales(), code]);
+  }
+
+  async addRule() {
+    this.busy.set(true); this.error.set('');
+    try {
+      const config = this.newRuleAction() === 'pretranslate'
+        ? { providerId: this.newRuleProvider(), locales: this.newRuleLocales() }
+        : { title: this.newRuleTitle() };
+      await this.api.createAutomationRule(this.projectId, {
+        name: this.newRuleName().trim(), trigger: this.newRuleTrigger(), action: this.newRuleAction(), config,
+      });
+      this.newRuleName.set(''); this.newRuleTitle.set(''); this.newRuleLocales.set([]);
+      this.autoRules.set(await this.api.listAutomationRules(this.projectId));
+    } catch (e) { this.error.set(e instanceof Error ? e.message : String(e)); } finally { this.busy.set(false); }
+  }
+
+  async toggleRule(r: AutomationRuleInfo) {
+    this.busy.set(true); this.error.set('');
+    try {
+      await this.api.updateAutomationRule(this.projectId, r.id, { enabled: !r.enabled });
+      this.autoRules.set(await this.api.listAutomationRules(this.projectId));
+    } catch (e) { this.error.set(e instanceof Error ? e.message : String(e)); } finally { this.busy.set(false); }
+  }
+
+  async removeRule(r: AutomationRuleInfo) {
+    this.busy.set(true); this.error.set('');
+    try {
+      await this.api.deleteAutomationRule(this.projectId, r.id);
+      this.autoRules.set(await this.api.listAutomationRules(this.projectId));
     } catch (e) { this.error.set(e instanceof Error ? e.message : String(e)); } finally { this.busy.set(false); }
   }
 

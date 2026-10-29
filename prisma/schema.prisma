@@ -87,6 +87,7 @@ model Project {
   snapshots    Snapshot[]
   otaPublications OtaPublication[]
   mtProviders    MtProvider[]
+  automationRules AutomationRule[]
 
   @@unique([teamId, slug])
   @@map("projects")
@@ -390,4 +391,25 @@ model MtProvider {
 
   @@unique([projectId, name])
   @@map("mt_providers")
+}
+
+model AutomationRule {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId String   @db.Uuid
+  name      String
+  // Explicit trigger whitelist: 'key.created' | 'translation.value'.
+  trigger   String
+  // Explicit action whitelist: 'pretranslate' | 'task.create'. Internal
+  // effects only - automations never call external services.
+  action    String
+  config    Json     @default("{}")
+  enabled   Boolean  @default(true)
+  // Runs execute as the creator, re-checked against live membership/locale
+  // permissions at fire time; lost access fails the run visibly.
+  creatorId String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("automation_rules")
 }
