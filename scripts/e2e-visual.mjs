@@ -46,7 +46,7 @@ try {
       SAML_IDP_ENTITY_ID: 'https://idp.example.com/idp', SAML_SP_ENTITY_ID: 'open-locale',
       SAML_SP_PRIVATE_KEY: 'e2e-display-key', SAML_SP_SIGNING_CERT: 'e2e-display-sp-cert' }, stdio: 'pipe' });
   check('API up', await waitFor(`http://127.0.0.1:${API_PORT}/api/projects`));
-  web = spawn(join(root, 'node_modules', '.bin', 'nx'), ['serve', 'web', '--port', String(WEB_PORT)], { cwd: root, stdio: 'pipe' });
+  web = spawn(join(root, 'node_modules', '.bin', 'nx'), ['serve', 'web', '--port', String(WEB_PORT)], { cwd: root, stdio: 'pipe', detached: true, env: { ...process.env, NX_DAEMON: 'false', NX_ISOLATE_PLUGINS: 'false' } });
   check('web dev server up', await waitFor(WEB, (r) => r.ok, 180));
 
   browser = await puppeteer.launch({
@@ -2193,7 +2193,13 @@ try {
   process.exit(1);
 } finally {
   await browser?.close().catch(() => {});
-  web?.kill('SIGTERM'); api?.kill('SIGTERM');
+  const stopped = [web, api].filter(Boolean).map(child => new Promise(resolve => {
+    if (child.exitCode !== null || child.signalCode !== null) return resolve();
+    child.once('close', resolve);
+    if (child === web) { try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); } }
+    else child.kill('SIGKILL');
+  }));
+  await Promise.all(stopped);
   await pg.stop().catch(() => {});
   rmSync(dataDir, { recursive: true, force: true });
 }
