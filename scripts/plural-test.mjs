@@ -79,10 +79,17 @@ try {
   check('merge main->feat accepted', merge.status === 200 || merge.status === 201, `status=${merge.status}`);
   check('merge carries pluralForms to target branch', JSON.stringify(formsOf(await keys('feat'), 'cart.items', 'en')) === JSON.stringify({ one: '1 merged', other: '# merged' }));
 
+  // Format import writers upsert value/status only: forms must survive an
+  // import over an existing plural key (imports never delete+recreate rows).
+  const imp = await call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { entries: { 'cart.items': 'imported items' } } });
+  check('JSON import over a plural key accepted', imp.status === 200 || imp.status === 201, `status=${imp.status}`);
+  check('import preserves pluralForms', JSON.stringify(formsOf(await keys(), 'cart.items', 'en')) === JSON.stringify({ one: '1 merged', other: '# merged' }));
+  check('import still updates the plain value', (await keys()).find((k) => k.name === 'cart.items').translations.find((t) => t.localeCode === 'en').value === 'imported items');
+
   // isPlural=false clears stored forms explicitly.
   check('isPlural flip accepted', (await call(`/projects/${pid}/keys/${kid}`, { jwt, method: 'PATCH', body: { isPlural: false } })).status === 200);
   check('isPlural=false clears pluralForms', formsOf(await keys(), 'cart.items', 'en') === null);
-  check('value survives the isPlural flip', (await keys()).find((k) => k.name === 'cart.items').translations.find((t) => t.localeCode === 'en').value === 'items v4');
+  check('value survives the isPlural flip', (await keys()).find((k) => k.name === 'cart.items').translations.find((t) => t.localeCode === 'en').value === 'imported items');
 
   console.log(failures === 0 ? 'plural pass complete' : `${failures} FAILURES`);
   process.exitCode = failures === 0 ? 0 : 1;

@@ -215,7 +215,7 @@ export const OPENAPI = {
       post: p('Capture a snapshot of all keys and translations', 'snapshots', true),
     },
     '/api/projects/{projectId}/snapshots/{snapshotId}/restore': {
-      post: p('Restore the project to a snapshot (atomic point-in-time recovery)', 'snapshots'),
+      post: p('Restore the project to a snapshot (atomic point-in-time recovery; fields added after a snapshot was taken - e.g. pluralForms in older snapshots - are left untouched, so a restore is not an exact historical reconstruction)', 'snapshots'),
     },
     '/api/projects/{projectId}/activity': { get: p('Project activity feed', 'projects') },
     '/api/projects/{projectId}/qa': { get: p('Run QA checks over translations', 'qa') },

@@ -23,7 +23,14 @@ translation writer audited for silent loss:
     and the merge/preview no-op comparisons include it (a forms-only change
     is merged, not skipped as "identical");
   - PATCH key isPlural=false explicitly NULLs pluralForms in the same tx
-    (stale forms never readable); value and other metadata survive.
+    (stale forms never readable); value and other metadata survive;
+  - format import writers (all formats route through importJson's upsert,
+    which updates value/status/version only and never deletes+recreates a
+    translation row) preserve stored forms; verified via JSON import over a
+    plural key. Claims limited to that shared path, not per-format re-tests.
+- Restore semantics are explicit on the endpoint: fields added after a
+  snapshot was taken are left untouched by restore, so restoring an old
+  snapshot is not an exact historical reconstruction.
 - Optimistic concurrency (version + rowId), task key locks, webhook and
   automation fires, history attribution are unchanged; a forms-only change
   bumps version and writes history.
