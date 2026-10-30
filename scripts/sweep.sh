@@ -12,7 +12,7 @@ FAIL=0
 dups=$(grep -h '^const PG_PORT = [0-9]' scripts/*-test.mjs scripts/e2e-visual.mjs | grep -o '[0-9]\{5\}' | sort | uniq -d)
 if [ -n "$dups" ]; then echo "SUITE-FAIL preflight (duplicate PG ports: $(echo $dups | tr '\n' ' '))"; FAIL=1; fi
 mkdir -p /tmp/sweep-legs
-for s in integration authz statuses comments activity imports screenshots tasks tm glossary qa formats webhooks tags apitokens docs cli sdk snapshots permissions review migration branches merge-concurrency ota reports incontext incontext-edit mt automations 2fa oidc saml oidc-browser groups plural docker; do
+for s in integration authz statuses comments activity imports screenshots tasks tm glossary qa formats webhooks tags apitokens docs cli sdk snapshots permissions review migration branches merge-concurrency ota reports incontext incontext-edit mt automations 2fa oidc saml oidc-browser saml-browser groups plural docker; do
   npm run --silent "test:$s" > "/tmp/sweep-legs/$s.log" 2>&1; rc=$?
   fails=$(grep -cE "^FAIL" "/tmp/sweep-legs/$s.log")
   passes=$(grep -cE "^PASS" "/tmp/sweep-legs/$s.log")

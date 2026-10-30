@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Get, Header, HttpCode, Post, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Header, HttpCode, Post, Res, UseGuards } from '@nestjs/common';
 import { SamlService } from './saml.service';
 import { AuthService, AuthPrincipal } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
@@ -14,6 +15,19 @@ export class SamlController {
   @Get('login')
   login() {
     return this.saml.login();
+  }
+
+  @Post('browser/start')
+  browserStart(@Body('challenge') challenge?: string) {
+    if (typeof challenge !== 'string') throw new BadRequestException('challenge is required');
+    return this.saml.browserStart(challenge);
+  }
+  @Post('browser/redeem')
+  @Header('Cache-Control', 'no-store')
+  @HttpCode(200)
+  browserRedeem(@Body() body: { code?: string; verifier?: string }) {
+    if (typeof body?.code !== 'string' || typeof body?.verifier !== 'string') throw new BadRequestException('code and verifier are required');
+    return this.saml.browserRedeem(body.code, body.verifier);
   }
 
   @Get('sp-info')
@@ -41,14 +55,18 @@ export class SamlController {
 
   @Post('acs')
   @HttpCode(200)
-  acs(@Body('SAMLResponse') samlResponse?: string, @Body('RelayState') relayState?: string) {
+  async acs(@Res({ passthrough: true }) res: Response, @Body('SAMLResponse') samlResponse?: string, @Body('RelayState') relayState?: string) {
     if (typeof samlResponse !== 'string' || !samlResponse) {
       throw new BadRequestException('SAMLResponse is required');
     }
     if (relayState !== undefined && typeof relayState !== 'string') {
       throw new BadRequestException('RelayState must be a string');
     }
-    return this.saml.acs(samlResponse, relayState);
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    const result = await this.saml.acs(samlResponse, relayState);
+    if ('browserRedirect' in result) { res.redirect(303, result.browserRedirect); return; }
+    return result;
   }
 
   @Post('complete')

@@ -1,0 +1,88 @@
+import { inflateRawSync } from 'node:zlib';
+// Real local browser -> mock IdP -> Angular callback -> built API + Postgres.
+// No external IdP/account acceptance. Requires nx build api.
+import { execFileSync, spawn } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import EmbeddedPostgres from 'embedded-postgres';
+import { PrismaClient } from '@prisma/client';
+import puppeteer from 'puppeteer-core';
+const PG_PORT = 55478, WEB_PORT = 4200, API_PORT = 3000;
+const WEB = `http://127.0.0.1:${WEB_PORT}`;
+const API = `http://127.0.0.1:${API_PORT}/api`;
+let failures = 0, api, web, mock, browser, prisma;
+process.exitCode = 1;
+const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
+const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
+const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-saml-browser-'));
+const pg = new EmbeddedPostgres({ databaseDir: dataDir, user: 'postgres', password: 'postgres', port: PG_PORT, persistent: false });
+try {
+  await pg.initialise(); await pg.start(); await pg.createDatabase('saml_browser');
+  const url = `postgresql://postgres:postgres@localhost:${PG_PORT}/saml_browser`;
+  execFileSync('node_modules/.bin/prisma', ['migrate','deploy'], { env: {...process.env, DATABASE_URL:url}, stdio:'pipe' });
+  prisma = new PrismaClient({ datasources:{db:{url}} });
+  mock = spawn(process.execPath,['scripts/mock-saml.mjs'],{env:{...process.env,MOCK_SAML_BROWSER:'1'},stdio:'pipe'});
+  await waitFor('http://127.0.0.1:5556/cert');
+  const cert=(await (await fetch('http://127.0.0.1:5556/cert')).json()).cert;
+  api=spawn(process.execPath,['dist/apps/api/main.js'],{env:{...process.env,DATABASE_URL:url,JWT_SECRET:'browser-saml-secret',SAML_ENTRY_POINT:'http://127.0.0.1:5556/sso',SAML_IDP_CERT:cert,SAML_IDP_ENTITY_ID:'http://127.0.0.1:5556/idp',SAML_BROWSER_RETURN_URL:`${WEB}/auth/saml/callback`,PORT:String(API_PORT)},stdio:'pipe'});
+  await waitFor(`${API}/auth/saml/sp-info`);
+  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{stdio:'pipe'});
+  await waitFor(WEB);
+  browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH??'/usr/bin/google-chrome',args:['--no-sandbox','--disable-dev-shm-usage']});
+  const page=await browser.newPage();
+  await page.setViewport({width:1280,height:800});
+  let redeems=0;
+  page.on('request',r=>{if(r.method()==='POST'&&r.url().endsWith('/auth/saml/browser/redeem'))redeems++;});
+  await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.waitForSelector('button[name=samlLogin]');
+  check('SAML browser sign-in button renders',!!(await page.$('button[name=samlLogin]')));
+  await page.screenshot({path:'/downloads/saml-browser-login.png'});
+  await page.click('button[name=samlLogin]');
+  await page.waitForFunction(()=>location.pathname==='/projects',{timeout:15000});
+  check('real IdP form POST completes browser SAML',new URL(page.url()).pathname==='/projects');
+  check('handoff redeemed once',redeems===1);
+  check('browser verifier removed',await page.evaluate(()=>!sessionStorage.getItem('ol.saml.verifier')));
+  check('handoff fragment removed',!page.url().includes('#'));
+  check('session authenticates protected endpoint',await page.evaluate(async()=> (await fetch('/api/projects',{headers:{Authorization:`Bearer ${localStorage.getItem('ol_token')}`}})).ok));
+  const user=await prisma.user.findUnique({where:{email:'saml-user@example.com'}});
+  check('SAML browser provisioned fixture account',!!user);
+  await prisma.user.update({where:{id:user.id},data:{totpEnabled:true}});
+  const recovery='BROWSER-SAML-RECOVERY';await prisma.recoveryCode.create({data:{userId:user.id,codeHash:createHash('sha256').update(recovery).digest('hex')}});
+  await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.waitForSelector('button[name=samlLogin]');await page.click('button[name=samlLogin]');
+  await page.waitForSelector('input[name=ssoCode]',{timeout:15000});
+  check('SAML handoff pauses for local second factor',new URL(page.url()).pathname==='/auth/saml/callback');
+  check('2FA prompt has no ticket in URL',!page.url().includes('#'));
+  await page.screenshot({path:'/downloads/saml-browser-second-factor.png'});
+  await page.type('input[name=ssoCode]',recovery);await page.click('button.primary');
+  await page.waitForFunction(()=>location.pathname==='/projects',{timeout:15000});
+  check('recovery verification completes SAML browser login',new URL(page.url()).pathname==='/projects');
+  check('recovery code consumed',!!(await prisma.recoveryCode.findFirst({where:{userId:user.id}})).usedAt);
+  // Real HTTP handoff rejection legs, independent of Angular UI state.
+  const post=async(path,body)=>fetch(`${API}${path}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body),redirect:'manual'});
+  const verifier='x'.repeat(64), challenge=createHash('sha256').update(verifier).digest('base64url');
+  const start=await (await post('/auth/saml/browser/start',{challenge})).json();
+  const loginUrl=new URL(start.url), requestXml=inflateRawSync(Buffer.from(loginUrl.searchParams.get('SAMLRequest'),'base64')).toString();
+  const requestId=requestXml.match(/ID="([^"]+)"/)[1];
+  const assertion=await (await fetch('http://127.0.0.1:5556/mint',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({inResponseTo:requestId})})).json();
+  const acs=await post('/auth/saml/acs',{...assertion,RelayState:loginUrl.searchParams.get('RelayState')});
+  check('ACS browser handoff is no-store 303, not JSON JWT',acs.status===303 && acs.headers.get('cache-control')==='no-store' && !(await acs.text()).includes('accessToken'));
+  const ticket=new URLSearchParams(new URL(acs.headers.get('location')).hash.slice(1)).get('code');
+  const wrong=await post('/auth/saml/browser/redeem',{code:ticket,verifier:'y'.repeat(64)});
+  check('ticket stolen without verifier rejected over HTTP',wrong.status===401);
+  const burned=await post('/auth/saml/browser/redeem',{code:ticket,verifier});
+  check('wrong verifier burns one-use ticket over HTTP',burned.status===401);
+  const replay=await post('/auth/saml/acs',{...assertion,RelayState:loginUrl.searchParams.get('RelayState')});
+  check('browser state replay rejected over HTTP',replay.status===401);
+  const before=redeems;
+  await page.goto(`${WEB}/auth/saml/callback#code=unsolicited`,{waitUntil:'networkidle0'});
+  check('unsolicited SAML callback rejected before redemption',redeems===before && !!(await page.$('[role=alert]')));
+  check('rejected ticket fragment scrubbed',!page.url().includes('#'));
+  await page.setViewport({width:480,height:800});await page.screenshot({path:'/downloads/saml-browser-error-narrow.png'});
+  check('SAML narrow error no horizontal overflow',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  console.log(failures?'SAML BROWSER CHECKS FAILED':'ALL SAML BROWSER CHECKS PASSED');
+  process.exitCode=failures?1:0;
+} catch(e){ console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1; }
+finally {await browser?.close();web?.kill('SIGKILL');api?.kill('SIGKILL');mock?.kill('SIGKILL');await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});}
+// Some child shutdown callbacks can reset exitCode. Exit with the verified result.
+process.exit(process.exitCode??1);

@@ -150,5 +150,11 @@ request or metadata the SP requires a parseable RSA key and matching public
 certificate. Use secret environment configuration for the private key, not
 source control. The read-only settings status is not a cryptographic
 configuration health check. Local mock tests are not external-IdP acceptance.
-Browser SAML completion is still work in progress; the existing ACS returns
-JSON, not a browser session handoff.
+Set `SAML_BROWSER_RETURN_URL` to the web app's fixed
+`/auth/saml/callback` URL to enable the browser sign-in button. HTTPS is
+required except on loopback. The IdP still posts to the configured ACS.
+Browser flows redirect with a short-lived one-use ticket in the fragment,
+not a session JWT. Redemption also requires the same-tab verifier. Existing
+API-only ACS calls still return JSON. Browser flow state, tickets and replay
+cache are process-local; restart loses pending sign-ins and multi-instance
+routing is not supported by these stores.

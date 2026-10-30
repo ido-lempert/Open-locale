@@ -7,6 +7,7 @@ import xpath from 'xpath';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
 import { BoundedSamlCache } from './saml-cache';
+import { SamlBrowserFlow } from './saml-browser-flow';
 
 const b64url = (b: Buffer) => b.toString('base64url');
 
@@ -23,6 +24,7 @@ const b64url = (b: Buffer) => b.toString('base64url');
 @Injectable()
 export class SamlService {
   private saml: SAML | null = null;
+  private browser = new SamlBrowserFlow();
   // Pending SAML logins waiting for the local second factor. Same shape as
   // the OIDC pending store; unifying the two is a documented follow-up -
   // this slice deliberately does not touch the verified OIDC path.
@@ -108,6 +110,29 @@ export class SamlService {
     return { url: await this.client().getAuthorizeUrlAsync(relayState, {}) };
   }
 
+  private browserReturnUrl() {
+    const raw = process.env.SAML_BROWSER_RETURN_URL;
+    if (!raw) throw new NotFoundException('Browser SAML is not configured');
+    const u = new URL(raw);
+    if (u.username || u.password || u.search || u.hash ||
+      (u.protocol !== 'https:' && !(u.protocol === 'http:' && ['localhost','127.0.0.1','[::1]'].includes(u.hostname)))) {
+      throw new ServiceUnavailableException('Invalid browser SAML return URL');
+    }
+    return u;
+  }
+  async browserStart(challenge: string) {
+    this.browserReturnUrl();
+    if (!/^[A-Za-z0-9_-]{43}$/.test(challenge)) throw new BadRequestException('Invalid browser challenge');
+    const state = `browser.${b64url(randomBytes(24))}`;
+    const result = await this.login(state);
+    const xml = inflateRawSync(Buffer.from(new URL(result.url).searchParams.get('SAMLRequest')!, 'base64')).toString('utf8');
+    const id = new DOMParser().parseFromString(xml, 'text/xml').documentElement.getAttribute('ID');
+    if (!id) throw new ServiceUnavailableException('Missing request ID');
+    this.browser.start(id, challenge, state);
+    return result;
+  }
+  browserRedeem(code: string, verifier: string) { return this.browser.redeem(code, verifier); }
+
   // Instance-level SAML status for the settings UI: reads env only (never
   // constructs the client, never contacts the IdP). Everything returned is
   // already public via the login redirect URL and the metadata document.
@@ -121,6 +146,7 @@ export class SamlService {
       metadataPath: '/api/auth/saml/metadata',
       idpEntryPoint: c.entryPoint,
       requestSigning: !!c.spPrivateKey,
+      browserEnabled: !!process.env.SAML_BROWSER_RETURN_URL,
     };
   }
 
@@ -221,6 +247,21 @@ export class SamlService {
   }
 
   async acs(samlResponseB64: string, relayState?: string) {
+    const c = this.config();
+    const requestId = this.precheck(Buffer.from(samlResponseB64, 'base64').toString('utf8'), c.callbackUrl) || '';
+    if (this.browser.isBrowser(relayState)) {
+      const returnUrl = this.browserReturnUrl();
+      const challenge = this.browser.take(relayState!, requestId);
+      const result = await this.validateAcs(samlResponseB64);
+      const code = this.browser.ticket(challenge, result);
+      returnUrl.hash = new URLSearchParams({ code }).toString();
+      return { browserRedirect: returnUrl.toString() };
+    }
+    this.browser.assertNotStripped(requestId);
+    return this.validateAcs(samlResponseB64, relayState);
+  }
+
+  private async validateAcs(samlResponseB64: string, relayState?: string) {
     const c = this.config();
     // Burn the link token before any validation when one is present.
     const link = typeof relayState === 'string' && relayState ? this.consumeLink(relayState) : null;

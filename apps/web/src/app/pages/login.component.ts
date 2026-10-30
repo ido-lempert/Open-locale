@@ -15,6 +15,7 @@ import { ApiService } from '../api.service';
         <button type="button" name="oidcLogin" (click)="startSso()" [disabled]="busy()">Sign in with SSO</button>
         <p class="muted">Continue through your identity provider.</p>
       }
+      @if (samlConfigured()) { <button name="samlLogin" type="button" (click)="startSaml()" [disabled]="busy()">Sign in with SAML</button> }
       <div class="tabs">
         <button [class.active]="mode() === 'login'" (click)="mode.set('login')">Log in</button>
         <button [class.active]="mode() === 'signup'" (click)="mode.set('signup')">Sign up</button>
@@ -41,6 +42,7 @@ import { ApiService } from '../api.service';
 })
 export class LoginComponent implements OnInit {
   oidcConfigured = signal(false);
+  samlConfigured = signal(false);
   mode = signal<'login' | 'signup'>('login');
   email = ''; password = ''; displayName = ''; totpCode = '';
   busy = signal(false); error = signal('');
@@ -49,7 +51,21 @@ export class LoginComponent implements OnInit {
     this.notice.set(route.snapshot.queryParamMap.get('reason') ?? '');
   }
   async ngOnInit() {
+    try { this.samlConfigured.set(!!(await this.api.getSamlSpInfo()).browserEnabled); } catch { /* Password login remains available. */ }
     try { this.oidcConfigured.set((await this.api.getOidcInfo()).configured); } catch { /* Password login remains available. */ }
+  }
+  async startSaml() {
+    this.busy.set(true); this.error.set('');
+    try {
+      const verifier = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('');
+      const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+      const challenge = btoa(String.fromCharCode(...digest)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      const result = await this.api.startSamlBrowser(challenge);
+      const url = new URL(result.url);
+      if (!['https:', 'http:'].includes(url.protocol)) throw new Error('Invalid SAML URL');
+      sessionStorage.setItem('ol.saml.verifier', verifier);
+      window.location.assign(url.toString());
+    } catch (e) { this.error.set(e instanceof Error ? e.message : 'SAML could not start'); this.busy.set(false); }
   }
   async startSso() {
     this.busy.set(true); this.error.set('');

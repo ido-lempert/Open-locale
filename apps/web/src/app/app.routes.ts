@@ -1,3 +1,4 @@
+import { SamlCallbackComponent } from './pages/saml-callback.component';
 import { Routes } from '@angular/router';
 import { OidcCallbackComponent } from './pages/oidc-callback.component';
 import { authGuard } from './auth.guard';
@@ -13,6 +14,7 @@ import { SnapshotsComponent } from './pages/snapshots.component';
 import { ReportsComponent } from './pages/reports.component';
 
 export const appRoutes: Routes = [
+  { path: 'auth/saml/callback', component: SamlCallbackComponent },
   { path: 'auth/oidc/callback', component: OidcCallbackComponent },
   { path: 'login', component: LoginComponent },
   { path: 'projects', component: ProjectsComponent, canActivate: [authGuard] },

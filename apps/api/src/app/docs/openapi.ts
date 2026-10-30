@@ -50,6 +50,8 @@ export const OPENAPI = {
     '/api/auth/saml/login': { get: pub('Begin SAML SSO login; returns the IdP redirect URL (configured IdP only)', 'auth', true) },
     '/api/auth/saml/start-link': { post: p('Begin SAML identity linking for the signed-in account (session only, fresh password required)', 'auth', true) },
     '/api/auth/saml/metadata': { get: pub('SAML SP metadata XML (entity ID, ACS, signing certificate when configured)', 'auth') },
+    '/api/auth/saml/browser/start': { post: pub('Start browser SAML with verifier challenge', 'auth', true) },
+    '/api/auth/saml/browser/redeem': { post: pub('Consume one-use browser SAML handoff with verifier', 'auth', true) },
     '/api/auth/saml/sp-info': { get: pub('SAML configuration status for display (public values only, no secrets)', 'auth') },
     '/api/auth/saml/acs': { post: pub('SAML assertion consumer (POST binding); may return requiresTwoFactor', 'auth', true) },
     '/api/auth/saml/complete': { post: pub('Finish a SAML SSO login with the account TOTP code', 'auth', true) },

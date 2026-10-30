@@ -172,6 +172,9 @@ export class ApiService {
     return res.json() as Promise<T>;
   }
 
+  startSamlBrowser(challenge: string) { return this.request<{ url: string }>('/auth/saml/browser/start', { method: 'POST', body: JSON.stringify({ challenge }) }); }
+  redeemSamlBrowser(code: string, verifier: string) { return this.request<{ accessToken?: string; requiresTwoFactor?: boolean; pendingToken?: string }>('/auth/saml/browser/redeem', { method: 'POST', body: JSON.stringify({ code, verifier }) }); }
+  completeSaml(pendingToken: string, totpCode: string) { return this.request<{ accessToken: string }>('/auth/saml/complete', { method: 'POST', body: JSON.stringify({ pendingToken, totpCode }) }); }
   getOidcInfo() { return this.request<{ configured: boolean }>('/auth/oidc/info'); }
   startOidc() { return this.request<{ url: string }>('/auth/oidc/start'); }
   callbackOidc(code: string, state: string) {
@@ -181,7 +184,7 @@ export class ApiService {
     return this.request<{ accessToken: string }>('/auth/oidc/complete', { method: 'POST', body: JSON.stringify({ pendingToken, totpCode }) });
   }
   listTokens() { return this.request<ApiTokenInfo[]>('/auth/tokens'); }
-  getSamlSpInfo() { return this.request<{ configured: boolean; entityId?: string; acsUrl?: string; metadataPath?: string; idpEntryPoint?: string; requestSigning?: boolean }>('/auth/saml/sp-info'); }
+  getSamlSpInfo() { return this.request<{ configured: boolean; entityId?: string; acsUrl?: string; metadataPath?: string; idpEntryPoint?: string; requestSigning?: boolean; browserEnabled?: boolean }>('/auth/saml/sp-info'); }
   get2faStatus() { return this.request<{ enabled: boolean; recoveryCodesRemaining: number }>('/auth/2fa/status'); }
   setup2fa(password: string) { return this.request<{ secret: string; otpauthUrl: string }>('/auth/2fa/setup', { method: 'POST', body: JSON.stringify({ password }) }); }
   enable2fa(password: string, code: string) { return this.request<{ enabled: boolean; recoveryCodes: string[] }>('/auth/2fa/enable', { method: 'POST', body: JSON.stringify({ password, code }) }); }

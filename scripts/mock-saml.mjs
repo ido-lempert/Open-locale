@@ -163,6 +163,14 @@ const server = http.createServer((req, res) => {
           spSignature = ok ? 'valid' : 'invalid';
         }
       }
+      if (process.env.MOCK_SAML_BROWSER === '1') {
+        const response = buildResponse({ inResponseTo: m[1] });
+        const relay = u.searchParams.get('RelayState') || '';
+        const escape = v => v.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;');
+        res.writeHead(200, { 'content-type': 'text/html', 'cache-control':'no-store' });
+        res.end(`<form method="post" action="http://127.0.0.1:3000/api/auth/saml/acs"><input name="SAMLResponse" value="${escape(response)}"><input name="RelayState" value="${escape(relay)}"></form><script>document.forms[0].submit()</script>`);
+        return;
+      }
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ requestId: m[1], spSignature }));
     } catch (e) {
