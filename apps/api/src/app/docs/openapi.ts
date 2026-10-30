@@ -208,6 +208,9 @@ export const OPENAPI = {
       get: p('List webhooks', 'webhooks'),
       post: p('Create a webhook (signed HMAC delivery, pinned egress)', 'webhooks', true),
     },
+    '/api/projects/{projectId}/webhooks/{hookId}/deliveries': {
+      get: p('Recent delivery journal for this webhook (newest first, bounded retention)', 'webhooks'),
+    },
     '/api/projects/{projectId}/webhooks/{hookId}': {
       patch: p('Update a webhook', 'webhooks', true),
       delete: p('Delete a webhook', 'webhooks'),

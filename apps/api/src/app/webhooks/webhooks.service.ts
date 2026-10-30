@@ -99,6 +99,27 @@ export class WebhooksService {
     return all[0];
   }
 
+  // Bounded retry: one immediate attempt plus ONE retry after a short
+  // backoff. Transient receiver hiccups are absorbed; a persistently failing
+  // target surfaces in the delivery journal instead of hammering it forever.
+  private static readonly MAX_ATTEMPTS = 2;
+  private static readonly RETRY_BACKOFF_MS = 1500;
+  // Retention: the journal is operationally useful only while recent. The
+  // writer prunes synchronously so storage can never grow unbounded even if
+  // no cleanup job ever runs.
+  private static readonly JOURNAL_KEEP = 50;
+
+  async listDeliveries(userId: string, projectId: string, hookId: string) {
+    await this.projects.requireAdmin(userId, projectId);
+    const hook = await this.prisma.webhook.findFirst({ where: { id: hookId, projectId } });
+    if (!hook) throw new NotFoundException('Webhook not found');
+    return this.prisma.webhookDelivery.findMany({
+      where: { webhookId: hook.id },
+      orderBy: { createdAt: 'desc' },
+      take: WebhooksService.JOURNAL_KEEP,
+    });
+  }
+
   // Fire-and-forget delivery. Delivery failure must never fail the write that
   // triggered it, so callers invoke this without awaiting user-facing latency.
   async deliver(projectId: string, event: string, payload: Record<string, unknown>) {
@@ -108,6 +129,10 @@ export class WebhooksService {
     const body = JSON.stringify({ event, ...payload, at: new Date().toISOString() });
     await Promise.allSettled(
       hooks.map(async (hook) => {
+        const started = Date.now();
+        let attempts = 0;
+        let httpStatus: number | null = null;
+        let error: string | null = null;
         try {
           // Re-validate at the delivery boundary: URL rules, DNS resolution with
           // every address checked, then a connection PINNED to a validated
@@ -115,14 +140,52 @@ export class WebhooksService {
           const url = validateWebhookUrlString(hook.url);
           const pinned = await this.resolveApproved(url);
           const signature = createHmac('sha256', hook.secret).update(body).digest('hex');
-          const res = await deliverPinned(url, pinned, {
-            'X-OpenLocale-Event': event,
-            'X-OpenLocale-Signature': `sha256=${signature}`,
-          }, body);
-          if (!res.ok) this.logger.warn(`Webhook ${hook.id} -> ${res.status ?? res.error}`);
+          while (attempts < WebhooksService.MAX_ATTEMPTS) {
+            attempts++;
+            try {
+              const res = await deliverPinned(url, pinned, {
+                'X-OpenLocale-Event': event,
+                'X-OpenLocale-Signature': `sha256=${signature}`,
+              }, body);
+              httpStatus = res.status ?? null;
+              if (res.ok) { error = null; break; }
+              error = `receiver responded ${res.status ?? res.error}`;
+            } catch (err) {
+              // Never record the URL, payload or secret: URLs may embed
+              // internal names. The error class + message only, truncated.
+              error = String(err instanceof Error ? err.message : err).slice(0, 200);
+            }
+            if (attempts < WebhooksService.MAX_ATTEMPTS) {
+              await new Promise((r) => setTimeout(r, WebhooksService.RETRY_BACKOFF_MS));
+            }
+          }
+          if (error) this.logger.warn(`Webhook ${hook.id} delivery failed after ${attempts} attempt(s): ${error}`);
         } catch (err) {
-          // Never log the URL, payload or secret: URLs may embed internal names.
-          this.logger.warn(`Webhook ${hook.id} delivery failed: ${err instanceof Error ? err.message : err}`);
+          error = String(err instanceof Error ? err.message : err).slice(0, 200);
+          this.logger.warn(`Webhook ${hook.id} delivery failed: ${error}`);
+        }
+        // Journaling must also never fail the triggering write; a wedged
+        // journal table degrades to log-only delivery, never to data loss on
+        // the writing transaction.
+        try {
+          await this.prisma.webhookDelivery.create({
+            data: {
+              webhookId: hook.id, event, httpStatus,
+              success: error === null && httpStatus !== null,
+              attempts, durationMs: Date.now() - started, error,
+            },
+          });
+          const stale = await this.prisma.webhookDelivery.findMany({
+            where: { webhookId: hook.id },
+            orderBy: { createdAt: 'desc' },
+            skip: WebhooksService.JOURNAL_KEEP,
+            select: { id: true },
+          });
+          if (stale.length) {
+            await this.prisma.webhookDelivery.deleteMany({ where: { id: { in: stale.map((d) => d.id) } } });
+          }
+        } catch (journalErr) {
+          this.logger.warn(`Webhook ${hook.id} journal write failed: ${journalErr instanceof Error ? journalErr.message : journalErr}`);
         }
       }),
     );

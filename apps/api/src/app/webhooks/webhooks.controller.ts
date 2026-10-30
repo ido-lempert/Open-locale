@@ -26,6 +26,12 @@ export class WebhooksController {
     return this.webhooks.update(user.userId, projectId, hookId, dto);
   }
 
+  @Get(':hookId/deliveries')
+  deliveries(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string,
+    @Param('hookId') hookId: string) {
+    return this.webhooks.listDeliveries(user.userId, projectId, hookId);
+  }
+
   @Delete(':hookId')
   remove(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('hookId') hookId: string) {
     return this.webhooks.remove(user.userId, projectId, hookId);

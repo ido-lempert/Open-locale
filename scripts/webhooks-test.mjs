@@ -24,11 +24,13 @@ async function call(path, { token, method = 'GET', body } = {}) {
 }
 
 const received = [];
+let failNext = 0; // when >0 the receiver answers 500 (retry testing)
 const receiver = createServer((req, res) => {
   let body = '';
   req.on('data', (c) => (body += c));
   req.on('end', () => {
     received.push({ event: req.headers['x-openlocale-event'], sig: req.headers['x-openlocale-signature'], body });
+    if (failNext > 0) { failNext--; res.writeHead(500); res.end('boom'); return; }
     res.writeHead(200); res.end('ok');
   });
 });
@@ -91,8 +93,51 @@ try {
   await new Promise((r) => setTimeout(r, 1500));
   check('inactive webhook receives no delivery', received.length === before, `${before} -> ${received.length}`);
 
+  // --- Delivery journal (slice 17) ---
+  // Reactivate, then read the journal: the two earlier deliveries (one active
+  // hit, none while inactive) must appear with exact shape.
+  await call(`${P}/webhooks/${hook.id}`, { token: at, method: 'PATCH', body: { active: true } });
+  let journal = [];
+  for (let i = 0; i < 20 && journal.length < 1; i++) {
+    await new Promise((r) => setTimeout(r, 250));
+    journal = (await call(`${P}/webhooks/${hook.id}/deliveries`, { token: at })).json ?? [];
+  }
+  check('delivery journal records the successful delivery', journal.length === 1, JSON.stringify(journal.length));
+  if (journal[0]) {
+    const d = journal[0];
+    check('journal row: success, status 200, one attempt, timed', d.success === true && d.httpStatus === 200 && d.attempts === 1 && d.durationMs >= 0 && d.event === 'translation.updated' && d.error === null, JSON.stringify(d));
+    check('journal row carries no secret or payload', !('secret' in d) && !('payload' in d) && !('body' in d), Object.keys(d).join(','));
+  }
+  const memberJournal = await call(`${P}/webhooks/${hook.id}/deliveries`, { token: bt });
+  check('cross-team journal read is 404', memberJournal.status === 404, String(memberJournal.status));
+
+  // Retry: receiver 500s the first attempt, succeeds on the retry.
+  failNext = 1;
+  await call(`${P}/keys/${key.id}/translations`, { token: at, method: 'PUT', body: { locale: 'en', value: 'Hello v3' } });
+  let retried = null;
+  for (let i = 0; i < 30 && !retried; i++) {
+    await new Promise((r) => setTimeout(r, 300));
+    journal = (await call(`${P}/webhooks/${hook.id}/deliveries`, { token: at })).json ?? [];
+    retried = journal.find((d) => d.attempts === 2);
+  }
+  check('failed first attempt is retried and succeeds', !!retried && retried.success === true && retried.httpStatus === 200, JSON.stringify(retried));
+
+  // Persistent failure: closed port (fixture mode allows private targets).
+  const deadHook = (await call(`${P}/webhooks`, { token: at, method: 'POST', body: { url: 'http://127.0.0.1:9/dead', events: ['translation.updated'] } })).json;
+  await call(`${P}/keys/${key.id}/translations`, { token: at, method: 'PUT', body: { locale: 'en', value: 'Hello v4' } });
+  let deadRow = null;
+  for (let i = 0; i < 30 && !deadRow; i++) {
+    await new Promise((r) => setTimeout(r, 300));
+    deadRow = ((await call(`${P}/webhooks/${deadHook.id}/deliveries`, { token: at })).json ?? [])[0];
+  }
+  check('unreachable target journaled as failure after both attempts', !!deadRow && deadRow.success === false && deadRow.attempts === 2 && deadRow.httpStatus === null && typeof deadRow.error === 'string' && deadRow.error.length > 0, JSON.stringify(deadRow));
+
+  // The emitted-but-unsubscribable event class is fixed: mt.pretranslated passes validation.
+  const mtHook = await call(`${P}/webhooks`, { token: at, method: 'POST', body: { url: `http://127.0.0.1:${HOOK_PORT}/mt`, events: ['mt.pretranslated'] } });
+  check('mt.pretranslated subscription accepted (event list matches emissions)', mtHook.status === 201, `got ${mtHook.status}`);
+
   const del = await call(`${P}/webhooks/${hook.id}`, { token: at, method: 'DELETE' });
-  check('webhook deleted', del.status === 200 && (await call(`${P}/webhooks`, { token: at })).json.length === 0);
+  check('webhook deleted', del.status === 200 && (await call(`${P}/webhooks`, { token: at })).json.length === 2);
 } catch (err) {
   // embedded-postgres can reject with `undefined` when the postmaster dies at
   // startup; through an async finally that exception exits 0 SILENTLY. Catch

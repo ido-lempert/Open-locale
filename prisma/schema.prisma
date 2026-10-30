@@ -410,8 +410,28 @@ model Webhook {
   createdAt DateTime @default(now())
 
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
 
   @@map("webhooks")
+}
+
+// One row per delivered event per webhook (NOT per attempt: attempts is a
+// count). Retention is bounded by the writer (latest 50 per webhook).
+model WebhookDelivery {
+  id         String   @id @default(uuid()) @db.Uuid
+  webhookId  String   @db.Uuid
+  event      String
+  httpStatus Int?
+  success    Boolean
+  attempts   Int
+  durationMs Int
+  error      String?
+  createdAt  DateTime @default(now())
+
+  webhook    Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId, createdAt])
+  @@map("webhook_deliveries")
 }
 
 // Immutable published translation bundle for OTA pull: one row per publish
