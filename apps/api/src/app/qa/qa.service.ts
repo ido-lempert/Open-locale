@@ -40,15 +40,52 @@ export class QaService {
     });
     const issues: QaIssue[] = [];
     for (const key of keys) {
-      const byLocale = new Map(key.translations.map((t) => [t.localeCode, t.value]));
-      const source = byLocale.get(base) ?? '';
+      const byLocale = new Map(key.translations.map((t) => [t.localeCode, t]));
+      const srcRow = byLocale.get(base);
+      const source = srcRow?.value ?? '';
+      const srcForms = (srcRow?.pluralForms ?? null) as Record<string, string> | null;
       for (const target of targets) {
-        const value = byLocale.get(target) ?? '';
+        const tRow = byLocale.get(target);
+        const value = tRow?.value ?? '';
         if (source && !value) {
           issues.push({ keyId: key.id, key: key.name, locale: target, type: 'untranslated', detail: `no ${target} translation for non-empty ${base} source` });
           continue;
         }
         if (!value) continue;
+        // Plural keys with source forms are checked per category, anchored
+        // on the source form set: a missing or empty target form for a
+        // category the source fills is untranslated; placeholder sets and
+        // maxLength are compared per category form. The value-level checks
+        // below would double-report the 'other' form, so they are skipped.
+        // Categories the target locale needs beyond the source set (e.g.
+        // Arabic zero/two on an English source) are NOT derived here -
+        // documented limitation.
+        if (key.isPlural && srcForms) {
+          const tgtForms = (tRow?.pluralForms ?? null) as Record<string, string> | null;
+          for (const [cat, sv] of Object.entries(srcForms)) {
+            if (!sv) continue;
+            const tv = tgtForms?.[cat] ?? '';
+            if (!tv) {
+              issues.push({ keyId: key.id, key: key.name, locale: target, type: 'untranslated', detail: `no ${target} translation for category "${cat}" of non-empty ${base} source` });
+              continue;
+            }
+            const sp = placeholders(sv);
+            const tp = placeholders(tv);
+            if (sp.join('|') !== tp.join('|')) {
+              issues.push({
+                keyId: key.id, key: key.name, locale: target, type: 'placeholder_mismatch',
+                detail: `category "${cat}": ${base} has [${sp.join(', ') || 'none'}], ${target} has [${tp.join(', ') || 'none'}]`,
+              });
+            }
+            if (key.maxLength != null && tv.length > key.maxLength) {
+              issues.push({
+                keyId: key.id, key: key.name, locale: target, type: 'max_length',
+                detail: `category "${cat}": ${tv.length} chars exceeds maxLength ${key.maxLength}`,
+              });
+            }
+          }
+          continue;
+        }
         const srcPh = placeholders(source);
         const tgtPh = placeholders(value);
         if (srcPh.join('|') !== tgtPh.join('|')) {

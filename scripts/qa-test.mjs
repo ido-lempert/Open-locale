@@ -85,6 +85,31 @@ try {
 
   const detail = all.issues.find((i) => i.key === 'k.placeholder' && i.locale === 'he');
   check('mismatch detail lists both placeholder sets', !!detail && detail.detail.includes('{name}') && detail.detail.includes('%d'), detail?.detail);
+
+  // Plural keys (slice 9): QA runs per category form, anchored on the
+  // source form set - not on the plain value (the "other" form) alone.
+  const k6 = (await call(`${P}/keys`, { token: at, method: 'POST', body: { name: 'k.plural', maxLength: 40, isPlural: true } })).json;
+  const k6put = await call(`${P}/keys/${k6.id}/translations`, { token: at, method: 'PUT', body: { locale: 'en', value: '%d apples', pluralForms: { one: '%d apple', other: '%d apples' } } });
+  check('plural: source forms PUT accepted', k6put.status === 200 || k6put.status === 201, `${k6put.status} ${JSON.stringify(k6put.json)}`);
+  // he: the 'one' form is missing entirely and the 'other' form drops the
+  // %d placeholder (the write API requires 'other', so it stays present)
+  await call(`${P}/keys/${k6.id}/translations`, { token: at, method: 'PUT', body: { locale: 'he', value: 'תפוחים', pluralForms: { other: 'תפוחים' } } });
+  // de: complete and consistent - no issues expected
+  await call(`${P}/keys/${k6.id}/translations`, { token: at, method: 'PUT', body: { locale: 'de', value: '%d Äpfel', pluralForms: { one: '%d Apfel', other: '%d Äpfel' } } });
+  const k7 = (await call(`${P}/keys`, { token: at, method: 'POST', body: { name: 'k.plurallong', maxLength: 5, isPlural: true } })).json;
+  await call(`${P}/keys/${k7.id}/translations`, { token: at, method: 'PUT', body: { locale: 'en', value: 'aa bb', pluralForms: { one: 'aa', other: 'aa bb' } } });
+  await call(`${P}/keys/${k7.id}/translations`, { token: at, method: 'PUT', body: { locale: 'he', value: 'אא', pluralForms: { one: 'אא', other: 'אא בב גג' } } });
+
+  const pl = (await call(`${P}/qa`, { token: at })).json ?? { issues: [] };
+  const ptypes = (k) => pl.issues.filter((i) => i.key === k).map((i) => `${i.locale}:${i.type}`).sort();
+  check('plural: missing source category form flagged untranslated (he one)', ptypes('k.plural').includes('he:untranslated'), JSON.stringify(ptypes('k.plural')));
+  check('plural: placeholder mismatch flagged per category (he other)', ptypes('k.plural').includes('he:placeholder_mismatch'), JSON.stringify(ptypes('k.plural')));
+  check('plural: exactly two he issues, no double-report of other', ptypes('k.plural').length === 2, JSON.stringify(ptypes('k.plural')));
+  check('plural: consistent target (de) has no issues', ptypes('k.plural').filter((t) => t.startsWith('de:')).length === 0, JSON.stringify(ptypes('k.plural')));
+  check('plural: maxLength applies per form (he other over, one within; de untranslated)', JSON.stringify(ptypes('k.plurallong')) === JSON.stringify(['de:untranslated', 'he:max_length']), JSON.stringify(ptypes('k.plurallong')));
+  const uDetail = pl.issues.find((i) => i.key === 'k.plural' && i.type === 'untranslated');
+  const mDetail = pl.issues.find((i) => i.key === 'k.plural' && i.type === 'placeholder_mismatch');
+  check('plural: details name the category', !!uDetail && uDetail.detail.includes('"one"') && !!mDetail && mDetail.detail.includes('"other"') && mDetail.detail.includes('%d'), `${uDetail?.detail} | ${mDetail?.detail}`);
 } catch (err) {
   // embedded-postgres can reject with `undefined` when the postmaster dies at
   // startup; through an async finally that exception exits 0 SILENTLY. Catch
