@@ -10,6 +10,11 @@ import { TasksService } from '../tasks/tasks.service';
 export const DEFAULT_BRANCH = 'main';
 const BRANCH_NAME = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,39}$/;
 
+// Canonical comparison for pluralForms read back from jsonb (key order is
+// normalized by PostgreSQL) vs the source row's object.
+const canonPlural = (v: unknown): string =>
+  v == null ? 'null' : JSON.stringify(Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : 1))));
+
 @Injectable()
 export class BranchesService {
   constructor(
@@ -105,7 +110,7 @@ export class BranchesService {
       for (const tr of sk.translations) {
         const ex = tByLocale.get(tr.localeCode);
         if (!ex) translationsAdded++;
-        else if (ex.value === tr.value && ex.status === tr.status) translationsIdentical++;
+        else if (ex.value === tr.value && ex.status === tr.status && canonPlural(ex.pluralForms) === canonPlural(tr.pluralForms)) translationsIdentical++;
         else translationsOverwritten++;
       }
     }
@@ -188,11 +193,11 @@ export class BranchesService {
             // (blocking until any in-flight concurrent writer commits or
             // rolls back), so `existing.value` below is EXACTLY the value the
             // merge's conditional write then replaces - not a stale pre-read.
-            const existingRows = await tx.$queryRaw<{ value: string; status: string; updatedAt: Date }[]>(Prisma.sql`
-              SELECT "value", "status", "updatedAt" FROM "translations"
+            const existingRows = await tx.$queryRaw<{ value: string; status: string; updatedAt: Date; pluralForms: unknown }[]>(Prisma.sql`
+              SELECT "value", "status", "updatedAt", "pluralForms" FROM "translations"
               WHERE "keyId" = ${tkId}::uuid AND "localeCode" = ${tr.localeCode} FOR UPDATE`);
             const existing = existingRows[0] ?? null;
-            if (existing && existing.value === tr.value && existing.status === tr.status) continue;
+            if (existing && existing.value === tr.value && existing.status === tr.status && canonPlural(existing.pluralForms) === canonPlural(tr.pluralForms)) continue;
             // Task key locks apply to merge writes. Guarded at the first
             // actual write per key (after the no-op skip above), inside this
             // transaction: a denial rolls the whole merge back atomically.
@@ -206,17 +211,17 @@ export class BranchesService {
             // statement skip the row instead of being overwritten silently.
             const wrote = cutoff !== null
               ? await tx.$queryRaw<{ keyId: string }[]>(Prisma.sql`
-                  INSERT INTO "translations" ("keyId", "projectId", "localeCode", "value", "status", "version", "updatedAt")
-                  VALUES (${tkId}::uuid, ${projectId}::uuid, ${tr.localeCode}, ${tr.value}, ${tr.status}, 1, now() AT TIME ZONE 'UTC')
+                  INSERT INTO "translations" ("keyId", "projectId", "localeCode", "value", "status", "version", "pluralForms", "updatedAt")
+                  VALUES (${tkId}::uuid, ${projectId}::uuid, ${tr.localeCode}, ${tr.value}, ${tr.status}, 1, ${tr.pluralForms == null ? null : JSON.stringify(tr.pluralForms)}::jsonb, now() AT TIME ZONE 'UTC')
                   ON CONFLICT ("keyId", "localeCode") DO UPDATE
-                  SET "value" = EXCLUDED."value", "status" = EXCLUDED."status", "version" = "translations"."version" + 1, "updatedAt" = now() AT TIME ZONE 'UTC'
+                  SET "value" = EXCLUDED."value", "status" = EXCLUDED."status", "version" = "translations"."version" + 1, "pluralForms" = EXCLUDED."pluralForms", "updatedAt" = now() AT TIME ZONE 'UTC'
                   WHERE "translations"."updatedAt" <= ${cutoff}::timestamp
                   RETURNING "keyId"`)
               : await tx.$queryRaw<{ keyId: string }[]>(Prisma.sql`
-                  INSERT INTO "translations" ("keyId", "projectId", "localeCode", "value", "status", "version", "updatedAt")
-                  VALUES (${tkId}::uuid, ${projectId}::uuid, ${tr.localeCode}, ${tr.value}, ${tr.status}, 1, now() AT TIME ZONE 'UTC')
+                  INSERT INTO "translations" ("keyId", "projectId", "localeCode", "value", "status", "version", "pluralForms", "updatedAt")
+                  VALUES (${tkId}::uuid, ${projectId}::uuid, ${tr.localeCode}, ${tr.value}, ${tr.status}, 1, ${tr.pluralForms == null ? null : JSON.stringify(tr.pluralForms)}::jsonb, now() AT TIME ZONE 'UTC')
                   ON CONFLICT ("keyId", "localeCode") DO UPDATE
-                  SET "value" = EXCLUDED."value", "status" = EXCLUDED."status", "version" = "translations"."version" + 1, "updatedAt" = now() AT TIME ZONE 'UTC'
+                  SET "value" = EXCLUDED."value", "status" = EXCLUDED."status", "version" = "translations"."version" + 1, "pluralForms" = EXCLUDED."pluralForms", "updatedAt" = now() AT TIME ZONE 'UTC'
                   RETURNING "keyId"`);
             if (wrote.length === 0) { translationsSkipped++; continue; }
             // Attribution: every overwrite or merge-created translation gets a

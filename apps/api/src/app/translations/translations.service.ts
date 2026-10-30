@@ -28,6 +28,11 @@ import { buildZip, readZip, zipSafeName } from './zip';
 // customStatuses (validated in ProjectsService.updateFor).
 export const BASE_STATUSES = ['UNVERIFIED', 'TRANSLATED', 'REVIEWED'] as const;
 
+// Canonical comparison for pluralForms read back from jsonb (key order is
+// normalized by PostgreSQL) vs the caller's object (arbitrary order).
+const canonPlural = (v: unknown): string =>
+  v == null ? 'null' : JSON.stringify(Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : 1))));
+
 @Injectable()
 export class TranslationsService {
   private assertKnownStatus(project: { customStatuses: string[] }, status: string) {
@@ -48,7 +53,7 @@ export class TranslationsService {
     private readonly tasks: TasksService,
   ) {}
 
-  async upsert(userId: string, projectId: string, keyId: string, locale: string, value: string, expectedVersion?: number, expectedRowId?: string) {
+  async upsert(userId: string, projectId: string, keyId: string, locale: string, value: string, expectedVersion?: number, expectedRowId?: string, pluralForms?: Record<string, string> | null) {
     await this.projects.assertLocaleWrite(userId, projectId, [locale]);
     const project = await this.projects.getFor(userId, projectId);
     if (!project.locales.some((l) => l.code === locale)) {
@@ -56,18 +61,41 @@ export class TranslationsService {
     }
     const key = await this.prisma.key.findFirst({ where: { id: keyId, projectId }, include: { branch: true } });
     if (!key) throw new NotFoundException('Key not found');
+    // null is treated as omitted: plural forms are cleared by marking the key
+    // non-plural (keys.service), never by sending null here.
+    if (pluralForms == null) pluralForms = undefined;
+    if (pluralForms !== undefined) {
+      if (!key.isPlural || Array.isArray(pluralForms)) {
+        throw new BadRequestException('pluralForms is an object of CLDR category to text, only for keys marked plural (isPlural)');
+      }
+      let allowed: string[];
+      try {
+        allowed = new Intl.PluralRules(locale).resolvedOptions().pluralCategories;
+      } catch {
+        throw new BadRequestException(`No CLDR plural rules for locale ${locale}`);
+      }
+      const cats = Object.keys(pluralForms);
+      const invalid = cats.filter((c) => !allowed.includes(c));
+      if (invalid.length) {
+        throw new BadRequestException(`Locale ${locale} has no plural categories: ${invalid.join(', ')} (allowed: ${allowed.join(', ')})`);
+      }
+      if (!cats.includes('other')) throw new BadRequestException('pluralForms must include the "other" category');
+      for (const [c, v] of Object.entries(pluralForms)) {
+        if (typeof v !== 'string') throw new BadRequestException(`pluralForms.${c} must be a string`);
+      }
+    }
     return this.prisma.$transaction(async (tx) => {
       // Task key lock: rejects when an open lockKeys task covers this key
       // and the caller is neither its assignee (direct/group) nor an admin.
       await this.tasks.assertKeysEditable(tx, userId, projectId, [keyId]);
-      let existing: { value: string; status: string; version: number; rowId?: string } | null;
+      let existing: { value: string; status: string; version: number; rowId?: string; pluralForms?: unknown } | null;
       if (expectedVersion !== undefined) {
         // Optimistic concurrency: lock the row first, then compare the locked
         // version, so the value checked is exactly the value overwritten.
         // A missing row is version 0 - an expectedVersion of 0 asserts
         // "no translation yet" and races with a concurrent create.
-        const locked = await tx.$queryRaw<{ value: string; status: string; version: number; rowId: string }[]>`
-          SELECT "value", "status", "version", "rowId" FROM "translations"
+        const locked = await tx.$queryRaw<{ value: string; status: string; version: number; rowId: string; pluralForms: unknown }[]>`
+          SELECT "value", "status", "version", "rowId", "pluralForms" FROM "translations"
           WHERE "keyId" = ${keyId}::uuid AND "localeCode" = ${locale} FOR UPDATE`;
         existing = locked[0] ?? null;
         const currentVersion = existing ? existing.version : 0;
@@ -94,8 +122,8 @@ export class TranslationsService {
         // Create-only write: ON CONFLICT DO NOTHING turns a concurrent create
         // into a conflict instead of a silent overwrite.
         const created = await tx.$queryRaw<{ keyId: string }[]>`
-          INSERT INTO "translations" ("keyId", "projectId", "localeCode", "value", "status", "version", "updatedAt")
-          VALUES (${keyId}::uuid, ${projectId}::uuid, ${locale}, ${value}, ${status}, 1, now())
+          INSERT INTO "translations" ("keyId", "projectId", "localeCode", "value", "status", "version", "pluralForms", "updatedAt")
+          VALUES (${keyId}::uuid, ${projectId}::uuid, ${locale}, ${value}, ${status}, 1, ${pluralForms ? JSON.stringify(pluralForms) : null}::jsonb, now())
           ON CONFLICT ("keyId", "localeCode") DO NOTHING RETURNING "keyId"`;
         if (!created[0]) {
           throw new ConflictException({ message: 'This translation was created concurrently.', currentValue: null, currentVersion: null });
@@ -104,12 +132,13 @@ export class TranslationsService {
       } else {
         translation = await tx.translation.upsert({
           where: { keyId_localeCode: { keyId, localeCode: locale } },
-          create: { keyId, projectId, localeCode: locale, value, version: 1 },
-          update: { value, status, version: { increment: 1 } },
+          create: { keyId, projectId, localeCode: locale, value, version: 1, ...(pluralForms ? { pluralForms } : {}) },
+          update: { value, status, version: { increment: 1 }, ...(pluralForms ? { pluralForms } : {}) },
         });
       }
       if (value) await this.rememberTx(tx, projectId, project.baseLocale, keyId, locale, value);
-      if (!existing || existing.value !== value || existing.status !== status) {
+      const pluralChanged = pluralForms !== undefined && canonPlural(existing?.pluralForms) !== canonPlural(pluralForms);
+      if (!existing || existing.value !== value || existing.status !== status || pluralChanged) {
         await tx.translationHistory.create({
           data: { keyId, localeCode: locale, value,
             previousValue: existing?.value ?? null, status, changedById: userId },

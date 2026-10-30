@@ -17,6 +17,13 @@ export class UpsertTranslationDto {
   // climbs back to the same version number.
   @IsOptional() @IsUUID()
   expectedRowId?: string;
+
+  // Plural keys only (service-validates against key.isPlural and the locale's
+  // CLDR categories): { "one": "...", "other": "..." }. Omitting the field
+  // leaves stored plural forms unchanged; clearing happens via isPlural=false
+  // on the key, not by sending null here.
+  @IsOptional() @IsObject()
+  pluralForms?: Record<string, string>;
 }
 
 export class ImportJsonDto {

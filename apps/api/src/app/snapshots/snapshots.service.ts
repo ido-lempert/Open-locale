@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
 import { ActivityService } from '../activity/activity.service';
@@ -21,12 +21,20 @@ interface SnapshotTranslation {
   localeCode: string;
   value: string;
   status: string;
+  // Present (possibly null) in snapshots written after slice 2; ABSENT in
+  // older snapshots, where restore must leave the column untouched.
+  pluralForms?: unknown;
 }
 
 // Cap on retained automatic snapshots per project: imports happen often and
 // each snapshot duplicates the project content, so keep the useful recent
 // window and prune the rest. Manual snapshots are never auto-pruned.
 const AUTO_SNAPSHOT_KEEP = 25;
+
+// Canonical comparison for pluralForms read back from jsonb vs a snapshot
+// payload (key order differs between the two).
+const canonPlural = (v: unknown): string =>
+  v == null ? 'null' : JSON.stringify(Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : 1))));
 
 @Injectable()
 export class SnapshotsService {
@@ -52,6 +60,7 @@ export class SnapshotsService {
     const snapTranslations: SnapshotTranslation[] = keys.flatMap((k) =>
       k.translations.map((t) => ({
         keyName: k.name, branch: k.branch.name, localeCode: t.localeCode, value: t.value, status: t.status,
+        pluralForms: t.pluralForms ?? null,
       })));
     return this.prisma.snapshot.create({
       data: {
@@ -183,14 +192,20 @@ export class SnapshotsService {
         const keyId = idByName.get(`${st.branch ?? 'main'}${st.keyName}`);
         if (!keyId) continue; // translation for a key not in the snapshot: ignore defensively
         const before = byName.get(`${st.branch ?? 'main'}${st.keyName}`)?.translations.find((t) => t.localeCode === st.localeCode);
-        if (before && before.value === st.value && before.status === st.status) continue;
+        // Old snapshots carry no pluralForms field: restore then leaves the
+        // column untouched (no silent NULL-ing of live data). New snapshots
+        // always carry it (null or object) and restore it exactly.
+        const pluralProvided = st.pluralForms !== undefined;
+        if (before && before.value === st.value && before.status === st.status
+          && (!pluralProvided || canonPlural(before.pluralForms) === canonPlural(st.pluralForms))) continue;
         // Task key locks apply to snapshot restores too (per actual write,
         // after the no-op skip above).
         await this.tasks.assertKeysEditable(tx, userId, projectId, [keyId]);
+        const pluralData = !pluralProvided ? {} : { pluralForms: st.pluralForms === null ? Prisma.DbNull : (st.pluralForms as Prisma.InputJsonValue) };
         await tx.translation.upsert({
           where: { keyId_localeCode: { keyId, localeCode: st.localeCode } },
-          create: { keyId, projectId, localeCode: st.localeCode, value: st.value, status: st.status as never, version: 1 },
-          update: { value: st.value, status: st.status as never, version: { increment: 1 } },
+          create: { keyId, projectId, localeCode: st.localeCode, value: st.value, status: st.status as never, version: 1, ...pluralData },
+          update: { value: st.value, status: st.status as never, version: { increment: 1 }, ...pluralData },
         });
         await tx.translationHistory.create({
           data: {

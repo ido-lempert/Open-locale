@@ -156,7 +156,7 @@ export const OPENAPI = {
       delete: p('Detach a screenshot', 'keys'),
     },
     '/api/projects/{projectId}/keys/{keyId}/translations': {
-      put: p('Upsert translations for a key', 'translations', true),
+      put: p('Upsert a translation for a key and locale (value; for plural keys an optional pluralForms object validated against the locale CLDR categories)', 'translations', true),
     },
     '/api/projects/{projectId}/review/bulk-status': {
       post: p('Bulk-set one status for translations in a locale (review queue; requires locale write access)', 'translations', true),

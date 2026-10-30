@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
 import { BranchesService } from '../branches/branches.service';
@@ -89,7 +90,15 @@ export class KeysService {
     await this.projects.getFor(userId, projectId);
     const existing = await this.prisma.key.findFirst({ where: { id: keyId, projectId } });
     if (!existing) throw new NotFoundException('Key not found');
-    return this.prisma.key.update({ where: { id: keyId }, data: input });
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.key.update({ where: { id: keyId }, data: input });
+      // Turning plural off makes stored per-category forms meaningless: clear
+      // them explicitly (documented) rather than leaving stale data readable.
+      if (input.isPlural === false && existing.isPlural) {
+        await tx.translation.updateMany({ where: { keyId }, data: { pluralForms: Prisma.DbNull } });
+      }
+      return updated;
+    });
   }
 
   async remove(userId: string, projectId: string, keyId: string) {

@@ -6,7 +6,7 @@ set -o pipefail
 cd ~/Open-locale
 FAIL=0
 mkdir -p /tmp/sweep-legs
-for s in integration authz statuses comments activity imports screenshots tasks tm glossary qa formats webhooks tags apitokens docs cli sdk snapshots permissions review migration branches merge-concurrency ota reports incontext incontext-edit mt automations 2fa oidc groups; do
+for s in integration authz statuses comments activity imports screenshots tasks tm glossary qa formats webhooks tags apitokens docs cli sdk snapshots permissions review migration branches merge-concurrency ota reports incontext incontext-edit mt automations 2fa oidc groups plural; do
   npm run --silent "test:$s" > "/tmp/sweep-legs/$s.log" 2>&1; rc=$?
   fails=$(grep -cE "^FAIL" "/tmp/sweep-legs/$s.log")
   passes=$(grep -cE "^PASS" "/tmp/sweep-legs/$s.log")
