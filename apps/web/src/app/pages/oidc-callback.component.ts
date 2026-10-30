@@ -24,13 +24,16 @@ import { ApiService } from '../api.service';
   `,
 })
 export class OidcCallbackComponent implements OnInit, OnDestroy {
+  // Each callback owns its async results only until navigation or a new attempt.
+  private generation = 0;
   private querySubscription?: { unsubscribe(): void };
   busy = signal(true); error = signal(''); code = ''; pendingToken = '';
   constructor(private api: ApiService, private router: Router, private route: ActivatedRoute) {}
   ngOnInit() { this.querySubscription = this.route.queryParamMap.subscribe(() => { void this.consumeCallback(); }); }
-  ngOnDestroy() { this.querySubscription?.unsubscribe(); }
+  ngOnDestroy() { this.generation++; this.pendingToken = ''; this.code = ''; this.querySubscription?.unsubscribe(); }
   private async consumeCallback() {
-    this.pendingToken = ''; this.error.set(''); this.busy.set(true);
+    const generation = ++this.generation;
+    this.pendingToken = ''; this.code = ''; this.error.set(''); this.busy.set(true);
     const params = new URL(window.location.href).searchParams;
     // Remove authorization codes and state from history before network I/O.
     window.history.replaceState(window.history.state, '', window.location.pathname);
@@ -42,14 +45,16 @@ export class OidcCallbackComponent implements OnInit, OnDestroy {
       if (params.has('error')) throw new Error('The identity provider did not complete sign-in. Please try again.');
       if (codes.length !== 1 || !codes[0]) throw new Error('The sign-in response is missing its authorization code.');
       const result = await this.api.callbackOidc(codes[0], states[0]);
+      if (generation !== this.generation) return;
       if (result.requiresTwoFactor && result.pendingToken) this.pendingToken = result.pendingToken;
       else if (result.accessToken) { this.api.token = result.accessToken; await this.router.navigate(['/projects'], { replaceUrl: true }); }
       else throw new Error('The sign-in response was incomplete.');
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Sign-in failed.'); }
-    finally { this.busy.set(false); }
+    } catch (e) { if (generation === this.generation) this.error.set(e instanceof Error ? e.message : 'Sign-in failed.'); }
+    finally { if (generation === this.generation) this.busy.set(false); }
   }
   async complete() {
     if (!this.pendingToken || this.busy()) return;
+    const generation = ++this.generation;
     this.busy.set(true); this.error.set('');
     const pending = this.pendingToken;
     // The server consumes the pending token even on a wrong code. A failure
@@ -57,11 +62,12 @@ export class OidcCallbackComponent implements OnInit, OnDestroy {
     this.pendingToken = '';
     try {
       const result = await this.api.completeOidc(pending, this.code.trim());
+      if (generation !== this.generation) return;
       if (!result.accessToken) throw new Error('The sign-in response was incomplete.');
       this.api.token = result.accessToken;
       await this.router.navigate(['/projects'], { replaceUrl: true });
-    } catch { this.error.set('Second-factor verification failed. Return to sign-in to start again.'); }
-    finally { this.code = ''; this.busy.set(false); }
+    } catch { if (generation === this.generation) this.error.set('Second-factor verification failed. Return to sign-in to start again.'); }
+    finally { if (generation === this.generation) { this.code = ''; this.busy.set(false); } }
   }
-  restart() { this.pendingToken = ''; this.code = ''; void this.router.navigate(['/login'], { replaceUrl: true }); }
+  restart() { this.generation++; this.pendingToken = ''; this.code = ''; void this.router.navigate(['/login'], { replaceUrl: true }); }
 }
