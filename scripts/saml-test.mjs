@@ -54,12 +54,14 @@ async function mint(knobs = {}) {
   return j.SAMLResponse;
 }
 // One fresh SP-initiated login: returns the AuthnRequest ID the IdP must echo.
-async function freshRequestId() {
-  const login = await call('/auth/saml/login');
-  const u = new URL(login.json.url);
+async function requestIdFromUrl(url) {
+  const u = new URL(url);
   const samlRequest = u.searchParams.get('SAMLRequest');
   const res = await fetch(`${MOCK}/sso?SAMLRequest=${encodeURIComponent(samlRequest)}`);
   return (await res.json()).requestId;
+}
+async function freshRequestId() {
+  return requestIdFromUrl((await call('/auth/saml/login')).json.url);
 }
 
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-saml-'));
@@ -201,7 +203,7 @@ try {
   const linkStart = (await call('/auth/saml/start-link', { jwt: eveLogin.accessToken, method: 'POST', body: { password: 'pass1234' } })).json;
   const relay = new URL(linkStart.url).searchParams.get('RelayState');
   check('start-link returns IdP URL carrying an opaque RelayState', typeof relay === 'string' && relay.length > 10);
-  const ridL = await freshRequestId();
+  const ridL = await requestIdFromUrl(linkStart.url);
   // The asserted email differs from the account email on purpose: the
   // anti-takeover boundary is the fresh-password step-up, not email matching.
   const linkAcs = await call('/auth/saml/acs', { method: 'POST', body: { SAMLResponse: await mint({ inResponseTo: ridL, email: 'eve-saml-asserted@example.com' }), RelayState: relay } });
@@ -214,7 +216,7 @@ try {
   await call('/auth/signup', { method: 'POST', body: { email: 'frank-link@example.com', password: 'pass1234', displayName: 'Frank' } });
   const frankLogin = (await call('/auth/login', { method: 'POST', body: { email: 'frank-link@example.com', password: 'pass1234' } })).json;
   const frankLink = (await call('/auth/saml/start-link', { jwt: frankLogin.accessToken, method: 'POST', body: { password: 'pass1234' } })).json;
-  const ridF = await freshRequestId();
+  const ridF = await requestIdFromUrl(frankLink.url);
   const stealLink = await call('/auth/saml/acs', { method: 'POST', body: { SAMLResponse: await mint({ inResponseTo: ridF, email: 'saml-user@example.com' }), RelayState: new URL(frankLink.url).searchParams.get('RelayState') } });
   check('linking an identity bound to a different account rejected', stealLink.status === 409, `got ${stealLink.status}`);
   const ridP = await freshRequestId();
@@ -228,6 +230,28 @@ try {
   check('unissued RelayState rejected (only SP-issued link tokens honored)', unknownRelay.status === 401, `got ${unknownRelay.status}`);
   const unknownBound = await prisma.externalIdentity.findFirst({ where: { email: 'unknown-relay@example.com' } });
   check('rejected RelayState created no binding or account', !unknownBound && !(await prisma.user.findUnique({ where: { email: 'unknown-relay@example.com' } })));
+
+  const startEveLink = async () => (await call('/auth/saml/start-link', { jwt: eveLogin.accessToken, method: 'POST', body: { password: 'pass1234' } })).json;
+  const swapped = await startEveLink();
+  const swappedRelay = new URL(swapped.url).searchParams.get('RelayState');
+  const swappedReply = await call('/auth/saml/acs', { method: 'POST', body: { SAMLResponse: await mint({ inResponseTo: await freshRequestId(), email: 'swapped@example.com' }), RelayState: swappedRelay } });
+  check('link token cannot answer a different valid SP request', swappedReply.status === 401 && swappedReply.json?.message === 'SAML link request mismatch', JSON.stringify(swappedReply.json));
+  check('swapped request creates no identity or user', !(await prisma.externalIdentity.findFirst({ where: { email: 'swapped@example.com' } })) && !(await prisma.user.findUnique({ where: { email: 'swapped@example.com' } })));
+  const burned = await call('/auth/saml/acs', { method: 'POST', body: { SAMLResponse: await mint({ inResponseTo: await requestIdFromUrl(swapped.url), email: 'swapped@example.com' }), RelayState: swappedRelay } });
+  check('mismatched request burns its link token', burned.status === 401 && burned.json?.message === 'Invalid or expired link state');
+  const stripped = await startEveLink();
+  const strippedReply = await call('/auth/saml/acs', { method: 'POST', body: { SAMLResponse: await mint({ inResponseTo: await requestIdFromUrl(stripped.url), email: 'stripped@example.com' }) } });
+  check('link response without RelayState cannot become normal login', strippedReply.status === 401 && strippedReply.json?.message === 'SAML link RelayState is required');
+  check('stripped RelayState creates no account', !(await prisma.user.findUnique({ where: { email: 'stripped@example.com' } })));
+  const strippedAgain = await call('/auth/saml/acs', { method: 'POST', body: { SAMLResponse: await mint({ inResponseTo: await requestIdFromUrl(stripped.url), email: 'stripped@example.com' }) } });
+  check('repeated stripped link response still cannot provision', strippedAgain.status === 401 && strippedAgain.json?.message === 'SAML link RelayState is required');
+  const consumedStripped = await call('/auth/saml/acs', { method: 'POST', body: { SAMLResponse: await mint({ inResponseTo: await requestIdFromUrl(swapped.url), email: 'consumed-stripped@example.com' }) } });
+  check('consumed link token leaves request-purpose tombstone', consumedStripped.status === 401 && consumedStripped.json?.message === 'SAML link RelayState is required');
+  const stale = await startEveLink();
+  await prisma.user.update({ where: { id: eveLogin.user.id }, data: { authEpoch: { increment: 1 } } });
+  const staleReply = await call('/auth/saml/acs', { method: 'POST', body: { SAMLResponse: await mint({ inResponseTo: await requestIdFromUrl(stale.url), email: 'stale-link@example.com' }), RelayState: new URL(stale.url).searchParams.get('RelayState') } });
+  check('link epoch changed after start is rejected after valid signature', staleReply.status === 401 && staleReply.json?.message === 'Link state is stale - restart the linking flow');
+  check('stale link creates no identity', !(await prisma.externalIdentity.findFirst({ where: { email: 'stale-link@example.com' } })));
 
   console.log(failures === 0 ? 'ALL SAML CHECKS PASSED' : `${failures} SAML CHECK(S) FAILED`);
   process.exitCode = failures === 0 ? 0 : 1;

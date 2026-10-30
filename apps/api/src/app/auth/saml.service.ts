@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
+import { inflateRawSync } from 'node:zlib';
 import { InMemoryCacheProvider, SAML, ValidateInResponseTo, type Profile } from '@node-saml/node-saml';
 import { DOMParser } from '@xmldom/xmldom';
 import xpath from 'xpath';
@@ -53,7 +54,10 @@ export class SamlService {
   private static readonly LINK_MAX = Number(process.env.SAML_LINK_MAX) || 10_000;
   // Link flows: opaque RelayState token -> the account that proved fresh
   // auth and its authEpoch at that moment (a stale or revoked linker fails).
-  private linkStates = new Map<string, { userId: string; epoch: number; expiresAt: number }>();
+  private linkStates = new Map<string, { userId: string; epoch: number; requestId: string; expiresAt: number }>();
+  // Purpose tombstones outlive token consumption until the request TTL,
+  // preventing a rejected/replayed link response from becoming plain login.
+  private linkRequests = new Map<string, number>();
   private static readonly CACHE_MAX = Number(process.env.SAML_CACHE_MAX) || 10_000;
   private static readonly REQUEST_TTL_MS = 10 * 60 * 1000;
 
@@ -137,22 +141,37 @@ export class SamlService {
   // its current authEpoch, carried to the IdP as an opaque RelayState token.
   async startLink(userId: string, epoch: number): Promise<{ url: string }> {
     const now = Date.now();
-    for (const [k, v] of this.linkStates) if (v.expiresAt <= now) this.linkStates.delete(k);
-    if (this.linkStates.size >= SamlService.LINK_MAX) {
+    for (const [k, v] of this.linkStates) if (v.expiresAt <= now) {
+      this.linkStates.delete(k);
+    }
+    for (const [id, expiry] of this.linkRequests) if (expiry <= now) this.linkRequests.delete(id);
+    if (this.linkRequests.size >= SamlService.LINK_MAX || this.linkStates.size >= SamlService.LINK_MAX) {
       throw new ServiceUnavailableException('Too many pending SAML link flows');
     }
     const token = b64url(randomBytes(16));
-    this.linkStates.set(token, { userId, epoch, expiresAt: now + SamlService.LINK_TTL_MS });
-    return this.login(token);
+    const result = await this.login(token);
+    // Read only our own library-generated AuthnRequest, not IdP input.
+    // RelayState alone is not enough: it must answer THIS exact request.
+    const encoded = new URL(result.url).searchParams.get('SAMLRequest');
+    if (!encoded) throw new ServiceUnavailableException('Missing SAML request');
+    const requestXml = inflateRawSync(Buffer.from(encoded, 'base64')).toString('utf8');
+    const requestId = new DOMParser().parseFromString(requestXml, 'text/xml').documentElement.getAttribute('ID');
+    if (!requestId) throw new ServiceUnavailableException('Missing SAML request ID');
+    // Recheck after the awaited library call: concurrent starts cannot
+    // overrun the cap. Failed generation leaves no link state behind.
+    if (this.linkRequests.size >= SamlService.LINK_MAX || this.linkStates.size >= SamlService.LINK_MAX) throw new ServiceUnavailableException('Too many pending SAML link flows');
+    this.linkStates.set(token, { userId, epoch, requestId, expiresAt: now + SamlService.LINK_TTL_MS });
+    this.linkRequests.set(requestId, now + SamlService.REQUEST_TTL_MS);
+    return result;
   }
 
   // Consumed at ACS entry (before validation): single winner, and a failed
   // validation burns the token - fail closed like the OIDC state store.
-  private consumeLink(token: string): { userId: string; epoch: number } {
+  private consumeLink(token: string): { userId: string; epoch: number; requestId: string } {
     const l = this.linkStates.get(token);
     this.linkStates.delete(token);
     if (!l || l.expiresAt < Date.now()) throw new UnauthorizedException('Invalid or expired link state');
-    return { userId: l.userId, epoch: l.epoch };
+    return { userId: l.userId, epoch: l.epoch, requestId: l.requestId };
   }
 
   // Structural pre-checks only (no crypto): the exact recipient/destination
@@ -191,6 +210,7 @@ export class SamlService {
       if (seen.has(a.value)) throw new UnauthorizedException('Duplicate XML ID in SAML response');
       seen.add(a.value);
     }
+    return responses[0].getAttribute('InResponseTo');
   }
 
   async acs(samlResponseB64: string, relayState?: string) {
@@ -198,7 +218,16 @@ export class SamlService {
     // Burn the link token before any validation when one is present.
     const link = typeof relayState === 'string' && relayState ? this.consumeLink(relayState) : null;
     const xml = Buffer.from(samlResponseB64, 'base64').toString('utf8');
-    this.precheck(xml, c.callbackUrl);
+    const requestId = this.precheck(xml, c.callbackUrl);
+    if (link && requestId !== link.requestId) {
+      throw new UnauthorizedException('SAML link request mismatch');
+    }
+    if (!link && requestId && this.linkRequests.has(requestId)) {
+      // A link response cannot be downgraded into a provisioning login by
+      // removing RelayState, including after a prior token was consumed.
+      // Keep the purpose tombstone until the request itself expires.
+      throw new UnauthorizedException('SAML link RelayState is required');
+    }
     let profile: Profile;
     try {
       const { profile: p } = await this.client().validatePostResponseAsync({ SAMLResponse: samlResponseB64 });
@@ -243,11 +272,10 @@ export class SamlService {
 
     // Never auto-link by email - that is account takeover. SAML has no
     // standard email-verified claim; the anti-takeover property comes from
-    // requiring the authenticated linking flow for collisions (linking is
-    // not yet implemented for SAML - fail closed with a clear 409).
+    // requiring the authenticated linking flow for collisions.
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) {
-      throw new ConflictException('An account with this email exists - SAML account linking is not yet implemented');
+      throw new ConflictException('An account with this email exists - sign in and start SAML account linking');
     }
     // Provision a passwordless account (empty hash never matches bcrypt).
     // Two concurrent first logins for the same NEW email can both pass the
@@ -264,7 +292,7 @@ export class SamlService {
         },
       });
     } catch {
-      throw new ConflictException('An account with this email exists - SAML account linking is not yet implemented');
+      throw new ConflictException('An account with this email exists - sign in and start SAML account linking');
     }
     try {
       await this.prisma.externalIdentity.create({ data: { userId: user.id, issuer, subject: sub, email } });
