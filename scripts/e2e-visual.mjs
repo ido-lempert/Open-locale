@@ -2030,6 +2030,44 @@ try {
   check('automations panel usable at 480px (no control overflows viewport)', clippedEls.length === 0, clippedEls.join(';'));
   await page.setViewport({ width: 1280, height: 800 });
 
+  // --- Automations notify action: create via settings UI, fire, verify run record ---
+  await page.evaluate(() => {
+    const setVal = (el, v) => {
+      const proto = el.tagName === 'SELECT' ? window.HTMLSelectElement.prototype : window.HTMLInputElement.prototype;
+      Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, v);
+      el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true }));
+    };
+    setVal(document.querySelector('input[name=newRuleName]'), 'Notify on new key');
+    setVal(document.querySelector('select[name=newRuleTrigger]'), 'key.created');
+    setVal(document.querySelector('select[name=newRuleAction]'), 'notify');
+  });
+  const msgInput = await page.waitForSelector('input[name=newRuleMessage]', { timeout: 10000 }).then(() => true).catch(() => false);
+  check('notify action shows the message input', msgInput);
+  await page.evaluate(() => {
+    const el = document.querySelector('input[name=newRuleMessage]');
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(el, 'Key {key} awaiting translation');
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await new Promise((r) => setTimeout(r, 400));
+  await page.evaluate(() => document.querySelector('input[name=newRuleName]').closest('form').requestSubmit());
+  const notifyListed = await page.waitForFunction(() => [...document.querySelectorAll('li')].some((li) => li.textContent.includes('Notify on new key') && li.textContent.includes('notify webhooks: Key {key} awaiting translation')), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('notify rule added via settings UI with correct summary', notifyListed);
+  await page.evaluate(async (pid) => {
+    const token = localStorage.getItem('ol_token');
+    await fetch(`/api/projects/${pid}/keys`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ name: 'auto.noted' }) });
+  }, projId);
+  const notifyRan = await page.waitForFunction(async () => {
+    const pid = location.pathname.split('/')[2];
+    const token = localStorage.getItem('ol_token');
+    const res = await fetch(`/api/projects/${pid}/activity`, { headers: { Authorization: `Bearer ${token}` } });
+    const acts = await res.json();
+    return (acts.items || []).some((a) => a.action === 'automation.run' && a.detail && a.detail.action === 'notify' && a.detail.message === 'Key auto.noted awaiting translation');
+  }, { timeout: 10000, polling: 500 }).then(() => true).catch(() => false);
+  check('creating a key fired the notify rule (run recorded with interpolated message)', notifyRan);
+  await page.evaluate(() => { [...document.querySelectorAll('h2')].find((h) => h.textContent === 'Automations')?.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70); });
+  await new Promise((r) => setTimeout(r, 300));
+  await shot('editor-29c-automations-notify.png');
+
   // --- 2FA: enable via projects-page security panel, log out, log in with code ---
   await page.goto(`${WEB}/projects`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.panel.tfa input[name=tfaSetupPassword]', { timeout: 10000 });

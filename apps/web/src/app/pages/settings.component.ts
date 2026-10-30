@@ -200,7 +200,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
         </section>
         <section class="panel">
           <h2>Automations</h2>
-          <p class="muted">Rules fire only on the whitelisted triggers - a new key, or a base-locale write on the main branch - and only do the whitelisted internal actions: fill empty cells with pseudo TEST DATA or create a task. They never call external services. Only project admins can create rules, and creating a rule delegates YOUR authority to it: any member's edit can trigger it, but the rule acts as you, with your CURRENT permissions re-checked on every run - not as the editor who triggered it. If you are demoted, lose a locale grant, or leave the project, the run narrows or fails visibly in the activity log and the triggering edit is unaffected. Runs are best-effort and in-process: no durable queue and no retry, and a write committed while the server restarts does not replay.</p>
+          <p class="muted">Rules fire only on the whitelisted triggers - a new key, or a base-locale write on the main branch - and only do the whitelisted actions: fill empty cells with pseudo TEST DATA, create a task, or notify this project's registered webhooks (signed delivery to the URLs admins set up in the Webhooks panel - a rule itself cannot send anywhere else). Only project admins can create rules, and creating a rule delegates YOUR authority to it: any member's edit can trigger it, but the rule acts as you, with your CURRENT permissions re-checked on every run - not as the editor who triggered it. If you are demoted, lose a locale grant, or leave the project, the run narrows or fails visibly in the activity log and the triggering edit is unaffected. Runs are best-effort and in-process: no durable queue and no retry, and a write committed while the server restarts does not replay.</p>
           <ul class="locale-list">
             @for (r of autoRules(); track r.id) {
               <li>
@@ -221,6 +221,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             <select aria-label="Action" [ngModel]="newRuleAction()" (ngModelChange)="newRuleAction.set($event)" name="newRuleAction">
               <option value="pretranslate">fill empty cells with test data</option>
               <option value="task.create">create a task</option>
+              <option value="notify">notify project webhooks</option>
             </select>
             @if (newRuleAction() === 'pretranslate') {
               <select aria-label="Rule provider" [ngModel]="newRuleProvider()" (ngModelChange)="newRuleProvider.set($event)" name="newRuleProvider">
@@ -231,8 +232,10 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                   <label><input type="checkbox" [checked]="newRuleLocales().includes(l.code)" (change)="toggleRuleLocale(l.code)" name="ruleLoc-{{ l.code }}" /> {{ l.code }}</label>
                 }
               }
-            } @else {
+            } @else if (newRuleAction() === 'task.create') {
               <input aria-label="Task title" placeholder="Task title ({key} = key name)" [ngModel]="newRuleTitle()" (ngModelChange)="newRuleTitle.set($event)" name="newRuleTitle" />
+            } @else {
+              <input aria-label="Notification message" placeholder="Message ({key} = key name)" [ngModel]="newRuleMessage()" (ngModelChange)="newRuleMessage.set($event)" name="newRuleMessage" maxlength="200" />
             }
             <button type="submit" [disabled]="busy()">Add rule</button>
           </form>
@@ -506,7 +509,7 @@ export class SettingsComponent implements OnInit {
   mtProviderId = signal(''); mtLocale = signal(''); mtBranch = signal('main'); mtResult = signal('');
   autoRules = signal<AutomationRuleInfo[]>([]);
   newRuleName = signal(''); newRuleTrigger = signal('translation.value'); newRuleAction = signal('pretranslate');
-  newRuleProvider = signal(''); newRuleLocales = signal<string[]>([]); newRuleTitle = signal('');
+  newRuleProvider = signal(''); newRuleLocales = signal<string[]>([]); newRuleTitle = signal(''); newRuleMessage = signal('');
 
   async addOrigin() {
     const origin = this.newOrigin().trim();
@@ -573,6 +576,7 @@ export class SettingsComponent implements OnInit {
       const locales = Array.isArray(r.config['locales']) ? (r.config['locales'] as string[]).join(', ') : '';
       return `fill ${locales} with test data`;
     }
+    if (r.action === 'notify') return `notify webhooks: ${String(r.config['message'] ?? '')}`;
     return `task: ${String(r.config['title'] ?? '')}`;
   }
 
@@ -587,11 +591,13 @@ export class SettingsComponent implements OnInit {
     try {
       const config = this.newRuleAction() === 'pretranslate'
         ? { providerId: this.newRuleProvider(), locales: this.newRuleLocales() }
-        : { title: this.newRuleTitle() };
+        : this.newRuleAction() === 'notify'
+          ? { message: this.newRuleMessage() }
+          : { title: this.newRuleTitle() };
       await this.api.createAutomationRule(this.projectId, {
         name: this.newRuleName().trim(), trigger: this.newRuleTrigger(), action: this.newRuleAction(), config,
       });
-      this.newRuleName.set(''); this.newRuleTitle.set(''); this.newRuleLocales.set([]);
+      this.newRuleName.set(''); this.newRuleTitle.set(''); this.newRuleMessage.set(''); this.newRuleLocales.set([]);
       this.autoRules.set(await this.api.listAutomationRules(this.projectId));
     } catch (e) { this.error.set(e instanceof Error ? e.message : String(e)); } finally { this.busy.set(false); }
   }
