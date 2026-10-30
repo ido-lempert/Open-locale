@@ -15,7 +15,7 @@ import type { ImportJsonDto } from './dto';
 import { parseCsv, toCsv } from './csv';
 import { parseAndroidXml, toAndroidXml } from './android-xml';
 import { parseStringsdict, toStringsdict } from './stringsdict';
-import { parsePluralFormsHeader, parsePo, slotCategories, toPo, toPot } from './po';
+import { importSlotCategories, parsePluralFormsHeader, parsePo, toPo, toPot } from './po';
 import { toTmx } from './tmx';
 import { parseXliff, toXliff } from './xliff';
 import { parseResx, toResx } from './resx';
@@ -720,8 +720,9 @@ export class TranslationsService {
   }
 
   // PO parsing needs the target locale to map msgstr[n] slots to CLDR
-  // categories via the file's own Plural-Forms expression, so it is split
-  // out of parseImport (which is locale-agnostic for every other format).
+  // categories through the reviewed Plural-Forms header allowlist, so it is
+  // split out of parseImport (which is locale-agnostic for every other
+  // format).
   private parsePoEntries(po: string, locale: string): { entries: Record<string, unknown>; untranslatedSkipped: number; plurals?: Record<string, Record<string, string>> } {
     const { rows, pluralEntries, headerPluralForms, rejected } = parsePo(po);
     if (rejected > 0) {
@@ -733,10 +734,13 @@ export class TranslationsService {
       throw new BadRequestException('PO plural entries require a Plural-Forms metadata header to map msgstr[n] slots to plural categories');
     }
     const hf = parsePluralFormsHeader(headerPluralForms);
-    const cats = hf ? slotCategories(hf.expr, hf.nplurals, locale) : null;
-    if (!cats) {
-      throw new BadRequestException(`PO Plural-Forms header could not be mapped to locale ${locale}: the expression must parse, stay within its nplurals range and assign each slot exactly one CLDR category`);
+    const mapped = hf
+      ? importSlotCategories(hf.nplurals, hf.expr, locale)
+      : { error: 'the Plural-Forms header is malformed (expected "nplurals=<n>; plural=<expression>;")' };
+    if ('error' in mapped) {
+      throw new BadRequestException(`PO plural import rejected: ${mapped.error}`);
     }
+    const cats = mapped.categories;
     if (!cats.includes('other')) {
       throw new BadRequestException(`PO plural slots for locale ${locale} have no 'other' category (used for fractional quantities); such files are not supported`);
     }

@@ -8,11 +8,14 @@
 //
 // Plural subset: an entry with msgid_plural and msgstr[0..n] slots (no
 // plain msgstr) imports as a plural key. Slot indices are mapped to CLDR
-// categories by evaluating the file's own Plural-Forms C expression for
-// n=0..200 against Intl.PluralRules of the target locale - the declared
-// category order is never trusted. The mapping must be consistent (each
-// slot one category, no category twice) and cover every slot, and it must
-// contain 'other'; anything else rejects the import (400), fail-closed.
+// categories through an allowlist of reviewed standard gettext
+// Plural-Forms headers (PO_IMPORT_PLURAL_HEADERS below): the file's header
+// must match a listed expression exactly, modulo whitespace, and the
+// reviewed slot->category mapping for that expression is used - the
+// declared category order is never trusted and no untrusted C expression
+// is ever evaluated on import. Headers not on the list - including the
+// standard Russian/Polish rules, whose slots have no 'other' category -
+// reject the import (400), fail-closed.
 // msgid_plural is dropped on import (the key is the msgid; the source
 // plural string is not stored - documented, lossy). Export emits
 // msgid/msgid_plural/msgstr[n] for plural keys with stored forms, with
@@ -58,6 +61,72 @@ export const PO_PLURAL_FORMS: Record<string, string> = {
   ga: 'nplurals=5; plural=(n==1) ? 0 : (n==2) ? 1 : (n>=3 && n<=6) ? 2 : (n>=7 && n<=10) ? 3 : 4;',
   sl: 'nplurals=4; plural=(n%100==1) ? 0 : (n%100==2) ? 1 : (n%100==3 || n%100==4) ? 2 : 3;',
 };
+
+// Canonical form of a Plural-Forms header for allowlist lookup. Whitespace
+// is insignificant in the C expression grammar accepted here (no string
+// literals, no identifiers other than n), so it is stripped entirely; the
+// nplurals count is part of the key.
+export function canonicalPluralKey(nplurals: number, expr: string): string {
+  return `nplurals=${nplurals};plural=${expr.replace(/\s+/g, '')}`;
+}
+
+export interface PluralHeaderEntry {
+  // Slot index -> CLDR category, reviewed from the documented standard
+  // gettext header this exact expression implements.
+  categories: string[];
+  // Set when one expression is the documented standard header for several
+  // locales with DIFFERENT slot meanings (the shared Latvian/Lithuanian
+  // header); the import target locale picks the entry. Absent means the
+  // mapping is the same for every locale that uses the header.
+  locales?: string[];
+}
+
+// Import allowlist: the only Plural-Forms headers accepted for plural
+// imports. Each entry is a reviewed, documented standard gettext header
+// and is regression-checked against Intl.PluralRules in po.spec.ts;
+// anything not listed - including arbitrary C expressions and headers
+// whose slots have no 'other' category (Russian, Polish) - is rejected,
+// fail-closed. Import needs only an 'other' slot to place every form
+// correctly, so headers that do not cover every CLDR category of a locale
+// (Czech, Slovak, Irish) are importable here even though the export table
+// omits those locales: export must express every stored form, import must
+// only avoid misplacing one.
+export const PO_IMPORT_PLURAL_HEADERS: Record<string, PluralHeaderEntry[]> = {
+  'nplurals=1;plural=0': [{ categories: ['other'] }],
+  'nplurals=2;plural=(n!=1)': [{ categories: ['one', 'other'] }],
+  'nplurals=2;plural=n!=1': [{ categories: ['one', 'other'] }],
+  'nplurals=2;plural=(n>1)': [{ categories: ['one', 'other'] }],
+  'nplurals=2;plural=n>1': [{ categories: ['one', 'other'] }],
+  'nplurals=3;plural=(n==1)?0:(n==2)?1:2': [{ categories: ['one', 'two', 'other'] }],
+  'nplurals=3;plural=(n==1)?0:(n>=2&&n<=4)?1:2': [{ categories: ['one', 'few', 'other'] }],
+  'nplurals=3;plural=(n%10==1&&n%100!=11)?0:(n%10>=2&&(n%100<10||n%100>=20))?1:2': [
+    { locales: ['lv'], categories: ['one', 'other', 'zero'] },
+    { locales: ['lt'], categories: ['one', 'few', 'other'] },
+  ],
+  'nplurals=6;plural=(n==0)?0:(n==1)?1:(n==2)?2:(n%100>=3&&n%100<=10)?3:(n%100>=11)?4:5':
+    [{ categories: ['zero', 'one', 'two', 'few', 'many', 'other'] }],
+  'nplurals=3;plural=(n==1)?0:(n==0||(n%100>0&&n%100<20))?1:2': [{ categories: ['one', 'few', 'other'] }],
+  'nplurals=5;plural=(n==1)?0:(n==2)?1:(n>=3&&n<=6)?2:(n>=7&&n<=10)?3:4':
+    [{ categories: ['one', 'two', 'few', 'many', 'other'] }],
+  'nplurals=4;plural=(n%100==1)?0:(n%100==2)?1:(n%100==3||n%100==4)?2:3':
+    [{ categories: ['one', 'two', 'few', 'other'] }],
+};
+
+// Resolve an import header against the allowlist for a target locale.
+// Fail-closed: unknown expressions and locale-ambiguous headers imported
+// into a locale they do not cover both return an error string.
+export function importSlotCategories(nplurals: number, expr: string, locale: string): { categories: string[] } | { error: string } {
+  const entries = PO_IMPORT_PLURAL_HEADERS[canonicalPluralKey(nplurals, expr)];
+  if (!entries) {
+    return { error: `unsupported Plural-Forms expression (nplurals=${nplurals}; plural=${expr}); only reviewed standard headers are accepted` };
+  }
+  const entry = entries.find((e) => !e.locales || e.locales.includes(locale));
+  if (!entry) {
+    const locs = [...new Set(entries.flatMap((e) => e.locales ?? []))];
+    return { error: `this Plural-Forms header has different slot meanings per locale and is supported only for: ${locs.join(', ')} (import target is ${locale})` };
+  }
+  return { categories: entry.categories };
+}
 
 // Evaluate a gettext plural C expression for a given n. Supports integer
 // literals, n, %, *, / (truncating, like C), +, -, comparisons, !, &&, ||,

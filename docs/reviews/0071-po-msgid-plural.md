@@ -3,7 +3,9 @@
 PO (gettext) gains a deliberately narrow plural subset, replacing the
 previous blanket msgid_plural/msgstr[n] rejection:
 
-- Slot-to-category mapping is DERIVED, never declared: the file's own
+- Slot-to-category mapping (SUPERSEDED by 0072 in slice 8 - the derived
+  mapping was replaced by a reviewed-header allowlist; the description
+  below is kept for chronology): the file's own
   Plural-Forms header expression (a small C subset - integers, n, %, *,
   truncating /, +, -, comparisons, !, &&, ||, ternary, parentheses) is
   evaluated for n=0..200 against Intl.PluralRules of the target locale

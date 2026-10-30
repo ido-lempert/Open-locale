@@ -176,8 +176,9 @@ try {
   check('PO export-import roundtrip stable', poRound.status === 201 && poRound.json.unchangedSkipped >= 2, JSON.stringify(poRound.json));
   const poPlural = await call(`${P}/import/he`, { token: at, method: 'POST', body: { po: 'msgid "apple"\nmsgid_plural "apples"\nmsgstr[0] "%d"\nmsgstr[1] "%d"\n' } });
   check('PO plural entry without a Plural-Forms header rejected (400)', poPlural.status === 400, String(poPlural.status));
-  // PO msgid_plural subset (slice 7): slots map to CLDR categories by
-  // evaluating the file's own header expression against the target locale.
+  // PO msgid_plural subset (slices 7-8): slots map to CLDR categories
+  // through the reviewed Plural-Forms header allowlist; the file's
+  // expression is never evaluated.
   const heHeader = 'msgid ""\nmsgstr ""\n"Plural-Forms: nplurals=3; plural=(n==1) ? 0 : (n==2) ? 1 : 2;\\n"\n\n';
   const poPluralIn = heHeader + 'msgid "po.apples"\nmsgid_plural "po.apples"\nmsgstr[0] "tapuz echad"\nmsgstr[1] "shnei tapuzim"\nmsgstr[2] "tapuzim"\n';
   const poPlImp = await call(`${P}/import/he`, { token: at, method: 'POST', body: { po: poPluralIn } });
@@ -190,10 +191,19 @@ try {
   check('PO export emits msgid_plural entries and a Plural-Forms header', poPlOut.includes('Plural-Forms: nplurals=3; plural=(n==1) ? 0 : (n==2) ? 1 : 2;') && poPlOut.includes('msgid "po.apples"\nmsgid_plural "po.apples"\nmsgstr[0] "tapuz echad"\nmsgstr[1] "shnei tapuzim"\nmsgstr[2] "tapuzim"'), poPlOut.split('\n').find((l) => l.includes('po.apples')) ?? '');
   const poPlRound = await call(`${P}/import/he`, { token: at, method: 'POST', body: { po: poPlOut } });
   check('PO plural export -> import roundtrips (own output re-imports)', poPlRound.status === 201 && poPlRound.json.keysCreated === 0 && poPlRound.json.failed === 0, JSON.stringify(poPlRound.json));
-  const poEnHeaderForHe = await call(`${P}/import/he`, { token: at, method: 'POST', body: { po: 'msgid ""\nmsgstr ""\n"Plural-Forms: nplurals=2; plural=(n != 1);\\n"\n\nmsgid "po.wrong"\nmsgid_plural "po.wrongs"\nmsgstr[0] "a"\nmsgstr[1] "b"\n' } });
-  check('PO header inconsistent with the target locale rejected (400)', poEnHeaderForHe.status === 400, String(poEnHeaderForHe.status));
+  // A standard header from another locale family is fine: its reviewed
+  // mapping is locale-independent, so {one, other} forms land in he.
+  const poCrossLocale = await call(`${P}/import/he`, { token: at, method: 'POST', body: { po: 'msgid ""\nmsgstr ""\n"Plural-Forms: nplurals=2; plural=(n != 1);\\n"\n\nmsgid "po.cross"\nmsgid_plural "po.crosses"\nmsgstr[0] "a"\nmsgstr[1] "b"\n' } });
+  check('PO standard header from another locale family accepted (201)', poCrossLocale.status === 201, String(poCrossLocale.status));
+  const poCrossKey = (await call(`${P}/keys`, { token: at })).json.find((k) => k.name === 'po.cross');
+  check('cross-locale-header forms map one/other', JSON.stringify(poCrossKey?.translations.find((t) => t.localeCode === 'he')?.pluralForms) === JSON.stringify({ one: 'a', other: 'b' }), JSON.stringify(poCrossKey?.translations.find((t) => t.localeCode === 'he')?.pluralForms));
+  // Headers outside the reviewed allowlist are rejected fail-closed: the
+  // standard Russian rule (slots one/few/many, no 'other') and an
+  // unparseable expression both 400.
+  const poRuHeader = await call(`${P}/import/he`, { token: at, method: 'POST', body: { po: 'msgid ""\nmsgstr ""\n"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11) ? 0 : (n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20)) ? 1 : 2;\\n"\n\nmsgid "po.ru"\nmsgid_plural "po.rus"\nmsgstr[0] "a"\nmsgstr[1] "b"\nmsgstr[2] "c"\n' } });
+  check('PO no-other header (Russian rule) rejected (400)', poRuHeader.status === 400 && String(poRuHeader.json?.message ?? '').includes('unsupported Plural-Forms'), `${poRuHeader.status} ${JSON.stringify(poRuHeader.json)}`);
   const poBadExpr = await call(`${P}/import/he`, { token: at, method: 'POST', body: { po: 'msgid ""\nmsgstr ""\n"Plural-Forms: nplurals=2; plural=nonsense();\\n"\n\nmsgid "po.bad"\nmsgid_plural "po.bads"\nmsgstr[0] "a"\nmsgstr[1] "b"\n' } });
-  check('PO unparseable header expression rejected (400)', poBadExpr.status === 400, String(poBadExpr.status));
+  check('PO header expression outside the allowlist rejected (400)', poBadExpr.status === 400, String(poBadExpr.status));
   const poSlotMismatch = await call(`${P}/import/he`, { token: at, method: 'POST', body: { po: heHeader + 'msgid "po.slots"\nmsgid_plural "po.slots"\nmsgstr[0] "a"\nmsgstr[1] "b"\n' } });
   check('PO slot count below declared nplurals rejected (400)', poSlotMismatch.status === 400, String(poSlotMismatch.status));
   const poBefore = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
