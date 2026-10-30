@@ -367,7 +367,7 @@ export class TranslationsService {
       include: { key: true },
       orderBy: { key: { name: 'asc' } },
     });
-    const map: Record<string, string> = {};
+    const map: Record<string, string> = Object.create(null);
     for (const t of translations) map[t.key.name] = t.value;
     return flat ? map : unflattenJson(map);
   }

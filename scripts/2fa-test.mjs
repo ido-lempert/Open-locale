@@ -130,7 +130,7 @@ try {
   // Concurrent identical TOTP submissions: the atomic counter claim lets
   // exactly one through. Wait for a fresh window so the code is valid.
   {
-    while (Math.floor(Date.now() / 1000 / 30) <= consumedCounter + 1) await new Promise((r) => setTimeout(r, 200));
+    while (Math.floor(Date.now() / 1000 / 30) <= consumedCounter) await new Promise((r) => setTimeout(r, 200));
     const fresh = totp(setup.secret);
     const [r1, r2] = await Promise.all([
       call('/auth/login', { method: 'POST', body: { email, password: 'pass1234', totpCode: fresh } }),
@@ -138,7 +138,8 @@ try {
     ]);
     const wins = [r1, r2].filter((r) => r.status === 200).length;
     check('simultaneous identical TOTP: exactly one session wins', wins === 1, `wins=${wins}`);
-    consumedCounter = Math.floor(Date.now() / 1000 / 30) + 1; // the winner consumed this window
+    // The disable leg below computes a fresh +1 code; no stored fixture state
+    // is used to bypass the real replay claim.
   }
 
   // Recovery code: works once, consumed atomically.
@@ -177,15 +178,14 @@ try {
   // Disable with a valid code (bypass the lock by clearing it in the fixture
   // row - the lock is under test above, not here). Codes only validate within
   // +-1 step and the last-seen counter must move forward, so wait for the
-  // next 30s window before computing the disable code.
+  // next accepted counter before computing the disable code.
   await prisma.user.update({ where: { email }, data: { totpLockedUntil: null, totpFailedAttempts: 0 } });
-  // Wait until the current window is strictly past any counter the server
-  // may have recorded (lastCounter <= consumedCounter + 1 for mid-flight
-  // rollover), then the fresh code always wins.
-  while (Math.floor(Date.now() / 1000 / 30) <= consumedCounter + 1) await new Promise((r) => setTimeout(r, 250));
-  const noPwDisable = await call('/auth/2fa/disable', { jwt: jwtStepped, method: 'POST', body: { password: 'nope-nope', code: totp(setup.secret) } });
+  // The concurrent login consumed its current counter. Use the next
+  // accepted (+1 skew) counter to disable without another full window wait.
+  // This still exercises the real verifier and its monotonic replay claim.
+  const noPwDisable = await call('/auth/2fa/disable', { jwt: jwtStepped, method: 'POST', body: { password: 'nope-nope', code: totp(setup.secret, 1) } });
   check('disable with wrong password rejected (step-up)', noPwDisable.status === 401, `got ${noPwDisable.status}`);
-  const disabled = await call('/auth/2fa/disable', { jwt: jwtStepped, method: 'POST', body: { password: 'pass1234', code: totp(setup.secret) } });
+  const disabled = await call('/auth/2fa/disable', { jwt: jwtStepped, method: 'POST', body: { password: 'pass1234', code: totp(setup.secret, 1) } });
   check('valid code disables 2FA', disabled.status === 200 || disabled.status === 201, `got ${disabled.status} ${disabled.json && disabled.json.message || ''}`);
   const open2 = await call('/auth/login', { method: 'POST', body: { email, password: 'pass1234' } });
   check('login single-factor again after disable', open2.status === 200, `got ${open2.status}`);

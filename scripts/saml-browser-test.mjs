@@ -28,7 +28,7 @@ try {
   const cert=(await (await fetch('http://127.0.0.1:5556/cert')).json()).cert;
   api=spawn(process.execPath,['dist/apps/api/main.js'],{env:{...process.env,DATABASE_URL:url,JWT_SECRET:'browser-saml-secret',SAML_ENTRY_POINT:'http://127.0.0.1:5556/sso',SAML_IDP_CERT:cert,SAML_IDP_ENTITY_ID:'http://127.0.0.1:5556/idp',SAML_BROWSER_RETURN_URL:`${WEB}/auth/saml/callback`,PORT:String(API_PORT)},stdio:'pipe'});
   await waitFor(`${API}/auth/saml/sp-info`);
-  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{stdio:'pipe'});
+  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{stdio:'pipe',detached:true});
   await waitFor(WEB);
   browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH??'/usr/bin/google-chrome',args:['--no-sandbox','--disable-dev-shm-usage']});
   const page=await browser.newPage();
@@ -97,6 +97,18 @@ try {
   console.log(failures?'SAML BROWSER CHECKS FAILED':'ALL SAML BROWSER CHECKS PASSED');
   process.exitCode=failures?1:0;
 } catch(e){ console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1; }
-finally {await browser?.close();web?.kill('SIGKILL');api?.kill('SIGKILL');mock?.kill('SIGKILL');await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});}
+finally {
+  await browser?.close();
+  // Nx serve launches a child server. Reap its process group, not only Nx,
+  // so a successful suite does not leave the web listener behind.
+  const stopped = [web,api,mock].filter(Boolean).map(child => new Promise(resolve => {
+    if (child.exitCode !== null || child.signalCode !== null) return resolve();
+    child.once('close', resolve);
+    if (child === web) { try { process.kill(-child.pid,'SIGKILL'); } catch { child.kill('SIGKILL'); } }
+    else child.kill('SIGKILL');
+  }));
+  await Promise.all(stopped);
+  await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
+}
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
 process.exit(process.exitCode??1);

@@ -27,7 +27,7 @@ try {
   api=spawn(process.execPath,['dist/apps/api/main.js'],{env:{...process.env,DATABASE_URL:url,JWT_SECRET:'browser-oidc-secret',OIDC_ISSUER:'http://127.0.0.1:5555',OIDC_REDIRECT_URI:`${WEB}/auth/oidc/callback`,PORT:String(API_PORT)},stdio:'pipe'});
   await waitFor(`${API}/auth/oidc/info`);
   check('OIDC configured endpoint returns only boolean',JSON.stringify(await (await fetch(`${API}/auth/oidc/info`)).json())==='{"configured":true}');
-  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{stdio:'pipe'});
+  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{stdio:'pipe',detached:true});
   await waitFor(WEB);
   browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH??'/usr/bin/google-chrome',args:['--no-sandbox','--disable-dev-shm-usage']});
   const page=await browser.newPage();
@@ -103,6 +103,18 @@ try {
   console.log(failures?'OIDC BROWSER CHECKS FAILED':'ALL OIDC BROWSER CHECKS PASSED');
   process.exitCode=failures?1:0;
 } catch(e){ console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1; }
-finally {await browser?.close();web?.kill('SIGKILL');api?.kill('SIGKILL');mock?.kill('SIGKILL');await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});}
+finally {
+  await browser?.close();
+  // Nx serve launches a child server. Reap its process group, not only Nx,
+  // so a successful suite does not leave the web listener behind.
+  const stopped = [web,api,mock].filter(Boolean).map(child => new Promise(resolve => {
+    if (child.exitCode !== null || child.signalCode !== null) return resolve();
+    child.once('close', resolve);
+    if (child === web) { try { process.kill(-child.pid,'SIGKILL'); } catch { child.kill('SIGKILL'); } }
+    else child.kill('SIGKILL');
+  }));
+  await Promise.all(stopped);
+  await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
+}
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
 process.exit(process.exitCode??1);

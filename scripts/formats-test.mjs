@@ -43,6 +43,22 @@ try {
   const proj = (await call('/projects', { token: at, method: 'POST', body: { name: 'FMT', slug: 'fmt', locales: ['en', 'he'] } })).json;
   const P = `/projects/${proj.id}`;
 
+  // Isolated project: prototype-named keys must survive real import/export.
+  const protoProject = (await call('/projects', { token: at, method: 'POST', body: { name: 'Prototype data', slug: 'proto-data', locales: ['en'] } })).json;
+  const protoPath = `/projects/${protoProject.id}`;
+  const protoImport = await call(`${protoPath}/import/en`, { token: at, method: 'POST', body: { csv: 'key,value\n__proto__.probe,nested data\nconstructor.prototype.label,text\ntoString,literal\n' } });
+  const protoNested = await call(`${protoPath}/export/en`, { token: at });
+  const protoFlat = await call(`${protoPath}/export/en?flat=true`, { token: at });
+  check('JSON dotted prototype keys import and export as own data', protoImport.status === 201 && protoNested.status === 200 && Object.hasOwn(protoNested.json, '__proto__') && protoNested.json.__proto__.probe === 'nested data' && protoNested.json.constructor.prototype.label === 'text' && protoNested.json.toString === 'literal' && protoFlat.json['__proto__.probe'] === 'nested data', JSON.stringify({protoImport,protoNested,protoFlat}));
+  const literalImport = await call(`${protoPath}/import/he`, { token: at, method: 'POST', body: { csv: 'key,value\n__proto__,literal\n' } });
+  // en instead: he is not a project locale, so this must not write anything.
+  check('prototype regression request still respects locale membership', literalImport.status === 400);
+  const literalProject = (await call('/projects', { token: at, method: 'POST', body: { name: 'Literal keys', slug: 'literal-keys', locales: ['en'] } })).json;
+  const literalPath = `/projects/${literalProject.id}`;
+  const literalOk = await call(`${literalPath}/import/en`, { token: at, method: 'POST', body: { csv: 'key,value\n__proto__,literal\n' } });
+  const literalExport = await call(`${literalPath}/export/en?flat=true`, { token: at });
+  check('JSON exact __proto__ key survives database and flat export', literalOk.status === 201 && literalExport.status === 200 && Object.hasOwn(literalExport.json, '__proto__') && literalExport.json.__proto__ === 'literal', JSON.stringify({literalOk,literalExport}));
+
   // Seed via CSV import (with header row and quoted specials)
   const csvIn = 'key,value\napp.title,"My App"\nmsg.quote,"He said ""hi"", loudly"\nmsg.multi,"line1\nline2"\n';
   const imp = await call(`${P}/import/en`, { token: at, method: 'POST', body: { csv: csvIn } });
