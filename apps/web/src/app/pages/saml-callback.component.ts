@@ -1,6 +1,6 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../api.service';
 
 @Component({
@@ -23,10 +23,14 @@ import { ApiService } from '../api.service';
     </main>
   `,
 })
-export class SamlCallbackComponent implements OnInit {
+export class SamlCallbackComponent implements OnInit, OnDestroy {
+  private fragmentSubscription?: { unsubscribe(): void };
   busy = signal(true); error = signal(''); code = ''; pendingToken = '';
-  constructor(private api: ApiService, private router: Router) {}
-  async ngOnInit() {
+  constructor(private api: ApiService, private router: Router, private route: ActivatedRoute) {}
+  ngOnInit() { this.fragmentSubscription = this.route.fragment.subscribe(() => { void this.consumeFragment(); }); }
+  ngOnDestroy() { this.fragmentSubscription?.unsubscribe(); }
+  private async consumeFragment() {
+    this.pendingToken = ''; this.error.set(''); this.busy.set(true);
     const params = new URLSearchParams(window.location.hash.slice(1));
     window.history.replaceState(window.history.state, '', window.location.pathname);
     const verifier = sessionStorage.getItem('ol.saml.verifier');
@@ -35,6 +39,7 @@ export class SamlCallbackComponent implements OnInit {
       const codes = params.getAll('code');
       if (!verifier || codes.length !== 1 || !codes[0]) throw new Error('This SAML sign-in is incomplete or was not started in this tab. Return to sign-in and try again.');
       const result = await this.api.redeemSamlBrowser(codes[0], verifier);
+      if (result.error) throw new Error('SAML sign-in could not be verified. Return to sign-in and try again.');
       if (result.requiresTwoFactor && result.pendingToken) this.pendingToken = result.pendingToken;
       else if (result.accessToken) { this.api.token = result.accessToken; await this.router.navigate(['/projects'], { replaceUrl: true }); }
       else throw new Error('The sign-in response was incomplete.');

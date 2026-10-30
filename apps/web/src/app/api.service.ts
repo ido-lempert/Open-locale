@@ -173,7 +173,7 @@ export class ApiService {
   }
 
   startSamlBrowser(challenge: string) { return this.request<{ url: string }>('/auth/saml/browser/start', { method: 'POST', body: JSON.stringify({ challenge }) }); }
-  redeemSamlBrowser(code: string, verifier: string) { return this.request<{ accessToken?: string; requiresTwoFactor?: boolean; pendingToken?: string }>('/auth/saml/browser/redeem', { method: 'POST', body: JSON.stringify({ code, verifier }) }); }
+  redeemSamlBrowser(code: string, verifier: string) { return this.request<{ accessToken?: string; requiresTwoFactor?: boolean; pendingToken?: string; error?: string }>('/auth/saml/browser/redeem', { method: 'POST', body: JSON.stringify({ code, verifier }) }); }
   completeSaml(pendingToken: string, totpCode: string) { return this.request<{ accessToken: string }>('/auth/saml/complete', { method: 'POST', body: JSON.stringify({ pendingToken, totpCode }) }); }
   getOidcInfo() { return this.request<{ configured: boolean }>('/auth/oidc/info'); }
   startOidc() { return this.request<{ url: string }>('/auth/oidc/start'); }

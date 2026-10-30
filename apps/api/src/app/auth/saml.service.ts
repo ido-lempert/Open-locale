@@ -252,7 +252,13 @@ export class SamlService {
     if (this.browser.isBrowser(relayState)) {
       const returnUrl = this.browserReturnUrl();
       const challenge = this.browser.take(relayState!, requestId);
-      const result = await this.validateAcs(samlResponseB64);
+      // State/request binding has succeeded. Return a verifier-protected,
+      // fixed error result for assertion validation/account failures rather
+      // than leaving the browser on raw API JSON. Never forward IdP/XML
+      // content or detailed verifier errors into the web page.
+      let result: unknown;
+      try { result = await this.validateAcs(samlResponseB64); }
+      catch { result = { error: 'SAML sign-in could not be verified. Return to sign-in and try again.' }; }
       const code = this.browser.ticket(challenge, result);
       returnUrl.hash = new URLSearchParams({ code }).toString();
       return { browserRedirect: returnUrl.toString() };
