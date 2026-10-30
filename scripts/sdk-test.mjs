@@ -77,6 +77,35 @@ try {
   const brHe = await ol.translations.get(proj.id, 'he', { branch: 'sdk-branch' });
   check('branch option scopes import and export', mainHe['sdk.branchonly'] === undefined && brHe['sdk.branchonly'] === 'ענף', '');
 
+  // OTA pulls with integrity verification: the slice-18 digest exists FOR
+  // this consumer - the SDK must verify it and never hand over bad bytes.
+  await call(`/projects/${proj.id}/ota/publish`, { token: a.accessToken, method: 'POST', body: {} });
+  const pull1 = await ol.ota.latest(proj.id, 'he');
+  check('ota.latest returns the verified bundle', pull1.notModified === false && pull1.bundle.translations['sdk.greeting'] === 'שלום מה-SDK' && pull1.bundle.version === 1 && /^[0-9a-f]{64}$/.test(pull1.sha256) && !!pull1.etag, String(pull1.sha256).slice(0, 20));
+  const pull304 = await ol.ota.latest(proj.id, 'he', { etag: pull1.etag });
+  check('etag revalidation yields notModified and still carries the digest', pull304.notModified === true && pull304.sha256 === pull1.sha256 && pull304.bundle === undefined);
+  const tampered = createClient({ url: `http://127.0.0.1:${API_PORT}`, token: tok.token, fetchImpl: async (u, opts) => {
+    const res = await fetch(u, opts);
+    if (!String(u).includes('/ota/')) return res;
+    const text = await res.text();
+    return new Response(text.replace('שלום', 'XXXX'), { status: res.status, headers: res.headers });
+  } });
+  const tamperErr = await tampered.ota.latest(proj.id, 'he').then(() => null).catch((e) => e);
+  check('tampered bundle bytes are rejected, never returned', tamperErr instanceof OpenLocaleError && /integrity check failed/.test(tamperErr.message), String(tamperErr));
+  const stripped = createClient({ url: `http://127.0.0.1:${API_PORT}`, token: tok.token, fetchImpl: async (u, opts) => {
+    const res = await fetch(u, opts);
+    if (!String(u).includes('/ota/')) return res;
+    const h = new Headers(res.headers); h.delete('x-openlocale-bundle-sha256');
+    return new Response(await res.text(), { status: res.status, headers: h });
+  } });
+  const stripErr = await stripped.ota.latest(proj.id, 'he').then(() => null).catch((e) => e);
+  check('missing digest header fails closed', stripErr instanceof OpenLocaleError && /missing its integrity digest/.test(stripErr.message), String(stripErr));
+  await ol.translations.put(proj.id, key.id, 'he', 'שלום חדש');
+  await call(`/projects/${proj.id}/ota/publish`, { token: a.accessToken, method: 'POST', body: {} });
+  const pullV2 = await ol.ota.latest(proj.id, 'he');
+  const pullV1 = await ol.ota.version(proj.id, 1, 'he');
+  check('ota.version(1) immutable after v2, digests differ', pullV1.bundle.version === 1 && pullV1.bundle.translations['sdk.greeting'] === 'שלום מה-SDK' && pullV2.bundle.version === 2 && pullV1.sha256 !== pullV2.sha256, '');
+
   // Errors carry status and path, not just a message.
   const err = await ol.projects.get('00000000-0000-0000-0000-000000000000').then(() => null).catch((e) => e);
   check('errors are OpenLocaleError with status and path', err instanceof OpenLocaleError && err.status === 404 && err.path.includes('/projects/'), String(err));

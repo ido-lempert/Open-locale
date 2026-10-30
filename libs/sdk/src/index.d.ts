@@ -9,6 +9,10 @@ export interface ImportSummary {
   locale: string; keysCreated: number; translationsUpserted: number;
   unchangedSkipped: number; failed: number; failures?: string[]; dryRun?: boolean;
 }
+export interface OtaPull {
+  notModified: boolean; etag: string | null; sha256: string | null;
+  bundle?: { version: number; branch: string; translations: Record<string, string> };
+}
 export interface OpenLocaleClient {
   request: (path: string, opts?: { method?: string; body?: unknown; raw?: boolean }) => Promise<any>;
   projects: {
@@ -22,6 +26,10 @@ export interface OpenLocaleClient {
   translations: {
     get: (projectId: string, locale: string, opts?: BranchOpts) => Promise<Record<string, string>>;
     put: (projectId: string, keyId: string, locale: string, value: string, opts?: BranchOpts) => Promise<any>;
+  };
+  ota: {
+    latest: (projectId: string, locale: string, opts?: BranchOpts & { etag?: string }) => Promise<OtaPull>;
+    version: (projectId: string, version: number, locale: string, opts?: BranchOpts & { etag?: string }) => Promise<OtaPull>;
   };
   io: {
     importEntries: (projectId: string, locale: string, entries: Record<string, unknown>, opts?: BranchOpts & { dryRun?: boolean }) => Promise<ImportSummary>;

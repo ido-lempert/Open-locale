@@ -52,7 +52,9 @@ running on the built-in development secret.
 
 `libs/sdk` (`@open-locale/sdk`) is a zero-dependency ESM client for the REST
 API v1 covering the core translation workflow - projects, keys, translations,
-import/export with branch scoping. It is not full API parity; other endpoints
+import/export with branch scoping, and OTA bundle pulls (latest or pinned
+version, ETag revalidation, sha256 integrity verified before any bundle is
+handed to the caller). It is not full API parity; other endpoints
 are reachable through its low-level `request` escape hatch. Private to the
 repo (not published). See docs/reviews/0062-sdk.md.
 
