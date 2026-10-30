@@ -105,13 +105,21 @@ export class OtaService {
     // delete/recreate, must never share an ETag. projectId + branchId +
     // version + a content hash of this locale's payload achieves that.
     const hash = createHash('sha256').update(JSON.stringify(payload[opts.locale] ?? {})).digest('hex').slice(0, 12);
+    const body = {
+      project: project.slug, branch: row.branch.name, locale: opts.locale,
+      version: row.version, publishedAt: row.createdAt,
+      translations: payload[opts.locale] ?? {},
+    };
+    // Full-content integrity digest over the EXACT bytes served: the
+    // controller serializes with JSON.stringify (Nest default), which is the
+    // same string hashed here - a mobile SDK can verify the downloaded bundle
+    // byte-for-byte. Full 256 bits, unlike the truncated ETag discriminator
+    // (which only needs to distinguish versions, not prove integrity).
+    const sha256 = createHash('sha256').update(JSON.stringify(body)).digest('hex');
     return {
       etag: `W/"ota-${projectId}-${branch.id}-v${row.version}-${opts.locale}-${hash}`,
-      body: {
-        project: project.slug, branch: row.branch.name, locale: opts.locale,
-        version: row.version, publishedAt: row.createdAt,
-        translations: payload[opts.locale] ?? {},
-      },
+      sha256,
+      body,
     };
   }
 }

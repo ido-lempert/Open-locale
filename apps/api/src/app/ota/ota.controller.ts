@@ -59,10 +59,13 @@ export class OtaController {
     req: { headers: Record<string, string | undefined> }, res: Response,
   ) {
     if (!opts.locale) throw new NotFoundException('locale query parameter is required');
-    const { etag, body } = await ota.bundle(user.userId, projectId, { ...opts, locale: opts.locale });
+    const { etag, sha256, body } = await ota.bundle(user.userId, projectId, { ...opts, locale: opts.locale });
     res.setHeader('ETag', etag);
+    res.setHeader('X-OpenLocale-Bundle-SHA256', sha256);
     res.setHeader('Cache-Control', 'private, no-cache');
     if (req.headers['if-none-match'] === etag) {
+      // The digest header rides the 304 too: a client holding the body can
+      // re-verify integrity without re-downloading it.
       res.status(304);
       return null;
     }

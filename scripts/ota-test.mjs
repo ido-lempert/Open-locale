@@ -6,6 +6,7 @@ import EmbeddedPostgres from 'embedded-postgres';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 
 const PG_PORT = 55465, API_PORT = 3027;
 const API = `http://127.0.0.1:${API_PORT}/api`;
@@ -87,6 +88,18 @@ try {
   check('old ETag no longer matches after v2', (await call(`/projects/${pid}/ota/latest?locale=he`, { jwt, headers: { 'If-None-Match': l1.etag } })).status === 200);
   check('unknown version 404', (await call(`/projects/${pid}/ota/99/he`, { jwt })).status === 404);
   check('unknown locale 404', (await call(`/projects/${pid}/ota/latest?locale=fr`, { jwt })).status === 404);
+
+  // --- Bundle integrity digest (slice 18): full sha256 over the exact served bytes ---
+  const rawV2 = await fetch(`${API}/projects/${pid}/ota/latest?locale=he`, { headers: { Authorization: `Bearer ${jwt}` } });
+  const rawV2Text = await rawV2.text();
+  const digestV2 = rawV2.headers.get('x-openlocale-bundle-sha256');
+  check('integrity header present, full 256-bit hex', !!digestV2 && /^[0-9a-f]{64}$/.test(digestV2), String(digestV2));
+  check('digest matches the exact served bytes', digestV2 === createHash('sha256').update(rawV2Text).digest('hex'), 'recomputed over response body');
+  const rawV2c = await fetch(`${API}/projects/${pid}/ota/latest?locale=he`, { headers: { Authorization: `Bearer ${jwt}`, 'If-None-Match': l2.etag } });
+  check('304 still carries the integrity digest', rawV2c.status === 304 && rawV2c.headers.get('x-openlocale-bundle-sha256') === digestV2, `got ${rawV2c.status}`);
+  const rawV1 = await fetch(`${API}/projects/${pid}/ota/1/he`, { headers: { Authorization: `Bearer ${jwt}` } });
+  const digestV1 = rawV1.headers.get('x-openlocale-bundle-sha256');
+  check('v1 digest stable and differs from v2', !!digestV1 && digestV1 !== digestV2 && digestV1 === createHash('sha256').update(await rawV1.text()).digest('hex'), `${digestV1} vs ${digestV2}`);
 
   // Branch scope: feat bundle is separate and does not leak main values.
   await call(`/projects/${pid}/branches`, { jwt, method: 'POST', body: { name: 'feat' } });
