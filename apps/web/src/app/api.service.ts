@@ -185,6 +185,14 @@ export class ApiService {
   redeemSamlBrowser(code: string, verifier: string) { return this.request<{ accessToken?: string; requiresTwoFactor?: boolean; pendingToken?: string; error?: string }>('/auth/saml/browser/redeem', { method: 'POST', body: JSON.stringify({ code, verifier }) }); }
   completeSaml(pendingToken: string, totpCode: string) { return this.request<{ accessToken: string }>('/auth/saml/complete', { method: 'POST', body: JSON.stringify({ pendingToken, totpCode }) }); }
   getOidcInfo() { return this.request<{ configured: boolean }>('/auth/oidc/info'); }
+  async startOidcLink(password:string):Promise<{url:string}>{
+    // A wrong step-up password returns401 but does not revoke the existing
+    // session. Do not use request(), which clears the token on every401.
+    const response=await fetch(`${this.base}/auth/oidc/start-link`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${this.token??''}`},body:JSON.stringify({password})});
+    const body=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(typeof body.message==='string'?body.message:'Could not start identity linking');
+    return body;
+  }
   startOidc() { return this.request<{ url: string }>('/auth/oidc/start'); }
   callbackOidc(code: string, state: string) {
     return this.request<{ accessToken?: string; requiresTwoFactor?: boolean; pendingToken?: string }>('/auth/oidc/callback', { method: 'POST', body: JSON.stringify({ code, state }) });

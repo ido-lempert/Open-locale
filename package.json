@@ -44,7 +44,8 @@
     "test:saml-browser": "node scripts/saml-browser-test.mjs",
     "test:sync-preview": "node scripts/sync-preview-test.mjs",
     "test:sync-browser": "node scripts/sync-browser-test.mjs",
-    "test:visual": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false python3 scripts/run-reaped.py node scripts/e2e-visual.mjs"
+    "test:visual": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false python3 scripts/run-reaped.py node scripts/e2e-visual.mjs",
+    "test:oidc-link-browser": "node scripts/oidc-link-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

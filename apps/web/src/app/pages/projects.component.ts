@@ -8,6 +8,7 @@ import { ApiService, Project } from '../api.service';
   imports: [FormsModule, RouterLink],
   template: `
     <header class="bar"><h1>Projects</h1>
+      <a routerLink="/account/link-oidc" class="identity-link">Link SSO identity</a>
       <button (click)="logout()">Log out</button></header>
     <main>
       <form class="create" (ngSubmit)="create()">
