@@ -426,6 +426,19 @@ try {
     `pairs=${tmxPairs.length}`);
   await shot('editor-19c-tmx-export.png');
   await page.select('select[aria-label="Import/export locale"]', 'en');
+  // Rendered API docs: the HTML page renders every spec operation, grouped, no external assets.
+  await page.goto(`http://127.0.0.1:${API_PORT}/api/docs`, { waitUntil: 'networkidle0' });
+  const docsCount = await page.evaluate(async () => {
+    const spec = await (await fetch('openapi.json')).json();
+    let expected = 0;
+    for (const p of Object.keys(spec.paths)) expected += Object.keys(spec.paths[p]).length;
+    return { expected, rendered: document.querySelectorAll('.op').length, meta: document.getElementById('meta')?.textContent || '' };
+  });
+  check('API docs page renders every spec operation', docsCount.rendered === docsCount.expected && docsCount.expected > 0, `rendered=${docsCount.rendered} expected=${docsCount.expected}`);
+  check('API docs page names the spec and auth model', docsCount.meta.includes('Open-locale API') && docsCount.meta.includes('X-Api-Key'), docsCount.meta.slice(0, 80));
+  await shot('api-docs.png');
+  await page.goto(`${WEB}/projects/${projId}`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('.grid', { timeout: 10000 });
   const csvFile = '/tmp/e2e-import.csv';
   writeFileSync(csvFile, 'key,value\napp.subtitle,"Welcome, friend"\n');
   // The IO toolbar has a format picker; select CSV first so the import input and the safe/raw note apply to CSV.

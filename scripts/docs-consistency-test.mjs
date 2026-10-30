@@ -41,8 +41,10 @@ for (const [path, ops] of Object.entries(OPENAPI.paths)) {
 }
 void specSrc; void pathRe; void dir;
 
-// 3. Compare both directions. The API root (GET /api) is intentionally internal.
-const internal = new Set(['GET /api']);
+// 3. Compare both directions. The API root (GET /api) is intentionally internal,
+// as is the rendered HTML docs page (GET /api/docs): the spec documents the
+// JSON API surface, and the HTML viewer is a docs surface like the root.
+const internal = new Set(['GET /api', 'GET /api/docs']);
 const missing = [...implemented.keys()].filter((r) => !internal.has(r) && !documented.has(r));
 const phantom = [...documented].filter((r) => !implemented.has(r));
 check('every implemented route is documented', missing.length === 0, missing.join(' | '));
