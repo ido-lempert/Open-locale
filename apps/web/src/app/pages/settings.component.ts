@@ -563,7 +563,8 @@ export class SettingsComponent implements OnInit {
     try {
       const r = await this.api.pretranslate(this.projectId, this.mtProviderId(), this.mtLocale(), this.mtBranch());
       const score = r.scoreAvg === null || r.scoreAvg === undefined ? '' : ` Provider score: avg ${r.scoreAvg}, min ${r.scoreMin}, max ${r.scoreMax} (structural preservation only, not linguistic quality).`;
-      this.mtResult.set(`Pseudo test data (${this.mtLocale()} on ${this.mtBranch()}): ${r.translated} filled, ${r.skippedExisting} already translated (untouched), ${r.skippedNoSource} without source text.${score} Filled rows are UNVERIFIED pseudo-localization TEST DATA, not real translations.`);
+      const pluralSkip = r.skippedPlural ? ` ${r.skippedPlural} plural keys skipped (scalar-only test provider; forms need real translation).` : '';
+      this.mtResult.set(`Pseudo test data (${this.mtLocale()} on ${this.mtBranch()}): ${r.translated} filled, ${r.skippedExisting} already translated (untouched), ${r.skippedNoSource} without source text.${pluralSkip}${score} Filled rows are UNVERIFIED pseudo-localization TEST DATA, not real translations.`);
     } catch (e) { this.error.set(e instanceof Error ? e.message : String(e)); } finally { this.busy.set(false); }
   }
 

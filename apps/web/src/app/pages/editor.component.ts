@@ -184,7 +184,7 @@ interface CellState {
                         <span class="cell-status">{{ statusText(k.id, l.code) }}</span>
                       }
                       @if (cell(k.id, l.code)().mtScore !== null) {
-                        <span class="mt-badge" [title]="'MT fill by ' + (cell(k.id, l.code)().mtProvider ?? 'provider') + ' - structural preservation score, not a quality review'">MT {{ cell(k.id, l.code)().mtScore }}</span>
+                        <span class="mt-badge" [attr.aria-label]="'Machine test-data fill by ' + (cell(k.id, l.code)().mtProvider ?? 'provider') + ' - structural preservation score only, not a measure of translation quality'" [title]="'MT fill by ' + (cell(k.id, l.code)().mtProvider ?? 'provider') + ' - structural preservation score, not a quality review'">MT {{ cell(k.id, l.code)().mtScore }} (structure)</span>
                       }
                     </div>
                     @if (l.code !== p.baseLocale && glossaryHints(k, l.code).length) {

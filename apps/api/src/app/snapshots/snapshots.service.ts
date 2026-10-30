@@ -205,7 +205,7 @@ export class SnapshotsService {
         await tx.translation.upsert({
           where: { keyId_localeCode: { keyId, localeCode: st.localeCode } },
           create: { keyId, projectId, localeCode: st.localeCode, value: st.value, status: st.status as never, version: 1, ...pluralData },
-          update: { value: st.value, status: st.status as never, version: { increment: 1 }, mtScore: null, mtProvider: null, ...pluralData },
+          update: { value: st.value, status: st.status as never, version: { increment: 1 }, ...((!before || before.value !== st.value || (pluralProvided && canonPlural(before.pluralForms) !== canonPlural(st.pluralForms))) ? { mtScore: null, mtProvider: null } : {}), ...pluralData },
         });
         await tx.translationHistory.create({
           data: {

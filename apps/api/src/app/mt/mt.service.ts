@@ -99,10 +99,15 @@ export class MtService {
     }
 
     const work: { keyId: string; keyName: string; source: string }[] = [];
-    let skippedExisting = 0, skippedNoSource = 0;
+    let skippedExisting = 0, skippedNoSource = 0, skippedPlural = 0;
     for (const key of keys) {
       const target = key.translations.find((t) => t.localeCode === dto.locale);
       if (target && target.value !== '') { skippedExisting++; continue; }
+      // Plural keys are skipped: their translatable content lives in
+      // per-CLDR-category pluralForms and the built-in pseudo fixture is
+      // scalar-only. Filling just the scalar cell would leave empty plural
+      // forms sitting next to a confidence score that cannot cover them.
+      if (key.isPlural) { skippedPlural++; continue; }
       const source = key.translations.find((t) => t.localeCode === sourceLocale)?.value ?? '';
       if (source === '') { skippedNoSource++; continue; }
       work.push({ keyId: key.id, keyName: key.name, source });
@@ -141,7 +146,7 @@ export class MtService {
       await this.activity.record(tx, {
         projectId, actorId: userId, action: 'mt.pretranslate', localeCode: dto.locale,
         detail: {
-          provider: provider.name, type: provider.type, sourceLocale, branch: branchName, translated: written, skippedExisting, skippedNoSource,
+          provider: provider.name, type: provider.type, sourceLocale, branch: branchName, translated: written, skippedExisting, skippedNoSource, skippedPlural,
           ...(writtenScores.length ? { scoreAvg: Math.round(writtenScores.reduce((a, b) => a + b, 0) / writtenScores.length), scoreMin: Math.min(...writtenScores), scoreMax: Math.max(...writtenScores) } : {}),
         },
       });
@@ -152,7 +157,7 @@ export class MtService {
     }).catch(() => {});
 
     return {
-      translated: written, skippedExisting, skippedNoSource, totalKeys: keys.length,
+      translated: written, skippedExisting, skippedNoSource, skippedPlural, totalKeys: keys.length,
       scored: writtenScores.length,
       scoreAvg: writtenScores.length ? Math.round(writtenScores.reduce((a, b) => a + b, 0) / writtenScores.length) : null,
       scoreMin: writtenScores.length ? Math.min(...writtenScores) : null,

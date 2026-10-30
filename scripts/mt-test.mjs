@@ -201,6 +201,47 @@ try {
   check('human edit accepted', humanEdit.status === 200 || humanEdit.status === 201, `got ${humanEdit.status}`);
   const tProv = (await call(`/projects/${pid}/keys?branch=main`, { jwt })).json.find((k) => k.id === kp.id).translations.find((t) => t.localeCode === 'he');
   check('human edit clears MT provenance', tProv.mtScore === null && tProv.mtProvider === null && tProv.value === 'תרגום אנושי', JSON.stringify({ s: tProv.mtScore, p: tProv.mtProvider }));
+
+  // --- Slice 15: provenance tracks the TEXT, not status/metadata edits ---
+  // Dedicated key: other legs have already human-edited the shared fixtures.
+  const fetchHe = async (kid) => (await call(`/projects/${pid}/keys?branch=main`, { jwt })).json.find((k) => k.id === kid).translations.find((t) => t.localeCode === 'he');
+  const kpv = (await call(`/projects/${pid}/keys`, { jwt, method: 'POST', body: { name: 'a.provkeep' } })).json;
+  await call(`/projects/${pid}/keys/${kpv.id}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value: 'Keep my provenance' } });
+  const keepRun = await call(`/projects/${pid}/mt/pretranslate`, { jwt, method: 'POST', body: { providerId: provider2.id, locale: 'he', keyIds: [kpv.id] } });
+  check('provenance-keep key filled by MT', keepRun.json.translated === 1 && keepRun.json.scored === 1, JSON.stringify(keepRun.json));
+  const filledPv = await fetchHe(kpv.id);
+  check('provenance present before edits', filledPv.mtScore === 100 && filledPv.mtProvider === 'Pseudo-2', JSON.stringify({ s: filledPv.mtScore, p: filledPv.mtProvider }));
+  const statusOnly = await call(`/projects/${pid}/keys/${kpv.id}/translations/he/status`, { jwt, method: 'PATCH', body: { status: 'REVIEWED' } });
+  check('status-only edit accepted', statusOnly.status === 200, `got ${statusOnly.status}`);
+  const afterStatus = await fetchHe(kpv.id);
+  check('status-only edit preserves MT provenance', afterStatus.status === 'REVIEWED' && afterStatus.mtScore === 100 && afterStatus.mtProvider === 'Pseudo-2', JSON.stringify({ st: afterStatus.status, s: afterStatus.mtScore, p: afterStatus.mtProvider }));
+  const resave = await call(`/projects/${pid}/keys/${kpv.id}/translations`, { jwt, method: 'PUT', body: { locale: 'he', value: afterStatus.value } });
+  check('identical-text resave accepted', resave.status === 200 || resave.status === 201, `got ${resave.status}`);
+  const afterResave = await fetchHe(kpv.id);
+  check('identical-text resave preserves provenance and review state', afterResave.mtScore === 100 && afterResave.status === 'REVIEWED', JSON.stringify({ s: afterResave.mtScore, st: afterResave.status }));
+  // Snapshot restore: a restore that changes only STATUS preserves provenance;
+  // one that restores different TEXT clears it (the restored wording's origin
+  // is not recorded in the snapshot, so claiming MT provenance would mislead).
+  const snap = (await call(`/projects/${pid}/snapshots`, { jwt, method: 'POST', body: { label: 'mt-prov' } })).json;
+  check('snapshot created', !!snap.id, JSON.stringify(snap).slice(0, 120));
+  const backToUnverified = await call(`/projects/${pid}/keys/${kpv.id}/translations/he/status`, { jwt, method: 'PATCH', body: { status: 'UNVERIFIED' } });
+  check('status flip accepted', backToUnverified.status === 200, `got ${backToUnverified.status}`);
+  await call(`/projects/${pid}/snapshots/${snap.id}/restore`, { jwt, method: 'POST', body: {} });
+  const afterRestore1 = await fetchHe(kpv.id);
+  check('status-only snapshot restore preserves MT provenance', afterRestore1.status === 'REVIEWED' && afterRestore1.mtScore === 100 && afterRestore1.mtProvider === 'Pseudo-2', JSON.stringify({ st: afterRestore1.status, s: afterRestore1.mtScore }));
+  const textChange = await call(`/projects/${pid}/keys/${kpv.id}/translations`, { jwt, method: 'PUT', body: { locale: 'he', value: 'human replacement' } });
+  check('text change accepted', textChange.status === 200 || textChange.status === 201, `got ${textChange.status}`);
+  await call(`/projects/${pid}/snapshots/${snap.id}/restore`, { jwt, method: 'POST', body: {} });
+  const afterRestore2 = await fetchHe(kpv.id);
+  check('text-changing snapshot restore clears MT provenance', afterRestore2.value === afterStatus.value && (afterRestore2.mtScore === null || afterRestore2.mtScore === undefined), JSON.stringify({ v: afterRestore2.value, s: afterRestore2.mtScore }));
+
+  // --- Slice 15: plural keys are skipped by the scalar-only pseudo fixture ---
+  const kpl = (await call(`/projects/${pid}/keys`, { jwt, method: 'POST', body: { name: 'a.plural', isPlural: true } })).json;
+  await call(`/projects/${pid}/keys/${kpl.id}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value: 'Items', pluralForms: { one: 'One item', other: 'Many items' } } });
+  const pluralRun = await call(`/projects/${pid}/mt/pretranslate`, { jwt, method: 'POST', body: { providerId: provider2.id, locale: 'he', keyIds: [kpl.id] } });
+  check('plural key is skipped, not half-filled', pluralRun.json.translated === 0 && pluralRun.json.skippedPlural === 1, JSON.stringify(pluralRun.json));
+  const tPlural = (await call(`/projects/${pid}/keys?branch=main`, { jwt })).json.find((k) => k.id === kpl.id).translations.find((t) => t.localeCode === 'he');
+  check('skipped plural row has no value, forms or provenance', !tPlural || (tPlural.value === '' && !tPlural.pluralForms && (tPlural.mtScore === null || tPlural.mtScore === undefined)), JSON.stringify(tPlural));
 } catch (err) {
   // embedded-postgres can reject with `undefined` when the postmaster dies at
   // startup; through an async finally that exception exits 0 SILENTLY. Catch

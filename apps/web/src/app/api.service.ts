@@ -33,7 +33,7 @@ export interface MtProviderInfo {
   id: string; name: string; type: string; enabled: boolean; createdAt: string;
 }
 export interface MtPretranslateResult {
-  translated: number; skippedExisting: number; skippedNoSource: number; totalKeys: number;
+  translated: number; skippedExisting: number; skippedNoSource: number; skippedPlural: number; totalKeys: number;
   scored: number; scoreAvg: number | null; scoreMin: number | null; scoreMax: number | null;
 }
 export interface OtaPublicationInfo { id: string; version: number; branch: string; createdAt: string; locales: string[]; translations: number; }
