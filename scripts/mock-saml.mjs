@@ -81,11 +81,31 @@ function buildResponse(knobs = {}) {
   if (knobs.signAssertion !== false) {
     xml = signElement(xml, 'Assertion', asrtId, "//*[local-name()='Assertion']/*[local-name()='Issuer']");
   }
+  // Adversarial injections happen BEFORE the Response is signed, so the
+  // Response signature stays valid and rejection can only come from the
+  // structural rule under test.
+  if (knobs.siblingAssertion) {
+    const evil = `<saml:Assertion ID="${nextId('evil')}" Version="2.0" IssueInstant="${nowIso()}"><saml:Issuer>${IDP_ENTITY_ID}</saml:Issuer><saml:Subject><saml:NameID>attacker@evil.example</saml:NameID></saml:Subject></saml:Assertion>`;
+    xml = xml.replace('</samlp:Response>', `${evil}</samlp:Response>`);
+  }
+  if (knobs.deepAssertion) {
+    // Hidden assertion INSIDE Extensions carrying the SAME ID as the real
+    // signed assertion - the classic duplicate-ID wrapping primitive.
+    const evil = `<samlp:Extensions><saml:Assertion ID="${asrtId}" Version="2.0" IssueInstant="${nowIso()}"><saml:Issuer>urn:attacker</saml:Issuer><saml:Subject><saml:NameID>attacker@evil.example</saml:NameID></saml:Subject></saml:Assertion></samlp:Extensions>`;
+    xml = xml.replace(`<samlp:Status>`, `${evil}<samlp:Status>`);
+  }
+  if (knobs.nsAssertion) {
+    const evil = `<x:Assertion xmlns:x="urn:attacker-ns" ID="${nextId('nsevil')}" Version="2.0"><x:Subject><x:NameID>attacker@evil.example</x:NameID></x:Subject></x:Assertion>`;
+    xml = xml.replace('</samlp:Response>', `${evil}</samlp:Response>`);
+  }
   if (knobs.signResponse !== false) {
     xml = signElement(xml, 'Response', respId, "//*[local-name()='Response']/*[local-name()='Issuer']");
   }
   if (knobs.tamperEmail) {
     xml = xml.replace(`>${email}</saml:AttributeValue>`, '>tampered@evil.example</saml:AttributeValue>');
+  }
+  if (knobs.doctype) {
+    xml = `<!DOCTYPE samlp:Response [<!ENTITY probe "doctype-probe">]>${xml}`;
   }
   return Buffer.from(xml, 'utf8').toString('base64');
 }

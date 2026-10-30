@@ -1,6 +1,6 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
-import { SAML, ValidateInResponseTo, type Profile } from '@node-saml/node-saml';
+import { InMemoryCacheProvider, SAML, ValidateInResponseTo, type Profile } from '@node-saml/node-saml';
 import { DOMParser } from '@xmldom/xmldom';
 import xpath from 'xpath';
 import { PrismaService } from '../prisma/prisma.service';
@@ -18,6 +18,28 @@ const b64url = (b: Buffer) => b.toString('base64url');
 // On top of the library, precheck() hard-fails the two checks v5 only warns
 // about (rejection is announced for v6): the Response Destination and every
 // bearer SubjectConfirmationData Recipient must equal our ACS URL.
+// The library's default in-memory cache has TTL pruning but NO size cap:
+// /auth/saml/login is unauthenticated, so an unbounded request-ID / replay
+// store is a memory-growth vector. This wrapper fails closed at a hard cap:
+// saveAsync throws (login refused), saveIfAbsentAsync returns false (the
+// replay check treats an unstorable assertion ID as already-seen = reject).
+class BoundedCacheProvider extends InMemoryCacheProvider {
+  constructor(private readonly maxKeys: number, keyExpirationPeriodMs: number) {
+    super({ keyExpirationPeriodMs });
+  }
+  private size(): number {
+    return Object.keys((this as unknown as { cacheKeys: Record<string, unknown> }).cacheKeys).length;
+  }
+  override async saveAsync(key: string, value: string) {
+    if (this.size() >= this.maxKeys) throw new ServiceUnavailableException('SAML request cache is full');
+    return super.saveAsync(key, value);
+  }
+  override async saveIfAbsentAsync(key: string, value: string, expiresAtMs: number) {
+    if (this.size() >= this.maxKeys) return false;
+    return super.saveIfAbsentAsync(key, value, expiresAtMs);
+  }
+}
+
 @Injectable()
 export class SamlService {
   private saml: SAML | null = null;
@@ -25,6 +47,10 @@ export class SamlService {
   // the OIDC pending store; unifying the two is a documented follow-up -
   // this slice deliberately does not touch the verified OIDC path.
   private pending = new Map<string, { userId: string; expiresAt: number }>();
+  private static readonly PENDING_TTL_MS = 5 * 60 * 1000;
+  private static readonly PENDING_MAX = Number(process.env.SAML_PENDING_MAX) || 10_000;
+  private static readonly CACHE_MAX = Number(process.env.SAML_CACHE_MAX) || 10_000;
+  private static readonly REQUEST_TTL_MS = 10 * 60 * 1000;
 
   constructor(private readonly prisma: PrismaService, private readonly auth: AuthService) {}
 
@@ -56,7 +82,9 @@ export class SamlService {
         signatureAlgorithm: 'sha256',
         validateInResponseTo: ValidateInResponseTo.always,
         rejectReplayedAssertions: true,
-        maxAssertionAgeMs: 10 * 60 * 1000,
+        maxAssertionAgeMs: SamlService.REQUEST_TTL_MS,
+        requestIdExpirationPeriodMs: SamlService.REQUEST_TTL_MS,
+        cacheProvider: new BoundedCacheProvider(SamlService.CACHE_MAX, SamlService.REQUEST_TTL_MS),
       });
     }
     return this.saml;
@@ -72,6 +100,12 @@ export class SamlService {
   // Structural pre-checks only (no crypto): the exact recipient/destination
   // fail-closed rules the library defers to its next major version.
   private precheck(xml: string, acsUrl: string) {
+    // No DTD at all: xmldom expands internal entities, which is a
+    // memory/CPU amplification vector (billion laughs) and no SAML POST
+    // response needs a DOCTYPE.
+    if (/<!DOCTYPE|<!ENTITY/i.test(xml)) {
+      throw new UnauthorizedException('SAML response must not contain a DOCTYPE or entities');
+    }
     let doc: Document;
     try {
       doc = new DOMParser().parseFromString(xml, 'text/xml');
@@ -88,6 +122,16 @@ export class SamlService {
     const recipients = xpath.select("//*[local-name()='SubjectConfirmationData']/@Recipient", doc) as Attr[];
     if (!recipients.length || recipients.some((r) => r.value !== acsUrl)) {
       throw new UnauthorizedException('SAML assertion Recipient mismatch');
+    }
+    // Duplicate-ID guard: signature references resolve by ID, and a second
+    // element carrying the signed node's ID is the classic wrapping-attack
+    // primitive - remove the ambiguity entirely instead of relying on
+    // resolution order.
+    const ids = xpath.select('//@ID | //@Id | //@id', doc) as Attr[];
+    const seen = new Set<string>();
+    for (const a of ids) {
+      if (seen.has(a.value)) throw new UnauthorizedException('Duplicate XML ID in SAML response');
+      seen.add(a.value);
     }
   }
 
@@ -160,8 +204,15 @@ export class SamlService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new UnauthorizedException();
     if (user.totpEnabled) {
+      // Bounded lifecycle: sweep expired entries on every insert, then fail
+      // closed at a hard cap instead of growing without limit.
+      const now = Date.now();
+      for (const [k, v] of this.pending) if (v.expiresAt <= now) this.pending.delete(k);
+      if (this.pending.size >= SamlService.PENDING_MAX) {
+        throw new ServiceUnavailableException('Too many pending SAML logins');
+      }
       const pendingToken = b64url(randomBytes(16));
-      this.pending.set(pendingToken, { userId, expiresAt: Date.now() + 5 * 60 * 1000 });
+      this.pending.set(pendingToken, { userId, expiresAt: now + SamlService.PENDING_TTL_MS });
       return { requiresTwoFactor: true as const, pendingToken };
     }
     return this.auth.issueOidcTokens(userId, false);

@@ -115,6 +115,23 @@ try {
     const r = await call('/auth/saml/acs', { method: 'POST', body: { SAMLResponse: await mint({ ...knobs, inResponseTo: rid, email: `neg-${knobs.audience ? 'aud' : Math.random().toString(36).slice(2, 8)}@example.com` }) } });
     check(name, r.status === 401, `got ${r.status}`);
   }
+  // Adversarial wrapping / namespace-confusion / duplicate-ID / DTD legs.
+  // Each response is otherwise fully valid with BOTH signatures valid, so
+  // only the structural rule under test can reject it.
+  const adversarial = [
+    ['DOCTYPE/entity declaration rejected', { doctype: true }],
+    ['sibling second assertion rejected (wrapping shape)', { siblingAssertion: true }],
+    ['hidden duplicate-ID assertion rejected (wrapping primitive)', { deepAssertion: true }],
+    ['namespace-confused assertion sibling rejected', { nsAssertion: true }],
+  ];
+  for (const [name, knobs] of adversarial) {
+    const rid = await freshRequestId();
+    const r = await call('/auth/saml/acs', { method: 'POST', body: { SAMLResponse: await mint({ ...knobs, inResponseTo: rid, email: `adv-${Math.random().toString(36).slice(2, 8)}@example.com` }) } });
+    // The reason is asserted too, so the leg proves rejection comes from the
+    // structural rule under test and not incidentally (e.g. a signature
+    // failure would say "SAML validation failed" instead).
+    check(name, r.status === 401 && typeof r.json?.message === 'string' && !r.json.message.startsWith('SAML validation failed'), `got ${r.status} "${String(r.json?.message).slice(0, 80)}"`);
+  }
   const noIrt = await call('/auth/saml/acs', { method: 'POST', body: { SAMLResponse: await mint({ email: 'noirt@example.com' }) } });
   check('missing InResponseTo rejected', noIrt.status === 401, `got ${noIrt.status}`);
   const bogusIrt = await call('/auth/saml/acs', { method: 'POST', body: { SAMLResponse: await mint({ inResponseTo: '_bogus-never-issued', email: 'bogus@example.com' }) } });
