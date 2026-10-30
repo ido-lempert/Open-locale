@@ -4,6 +4,7 @@
 // branch merge carry. Run: node scripts/plural-test.mjs  (requires: nx build api)
 import { execFileSync, spawn } from 'node:child_process';
 import EmbeddedPostgres from 'embedded-postgres';
+import { PrismaClient } from '@prisma/client';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -101,6 +102,33 @@ try {
   const ksAx2 = await keys();
   check('<string> import preserves pluralForms', JSON.stringify(formsOf(ksAx2, 'cart.android', 'en')) === JSON.stringify({ one: 'one thing', other: 'many things' }));
   check('<string> import updates plain value', ksAx2.find((k) => k.name === 'cart.android').translations.find((t) => t.localeCode === 'en').value === 'plain string');
+
+  // Failure atomicity (no inference from construction; direct evidence):
+  // a failed plural import leaves isPlural, forms and value unchanged.
+  const fewExisting = await call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { xml: '<resources><plurals name="cart.android"><item quantity="few">a few</item><item quantity="other">others</item></plurals></resources>' } });
+  check('locale-invalid category on existing plural key fails the key only', fewExisting.status === 201 && fewExisting.json.failed === 1, `${fewExisting.status} ${JSON.stringify(fewExisting.json)}`);
+  const ksF = await keys();
+  check('failed plural import leaves isPlural and forms unchanged', ksF.find((k) => k.name === 'cart.android')?.isPlural === true && JSON.stringify(formsOf(ksF, 'cart.android', 'en')) === JSON.stringify({ one: 'one thing', other: 'many things' }));
+  check('failed plural import leaves plain value unchanged', ksF.find((k) => k.name === 'cart.android').translations.find((t) => t.localeCode === 'en').value === 'plain string');
+  const fewNew = await call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { xml: '<resources><plurals name="few.check"><item quantity="few">x</item><item quantity="other">y</item></plurals></resources>' } });
+  check('locale-invalid category on a new key fails the key only', fewNew.status === 201 && fewNew.json.failed === 1, `${fewNew.status} ${JSON.stringify(fewNew.json)}`);
+  check('failed new plural key was not created', (await keys()).every((k) => k.name !== 'few.check'));
+  const noOther = await call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { xml: '<resources><plurals name="no.other"><item quantity="one">x</item></plurals></resources>' } });
+  check('plurals import without "other" fails the key (consistent with API 400)', noOther.status === 201 && noOther.json.failed === 1, `${noOther.status} ${JSON.stringify(noOther.json)}`);
+  check('missing-other key was not created', (await keys()).every((k) => k.name !== 'no.other'));
+  // Locked key: a non-assignee MEMBER's plural import fails atomically.
+  const member = (await call('/auth/signup', { method: 'POST', body: { email: `m${Date.now()}@t.dev`, password: 'pass1234', displayName: 'M' } })).json;
+  const prisma = new PrismaClient({ datasources: { db: { url } } });
+  await prisma.teamMember.create({ data: { teamId: (await prisma.project.findUniqueOrThrow({ where: { id: pid } })).teamId, userId: member.user.id, role: 'MEMBER' } });
+  await prisma.$disconnect();
+  const androidKey = (await keys()).find((k) => k.name === 'cart.android');
+  const lock = (await call(`/projects/${pid}/tasks`, { jwt, method: 'POST', body: { title: 'Lock android key', lockKeys: true, keyIds: [androidKey.id] } })).json;
+  check('lock task created for the atomicity leg', lock.lockKeys === true, JSON.stringify(lock).slice(0, 80));
+  const lockedImp = await call(`/projects/${pid}/import/en`, { jwt: member.accessToken, method: 'POST', body: { xml: '<resources><plurals name="cart.android"><item quantity="one">locked one</item><item quantity="other">locked other</item></plurals></resources>' } });
+  check('locked-key plural import fails the key', lockedImp.status === 201 && lockedImp.json.failed === 1, `${lockedImp.status} ${JSON.stringify(lockedImp.json)}`);
+  const ksL = await keys();
+  check('locked failed import leaves isPlural and forms unchanged', ksL.find((k) => k.name === 'cart.android')?.isPlural === true && JSON.stringify(formsOf(ksL, 'cart.android', 'en')) === JSON.stringify({ one: 'one thing', other: 'many things' }));
+  check('locked failed import leaves plain value unchanged', ksL.find((k) => k.name === 'cart.android').translations.find((t) => t.localeCode === 'en').value === 'plain string');
 
   // isPlural=false clears stored forms explicitly.
   check('isPlural flip accepted', (await call(`/projects/${pid}/keys/${kid}`, { jwt, method: 'PATCH', body: { isPlural: false } })).status === 200);

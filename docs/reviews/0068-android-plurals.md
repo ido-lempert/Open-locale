@@ -24,6 +24,13 @@ The Android strings.xml format gains a deliberately narrow plural subset:
 - Verified over real PG + HTTP in formats-test (import sets metadata+forms,
   value=other, export emits ordered items, three rejection cases) and
   plural-test (import upgrade, export, string-import preservation).
+- Failure atomicity (test-verified, not inferred): a failed plural import
+  leaves isPlural, stored forms and value unchanged - proven for a
+  locale-invalid category on an existing plural key, a locale-invalid
+  category on a new key (key never created), a missing "other" item
+  (per-key failure, consistent with the write API's 400), and a task-locked
+  key imported by a non-assignee MEMBER (lock failure rolls back the whole
+  per-key transaction, including the isPlural upgrade).
 - Explicit non-goals: PO msgid_plural, ARB ICU messages, XLIFF plural
   groups and iOS stringsdict remain unsupported/rejected exactly as before;
   stringsdict stays deferred per 0060. No other format reads or writes
