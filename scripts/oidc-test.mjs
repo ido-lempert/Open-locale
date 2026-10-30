@@ -185,6 +185,25 @@ try {
   const missingNonce = await mintFlow({ ...base, nonce: undefined });
   check('missing nonce rejected', missingNonce.status === 401, `got ${missingNonce.status}`);
 
+  // azp (OIDC Core 3.1.3.7): a multi-valued aud must name us as azp.
+  const mintFlowRealNonce = async (claims) => {
+    const start = await call('/auth/oidc/start');
+    const u = new URL(start.json.url);
+    const minted = await (await fetch(`${MOCK}/mint-code`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ challenge: u.searchParams.get('code_challenge'), claims: { ...claims, nonce: u.searchParams.get('nonce') } }) })).json();
+    return call('/auth/oidc/callback', { method: 'POST', body: { code: minted.code, state: u.searchParams.get('state') } });
+  };
+  const azpBase = { sub: 'mock-azp', email: `azp${ts}@t.dev`, email_verified: true };
+  check('multi-aud without azp rejected', (await mintFlow({ ...azpBase, nonce: undefined, aud: ['open-locale', 'other-app'] })).status === 401);
+  check('multi-aud with foreign azp rejected', (await mintFlow({ ...azpBase, nonce: undefined, aud: ['open-locale', 'other-app'], azp: 'other-app' })).status === 401);
+  const azpOk = await mintFlowRealNonce({ ...azpBase, aud: ['open-locale', 'other-app'], azp: 'open-locale' });
+  check('multi-aud with our azp accepted (control)', azpOk.status === 200 && !!azpOk.json.accessToken, `got ${azpOk.status}: ${JSON.stringify(azpOk.json).slice(0, 80)}`);
+
+  // Malformed id_token (3 segments, unparseable header) must 401, never 500.
+  const startX = await call('/auth/oidc/start');
+  const ux = new URL(startX.json.url);
+  const mintedX = await (await fetch(`${MOCK}/mint-code`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ challenge: ux.searchParams.get('code_challenge'), claims: {}, rawIdToken: 'aaa.bbb.ccc' }) })).json();
+  check('malformed id_token rejected as 401, not 500', (await call('/auth/oidc/callback', { method: 'POST', body: { code: mintedX.code, state: ux.searchParams.get('state') } })).status === 401);
+
   // Local 2FA after SSO: enable TOTP on the linked account, then SSO login
   // must return requiresTwoFactor and only issue a session after the code.
   const bobLogin = (await call('/auth/login', { method: 'POST', body: { email: bobEmail, password: 'pass1234' } })).json;

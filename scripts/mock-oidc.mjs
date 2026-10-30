@@ -64,7 +64,7 @@ createServer(async (req, res) => {
     // optionally signed with the wrong key. PKCE challenge still enforced.
     const body = JSON.parse(await new Promise((r) => { let d = ''; req.on('data', (c) => (d += c)); req.on('end', () => r(d)); }));
     const code = `minted-${codes.size + 1}`;
-    codes.set(code, { challenge: body.challenge, nonce: body.claims.nonce, claims: body.claims, badSign: !!body.badSign });
+    codes.set(code, { challenge: body.challenge, nonce: body.claims?.nonce ?? null, claims: body.claims || {}, badSign: !!body.badSign, rawIdToken: typeof body.rawIdToken === 'string' ? body.rawIdToken : null });
     return json(200, { code });
   }
   if (u.pathname === '/token' && req.method === 'POST') {
@@ -87,7 +87,7 @@ createServer(async (req, res) => {
       nonce: rec.nonce,
       ...rec.claims, // test fixtures may override iss/aud/exp/nonce for negative tests
     };
-    return json(200, { id_token: mint(claims, rec.badSign), token_type: 'Bearer', expires_in: 300 });
+    return json(200, { id_token: rec.rawIdToken ?? mint(claims, rec.badSign), token_type: 'Bearer', expires_in: 300 });
   }
   if (u.pathname === '/debug/last-token-host') return json(200, { host: lastTokenHost });
   json(404, { error: 'not found' });
