@@ -88,6 +88,7 @@ import { ApiService, BranchInfo, LocalSyncPreview } from '../api.service';
     <header class="bar">
       <a [routerLink]="['/projects', projectId]" class="back">&larr; Editor</a>
       <h1>File sync preview</h1>
+      <a [routerLink]="['/projects',projectId,'sync','history']" class="history-link">Diagnostic history</a>
     </header>
     <main>
       <p class="notice">

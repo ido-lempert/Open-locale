@@ -1,3 +1,4 @@
+import { SyncHistoryComponent } from './pages/sync-history.component';
 import { SyncPreviewComponent } from './pages/sync-preview.component';
 import { SamlCallbackComponent } from './pages/saml-callback.component';
 import { Routes } from '@angular/router';
@@ -20,6 +21,7 @@ export const appRoutes: Routes = [
   { path: 'login', component: LoginComponent },
   { path: 'projects', component: ProjectsComponent, canActivate: [authGuard] },
   { path: 'projects/:id', component: EditorComponent, canActivate: [authGuard] },
+  { path: 'projects/:id/sync/history', component: SyncHistoryComponent, canActivate: [authGuard] },
   { path: 'projects/:id/sync', component: SyncPreviewComponent, canActivate: [authGuard] },
   { path: 'projects/:id/settings', component: SettingsComponent, canActivate: [authGuard] },
   { path: 'projects/:id/activity', component: ActivityComponent, canActivate: [authGuard] },

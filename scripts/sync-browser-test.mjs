@@ -90,10 +90,27 @@ try {
   await page.waitForFunction(id=>location.pathname==='/projects/'+id+'/sync',{},second.id);
   await page.waitForSelector('textarea[name=syncBaseline]');
   check('same-component project navigation resets file inputs',await page.$eval('[name=syncBaseline]',e=>e.value==='') && await page.$eval('[name=syncRemote]',e=>e.value==='') && !(await page.$('section[aria-label="Preview results"]')));
+  await page.goto(`${WEB}/projects/${project.id}/sync`,{waitUntil:'networkidle0'});await page.waitForSelector('.history-link');await page.click('.history-link');
+  await page.waitForFunction(()=>document.body.textContent.includes('No diagnostic preview records'));
+  check('preview links to empty diagnostic history with non-sync explanation',(await page.content()).includes('not completed syncs or accepted baselines') && !(await page.$('article')));
+  const recordInput={branch:'main',locale:'en',baselineJson:'{}',remoteJson:'{"title":"remote diagnostic"}',remoteSha:'a'.repeat(40)};
+  const saved=await call(`${P}/sync/preview-records`,recordInput,token);
+  await page.click('button[name=syncHistoryRefresh]');await page.waitForSelector('article');
+  check('explicit API record appears after UI refresh',(await page.$eval('article',e=>e.textContent)).includes(saved.record.fingerprint) && (await page.$eval('article',e=>e.textContent)).includes('not applied'));
+  check('history displays counts not private file values',!(await page.content()).includes('remote diagnostic') && (await page.$eval('article',e=>e.textContent)).includes('keys'));
+  check('history has no apply action',!(await page.$$eval('button',nodes=>nodes.some(n=>/apply|save|push/i.test(n.textContent)))));
+  await page.setViewport({width:1280,height:900});await page.screenshot({path:'/downloads/sync-history-desktop.png',fullPage:true});
+  await page.setViewport({width:480,height:900});await page.screenshot({path:'/downloads/sync-history-narrow.png',fullPage:true});
+  check('history fingerprint wraps without document overflow',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.evaluate(id=>{const link=window.ng.getDirectives(document.querySelector('.back')).find(d=>d.router);return link.router.navigateByUrl('/projects/'+id+'/sync/history');},second.id);
+  await page.waitForFunction(()=>document.body.textContent.includes('No diagnostic preview records'));
+  check('same-component history navigation clears previous project record',!(await page.$('article')) && !(await page.content()).includes(saved.record.fingerprint));
   await page.evaluate(t=>localStorage.setItem('ol_token',t),member.accessToken);
   await page.goto(`${WEB}/projects/${project.id}/sync`,{waitUntil:'networkidle0'});await page.waitForSelector('textarea[name=syncBaseline]');
   await set('syncSha','a'.repeat(40));await set('syncBaseline','{}');await set('syncRemote','{}');await page.click('button[name=syncPreview]');await page.waitForSelector('[role=alert]');
   check('member gets explicit permission error and no preview',(await page.$eval('[role=alert]',e=>e.textContent)).includes('admin')&&!(await page.$('section[aria-label="Preview results"]')));
+  await page.goto(`${WEB}/projects/${project.id}/sync/history`,{waitUntil:'networkidle0'});await page.waitForSelector('[role=alert]');
+  check('member history denial exposes no saved record',!(await page.$('article')) && (await page.$eval('[role=alert]',e=>e.textContent)).includes('admin'));
   console.log(failures?'SYNC BROWSER CHECKS FAILED':'ALL SYNC BROWSER CHECKS PASSED');process.exitCode=failures?1:0;
 } catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {

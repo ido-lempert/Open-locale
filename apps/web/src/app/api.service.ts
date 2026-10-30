@@ -1,3 +1,7 @@
+export interface SyncPreviewRecord {
+ id:string;projectId:string;branch:string;locale:string;fingerprint:string;remoteSha:string;createdAt:string;
+ summary:{total:number;conflict:number;manual:number};
+}
 export interface LocalSyncPreview {
   projectId:string; branch:string; locale:string; fingerprint:string;
   baselineVerified:false; remoteVerified:false; canApply:false; requiresManual:boolean;
@@ -188,6 +192,7 @@ export class ApiService {
   completeOidc(pendingToken: string, totpCode: string) {
     return this.request<{ accessToken: string }>('/auth/oidc/complete', { method: 'POST', body: JSON.stringify({ pendingToken, totpCode }) });
   }
+  listSyncPreviewRecords(projectId:string){return this.request<{records:SyncPreviewRecord[];canApply:false}>(`/projects/${projectId}/sync/preview-records`);}
   previewLocalSync(projectId:string,input:{branch:string;locale:string;baselineJson:string;remoteJson:string;remoteSha:string}) { return this.request<LocalSyncPreview>(`/projects/${projectId}/sync/preview`,{method:'POST',body:JSON.stringify(input)}); }
   listTokens() { return this.request<ApiTokenInfo[]>('/auth/tokens'); }
   getSamlSpInfo() { return this.request<{ configured: boolean; entityId?: string; acsUrl?: string; metadataPath?: string; idpEntryPoint?: string; requestSigning?: boolean; browserEnabled?: boolean }>('/auth/saml/sp-info'); }
