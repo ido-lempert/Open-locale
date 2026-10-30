@@ -39,6 +39,9 @@ export class AuthController {
   // start returns the authorization URL; start-link binds an identity to the
   // signed-in account (session-only). callback exchanges code+state; complete
   // finishes the local-2FA step for accounts that have TOTP enabled.
+  @Get('oidc/info')
+  oidcInfo() { return { configured: !!process.env.OIDC_ISSUER }; }
+
   @Get('oidc/start')
   async oidcStart() {
     return this.oidc.start(null);

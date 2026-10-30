@@ -39,7 +39,8 @@
     "test:oidc": "node scripts/oidc-test.mjs",
     "test:groups": "node scripts/groups-test.mjs",
     "test:plural": "node scripts/plural-test.mjs",
-    "test:saml": "node scripts/saml-test.mjs"
+    "test:saml": "node scripts/saml-test.mjs",
+    "test:oidc-browser": "node scripts/oidc-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

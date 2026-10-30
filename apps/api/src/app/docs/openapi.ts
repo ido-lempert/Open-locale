@@ -42,6 +42,7 @@ export const OPENAPI = {
     '/api/auth/signup': { post: pub('Create an account', 'auth', true) },
     '/api/auth/login': { post: pub('Log in and receive a session JWT', 'auth', true) },
     '/api/auth/2fa/setup': { post: p('Generate a pending TOTP secret (session only; not enabled until verified)', 'auth') },
+    '/api/auth/oidc/info': { get: pub('Whether OIDC sign-in is configured (no provider secrets)', 'auth') },
     '/api/auth/oidc/start': { get: pub('Begin SSO login (authorization-code + PKCE); returns the issuer authorization URL', 'auth', true) },
     '/api/auth/oidc/start-link': { post: p('Begin SSO identity linking for the signed-in account (session only, fresh password required)', 'auth', true) },
     '/api/auth/oidc/callback': { post: pub('Exchange authorization code + state; may return requiresTwoFactor', 'auth', true) },

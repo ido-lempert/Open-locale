@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { OidcCallbackComponent } from './pages/oidc-callback.component';
 import { authGuard } from './auth.guard';
 import { LoginComponent } from './pages/login.component';
 import { ProjectsComponent } from './pages/projects.component';
@@ -12,6 +13,7 @@ import { SnapshotsComponent } from './pages/snapshots.component';
 import { ReportsComponent } from './pages/reports.component';
 
 export const appRoutes: Routes = [
+  { path: 'auth/oidc/callback', component: OidcCallbackComponent },
   { path: 'login', component: LoginComponent },
   { path: 'projects', component: ProjectsComponent, canActivate: [authGuard] },
   { path: 'projects/:id', component: EditorComponent, canActivate: [authGuard] },

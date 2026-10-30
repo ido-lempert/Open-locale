@@ -172,6 +172,14 @@ export class ApiService {
     return res.json() as Promise<T>;
   }
 
+  getOidcInfo() { return this.request<{ configured: boolean }>('/auth/oidc/info'); }
+  startOidc() { return this.request<{ url: string }>('/auth/oidc/start'); }
+  callbackOidc(code: string, state: string) {
+    return this.request<{ accessToken?: string; requiresTwoFactor?: boolean; pendingToken?: string }>('/auth/oidc/callback', { method: 'POST', body: JSON.stringify({ code, state }) });
+  }
+  completeOidc(pendingToken: string, totpCode: string) {
+    return this.request<{ accessToken: string }>('/auth/oidc/complete', { method: 'POST', body: JSON.stringify({ pendingToken, totpCode }) });
+  }
   listTokens() { return this.request<ApiTokenInfo[]>('/auth/tokens'); }
   getSamlSpInfo() { return this.request<{ configured: boolean; entityId?: string; acsUrl?: string; metadataPath?: string; idpEntryPoint?: string; requestSigning?: boolean }>('/auth/saml/sp-info'); }
   get2faStatus() { return this.request<{ enabled: boolean; recoveryCodesRemaining: number }>('/auth/2fa/status'); }
