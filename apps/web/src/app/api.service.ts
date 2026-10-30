@@ -304,9 +304,11 @@ export class ApiService {
     return this.request<{ restored: boolean; keysRemoved: number; valuesChanged: number }>(
       `/projects/${projectId}/snapshots/${snapshotId}/restore`, { method: 'POST' });
   }
-  listActivity(projectId: string, opts: { action?: string; cursor?: string; limit?: number } = {}) {
+  listActivity(projectId: string, opts: { action?: string; actorId?: string; key?: string; cursor?: string; limit?: number } = {}) {
     const params = new URLSearchParams();
     if (opts.action) params.set('action', opts.action);
+    if (opts.actorId) params.set('actorId', opts.actorId);
+    if (opts.key) params.set('key', opts.key);
     if (opts.cursor) params.set('cursor', opts.cursor);
     if (opts.limit) params.set('limit', String(opts.limit));
     const q = params.toString();

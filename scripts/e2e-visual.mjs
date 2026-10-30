@@ -220,6 +220,32 @@ try {
   );
   check('activity filter narrows to comments', true);
 
+  // Slice 11: actor + key filters on the activity page. Reset the action
+  // filter, then the key filter must narrow rows to the matching key.
+  await page.select('select[aria-label="Filter by action"]', '');
+  await page.waitForFunction(
+    () => document.querySelectorAll('.activity-row').length > 1,
+    { timeout: 10000 },
+  );
+  const actorOptions = await page.$$eval('select[aria-label="Filter by actor"] option', (els) => els.map((e) => e.textContent));
+  check('activity actor filter lists project members', actorOptions.length >= 2 && actorOptions[0] === 'all actors' && actorOptions.some((o) => o === 'Demo User'), JSON.stringify(actorOptions));
+  await page.select('select[aria-label="Filter by actor"]', await page.$eval('select[aria-label="Filter by actor"] option:nth-child(2)', (e) => e.value));
+  await page.waitForFunction(
+    () => [...document.querySelectorAll('.activity-row')].every((r) => r.textContent.includes('Demo User')) && document.querySelectorAll('.activity-row').length > 0,
+    { timeout: 10000 },
+  );
+  check('actor filter narrows rows to that member', true);
+  await page.type('input[aria-label="Filter by key"]', 'cart.checkout');
+  await page.waitForFunction(
+    () => {
+      const rows = [...document.querySelectorAll('.activity-row')];
+      return rows.length > 0 && rows.every((r) => r.textContent.includes('cart.checkout'));
+    },
+    { timeout: 10000 },
+  );
+  check('key filter narrows rows to matching key events', true);
+  await shot('editor-50-activity-filters.png');
+
   // Screenshots via UI
   await page.click('.back');
   await page.waitForSelector('.grid tbody tr', { timeout: 10000 });

@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { ActivityService } from './activity.service';
 import { ProjectsService } from '../projects/projects.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -18,12 +18,19 @@ export class ActivityController {
     @CurrentUser() user: AuthPrincipal,
     @Param('projectId') projectId: string,
     @Query('action') action?: string,
+    @Query('actorId') actorId?: string,
+    @Query('key') key?: string,
     @Query('limit') limit?: string,
     @Query('cursor') cursor?: string,
   ) {
     await this.projects.getFor(user.userId, projectId);
+    if (actorId && !/^[0-9a-fA-F-]{36}$/.test(actorId)) {
+      throw new BadRequestException('actorId must be a uuid');
+    }
     return this.activity.list(projectId, {
       action: action || undefined,
+      actorId: actorId || undefined,
+      key: key || undefined,
       limit: Math.min(Math.max(Number(limit) || 50, 1), 100),
       cursor: cursor || undefined,
     });

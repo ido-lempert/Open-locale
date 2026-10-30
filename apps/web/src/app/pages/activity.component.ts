@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { ActivityEntry, ApiService } from '../api.service';
+import { ActivityEntry, ApiService, MemberInfo } from '../api.service';
 
 const ACTION_LABELS: Record<string, string> = {
   'key.created': 'created key',
@@ -43,6 +43,11 @@ const ACTION_LABELS: Record<string, string> = {
         <option value="">all actions</option>
         @for (a of actions; track a) { <option [value]="a">{{ label(a) }}</option> }
       </select>
+      <select aria-label="Filter by actor" name="actActor" [ngModel]="actorFilter()" (ngModelChange)="setActor($event)">
+        <option value="">all actors</option>
+        @for (m of members(); track m.id) { <option [value]="m.id">{{ m.displayName }}</option> }
+      </select>
+      <input aria-label="Filter by key" name="actKey" placeholder="key contains…" [ngModel]="keyFilter()" (ngModelChange)="onKeyInput($event)">
     </header>
     <main>
       @if (error(); as e) { <p class="error" role="alert">{{ e }}</p> }
@@ -71,15 +76,32 @@ export class ActivityComponent implements OnInit {
   items = signal<ActivityEntry[]>([]);
   nextCursor = signal<string | null>(null);
   actionFilter = signal('');
+  actorFilter = signal('');
+  keyFilter = signal('');
+  members = signal<MemberInfo[]>([]);
   loading = signal(true);
   error = signal('');
   actions = Object.keys(ACTION_LABELS);
+  private keyTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private route: ActivatedRoute, private api: ApiService) {}
 
   ngOnInit() {
     this.projectId = this.route.snapshot.paramMap.get('id') ?? '';
     void this.fetch(true);
+    this.api.listMembers(this.projectId).then((m) => this.members.set(m)).catch(() => this.members.set([]));
+  }
+
+  setActor(actorId: string) {
+    this.actorFilter.set(actorId);
+    void this.fetch(true);
+  }
+
+  // Debounced like the editor search: one request per pause, not per keystroke.
+  onKeyInput(v: string) {
+    this.keyFilter.set(v);
+    if (this.keyTimer) clearTimeout(this.keyTimer);
+    this.keyTimer = setTimeout(() => void this.fetch(true), 250);
   }
 
   label(action: string) { return ACTION_LABELS[action] ?? action; }
@@ -147,6 +169,8 @@ export class ActivityComponent implements OnInit {
     try {
       const res = await this.api.listActivity(this.projectId, {
         action: this.actionFilter() || undefined,
+        actorId: this.actorFilter() || undefined,
+        key: this.keyFilter().trim() || undefined,
         cursor: reset ? undefined : this.nextCursor() ?? undefined,
       });
       this.items.set(reset ? res.items : [...this.items(), ...res.items]);

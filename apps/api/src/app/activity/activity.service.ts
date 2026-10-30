@@ -76,9 +76,16 @@ export class ActivityService {
   }
 
   // Authz is the caller's job (the controller checks membership first).
-  async list(projectId: string, filters: { action?: string; limit: number; cursor?: string }) {
+  async list(projectId: string, filters: { action?: string; actorId?: string; key?: string; limit: number; cursor?: string }) {
     const events = await this.prisma.activityEvent.findMany({
-      where: { projectId, ...(filters.action ? { action: filters.action } : {}) },
+      where: {
+        projectId,
+        ...(filters.action ? { action: filters.action } : {}),
+        ...(filters.actorId ? { actorId: filters.actorId } : {}),
+        // Target filter: the key the event acted on (keyName is a snapshot
+        // column, so filtering survives key deletion).
+        ...(filters.key ? { keyName: { contains: filters.key, mode: 'insensitive' as const } } : {}),
+      },
       include: { actor: { select: { displayName: true, email: true } } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: filters.limit + 1,

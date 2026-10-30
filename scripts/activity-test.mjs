@@ -90,6 +90,32 @@ try {
 
   const cross = await call(act, { token: bt });
   check('cross-team activity read denied (404)', cross.status === 404, `got ${cross.status}`);
+
+  // Actor and key (target) filters (slice 11): a second member acts so the
+  // actor filter has two actors to separate.
+  const addB = await call(`/projects/${proj.id}/members`, { token: at, method: 'POST', body: { email: 'b@act.io' } });
+  check('second member added for actor filtering', addB.status === 200 || addB.status === 201, `got ${addB.status}`);
+  // The first key was deleted above (keyName-snapshot leg), so bob acts on
+  // a fresh key.
+  const key2 = (await call(`/projects/${proj.id}/keys`, { token: at, method: 'POST', body: { name: 'act.second' } })).json;
+  const bComment = await call(`/projects/${proj.id}/keys/${key2.id}/comments`, { token: bt, method: 'POST', body: { body: 'note from bob', locale: 'en' } });
+  check('second member can act (comment)', bComment.status === 200 || bComment.status === 201, `got ${bComment.status} ${JSON.stringify(bComment.json)}`);
+  const byA = (await call(`${act}?actorId=${a.user.id}`, { token: at })).json;
+  const byB = (await call(`${act}?actorId=${b.user.id}`, { token: at })).json;
+  check('actor filter returns only that actor', byA.items.length > 0 && byA.items.every((e) => e.actor?.email === 'a@act.io') && byB.items.length === 1 && byB.items[0].actor?.email === 'b@act.io', `a=${byA.items.length} b=${byB.items.length}`);
+  const byNobody = (await call(`${act}?actorId=00000000-0000-0000-0000-000000000000`, { token: at })).json;
+  check('unknown actor yields an empty list (200)', Array.isArray(byNobody.items) && byNobody.items.length === 0);
+  const badActor = await call(`${act}?actorId=not-a-uuid`, { token: at });
+  check('malformed actorId rejected (400)', badActor.status === 400, `got ${badActor.status}`);
+  const allNow = (await call(act, { token: at })).json;
+  const commentEv = allNow.items.find((e) => e.action === 'comment.added' && e.keyName);
+  const kn = commentEv.keyName;
+  const byKey = (await call(`${act}?key=${encodeURIComponent(kn.toUpperCase())}`, { token: at })).json;
+  check('key filter matches case-insensitively', byKey.items.length > 0 && byKey.items.every((e) => e.keyName === kn), `${byKey.items.length} for ${kn}`);
+  const missKey = (await call(`${act}?key=no-such-key-xyz`, { token: at })).json;
+  check('key filter with no match yields an empty list', Array.isArray(missKey.items) && missKey.items.length === 0);
+  const combo = (await call(`${act}?action=comment.added&key=${encodeURIComponent(kn)}`, { token: at })).json;
+  check('action and key filters combine', combo.items.length > 0 && combo.items.every((e) => e.action === 'comment.added' && e.keyName === kn), `${combo.items.length}`);
 } catch (err) {
   // embedded-postgres can reject with `undefined` when the postmaster dies at
   // startup; through an async finally that exception exits 0 SILENTLY. Catch
