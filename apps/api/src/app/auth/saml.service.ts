@@ -49,6 +49,11 @@ export class SamlService {
   private pending = new Map<string, { userId: string; expiresAt: number }>();
   private static readonly PENDING_TTL_MS = 5 * 60 * 1000;
   private static readonly PENDING_MAX = Number(process.env.SAML_PENDING_MAX) || 10_000;
+  private static readonly LINK_TTL_MS = 10 * 60 * 1000;
+  private static readonly LINK_MAX = Number(process.env.SAML_LINK_MAX) || 10_000;
+  // Link flows: opaque RelayState token -> the account that proved fresh
+  // auth and its authEpoch at that moment (a stale or revoked linker fails).
+  private linkStates = new Map<string, { userId: string; epoch: number; expiresAt: number }>();
   private static readonly CACHE_MAX = Number(process.env.SAML_CACHE_MAX) || 10_000;
   private static readonly REQUEST_TTL_MS = 10 * 60 * 1000;
 
@@ -90,11 +95,34 @@ export class SamlService {
     return this.saml;
   }
 
-  async login(): Promise<{ url: string }> {
+  async login(relayState = ''): Promise<{ url: string }> {
     // The generated AuthnRequest ID is saved into the instance's cache
     // provider by the library, which is what makes the InResponseTo
     // consumption at the ACS enforceable.
-    return { url: await this.client().getAuthorizeUrlAsync('', {}) };
+    return { url: await this.client().getAuthorizeUrlAsync(relayState, {}) };
+  }
+
+  // Linking entry point: the caller has already passed fresh-auth (current
+  // password) in the controller; here the flow is bound to the account AND
+  // its current authEpoch, carried to the IdP as an opaque RelayState token.
+  async startLink(userId: string, epoch: number): Promise<{ url: string }> {
+    const now = Date.now();
+    for (const [k, v] of this.linkStates) if (v.expiresAt <= now) this.linkStates.delete(k);
+    if (this.linkStates.size >= SamlService.LINK_MAX) {
+      throw new ServiceUnavailableException('Too many pending SAML link flows');
+    }
+    const token = b64url(randomBytes(16));
+    this.linkStates.set(token, { userId, epoch, expiresAt: now + SamlService.LINK_TTL_MS });
+    return this.login(token);
+  }
+
+  // Consumed at ACS entry (before validation): single winner, and a failed
+  // validation burns the token - fail closed like the OIDC state store.
+  private consumeLink(token: string): { userId: string; epoch: number } {
+    const l = this.linkStates.get(token);
+    this.linkStates.delete(token);
+    if (!l || l.expiresAt < Date.now()) throw new UnauthorizedException('Invalid or expired link state');
+    return { userId: l.userId, epoch: l.epoch };
   }
 
   // Structural pre-checks only (no crypto): the exact recipient/destination
@@ -135,8 +163,10 @@ export class SamlService {
     }
   }
 
-  async acs(samlResponseB64: string) {
+  async acs(samlResponseB64: string, relayState?: string) {
     const c = this.config();
+    // Burn the link token before any validation when one is present.
+    const link = typeof relayState === 'string' && relayState ? this.consumeLink(relayState) : null;
     const xml = Buffer.from(samlResponseB64, 'base64').toString('utf8');
     this.precheck(xml, c.callbackUrl);
     let profile: Profile;
@@ -161,6 +191,24 @@ export class SamlService {
     const identity = await this.prisma.externalIdentity.findUnique({
       where: { issuer_subject: { issuer, subject: sub } },
     });
+    if (link) {
+      // Linking flow: the state is bound to the account that started it AND
+      // its authEpoch at that moment - a stale or revoked linker state fails.
+      // SAML has no email-verified claim (documented difference from OIDC):
+      // the anti-takeover boundary here is the fresh-password step-up, and
+      // the asserted email is stored as unverified metadata on the binding.
+      const linker = await this.prisma.user.findUnique({ where: { id: link.userId }, select: { authEpoch: true } });
+      if (!linker || linker.authEpoch !== link.epoch) {
+        throw new UnauthorizedException('Link state is stale - restart the linking flow');
+      }
+      if (identity && identity.userId !== link.userId) {
+        throw new ConflictException('This identity is already linked to a different account');
+      }
+      if (!identity) {
+        await this.prisma.externalIdentity.create({ data: { userId: link.userId, issuer, subject: sub, email } });
+      }
+      return this.finish(link.userId);
+    }
     if (identity) return this.finish(identity.userId);
 
     // Never auto-link by email - that is account takeover. SAML has no

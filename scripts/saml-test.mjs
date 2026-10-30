@@ -167,6 +167,45 @@ try {
   const reuse = await call('/auth/saml/complete', { method: 'POST', body: { pendingToken: tfAcs2.json.pendingToken, totpCode: totp(tfSetup.secret, 1) } });
   check('pending token single-use after completion', reuse.status === 401, `got ${reuse.status}`);
 
+  // Account linking: session-only start-link with fresh password, binding
+  // carried as an opaque RelayState token, single-use, epoch-bound.
+  await call('/auth/signup', { method: 'POST', body: { email: 'eve-link@example.com', password: 'pass1234', displayName: 'Eve' } });
+  const eveLogin = (await call('/auth/login', { method: 'POST', body: { email: 'eve-link@example.com', password: 'pass1234' } })).json;
+  const noAuth = await call('/auth/saml/start-link', { method: 'POST', body: { password: 'pass1234' } });
+  check('start-link without a session rejected', noAuth.status === 401, `got ${noAuth.status}`);
+  const wrongPw = await call('/auth/saml/start-link', { jwt: eveLogin.accessToken, method: 'POST', body: { password: 'nope-nope' } });
+  check('start-link with wrong password rejected', wrongPw.status === 401, `got ${wrongPw.status}`);
+  const linkStart = (await call('/auth/saml/start-link', { jwt: eveLogin.accessToken, method: 'POST', body: { password: 'pass1234' } })).json;
+  const relay = new URL(linkStart.url).searchParams.get('RelayState');
+  check('start-link returns IdP URL carrying an opaque RelayState', typeof relay === 'string' && relay.length > 10);
+  const ridL = await freshRequestId();
+  // The asserted email differs from the account email on purpose: the
+  // anti-takeover boundary is the fresh-password step-up, not email matching.
+  const linkAcs = await call('/auth/saml/acs', { method: 'POST', body: { SAMLResponse: await mint({ inResponseTo: ridL, email: 'eve-saml-asserted@example.com' }), RelayState: relay } });
+  check('link flow binds identity and issues the linker session', (linkAcs.status === 200 || linkAcs.status === 201) && linkAcs.json?.user?.email === 'eve-link@example.com', `status=${linkAcs.status}`);
+  const eveBound = await prisma.externalIdentity.findFirst({ where: { issuer: `saml:${IDP_ENTITY_ID}`, subject: 'idp-sub-eve-saml-asserted@example.com' } });
+  check('binding row points at the linker account', eveBound?.userId === eveLogin.user.id);
+  const ridReuse = await freshRequestId();
+  const reuseLink = await call('/auth/saml/acs', { method: 'POST', body: { SAMLResponse: await mint({ inResponseTo: ridReuse, email: 'second-attempt@example.com' }), RelayState: relay } });
+  check('link RelayState token is single-use', reuseLink.status === 401, `got ${reuseLink.status}`);
+  await call('/auth/signup', { method: 'POST', body: { email: 'frank-link@example.com', password: 'pass1234', displayName: 'Frank' } });
+  const frankLogin = (await call('/auth/login', { method: 'POST', body: { email: 'frank-link@example.com', password: 'pass1234' } })).json;
+  const frankLink = (await call('/auth/saml/start-link', { jwt: frankLogin.accessToken, method: 'POST', body: { password: 'pass1234' } })).json;
+  const ridF = await freshRequestId();
+  const stealLink = await call('/auth/saml/acs', { method: 'POST', body: { SAMLResponse: await mint({ inResponseTo: ridF, email: 'saml-user@example.com' }), RelayState: new URL(frankLink.url).searchParams.get('RelayState') } });
+  check('linking an identity bound to a different account rejected', stealLink.status === 409, `got ${stealLink.status}`);
+  const ridP = await freshRequestId();
+  const plainLogin = await call('/auth/saml/acs', { method: 'POST', body: { SAMLResponse: await mint({ inResponseTo: ridP, email: 'eve-saml-asserted@example.com' }) } });
+  check('plain SAML login after link uses the binding (linker session)', (plainLogin.status === 200 || plainLogin.status === 201) && plainLogin.json?.user?.email === 'eve-link@example.com', `status=${plainLogin.status}`);
+  const ridU = await freshRequestId();
+  const unknownRelay = await call('/auth/saml/acs', { method: 'POST', body: { SAMLResponse: await mint({ inResponseTo: ridU, email: 'unknown-relay@example.com' }), RelayState: 'bogus-token' } });
+  // The SP only ever issues RelayState for link flows, so an arriving token
+  // we did not issue is anomalous: fail closed rather than silently degrade
+  // to a non-link login.
+  check('unissued RelayState rejected (only SP-issued link tokens honored)', unknownRelay.status === 401, `got ${unknownRelay.status}`);
+  const unknownBound = await prisma.externalIdentity.findFirst({ where: { email: 'unknown-relay@example.com' } });
+  check('rejected RelayState created no binding or account', !unknownBound && !(await prisma.user.findUnique({ where: { email: 'unknown-relay@example.com' } })));
+
   console.log(failures === 0 ? 'ALL SAML CHECKS PASSED' : `${failures} SAML CHECK(S) FAILED`);
   process.exitCode = failures === 0 ? 0 : 1;
 } catch (e) {
