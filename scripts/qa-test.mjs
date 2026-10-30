@@ -110,6 +110,34 @@ try {
   const uDetail = pl.issues.find((i) => i.key === 'k.plural' && i.type === 'untranslated');
   const mDetail = pl.issues.find((i) => i.key === 'k.plural' && i.type === 'placeholder_mismatch');
   check('plural: details name the category', !!uDetail && uDetail.detail.includes('"one"') && !!mDetail && mDetail.detail.includes('"other"') && mDetail.detail.includes('%d'), `${uDetail?.detail} | ${mDetail?.detail}`);
+
+  // Whitespace / number / HTML checks (slice 10), value-level and per
+  // plural category form. Compared source-vs-target per pair.
+  const k8 = (await call(`${P}/keys`, { token: at, method: 'POST', body: { name: 'k.ws' } })).json;
+  await call(`${P}/keys/${k8.id}/translations`, { token: at, method: 'PUT', body: { locale: 'en', value: 'Hello ' } });
+  await call(`${P}/keys/${k8.id}/translations`, { token: at, method: 'PUT', body: { locale: 'he', value: 'שלום' } });
+  await call(`${P}/keys/${k8.id}/translations`, { token: at, method: 'PUT', body: { locale: 'de', value: 'Hallo ' } });
+  const k9 = (await call(`${P}/keys`, { token: at, method: 'POST', body: { name: 'k.num' } })).json;
+  await call(`${P}/keys/${k9.id}/translations`, { token: at, method: 'PUT', body: { locale: 'en', value: 'Order 42 total' } });
+  await call(`${P}/keys/${k9.id}/translations`, { token: at, method: 'PUT', body: { locale: 'he', value: 'הזמנה 43' } });
+  await call(`${P}/keys/${k9.id}/translations`, { token: at, method: 'PUT', body: { locale: 'de', value: 'Bestellung 42' } });
+  const k10 = (await call(`${P}/keys`, { token: at, method: 'POST', body: { name: 'k.html' } })).json;
+  await call(`${P}/keys/${k10.id}/translations`, { token: at, method: 'PUT', body: { locale: 'en', value: 'Click <b class="x">here</b> now' } });
+  await call(`${P}/keys/${k10.id}/translations`, { token: at, method: 'PUT', body: { locale: 'he', value: 'לחץ <i>כאן</i>' } });
+  await call(`${P}/keys/${k10.id}/translations`, { token: at, method: 'PUT', body: { locale: 'de', value: 'Klicke <B>hier</B>' } });
+  const k11 = (await call(`${P}/keys`, { token: at, method: 'POST', body: { name: 'k.pluralnum', isPlural: true } })).json;
+  const k11en = await call(`${P}/keys/${k11.id}/translations`, { token: at, method: 'PUT', body: { locale: 'en', value: '2 apples', pluralForms: { one: '1 apple', other: '2 apples' } } });
+  check('slice10: plural source PUT accepted', k11en.status === 200 || k11en.status === 201, String(k11en.status));
+  await call(`${P}/keys/${k11.id}/translations`, { token: at, method: 'PUT', body: { locale: 'he', value: '2 תפוחים', pluralForms: { one: 'תפוח', other: '2 תפוחים' } } });
+
+  const q2 = (await call(`${P}/qa`, { token: at })).json ?? { issues: [] };
+  const q2types = (k) => q2.issues.filter((i) => i.key === k).map((i) => `${i.locale}:${i.type}`).sort();
+  check('whitespace: trailing-space difference flagged only in he', JSON.stringify(q2types('k.ws')) === JSON.stringify(['he:whitespace']), JSON.stringify(q2types('k.ws')));
+  check('whitespace detail names the differing side', (q2.issues.find((i) => i.key === 'k.ws')?.detail ?? '').includes('trailing whitespace: en yes, he no'), q2.issues.find((i) => i.key === 'k.ws')?.detail);
+  check('numbers: changed number flagged only in he', JSON.stringify(q2types('k.num')) === JSON.stringify(['he:number_mismatch']), JSON.stringify(q2types('k.num')));
+  check('html: different tag flagged; case and attributes ignored in de', JSON.stringify(q2types('k.html')) === JSON.stringify(['he:html_mismatch']), JSON.stringify(q2types('k.html')));
+  check('numbers checked per plural category form (de untranslated as expected)', JSON.stringify(q2types('k.pluralnum')) === JSON.stringify(['de:untranslated', 'he:number_mismatch']), JSON.stringify(q2types('k.pluralnum')));
+  check('plural number detail names the category', (q2.issues.find((i) => i.key === 'k.pluralnum')?.detail ?? '').startsWith('category "one":'), q2.issues.find((i) => i.key === 'k.pluralnum')?.detail);
 } catch (err) {
   // embedded-postgres can reject with `undefined` when the postmaster dies at
   // startup; through an async finally that exception exits 0 SILENTLY. Catch

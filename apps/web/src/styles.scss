@@ -218,6 +218,9 @@ span.review { font-size: 0.72rem; padding: 0.05rem 0.4rem; border: 1px solid var
 .qa-untranslated { background: #f1f5f9; color: #475569; }
 .qa-placeholder_mismatch { background: #fee2e2; color: #b91c1c; }
 .qa-max_length { background: #fef3c7; color: #92400e; }
+.qa-whitespace { background: #e0e7ff; color: #3730a3; }
+.qa-number_mismatch { background: #fce7f3; color: #9d174d; }
+.qa-html_mismatch { background: #ffedd5; color: #9a3412; }
 
 
 .csv-note { flex-basis: 100%; font-size: 0.75rem; }

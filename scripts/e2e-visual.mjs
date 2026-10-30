@@ -333,6 +333,29 @@ try {
     () => [...document.querySelectorAll('.grid tbody tr:nth-child(3) .cell-status')].filter((e) => /saved/i.test(e.textContent)).length >= 2,
     { timeout: 10000 },
   );
+  // Slice 10: a number-mismatch row. The grid sorts keys by name, so the
+  // row is located by its key text, never by index.
+  await keyInput3.evaluate((el) => { el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.type('input[name=newKey]', 'zzz.qanum');
+  await page.click('.inline button');
+  check('zzz.qanum key added', await waitText('zzz.qanum'));
+  const qnCell = (idx) => page.evaluateHandle((i) => {
+    const row = [...document.querySelectorAll('.grid tbody tr')].find((r) => r.textContent.includes('zzz.qanum'));
+    return row ? row.querySelectorAll('textarea')[i] : null;
+  }, idx);
+  const qnSaved = (n) => page.waitForFunction((want) => {
+    const row = [...document.querySelectorAll('.grid tbody tr')].find((r) => r.textContent.includes('zzz.qanum'));
+    return !!row && [...row.querySelectorAll('.cell-status')].filter((e) => /saved/i.test(e.textContent)).length >= want;
+  }, { timeout: 10000 }, n);
+  const qnEn = await qnCell(0);
+  await qnEn.type('Items: 3');
+  await qnEn.evaluate((el) => el.blur());
+  await qnSaved(1);
+  const qnHe = await qnCell(1);
+  await qnHe.type('פריטים: 5');
+  await qnHe.evaluate((el) => el.blur());
+  await qnSaved(2);
+
   await page.click('.qa-link');
   await page.waitForSelector('.qa-table', { timeout: 10000 });
   const qaRow = await page.waitForFunction(() => {
@@ -341,6 +364,12 @@ try {
   }, { timeout: 10000 }).then(() => true).catch(() => false);
   check('QA page lists the placeholder mismatch for cart.total', qaRow);
   await shot('editor-19-qa.png');
+  const qaNumRow = await page.waitForFunction(() => {
+    const t = document.body.textContent || '';
+    return t.includes('zzz.qanum') && t.includes('Number mismatch');
+  }, { timeout: 10000 }).then(() => true).catch(() => false);
+  check('QA page lists the number mismatch with its new badge label', qaNumRow);
+  await shot('editor-49-qa-number.png');
 
   // --- CSV via UI: import a new key, verify notice + grid, export buttons visible ---
   await page.click('.back');

@@ -7,7 +7,7 @@ export interface QaIssue {
   keyId: string;
   key: string;
   locale: string;
-  type: 'untranslated' | 'placeholder_mismatch' | 'max_length';
+  type: 'untranslated' | 'placeholder_mismatch' | 'max_length' | 'whitespace' | 'number_mismatch' | 'html_mismatch';
   detail: string;
 }
 
@@ -16,6 +16,23 @@ export function placeholders(text: string): string[] {
   const braces = text.match(/\{[^{}]+\}/g) ?? [];
   const printf = text.match(/%[0-9]*\$?[sdif]/g) ?? [];
   return [...braces, ...printf].sort();
+}
+
+// Number tokens: digit sequences with an optional decimal part. Compared
+// as sorted multisets between source and target.
+export function numberTokens(text: string): string[] {
+  return (text.match(/\d+(?:\.\d+)?/g) ?? []).sort();
+}
+
+// HTML tag signature: tag name lowercased with a closing marker, attributes
+// ignored. Compared as sorted multisets between source and target.
+export function htmlTags(text: string): string[] {
+  return (text.match(/<\/?[a-zA-Z][a-zA-Z0-9]*(?:\s[^>]*)?>/g) ?? [])
+    .map((t) => {
+      const m = /^<(\/?)([a-zA-Z][a-zA-Z0-9]*)/.exec(t);
+      return m ? `${m[1]}${m[2].toLowerCase()}` : t;
+    })
+    .sort();
 }
 
 @Injectable()
@@ -69,39 +86,62 @@ export class QaService {
               issues.push({ keyId: key.id, key: key.name, locale: target, type: 'untranslated', detail: `no ${target} translation for category "${cat}" of non-empty ${base} source` });
               continue;
             }
-            const sp = placeholders(sv);
-            const tp = placeholders(tv);
-            if (sp.join('|') !== tp.join('|')) {
-              issues.push({
-                keyId: key.id, key: key.name, locale: target, type: 'placeholder_mismatch',
-                detail: `category "${cat}": ${base} has [${sp.join(', ') || 'none'}], ${target} has [${tp.join(', ') || 'none'}]`,
-              });
-            }
-            if (key.maxLength != null && tv.length > key.maxLength) {
-              issues.push({
-                keyId: key.id, key: key.name, locale: target, type: 'max_length',
-                detail: `category "${cat}": ${tv.length} chars exceeds maxLength ${key.maxLength}`,
-              });
-            }
+            this.checkPair(issues, key, base, target, sv, tv, `category "${cat}": `);
           }
           continue;
         }
-        const srcPh = placeholders(source);
-        const tgtPh = placeholders(value);
-        if (srcPh.join('|') !== tgtPh.join('|')) {
-          issues.push({
-            keyId: key.id, key: key.name, locale: target, type: 'placeholder_mismatch',
-            detail: `${base} has [${srcPh.join(', ') || 'none'}], ${target} has [${tgtPh.join(', ') || 'none'}]`,
-          });
-        }
-        if (key.maxLength != null && value.length > key.maxLength) {
-          issues.push({
-            keyId: key.id, key: key.name, locale: target, type: 'max_length',
-            detail: `${value.length} chars exceeds maxLength ${key.maxLength}`,
-          });
-        }
+        this.checkPair(issues, key, base, target, source, value, '');
       }
     }
     return { issues };
+  }
+
+  // All per-text checks for one source/target pair. prefix labels the
+  // detail when the pair is one plural category form (category "one": ...).
+  private checkPair(
+    issues: QaIssue[],
+    key: { id: string; name: string; maxLength: number | null },
+    base: string, target: string, source: string, value: string, prefix: string,
+  ) {
+    const srcPh = placeholders(source);
+    const tgtPh = placeholders(value);
+    if (srcPh.join('|') !== tgtPh.join('|')) {
+      issues.push({
+        keyId: key.id, key: key.name, locale: target, type: 'placeholder_mismatch',
+        detail: `${prefix}${base} has [${srcPh.join(', ') || 'none'}], ${target} has [${tgtPh.join(', ') || 'none'}]`,
+      });
+    }
+    if (key.maxLength != null && value.length > key.maxLength) {
+      issues.push({
+        keyId: key.id, key: key.name, locale: target, type: 'max_length',
+        detail: `${prefix}${value.length} chars exceeds maxLength ${key.maxLength}`,
+      });
+    }
+    const srcLead = /^\s/.test(source);
+    const tgtLead = /^\s/.test(value);
+    const srcTrail = /\s$/.test(source);
+    const tgtTrail = /\s$/.test(value);
+    if (srcLead !== tgtLead || srcTrail !== tgtTrail) {
+      const parts: string[] = [];
+      if (srcLead !== tgtLead) parts.push(`leading whitespace: ${base} ${srcLead ? 'yes' : 'no'}, ${target} ${tgtLead ? 'yes' : 'no'}`);
+      if (srcTrail !== tgtTrail) parts.push(`trailing whitespace: ${base} ${srcTrail ? 'yes' : 'no'}, ${target} ${tgtTrail ? 'yes' : 'no'}`);
+      issues.push({ keyId: key.id, key: key.name, locale: target, type: 'whitespace', detail: prefix + parts.join('; ') });
+    }
+    const srcNums = numberTokens(source);
+    const tgtNums = numberTokens(value);
+    if (srcNums.join('|') !== tgtNums.join('|')) {
+      issues.push({
+        keyId: key.id, key: key.name, locale: target, type: 'number_mismatch',
+        detail: `${prefix}${base} has [${srcNums.join(', ') || 'none'}], ${target} has [${tgtNums.join(', ') || 'none'}]`,
+      });
+    }
+    const srcTags = htmlTags(source);
+    const tgtTags = htmlTags(value);
+    if (srcTags.join('|') !== tgtTags.join('|')) {
+      issues.push({
+        keyId: key.id, key: key.name, locale: target, type: 'html_mismatch',
+        detail: `${prefix}${base} has [${srcTags.join(', ') || 'none'}], ${target} has [${tgtTags.join(', ') || 'none'}]`,
+      });
+    }
   }
 }

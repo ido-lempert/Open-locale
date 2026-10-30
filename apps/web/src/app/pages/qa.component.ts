@@ -66,6 +66,13 @@ export class QaComponent implements OnInit {
   }
 
   label(type: QaIssue['type']): string {
-    return type === 'untranslated' ? 'Untranslated' : type === 'placeholder_mismatch' ? 'Placeholder mismatch' : 'Too long';
+    switch (type) {
+      case 'untranslated': return 'Untranslated';
+      case 'placeholder_mismatch': return 'Placeholder mismatch';
+      case 'max_length': return 'Too long';
+      case 'whitespace': return 'Whitespace';
+      case 'number_mismatch': return 'Number mismatch';
+      case 'html_mismatch': return 'HTML mismatch';
+    }
   }
 }

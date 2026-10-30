@@ -79,7 +79,7 @@ export interface TmSuggestion { sourceText: string; targetText: string; score: n
 
 export interface QaIssue {
   keyId: string; key: string; locale: string;
-  type: 'untranslated' | 'placeholder_mismatch' | 'max_length';
+  type: 'untranslated' | 'placeholder_mismatch' | 'max_length' | 'whitespace' | 'number_mismatch' | 'html_mismatch';
   detail: string;
 }
 
