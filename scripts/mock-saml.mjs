@@ -13,6 +13,7 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SignedXml } from 'xml-crypto';
+import { createPublicKey, verify as cryptoVerify } from 'node:crypto';
 
 const PORT = 5556;
 export const IDP_ENTITY_ID = 'http://127.0.0.1:5556/idp';
@@ -110,8 +111,24 @@ function buildResponse(knobs = {}) {
   return Buffer.from(xml, 'utf8').toString('base64');
 }
 
+// SP signing cert (set via POST /sp-cert): when the AuthnRequest arrives
+// with SigAlg/Signature (HTTP-Redirect binding), the mock verifies it the
+// way a real IdP would, so tests prove the SP's request signature is real.
+let spCertPem = null;
+
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, `http://127.0.0.1:${PORT}`);
+  if (req.method === 'POST' && u.pathname === '/sp-cert') {
+    let body = '';
+    req.on('data', (c) => (body += c));
+    req.on('end', () => {
+      const j = JSON.parse(body);
+      spCertPem = `-----BEGIN CERTIFICATE-----\n${j.cert.match(/.{1,64}/g).join('\n')}\n-----END CERTIFICATE-----\n`;
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end('{}');
+    });
+    return;
+  }
   if (req.method === 'GET' && u.pathname === '/cert') {
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ cert: certB64 }));
@@ -122,8 +139,26 @@ const server = http.createServer((req, res) => {
       const deflated = Buffer.from(u.searchParams.get('SAMLRequest'), 'base64');
       const xml = zlib.inflateRawSync(deflated).toString('utf8');
       const m = xml.match(/ID="([^"]+)"/);
+      // HTTP-Redirect binding signature check (SAML Bindings 3.4.4.1): the
+      // signature covers the URLSearchParams serialization of SAMLRequest,
+      // RelayState (when present) and SigAlg, in that order - decode then
+      // re-encode to reproduce the exact signed bytes.
+      let spSignature = 'absent';
+      const sigAlg = u.searchParams.get('SigAlg');
+      const signature = u.searchParams.get('Signature');
+      if (sigAlg || signature) {
+        spSignature = 'invalid';
+        if (spCertPem && sigAlg === 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256' && signature) {
+          const base = new URLSearchParams();
+          base.set('SAMLRequest', u.searchParams.get('SAMLRequest'));
+          if (u.searchParams.get('RelayState') !== null) base.set('RelayState', u.searchParams.get('RelayState'));
+          base.set('SigAlg', sigAlg);
+          const ok = cryptoVerify('sha256', Buffer.from(base.toString()), createPublicKey(spCertPem), Buffer.from(signature, 'base64'));
+          spSignature = ok ? 'valid' : 'invalid';
+        }
+      }
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ requestId: m[1] }));
+      res.end(JSON.stringify({ requestId: m[1], spSignature }));
     } catch (e) {
       res.writeHead(400, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ error: String(e.message || e) }));

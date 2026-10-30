@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Get, HttpCode, Post, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Header, HttpCode, Post, UseGuards } from '@nestjs/common';
 import { SamlService } from './saml.service';
 import { AuthService, AuthPrincipal } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
@@ -14,6 +14,12 @@ export class SamlController {
   @Get('login')
   login() {
     return this.saml.login();
+  }
+
+  @Get('metadata')
+  @Header('content-type', 'application/samlmetadata+xml')
+  metadata() {
+    return this.saml.metadata();
   }
 
   // Linking requires fresh auth: the current password, and the resulting

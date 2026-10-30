@@ -63,12 +63,17 @@ export class SamlService {
     const entryPoint = process.env.SAML_ENTRY_POINT;
     const idpCert = process.env.SAML_IDP_CERT;
     if (!entryPoint || !idpCert) throw new NotFoundException('SAML is not configured');
+    const pem = (v?: string) => (v ? v.replace(/\\n/g, '\n') : undefined);
     return {
       entryPoint,
       idpCert,
       idpIssuer: process.env.SAML_IDP_ENTITY_ID || undefined,
       issuer: process.env.SAML_SP_ENTITY_ID || 'open-locale',
       callbackUrl: process.env.SAML_ACS_URL || 'http://127.0.0.1:3000/api/auth/saml/acs',
+      // Optional SP request signing (HTTP-Redirect binding). The cert is
+      // advertised in the SP metadata so the IdP can verify requests.
+      spPrivateKey: pem(process.env.SAML_SP_PRIVATE_KEY),
+      spCert: pem(process.env.SAML_SP_SIGNING_CERT),
     };
   }
 
@@ -90,6 +95,7 @@ export class SamlService {
         maxAssertionAgeMs: SamlService.REQUEST_TTL_MS,
         requestIdExpirationPeriodMs: SamlService.REQUEST_TTL_MS,
         cacheProvider: new BoundedCacheProvider(SamlService.CACHE_MAX, SamlService.REQUEST_TTL_MS),
+        ...(c.spPrivateKey ? { privateKey: c.spPrivateKey } : {}),
       });
     }
     return this.saml;
@@ -100,6 +106,14 @@ export class SamlService {
     // provider by the library, which is what makes the InResponseTo
     // consumption at the ACS enforceable.
     return { url: await this.client().getAuthorizeUrlAsync(relayState, {}) };
+  }
+
+  // SP metadata XML for IdP-side configuration. Advertises the ACS and, when
+  // configured, the SP signing certificate. No decryption key is configured
+  // in this slice, so no decryption KeyDescriptor is advertised.
+  metadata(): string {
+    const c = this.config();
+    return this.client().generateServiceProviderMetadata(null, c.spCert ?? null);
   }
 
   // Linking entry point: the caller has already passed fresh-auth (current

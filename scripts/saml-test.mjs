@@ -6,6 +6,7 @@
 // otherwise fully valid, correctly signed response, so only the rule under
 // test can reject it. Run: node scripts/saml-test.mjs (requires: nx build api)
 import { execFileSync, spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { createHmac } from 'node:crypto';
 import EmbeddedPostgres from 'embedded-postgres';
 import { mkdtempSync } from 'node:fs';
@@ -71,19 +72,39 @@ try {
   mock = spawn(process.execPath, [join(root, 'scripts', 'mock-saml.mjs')], { stdio: 'pipe' });
   if (!(await waitFor(`${MOCK}/cert`))) throw new Error('mock IdP did not start');
   const cert = (await (await fetch(`${MOCK}/cert`)).json()).cert;
+  // SP signing keypair for the AuthnRequest-signing legs: the API gets the
+  // private key + cert, and the mock IdP gets the cert so it can verify the
+  // redirect-binding signature the way a real IdP would.
+  const spDir = mkdtempSync(join(tmpdir(), 'ol-sp-'));
+  execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-keyout', join(spDir, 'key.pem'),
+    '-out', join(spDir, 'cert.pem'), '-days', '1', '-nodes', '-subj', '/CN=open-locale-sp'], { stdio: 'pipe' });
+  const spKeyPem = readFileSync(join(spDir, 'key.pem'), 'utf8');
+  const spCertB64 = readFileSync(join(spDir, 'cert.pem'), 'utf8').replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
+  await fetch(`${MOCK}/sp-cert`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cert: spCertB64 }) });
   api = spawn(process.execPath, [join(root, 'dist', 'apps', 'api', 'main.js')], {
     env: { ...process.env, DATABASE_URL: url, JWT_SECRET: 'saml-secret', TOTP_ENCRYPTION_KEY: 'saml-test-key-0123456789',
       SAML_ENTRY_POINT: `${MOCK}/sso`, SAML_IDP_CERT: cert, SAML_IDP_ENTITY_ID: IDP_ENTITY_ID,
-      SAML_SP_ENTITY_ID: 'open-locale', SAML_ACS_URL: `http://127.0.0.1:${API_PORT}/api/auth/saml/acs`, PORT: String(API_PORT) }, stdio: 'pipe' });
+      SAML_SP_ENTITY_ID: 'open-locale', SAML_ACS_URL: `http://127.0.0.1:${API_PORT}/api/auth/saml/acs`,
+      SAML_SP_PRIVATE_KEY: spKeyPem, SAML_SP_SIGNING_CERT: spCertB64, PORT: String(API_PORT) }, stdio: 'pipe' });
   if (!(await waitFor(`${API}/projects`))) throw new Error('API did not start');
   prisma = new PrismaClient({ datasources: { db: { url } } });
 
   // Happy path: fresh login, correctly signed response, echoed InResponseTo.
+  const metaRes = await fetch(`${API}/auth/saml/metadata`);
+  const metaXml = await metaRes.text();
+  check('metadata endpoint returns SP descriptor with entity ID and ACS', metaRes.status === 200 && metaXml.includes('entityID="open-locale"') && metaXml.includes('/api/auth/saml/acs'), `status=${metaRes.status}`);
+  check('metadata advertises the SP signing certificate', metaXml.includes('use="signing"') && metaXml.includes(spCertB64.slice(0, 40)));
   const login1 = await call('/auth/saml/login');
   const lu = new URL(login1.json.url);
   check('login returns URL on IdP entry point origin', lu.origin === MOCK && lu.pathname === '/sso', lu.origin + lu.pathname);
   const samlRequest = lu.searchParams.get('SAMLRequest');
   check('login URL carries a SAMLRequest parameter', typeof samlRequest === 'string' && samlRequest.length > 20);
+  check('AuthnRequest is signed (SigAlg + Signature on the URL)', lu.searchParams.get('SigAlg') === 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256' && !!lu.searchParams.get('Signature'));
+  const ssoRes = await (await fetch(`${MOCK}/sso?${lu.search.slice(1)}`)).json();
+  check('mock IdP verifies the SP request signature', ssoRes.spSignature === 'valid', String(ssoRes.spSignature));
+  const tamperedQuery = lu.search.slice(1).replace(/Signature=[^&]+/, (m) => `Signature=${m.slice(10, -4)}AAAA`);
+  const tamperedSso = await (await fetch(`${MOCK}/sso?${tamperedQuery}`)).json();
+  check('mock IdP rejects a tampered request signature (discriminating)', tamperedSso.spSignature === 'invalid', String(tamperedSso.spSignature));
   const reqId = await freshRequestId();
   check('mock IdP decodes the deflated AuthnRequest and its ID', typeof reqId === 'string' && reqId.length > 5, String(reqId));
   const happy = await call('/auth/saml/acs', { method: 'POST', body: { SAMLResponse: await mint({ inResponseTo: reqId }) } });
