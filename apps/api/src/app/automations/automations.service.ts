@@ -5,6 +5,7 @@ import { ProjectsService } from '../projects/projects.service';
 import { ActivityService } from '../activity/activity.service';
 import { MtService } from '../mt/mt.service';
 import { TasksService } from '../tasks/tasks.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
 import { CreateAutomationRuleDto, UpdateAutomationRuleDto, AUTOMATION_LOCALE_CAP } from './dto';
 
 // Automations fire ONLY from explicit in-process hooks (key creation and
@@ -21,6 +22,7 @@ export class AutomationsService {
     private readonly activity: ActivityService,
     private readonly mt: MtService,
     private readonly tasks: TasksService,
+    private readonly webhooks: WebhooksService,
   ) {}
 
   async list(userId: string, projectId: string) {
@@ -45,6 +47,11 @@ export class AutomationsService {
       const codes = project.locales.map((l) => l.code);
       const bad = locales.filter((l) => !codes.includes(l) || l === project.baseLocale);
       if (bad.length) throw new BadRequestException(`config.locales must be non-base project locales: ${bad.join(', ')}`);
+    } else if (action === 'notify') {
+      const message = config.message;
+      if (typeof message !== 'string' || !message.trim() || message.length > 200) {
+        throw new BadRequestException('config.message is required (max 200 chars, may contain {key})');
+      }
     } else if (action === 'task.create') {
       const title = config.title;
       if (typeof title !== 'string' || !title.trim() || title.length > 200) {
@@ -121,6 +128,14 @@ export class AutomationsService {
           }
         }
         detail = { rule: rule.name, action: rule.action, key: ctx.keyName, results };
+      } else if (rule.action === 'notify') {
+        // Local notification effect: dispatch the project's admin-managed
+        // webhooks subscribed to automation.notify. The rule config names no
+        // URL, so rule authors (admins) cannot aim the egress anywhere new;
+        // delivery, signing, retry and journaling are the webhook pipeline's.
+        const message = String(config.message ?? '').split('{key}').join(ctx.keyName);
+        await this.webhooks.deliver(projectId, 'automation.notify', { keyId: ctx.keyId, key: ctx.keyName, message });
+        detail = { rule: rule.name, action: rule.action, key: ctx.keyName, message };
       } else {
         const title = String(config.title ?? '').split('{key}').join(ctx.keyName);
         // Task-explosion bound, scoped honestly: one OPEN task per resolved

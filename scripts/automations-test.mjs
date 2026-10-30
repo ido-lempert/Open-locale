@@ -5,12 +5,14 @@
 // automation writes never re-trigger rules. Real PG + HTTP.
 // Run: node scripts/automations-test.mjs (requires: nx build api)
 import { execFileSync, spawn } from 'node:child_process';
+import { createServer } from 'node:http';
+import { createHmac } from 'node:crypto';
 import EmbeddedPostgres from 'embedded-postgres';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const PG_PORT = 55470, API_PORT = 3000;
+const PG_PORT = 55470, API_PORT = 3000, HOOK_PORT = 55870;
 const API = `http://127.0.0.1:${API_PORT}/api`;
 const root = process.cwd();
 let failures = 0;
@@ -33,6 +35,15 @@ const pollFor = async (fn, tries = 20) => {
   return null;
 };
 
+// Local webhook receiver for the notify action legs (fixture-only loopback).
+const received = [];
+const receiver = createServer((req, res) => {
+  let b = '';
+  req.on('data', (c) => (b += c));
+  req.on('end', () => { received.push({ event: req.headers['x-openlocale-event'], sig: req.headers['x-openlocale-signature'], body: b }); res.writeHead(200).end(); });
+});
+await new Promise((r) => receiver.listen(HOOK_PORT, '127.0.0.1', r));
+
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-au-'));
 const pg = new EmbeddedPostgres({ databaseDir: dataDir, user: 'postgres', password: 'postgres', port: PG_PORT, persistent: false });
 let api;
@@ -42,7 +53,7 @@ try {
   execFileSync(join(root, 'node_modules', '.bin', 'prisma'), ['migrate', 'deploy'], {
     env: { ...process.env, DATABASE_URL: url }, stdio: 'pipe' });
   api = spawn(process.execPath, [join(root, 'dist', 'apps', 'api', 'main.js')], {
-    env: { ...process.env, DATABASE_URL: url, JWT_SECRET: 'au-secret', PORT: String(API_PORT) }, stdio: 'pipe' });
+    env: { ...process.env, DATABASE_URL: url, JWT_SECRET: 'au-secret', PORT: String(API_PORT), WEBHOOK_ALLOW_PRIVATE_TARGETS: 'true' }, stdio: 'pipe' }); // fixture-only opt-in for the loopback receiver
   if (!(await waitFor(`${API}/projects`))) throw new Error('API did not start');
 
   const ts = Date.now();
@@ -198,6 +209,23 @@ try {
   const k7he = k7rows.find((t) => t.localeCode === 'he');
   const k7ar = k7rows.find((t) => t.localeCode === 'ar');
   check('demoted creator: granted locale fills, ungranted locale fails visibly', !!k7he && !k7ar && !!(demoteRun && demoteRun.detail.results.ar && demoteRun.detail.results.ar.error), JSON.stringify(demoteRun && demoteRun.detail.results).slice(0, 200));
+  // --- notify action (slice 19): dispatches the project's admin-managed
+  // webhooks subscribed to automation.notify; the rule config carries no URL.
+  const noMsg = await call(`/projects/${pid}/automations`, { jwt, method: 'POST', body: { name: 'n', trigger: 'key.created', action: 'notify', config: {} } });
+  check('notify without config.message rejected (400)', noMsg.status === 400, `got ${noMsg.status}`);
+  const hook = (await call(`/projects/${pid}/webhooks`, { jwt, method: 'POST', body: { url: `http://127.0.0.1:${HOOK_PORT}/au`, events: ['automation.notify'] } })).json;
+  check('webhook can subscribe to automation.notify (secret revealed once)', typeof hook.secret === 'string' && hook.secret.length >= 24);
+  const notifRule = (await call(`/projects/${pid}/automations`, { jwt, method: 'POST', body: { name: 'Announce keys', trigger: 'key.created', action: 'notify', config: { message: 'New key {key} needs translation' } } })).json;
+  check('notify rule created', !!notifRule.id, JSON.stringify(notifRule).slice(0, 160));
+  await call(`/projects/${pid}/keys`, { jwt, method: 'POST', body: { name: 'auto.notify' } });
+  const hit = await pollFor(async () => received.find((r) => r.event === 'automation.notify') || null);
+  check('key.created fired notify: receiver got the signed event', !!hit, JSON.stringify(hit && hit.body).slice(0, 120));
+  const parsed = hit && JSON.parse(hit.body);
+  check('payload carries key and interpolated message', !!parsed && parsed.key === 'auto.notify' && parsed.message === 'New key auto.notify needs translation' && typeof parsed.keyId === 'string', parsed && parsed.message);
+  const expectedSig = hit && 'sha256=' + createHmac('sha256', hook.secret).update(hit.body).digest('hex');
+  check('HMAC signature verifies against the one-time secret', !!hit && hit.sig === expectedSig, String(hit && hit.sig));
+  const notifRun = await pollFor(async () => (await runs()).find((a) => a.detail && a.detail.message));
+  check('notify run recorded in activity with the delivered message', !!notifRun && notifRun.detail.action === 'notify', JSON.stringify(notifRun && notifRun.detail).slice(0, 140));
 } catch (err) {
   // embedded-postgres can reject with `undefined` when the postmaster dies at
   // startup; through an async finally that exception exits 0 SILENTLY. Catch
@@ -205,6 +233,7 @@ try {
   console.error('SUITE INCOMPLETE:', err);
   process.exit(1);
 } finally {
+  receiver.close();
   if (api) api.kill('SIGTERM');
   await pg.stop();
   rmSync(dataDir, { recursive: true, force: true });

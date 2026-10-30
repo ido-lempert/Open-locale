@@ -100,7 +100,7 @@ export const OPENAPI = {
     },
     '/api/projects/{projectId}/automations': {
       get: p('List automation rules (explicit trigger/action whitelist, internal effects only)', 'automations'),
-      post: p('Create an automation rule (admin). Triggers: key.created, translation.value (base locale, main branch). Actions: pretranslate, task.create', 'automations', true),
+      post: p('Create an automation rule (admin). Triggers: key.created, translation.value (base locale, main branch). Actions: pretranslate, task.create, notify (project webhooks)', 'automations', true),
     },
     '/api/projects/{projectId}/automations/{ruleId}': {
       patch: p('Update a rule (admin): rename, enable/disable, config', 'automations', true),
