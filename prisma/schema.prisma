@@ -176,6 +176,11 @@ model Translation {
   // holding version+rowId from a deleted row can never match a recreated one
   // (closes the ABA hole that version numbers alone leave open).
   rowId        String   @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  // Plural keys (Key.isPlural): { "one": "...", "other": "..." } over the CLDR
+  // categories zero/one/two/few/many/other. NULL for non-plural keys; `value`
+  // stays the single-form storage. Written only through the plural-aware API
+  // validation (slice 2); no format layer reads it yet.
+  pluralForms  Json?
   updatedAt    DateTime          @updatedAt
 
   key     Key                  @relation(fields: [keyId], references: [id], onDelete: Cascade)
