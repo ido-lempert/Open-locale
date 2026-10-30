@@ -1,11 +1,12 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import { inflateRawSync } from 'node:zlib';
-import { InMemoryCacheProvider, SAML, ValidateInResponseTo, type Profile } from '@node-saml/node-saml';
+import { SAML, ValidateInResponseTo, type Profile } from '@node-saml/node-saml';
 import { DOMParser } from '@xmldom/xmldom';
 import xpath from 'xpath';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
+import { BoundedSamlCache } from './saml-cache';
 
 const b64url = (b: Buffer) => b.toString('base64url');
 
@@ -19,28 +20,6 @@ const b64url = (b: Buffer) => b.toString('base64url');
 // On top of the library, precheck() hard-fails the two checks v5 only warns
 // about (rejection is announced for v6): the Response Destination and every
 // bearer SubjectConfirmationData Recipient must equal our ACS URL.
-// The library's default in-memory cache has TTL pruning but NO size cap:
-// /auth/saml/login is unauthenticated, so an unbounded request-ID / replay
-// store is a memory-growth vector. This wrapper fails closed at a hard cap:
-// saveAsync throws (login refused), saveIfAbsentAsync returns false (the
-// replay check treats an unstorable assertion ID as already-seen = reject).
-class BoundedCacheProvider extends InMemoryCacheProvider {
-  constructor(private readonly maxKeys: number, keyExpirationPeriodMs: number) {
-    super({ keyExpirationPeriodMs });
-  }
-  private size(): number {
-    return Object.keys((this as unknown as { cacheKeys: Record<string, unknown> }).cacheKeys).length;
-  }
-  override async saveAsync(key: string, value: string) {
-    if (this.size() >= this.maxKeys) throw new ServiceUnavailableException('SAML request cache is full');
-    return super.saveAsync(key, value);
-  }
-  override async saveIfAbsentAsync(key: string, value: string, expiresAtMs: number) {
-    if (this.size() >= this.maxKeys) return false;
-    return super.saveIfAbsentAsync(key, value, expiresAtMs);
-  }
-}
-
 @Injectable()
 export class SamlService {
   private saml: SAML | null = null;
@@ -98,7 +77,7 @@ export class SamlService {
         rejectReplayedAssertions: true,
         maxAssertionAgeMs: SamlService.REQUEST_TTL_MS,
         requestIdExpirationPeriodMs: SamlService.REQUEST_TTL_MS,
-        cacheProvider: new BoundedCacheProvider(SamlService.CACHE_MAX, SamlService.REQUEST_TTL_MS),
+        cacheProvider: new BoundedSamlCache(SamlService.CACHE_MAX, SamlService.REQUEST_TTL_MS),
         ...(c.spPrivateKey ? { privateKey: c.spPrivateKey } : {}),
       });
     }
