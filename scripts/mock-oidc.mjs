@@ -18,9 +18,9 @@ const codes = new Map(); // code -> { challenge, nonce, claims, badSign }
 let lastTokenHost = null;
 
 const b64url = (x) => Buffer.from(x).toString('base64url');
-const mint = (claims, useBadKey) => {
+const mint = (claims, useBadKey, payloadJson) => {
   const h = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT', kid: 'mock-1' }));
-  const p = b64url(JSON.stringify(claims));
+  const p = payloadJson != null ? b64url(payloadJson) : b64url(JSON.stringify(claims));
   const sig = cryptoSign('RSA-SHA256', Buffer.from(`${h}.${p}`), useBadKey ? badKey : privateKey);
   return `${h}.${p}.${sig.toString('base64url')}`;
 };
@@ -64,7 +64,7 @@ createServer(async (req, res) => {
     // optionally signed with the wrong key. PKCE challenge still enforced.
     const body = JSON.parse(await new Promise((r) => { let d = ''; req.on('data', (c) => (d += c)); req.on('end', () => r(d)); }));
     const code = `minted-${codes.size + 1}`;
-    codes.set(code, { challenge: body.challenge, nonce: body.claims?.nonce ?? null, claims: body.claims || {}, badSign: !!body.badSign, rawIdToken: typeof body.rawIdToken === 'string' ? body.rawIdToken : null });
+    codes.set(code, { challenge: body.challenge, nonce: body.claims?.nonce ?? null, claims: body.claims || {}, badSign: !!body.badSign, rawIdToken: typeof body.rawIdToken === 'string' ? body.rawIdToken : null, payloadJson: typeof body.payloadJson === 'string' ? body.payloadJson : null });
     return json(200, { code });
   }
   if (u.pathname === '/token' && req.method === 'POST') {
@@ -87,7 +87,7 @@ createServer(async (req, res) => {
       nonce: rec.nonce,
       ...rec.claims, // test fixtures may override iss/aud/exp/nonce for negative tests
     };
-    return json(200, { id_token: rec.rawIdToken ?? mint(claims, rec.badSign), token_type: 'Bearer', expires_in: 300 });
+    return json(200, { id_token: rec.rawIdToken ?? mint(claims, rec.badSign, rec.payloadJson), token_type: 'Bearer', expires_in: 300 });
   }
   if (u.pathname === '/debug/last-token-host') return json(200, { host: lastTokenHost });
   json(404, { error: 'not found' });

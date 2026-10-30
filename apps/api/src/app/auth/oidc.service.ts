@@ -156,6 +156,11 @@ export class OidcService {
     } catch {
       throw new UnauthorizedException('Malformed id_token');
     }
+    // JSON.parse also succeeds on scalars and arrays: a "valid JSON" header
+    // that is not an object is still malformed.
+    if (typeof header !== 'object' || header === null || Array.isArray(header)) {
+      throw new UnauthorizedException('Malformed id_token');
+    }
     if (header.alg !== 'RS256') throw new UnauthorizedException('Unexpected id_token alg');
     const jwksRes = await this.guardedJson(jwksUri);
     if (!jwksRes.ok) throw new UnauthorizedException('JWKS fetch failed');
@@ -171,14 +176,19 @@ export class OidcService {
     } catch {
       throw new UnauthorizedException('Malformed id_token');
     }
+    if (typeof claims !== 'object' || claims === null || Array.isArray(claims)) {
+      throw new UnauthorizedException('Malformed id_token');
+    }
     const { issuer, clientId } = this.config();
     if (claims.iss !== issuer) throw new UnauthorizedException('id_token issuer mismatch');
     const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
     if (!aud.includes(clientId)) throw new UnauthorizedException('id_token audience mismatch');
-    // OIDC Core 3.1.3.7: a multi-valued aud REQUIRES an azp claim naming us -
-    // otherwise a token issued for a different party that merely lists our
-    // client_id among several audiences would be accepted.
-    if (aud.length > 1 && claims.azp !== clientId) throw new UnauthorizedException('id_token authorized-party mismatch');
+    // OIDC Core 3.1.3.7: a multi-valued aud REQUIRES an azp claim naming us,
+    // and a supplied azp must ALWAYS name us - optional does not mean
+    // ignorable when present. Otherwise a token issued for a different party
+    // that merely lists our client_id in aud would be accepted.
+    if (claims.azp !== undefined && claims.azp !== clientId) throw new UnauthorizedException('id_token authorized-party mismatch');
+    if (aud.length > 1 && claims.azp === undefined) throw new UnauthorizedException('id_token missing authorized party');
     if (typeof claims.exp !== 'number' || claims.exp * 1000 < Date.now()) throw new UnauthorizedException('id_token expired');
     if (typeof claims.sub !== 'string' || !claims.sub) throw new UnauthorizedException('id_token missing sub');
     return claims;

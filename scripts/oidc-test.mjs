@@ -186,6 +186,9 @@ try {
   check('missing nonce rejected', missingNonce.status === 401, `got ${missingNonce.status}`);
 
   // azp (OIDC Core 3.1.3.7): a multi-valued aud must name us as azp.
+  // Negative azp legs use a REAL nonce: with a valid nonce the ONLY reason
+  // left for a 401 is the azp rule itself (a nonce-mismatch 401 would prove
+  // nothing - these legs fail pre-fix, pass post-fix).
   const mintFlowRealNonce = async (claims) => {
     const start = await call('/auth/oidc/start');
     const u = new URL(start.json.url);
@@ -193,10 +196,33 @@ try {
     return call('/auth/oidc/callback', { method: 'POST', body: { code: minted.code, state: u.searchParams.get('state') } });
   };
   const azpBase = { sub: 'mock-azp', email: `azp${ts}@t.dev`, email_verified: true };
-  check('multi-aud without azp rejected', (await mintFlow({ ...azpBase, nonce: undefined, aud: ['open-locale', 'other-app'] })).status === 401);
-  check('multi-aud with foreign azp rejected', (await mintFlow({ ...azpBase, nonce: undefined, aud: ['open-locale', 'other-app'], azp: 'other-app' })).status === 401);
+  check('multi-aud without azp rejected', (await mintFlowRealNonce({ ...azpBase, aud: ['open-locale', 'other-app'] })).status === 401);
+  check('multi-aud with foreign azp rejected', (await mintFlowRealNonce({ ...azpBase, aud: ['open-locale', 'other-app'], azp: 'other-app' })).status === 401);
   const azpOk = await mintFlowRealNonce({ ...azpBase, aud: ['open-locale', 'other-app'], azp: 'open-locale' });
   check('multi-aud with our azp accepted (control)', azpOk.status === 200 && !!azpOk.json.accessToken, `got ${azpOk.status}: ${JSON.stringify(azpOk.json).slice(0, 80)}`);
+
+  // Supplied azp is validated on single-audience tokens too: optional does
+  // not mean ignorable when present.
+  const azpSingle = { sub: 'mock-azps', email: `azps${ts}@t.dev`, email_verified: true };
+  check('single-aud with foreign azp rejected', (await mintFlowRealNonce({ ...azpSingle, azp: 'other-app' })).status === 401);
+  const azpSingleOk = await mintFlowRealNonce({ ...azpSingle, azp: 'open-locale' });
+  check('single-aud with our azp accepted (control)', azpSingleOk.status === 200 && !!azpSingleOk.json.accessToken, `got ${azpSingleOk.status}`);
+
+  // Non-object JSON (valid signature, scalar/array payloads) must 401 too:
+  // JSON.parse succeeding is not enough.
+  const mintPayload = async (payloadJson) => {
+    const start = await call('/auth/oidc/start');
+    const u = new URL(start.json.url);
+    const minted = await (await fetch(`${MOCK}/mint-code`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ challenge: u.searchParams.get('code_challenge'), claims: {}, payloadJson }) })).json();
+    return call('/auth/oidc/callback', { method: 'POST', body: { code: minted.code, state: u.searchParams.get('state') } });
+  };
+  check('scalar claims payload rejected (signed, valid JSON, not an object)', (await mintPayload('5')).status === 401);
+  check('array claims payload rejected', (await mintPayload('[1,2,3]')).status === 401);
+  const rawBadHeader = `${Buffer.from('5').toString('base64url')}.bbb.ccc`;
+  const startH = await call('/auth/oidc/start');
+  const uh = new URL(startH.json.url);
+  const mintedH = await (await fetch(`${MOCK}/mint-code`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ challenge: uh.searchParams.get('code_challenge'), claims: {}, rawIdToken: rawBadHeader }) })).json();
+  check('non-object header rejected', (await call('/auth/oidc/callback', { method: 'POST', body: { code: mintedH.code, state: uh.searchParams.get('state') } })).status === 401);
 
   // Malformed id_token (3 segments, unparseable header) must 401, never 500.
   const startX = await call('/auth/oidc/start');
