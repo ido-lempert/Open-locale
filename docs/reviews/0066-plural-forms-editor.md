@@ -6,11 +6,12 @@ isPlural=true, under each locale cell:
 - Categories come from the browser's Intl.PluralRules - the same CLDR source
   the API validates against (slice 2); an invalid locale code falls back to
   "other" only. No hardcoded per-locale tables.
-- Save reuses the existing blur-to-save cell flow: plural keys send every
-  category the locale supports (empty string when untouched), so the
-  API-required "other" is always present; plain keys send no pluralForms
-  field at all. Dirty-checking covers value AND forms; the saved snapshot
-  updates from the server response.
+- Save reuses the existing blur-to-save cell flow. Plain keys send no
+  pluralForms field at all. Plural keys send mergeFormsForSave(saved, edited,
+  browserCategories) - NOT simply "every browser category": 0067 corrects
+  the first version of this rule, which would have erased stored categories
+  unknown to the browser's ICU. Dirty-checking covers value AND forms; the
+  saved snapshot updates from the server response.
 - Plain (non-plural) keys are visually unchanged.
 - e2e-visual: 4 new checks (API-created plural key renders category inputs;
   typed forms reach the API on blur; forms persist across reload; grid

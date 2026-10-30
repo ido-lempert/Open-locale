@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { hintsForTarget, GlossaryHint } from '../glossary-match';
 import { detectImportFormat, IoFormat } from '../import-format';
+import { mergeFormsForSave, pluralCategories } from '../plural-forms';
 import { ApiService, BranchInfo, ScreenshotMeta, TmSuggestion, GlossaryTermItem, CommentEntry, HistoryEntry, Key, Project, TranslationStatus } from '../api.service';
 
 interface CellState {
@@ -364,12 +365,7 @@ export class EditorComponent implements OnInit {
   editForm(k: Key, locale: string, category: string, value: string) {
     this.cell(k.id, locale).update((c) => ({ ...c, forms: { ...c.forms, [category]: value } }));
   }
-  pluralCategories(locale: string): string[] {
-    // Browser ICU (Intl.PluralRules) is the same CLDR source the API
-    // validates against; invalid locale codes fall back to "other" only.
-    try { return new Intl.PluralRules(locale).resolvedOptions().pluralCategories; }
-    catch { return ['other']; }
-  }
+  pluralCategories(locale: string): string[] { return pluralCategories(locale); }
   private sameForms(a: Record<string, string>, b: Record<string, string>): boolean {
     const ka = Object.keys(a), kb = Object.keys(b);
     return ka.length === kb.length && ka.every((k) => a[k] === b[k]);
@@ -380,10 +376,11 @@ export class EditorComponent implements OnInit {
     if (!force && c.value === c.saved && this.sameForms(c.forms, c.savedForms)) return;
     if (c.status === 'saving') return;
     const reviewAtSend = c.review;
-    // Plural keys send every category the locale supports (empty string when
-    // untouched), so the required "other" is always present.
+    // Plural keys send the merge of the server's last-known forms with this
+    // browser's category edits: categories a different ICU build stored but
+    // this browser does not know survive the save (see plural-forms.ts).
     const formsAtSend = k.isPlural
-      ? Object.fromEntries(this.pluralCategories(locale).map((cat) => [cat, c.forms[cat] ?? '']))
+      ? mergeFormsForSave(c.savedForms, c.forms, this.pluralCategories(locale))
       : undefined;
     sig.set({ ...c, status: 'saving' });
     try {
