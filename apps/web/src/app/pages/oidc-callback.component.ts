@@ -1,6 +1,6 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../api.service';
 
 @Component({
@@ -23,10 +23,14 @@ import { ApiService } from '../api.service';
     </main>
   `,
 })
-export class OidcCallbackComponent implements OnInit {
+export class OidcCallbackComponent implements OnInit, OnDestroy {
+  private querySubscription?: { unsubscribe(): void };
   busy = signal(true); error = signal(''); code = ''; pendingToken = '';
-  constructor(private api: ApiService, private router: Router) {}
-  async ngOnInit() {
+  constructor(private api: ApiService, private router: Router, private route: ActivatedRoute) {}
+  ngOnInit() { this.querySubscription = this.route.queryParamMap.subscribe(() => { void this.consumeCallback(); }); }
+  ngOnDestroy() { this.querySubscription?.unsubscribe(); }
+  private async consumeCallback() {
+    this.pendingToken = ''; this.error.set(''); this.busy.set(true);
     const params = new URL(window.location.href).searchParams;
     // Remove authorization codes and state from history before network I/O.
     window.history.replaceState(window.history.state, '', window.location.pathname);

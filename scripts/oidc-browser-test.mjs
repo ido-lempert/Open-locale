@@ -87,6 +87,16 @@ try {
   await page.goto(`${WEB}/auth/oidc/callback?error=access_denied&state=denied`,{waitUntil:'networkidle0'});
   check('provider cancellation has safe visible error', (await page.$eval('[role=alert]',e=>e.textContent)).includes('identity provider did not complete'));
   check('provider error never triggers exchange',callbackPosts===before);
+  // Angular reuses the callback component for query-only navigation.
+  // Drive Router itself, not page.goto (which reloads the whole document).
+  await page.evaluate(()=>{
+    const c=window.ng.getComponent(document.querySelector('ol-oidc-callback'));
+    return c.router.navigateByUrl('/auth/oidc/callback?code=new-attacker&state=unissued');
+  });
+  await page.waitForFunction(()=>!location.search && document.querySelector('[role=alert]')?.textContent.includes('not started in this tab'));
+  check('same-route query navigation consumes and scrubs callback',!page.url().includes('?'));
+  check('reused callback still rejects before code exchange',callbackPosts===before);
+  check('reused callback clears prior cancellation message',!(await page.$eval('[role=alert]',e=>e.textContent)).includes('identity provider did not complete'));
   await page.setViewport({width:480,height:800});
   await page.screenshot({path:'/downloads/oidc-error-narrow.png'});
   check('narrow callback has no horizontal overflow',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
