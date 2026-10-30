@@ -112,6 +112,22 @@ export interface ScreenshotMeta {
   uploader: { displayName: string; email: string } | null;
 }
 
+export interface QualityReport {
+  branch: string; totalIssues: number; keysWithIssues: number;
+  types: string[]; byType: Record<string, number>;
+  locales: { locale: string; total: number; byType: Record<string, number> }[];
+}
+export interface UsageReport {
+  days: number; since: string; totalEvents: number; activeKeys: number;
+  byAction: Record<string, number>;
+  byDay: { day: string; count: number }[];
+  topActors: { name: string; count: number }[];
+}
+export interface TaskReport {
+  total: number; byStatus: Record<string, number>; overdue: number; dueSoon: number;
+  perAssignee: { name: string; count: number }[];
+}
+
 export interface CommentEntry {
   id: string; keyId: string; localeCode: string | null; body: string; createdAt: string;
   parentId: string | null;
@@ -427,6 +443,17 @@ export class ApiService {
     return this.request<CommentEntry>(`/projects/${projectId}/keys/${keyId}/comments`, {
       method: 'POST', body: JSON.stringify({ body, ...(locale ? { locale } : {}), ...(parentId ? { parentId } : {}) }),
     });
+  }
+  getQuality(projectId: string, branch?: string) {
+    const q = branch ? `?branch=${encodeURIComponent(branch)}` : '';
+    return this.request<QualityReport>(`/projects/${projectId}/reports/quality${q}`);
+  }
+  getUsage(projectId: string, days?: number) {
+    const q = days ? `?days=${days}` : '';
+    return this.request<UsageReport>(`/projects/${projectId}/reports/usage${q}`);
+  }
+  getTaskReport(projectId: string) {
+    return this.request<TaskReport>(`/projects/${projectId}/reports/tasks`);
   }
   deleteComment(projectId: string, keyId: string, commentId: string) {
     return this.request<{ removed: string }>(`/projects/${projectId}/keys/${keyId}/comments/${commentId}`, { method: 'DELETE' });

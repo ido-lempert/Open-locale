@@ -5,5 +5,5 @@ import { AuthModule } from '../auth/auth.module';
 import { ProjectsModule } from '../projects/projects.module';
 import { BranchesModule } from '../branches/branches.module';
 
-@Module({ imports: [AuthModule, ProjectsModule, BranchesModule], controllers: [QaController], providers: [QaService] })
+@Module({ imports: [AuthModule, ProjectsModule, BranchesModule], controllers: [QaController], providers: [QaService], exports: [QaService] })
 export class QaModule {}

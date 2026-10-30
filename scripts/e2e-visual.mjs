@@ -271,6 +271,22 @@ try {
   check('key filter narrows rows to matching key events', true);
   await shot('editor-50-activity-filters.png');
 
+  // Reports dashboards (slice 13)
+  await page.click('.back');
+  await page.waitForSelector('.reports-link', { timeout: 10000 });
+  await page.click('.reports-link');
+  await page.waitForSelector('.progress-table', { timeout: 10000 });
+  check('progress table renders on reports page', true);
+  await page.waitForFunction(() => document.body.textContent.includes('open findings across'), { timeout: 10000 });
+  check('quality dashboard renders', true);
+  await page.waitForFunction(() => document.querySelectorAll('.usage-table').length === 2, { timeout: 10000 });
+  check('usage dashboard renders action and actor tables', true);
+  const usageFirst = await page.$eval('.usage-table tbody tr', (el) => el.textContent);
+  check('usage table has real activity rows', usageFirst.length > 0, usageFirst.slice(0, 60));
+  await page.waitForFunction(() => /\d+ tasks:/.test(document.body.textContent), { timeout: 10000 });
+  check('tasks dashboard renders', true);
+  await shot('reports-52-dashboards.png');
+
   // Screenshots via UI
   await page.click('.back');
   await page.waitForSelector('.grid tbody tr', { timeout: 10000 });
@@ -2109,4 +2125,7 @@ try {
 }
 if (failures > 0) { console.log(`${failures} FAILURES`); process.exit(1); }
 console.log('E2E visual pass complete');
+// In-script exit marker: the outer shell can be reaped before it records
+// $?, so the suite prints its own deterministic success line.
+console.log('E2E_RC=0');
 process.exitCode = 0;

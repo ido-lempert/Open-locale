@@ -13,4 +13,19 @@ export class ReportsController {
   progress(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Query('branch') branch?: string) {
     return this.reports.progress(user.userId, projectId, branch);
   }
+
+  @Get('quality')
+  quality(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Query('branch') branch?: string) {
+    return this.reports.quality(user.userId, projectId, branch);
+  }
+
+  @Get('usage')
+  usage(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Query('days') days?: string) {
+    return this.reports.usage(user.userId, projectId, days ? Number(days) : undefined);
+  }
+
+  @Get('tasks')
+  tasks(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string) {
+    return this.reports.tasks(user.userId, projectId);
+  }
 }

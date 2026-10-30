@@ -220,5 +220,8 @@ export const OPENAPI = {
     },
     '/api/projects/{projectId}/activity': { get: p('Project activity feed', 'projects') },
     '/api/projects/{projectId}/qa': { get: p('Run QA checks over translations', 'qa') },
+    '/api/projects/{projectId}/reports/quality': { get: p('Quality dashboard: QA findings aggregated by type and locale', 'projects') },
+    '/api/projects/{projectId}/reports/usage': { get: p('Usage dashboard: activity volume over a trailing window', 'projects') },
+    '/api/projects/{projectId}/reports/tasks': { get: p('Task dashboard: status totals, overdue, workload per assignee', 'projects') },
   },
 };

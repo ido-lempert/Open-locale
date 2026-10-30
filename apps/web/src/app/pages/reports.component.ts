@@ -1,7 +1,7 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { ApiService, BranchInfo, ProgressReport } from '../api.service';
+import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, UsageReport } from '../api.service';
 
 @Component({
   selector: 'ol-reports',
@@ -9,7 +9,7 @@ import { ApiService, BranchInfo, ProgressReport } from '../api.service';
   template: `
     <header class="bar">
       <a [routerLink]="['/projects', projectId]" class="back">&larr; Editor</a>
-      <h1>Progress</h1>
+      <h1>Reports</h1>
       <select aria-label="Branch" name="reportBranch" [ngModel]="branch()" (ngModelChange)="branch.set($event); void fetch()">
         @for (b of branches(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }
       </select>
@@ -53,12 +53,63 @@ import { ApiService, BranchInfo, ProgressReport } from '../api.service';
       } @else if (!error()) {
         <p class="muted">Loading…</p>
       }
+
+      <h2>Quality</h2>
+      @if (quality(); as q) {
+        <p class="muted">{{ q.totalIssues }} open findings across {{ q.keysWithIssues }} keys on {{ q.branch }}.</p>
+        @if (q.totalIssues > 0) {
+          <div class="table-scroll">
+          <table class="qa-table quality-table">
+            <thead>
+              <tr><th class="row-head">Locale</th><th>Total</th>@for (t of q.types; track t) { <th>{{ t.split('_').join(' ') }}</th> }</tr>
+            </thead>
+            <tbody>
+              @for (l of q.locales; track l.locale) {
+                <tr><td><code>{{ l.locale }}</code></td><td>{{ l.total }}</td>@for (t of q.types; track t) { <td>{{ l.byType[t] ?? 0 }}</td> }</tr>
+              }
+            </tbody>
+          </table>
+          </div>
+        }
+      }
+
+      <h2>Usage <span class="muted">last {{ usage()?.days ?? 30 }} days</span></h2>
+      @if (usage(); as u) {
+        <p class="muted">{{ u.totalEvents }} events touching {{ u.activeKeys }} keys.</p>
+        <div class="table-scroll">
+        <table class="qa-table usage-table">
+          <thead><tr><th class="row-head">Action</th><th>Events</th></tr></thead>
+          <tbody>@for (a of actionRows(u); track a.action) { <tr><td><code>{{ a.action }}</code></td><td>{{ a.count }}</td></tr> }</tbody>
+        </table>
+        <table class="qa-table usage-table">
+          <thead><tr><th class="row-head">Actor</th><th>Events</th></tr></thead>
+          <tbody>@for (a of u.topActors; track a.name) { <tr><td>{{ a.name }}</td><td>{{ a.count }}</td></tr> }</tbody>
+        </table>
+        </div>
+      }
+
+      <h2>Tasks</h2>
+      @if (taskReport(); as t) {
+        <p class="muted">{{ t.total }} tasks: {{ t.byStatus['OPEN'] ?? 0 }} open, {{ t.byStatus['IN_PROGRESS'] ?? 0 }} in progress, {{ t.byStatus['DONE'] ?? 0 }} done.
+          <span [class.error]="t.overdue > 0">{{ t.overdue }} overdue</span>, {{ t.dueSoon }} due within 7 days.</p>
+        @if (t.perAssignee.length > 0) {
+          <div class="table-scroll">
+          <table class="qa-table tasks-table">
+            <thead><tr><th class="row-head">Assignee</th><th>Open tasks</th></tr></thead>
+            <tbody>@for (a of t.perAssignee; track a.name) { <tr><td>{{ a.name }}</td><td>{{ a.count }}</td></tr> }</tbody>
+          </table>
+          </div>
+        }
+      }
     </main>
   `,
 })
 export class ReportsComponent implements OnInit {
   projectId = '';
   report = signal<ProgressReport | null>(null);
+  quality = signal<QualityReport | null>(null);
+  usage = signal<UsageReport | null>(null);
+  taskReport = signal<TaskReport | null>(null);
   branches = signal<BranchInfo[]>([]);
   branch = signal('main');
   statusColumns = signal<string[]>([]);
@@ -70,6 +121,11 @@ export class ReportsComponent implements OnInit {
     this.projectId = this.route.snapshot.paramMap.get('id') ?? '';
     this.branches.set(await this.api.listBranches(this.projectId).catch(() => []));
     await this.fetch();
+    await this.ngOnInitDashboards();
+  }
+
+  actionRows(u: UsageReport) {
+    return Object.entries(u.byAction).sort((a, b) => b[1] - a[1]).map(([action, count]) => ({ action, count }));
   }
 
   async fetch() {
@@ -80,6 +136,12 @@ export class ReportsComponent implements OnInit {
       const cols: string[] = [];
       for (const l of r.locales) for (const s of Object.keys(l.byStatus)) if (!cols.includes(s)) cols.push(s);
       this.statusColumns.set(cols);
+      this.quality.set(await this.api.getQuality(this.projectId, this.branch()));
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load'); }
+  }
+
+  async ngOnInitDashboards() {
+    this.usage.set(await this.api.getUsage(this.projectId).catch(() => null));
+    this.taskReport.set(await this.api.getTaskReport(this.projectId).catch(() => null));
   }
 }
