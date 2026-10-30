@@ -86,6 +86,22 @@ try {
   check('import preserves pluralForms', JSON.stringify(formsOf(await keys(), 'cart.items', 'en')) === JSON.stringify({ one: '1 merged', other: '# merged' }));
   check('import still updates the plain value', (await keys()).find((k) => k.name === 'cart.items').translations.find((t) => t.localeCode === 'en').value === 'imported items');
 
+  // Android format layer (slice 4): <plurals> import upgrades metadata and
+  // writes forms; a <string> import over a plural key preserves them.
+  const ax = await call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { xml: '<resources><plurals name="cart.android"><item quantity="one">one thing</item><item quantity="other">many things</item></plurals></resources>' } });
+  check('Android plurals import accepted', ax.status === 200 || ax.status === 201, `status=${ax.status}`);
+  const ksAx = await keys();
+  const axKey = ksAx.find((k) => k.name === 'cart.android');
+  check('Android import sets isPlural and forms', axKey?.isPlural === true && JSON.stringify(formsOf(ksAx, 'cart.android', 'en')) === JSON.stringify({ one: 'one thing', other: 'many things' }));
+  check('Android import sets plain value to the other form', axKey?.translations.find((t) => t.localeCode === 'en')?.value === 'many things');
+  const axOut = await (await fetch(`${API}/projects/${pid}/export/en/android`, { headers: { Authorization: `Bearer ${jwt}` } })).text();
+  check('Android export emits a <plurals> element', axOut.includes('<plurals name="cart.android">') && axOut.includes('<item quantity="one">one thing</item>'), axOut.split('\n').find((l) => l.includes('cart.android')) ?? '');
+  const axStr = await call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { xml: '<resources><string name="cart.android">plain string</string></resources>' } });
+  check('Android <string> import over a plural key accepted', axStr.status === 200 || axStr.status === 201, `status=${axStr.status}`);
+  const ksAx2 = await keys();
+  check('<string> import preserves pluralForms', JSON.stringify(formsOf(ksAx2, 'cart.android', 'en')) === JSON.stringify({ one: 'one thing', other: 'many things' }));
+  check('<string> import updates plain value', ksAx2.find((k) => k.name === 'cart.android').translations.find((t) => t.localeCode === 'en').value === 'plain string');
+
   // isPlural=false clears stored forms explicitly.
   check('isPlural flip accepted', (await call(`/projects/${pid}/keys/${kid}`, { jwt, method: 'PATCH', body: { isPlural: false } })).status === 200);
   check('isPlural=false clears pluralForms', formsOf(await keys(), 'cart.items', 'en') === null);

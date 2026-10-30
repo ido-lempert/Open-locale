@@ -373,8 +373,24 @@ export class TranslationsService {
   }
 
   async exportAndroid(userId: string, projectId: string, locale: string, branch?: string) {
-    const flat = (await this.exportJson(userId, projectId, locale, true, branch)) as Record<string, string>;
-    return toAndroidXml(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)));
+    await this.projects.getFor(userId, projectId);
+    const b = await this.branches.branchFor(projectId, branch);
+    const translations = await this.prisma.translation.findMany({
+      where: { projectId, localeCode: locale, key: { branchId: b.id } },
+      include: { key: true },
+      orderBy: { key: { name: 'asc' } },
+    });
+    const rows: [string, string][] = [];
+    const plurals: [string, Record<string, string>][] = [];
+    for (const t of translations) {
+      const forms = t.pluralForms as Record<string, string> | null;
+      // Plural key with stored forms -> <plurals>. A plural key without forms
+      // falls back to a plain <string> from value (documented, lossy for the
+      // plural intent but valid Android).
+      if (t.key.isPlural && forms && Object.keys(forms).length > 0) plurals.push([t.key.name, forms]);
+      else rows.push([t.key.name, t.value]);
+    }
+    return toAndroidXml(rows, plurals);
   }
 
   async exportIos(userId: string, projectId: string, locale: string, branch?: string) {
@@ -530,7 +546,7 @@ export class TranslationsService {
   // Single parse dispatch for every import format. The write path and the
   // dry-run preview share it, so both see identical parsing and identical
   // 400 rejections, in the same order (parse errors before grant checks).
-  private parseImport(dto: ImportJsonDto): { entries: Record<string, unknown>; untranslatedSkipped: number } {
+  private parseImport(dto: ImportJsonDto): { entries: Record<string, unknown>; untranslatedSkipped: number; plurals?: Record<string, Record<string, string>> } {
     if (dto.po != null) {
       const { rows, rejected } = parsePo(dto.po);
       if (rejected > 0) {
@@ -584,11 +600,18 @@ export class TranslationsService {
       return { entries: Object.fromEntries(rows), untranslatedSkipped: 0 };
     }
     if (dto.xml != null) {
-      const { rows, rejected } = parseAndroidXml(dto.xml);
+      const { rows, plurals, rejected } = parseAndroidXml(dto.xml);
       if (rejected > 0) {
-        throw new BadRequestException(`${rejected} unsupported or unparsable element(s) in Android XML: a missing <resources> root, plurals, string-array, DOCTYPE/entity declarations and nested markup are not supported`);
+        throw new BadRequestException(`${rejected} unsupported or unparsable element(s) in Android XML: a missing <resources> root, string-array, DOCTYPE/entity declarations, nested markup, and plurals items with a non-CLDR quantity, duplicate quantities or inner markup are not supported`);
       }
-      return { entries: Object.fromEntries(rows), untranslatedSkipped: 0 };
+      // Plural entries join the entries map with their "other" form as the
+      // plain value; the full category map rides separately.
+      const pluralRows = plurals.map(([n, f]) => [n, f.other ?? ''] as [string, string]);
+      return {
+        entries: { ...Object.fromEntries(rows), ...Object.fromEntries(pluralRows) },
+        untranslatedSkipped: 0,
+        plurals: Object.fromEntries(plurals),
+      };
     }
     if (dto.strings != null) {
       const { rows, rejected } = parseIosStrings(dto.strings);
@@ -614,7 +637,8 @@ export class TranslationsService {
   }
 
   async importAndroid(userId: string, projectId: string, locale: string, xml: string, branch?: string) {
-    return this.importJson(userId, projectId, locale, this.parseImport({ xml }).entries, branch);
+    const parsed = this.parseImport({ xml });
+    return this.importJson(userId, projectId, locale, parsed.entries, branch, undefined, parsed.plurals);
   }
 
   async importIos(userId: string, projectId: string, locale: string, strings: string, branch?: string) {
@@ -711,7 +735,7 @@ export class TranslationsService {
     };
   }
 
-  async importJson(userId: string, projectId: string, locale: string, entries: Record<string, unknown>, branch?: string, opts?: { preserveOnBlank?: boolean }) {
+  async importJson(userId: string, projectId: string, locale: string, entries: Record<string, unknown>, branch?: string, opts?: { preserveOnBlank?: boolean }, plurals?: Record<string, Record<string, string>>) {
     await this.projects.assertLocaleWrite(userId, projectId, [locale]);
     const b = await this.branches.branchFor(projectId, branch);
     const project = await this.projects.getFor(userId, projectId);
@@ -724,13 +748,14 @@ export class TranslationsService {
     // state. Single-instance in-process mutex; see LocksService for why not a
     // Postgres advisory lock and what multi-instance needs.
     return this.locks.withProjectLock(projectId, () =>
-      this.importJsonLocked(userId, projectId, locale, project.baseLocale, entries, flat, rejected, b.id, opts));
+      this.importJsonLocked(userId, projectId, locale, project.baseLocale, entries, flat, rejected, b.id, opts, plurals));
   }
 
   private async importJsonLocked(
     userId: string, projectId: string, locale: string, baseLocale: string,
     entries: Record<string, unknown>, flat: Record<string, string>, rejected: string[],
     branchId: string, opts?: { preserveOnBlank?: boolean },
+    plurals?: Record<string, Record<string, string>>,
   ) {
     // Restorable auto snapshot BEFORE anything mutates: every import leaves the
     // pre-import state recoverable from the snapshots list.
@@ -766,10 +791,29 @@ export class TranslationsService {
           // Locked keys fail their own per-key transaction (the run row
           // records the failure); the rest of the import continues.
           await this.tasks.assertKeysEditable(tx, userId, projectId, [key.id]);
+          const forms = plurals?.[name];
+          if (forms) {
+            // Same validation as the single-translation write path.
+            let allowed: string[];
+            try {
+              allowed = new Intl.PluralRules(locale).resolvedOptions().pluralCategories;
+            } catch {
+              throw new BadRequestException(`No CLDR plural rules for locale ${locale}`);
+            }
+            const invalid = Object.keys(forms).filter((c) => !allowed.includes(c));
+            if (invalid.length) {
+              throw new BadRequestException(`Locale ${locale} has no plural categories: ${invalid.join(', ')} (allowed: ${allowed.join(', ')})`);
+            }
+            if (!('other' in forms)) throw new BadRequestException(`plurals import for ${name} requires an "other" item`);
+            // Importing a <plurals> upgrades the key to plural metadata
+            // (explicit, documented); it never downgrades: a <string> import
+            // for a plural key leaves isPlural and stored forms untouched.
+            await tx.key.update({ where: { id: key.id }, data: { isPlural: true } });
+          }
           const existing = await tx.translation.findUnique({
             where: { keyId_localeCode: { keyId: key.id, localeCode: locale } },
           });
-          if (existing && existing.value === value) {
+          if (existing && existing.value === value && (!forms || canonPlural(existing.pluralForms) === canonPlural(forms))) {
             await tx.importRun.update({
               where: { id: run.id }, data: { unchangedSkipped: { increment: 1 } },
             });
@@ -789,8 +833,10 @@ export class TranslationsService {
           // Imported wording replaces the old one and has not been reviewed.
           await tx.translation.upsert({
             where: { keyId_localeCode: { keyId: key.id, localeCode: locale } },
-            create: { keyId: key.id, projectId, localeCode: locale, value, version: 1 },
-            update: { value, status: 'UNVERIFIED', version: { increment: 1 } },
+            create: { keyId: key.id, projectId, localeCode: locale, value, version: 1, ...(forms ? { pluralForms: forms } : {}) },
+            // A <plurals> import replaces stored forms, same as value (imported
+            // wording wins); a <string> import omits the field and preserves them.
+            update: { value, status: 'UNVERIFIED', version: { increment: 1 }, ...(forms ? { pluralForms: forms } : {}) },
           });
           await tx.translationHistory.create({
             data: {

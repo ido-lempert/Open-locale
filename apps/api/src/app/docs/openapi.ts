@@ -169,7 +169,7 @@ export const OPENAPI = {
     },
     '/api/projects/{projectId}/export/{locale}': { get: p('Export a locale as JSON', 'import/export') },
     '/api/projects/{projectId}/export/{locale}/csv': { get: p('Export a locale as CSV', 'import/export') },
-    '/api/projects/{projectId}/export/{locale}/android': { get: p('Export a locale as Android strings.xml', 'import/export') },
+    '/api/projects/{projectId}/export/{locale}/android': { get: p('Export a locale as Android strings.xml (plural keys with stored forms as <plurals> CLDR-quantity items; plural keys without forms as plain <string>)', 'import/export') },
     '/api/projects/{projectId}/export/{locale}/ios': { get: p('Export a locale as iOS .strings', 'import/export') },
     '/api/projects/{projectId}/export/{locale}/po': { get: p('Export a locale as PO (gettext)', 'import/export') },
     '/api/projects/{projectId}/export/{locale}/xliff': { get: p('Export a locale as XLIFF 1.2', 'import/export') },

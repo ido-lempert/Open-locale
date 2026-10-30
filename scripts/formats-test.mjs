@@ -97,10 +97,11 @@ try {
   check('Android import without a <resources> root rejected (400)', noRootXml.status === 400, String(noRootXml.status));
   const nested = await call(`${P}/import/he`, { token: at, method: 'POST', body: { xml: '<resources><string name="x">a <b>bold</b></string></resources>' } });
   check('nested markup rejected (400)', nested.status === 400, String(nested.status));
-  // Atomicity: a mixed import (one valid <string> plus an unsupported <plurals>)
-  // must 400 and leave keys, translations and history exactly as before.
+  // Atomicity: a mixed import (one valid <string> plus an unsupported
+  // <string-array>) must 400 and leave keys, translations and history exactly
+  // as before. (<plurals> is supported since slice 4 - see below.)
   const before = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
-  const mixed = await call(`${P}/import/he`, { token: at, method: 'POST', body: { xml: '<resources><string name="mixed.new">should not land</string><plurals name="cats"><item quantity="one">one</item></plurals></resources>' } });
+  const mixed = await call(`${P}/import/he`, { token: at, method: 'POST', body: { xml: '<resources><string name="mixed.new">should not land</string><string-array name="cats"><item>one</item></string-array></resources>' } });
   const after = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
   check('mixed valid+unsupported import rejected (400)', mixed.status === 400, String(mixed.status));
   check('rejected mixed import leaves all keys unchanged', JSON.stringify(before) === JSON.stringify(after) && after['mixed.new'] === undefined, JSON.stringify(after).slice(0, 120));
@@ -110,6 +111,25 @@ try {
   await call(`${P}/import/he`, { token: at, method: 'POST', body: { xml: '<resources><string name="mixed.two">nope</string><string-array name="a"><item>x</item></string-array></resources>' } });
   const actAfter = await actCount();
   check('rejected mixed import writes no history/activity', typeof actBefore === 'number' && actAfter === actBefore, `${actBefore} -> ${actAfter}`);
+  // Android <plurals> (slice 4 subset): CLDR-quantity items import as plural
+  // metadata + forms, and export back as a <plurals> element.
+  const pluralImp = await call(`${P}/import/he`, { token: at, method: 'POST', body: { xml: '<resources><plurals name="cart.items"><item quantity="one">\u05e4\u05e8\u05d9\u05d8</item><item quantity="two">\u05e4\u05e8\u05d9\u05d8\u05d9\u05dd</item><item quantity="other">\u05e4\u05e8\u05d9\u05d8\u05d9\u05dd \u05e8\u05d1\u05d9\u05dd</item></plurals></resources>' } });
+  check('Android plurals import accepted', pluralImp.status === 201 && pluralImp.json.keysCreated === 1, `${pluralImp.status} ${JSON.stringify(pluralImp.json)}`);
+  const keysPl = await (await fetch(`${API}${P}/keys`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  const plKey = keysPl.find((k) => k.name === 'cart.items');
+  const plForms = plKey?.translations.find((t) => t.localeCode === 'he')?.pluralForms;
+  check('imported plurals set isPlural and forms', plKey?.isPlural === true && plForms?.one === '\u05e4\u05e8\u05d9\u05d8' && plForms?.other === '\u05e4\u05e8\u05d9\u05d8\u05d9\u05dd \u05e8\u05d1\u05d9\u05dd', JSON.stringify(plForms));
+  check('plural plain value carries the "other" form', plKey?.translations.find((t) => t.localeCode === 'he')?.value === '\u05e4\u05e8\u05d9\u05d8\u05d9\u05dd \u05e8\u05d1\u05d9\u05dd');
+  const xmlPlOut = await (await fetch(`${API}${P}/export/he/android`, { headers: { Authorization: `Bearer ${at}` } })).text();
+  check('Android export emits a <plurals> element with CLDR items', xmlPlOut.includes('<plurals name="cart.items">') && xmlPlOut.includes('<item quantity="two">') && xmlPlOut.indexOf('<item quantity="one">') < xmlPlOut.indexOf('<item quantity="two">') && xmlPlOut.indexOf('<item quantity="two">') < xmlPlOut.indexOf('<item quantity="other">'));
+  const badCat = await call(`${P}/import/he`, { token: at, method: 'POST', body: { xml: '<resources><plurals name="bad.cat"><item quantity="million">x</item></plurals></resources>' } });
+  check('non-CLDR quantity rejected (400)', badCat.status === 400, String(badCat.status));
+  const dupCat = await call(`${P}/import/he`, { token: at, method: 'POST', body: { xml: '<resources><plurals name="dup.cat"><item quantity="one">a</item><item quantity="one">b</item></plurals></resources>' } });
+  check('duplicate quantity rejected (400)', dupCat.status === 400, String(dupCat.status));
+  // "few" is a valid CLDR category but NOT in hebrew's set: the key-level
+  // failure is recorded on the import run, not a 400 (per-key semantics).
+  const wrongLocale = await call(`${P}/import/he`, { token: at, method: 'POST', body: { xml: '<resources><plurals name="few.cat"><item quantity="few">x</item><item quantity="other">y</item></plurals></resources>' } });
+  check('category outside the locale set fails the key, not the import', wrongLocale.status === 201 && wrongLocale.json.failed === 1 && (await (await fetch(`${API}${P}/keys`, { headers: { Authorization: `Bearer ${at}` } })).json()).every((k) => k.name !== 'few.cat'), `${wrongLocale.status} ${JSON.stringify(wrongLocale.json)}`);
   // Direct translation-history evidence on the seeded key: a rejected import must
   // not append history rows (activity count alone would not prove this).
   const histCount = async () => {

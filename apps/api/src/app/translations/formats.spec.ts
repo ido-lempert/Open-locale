@@ -58,12 +58,24 @@ describe('android-xml adversarial', () => {
     expect(parseAndroidXml('<resources><string name="a">x&nbsp;y</string></resources>').rows)
       .toEqual([['a', 'x&nbsp;y']]);
   });
-  it('counts plurals and string-arrays as rejected so imports cannot silently lose them', () => {
-    const xml = '<resources><plurals name="cats"><item quantity="one">one</item></plurals>' +
+  it('parses plurals as CLDR forms and counts string-arrays as rejected so imports cannot silently lose them', () => {
+    const xml = '<resources><plurals name="cats"><item quantity="one">one cat</item><item quantity="other">many cats</item></plurals>' +
       '<string-array name="arr"><item>x</item></string-array><string name="a">v</string></resources>';
-    const { rows, rejected } = parseAndroidXml(xml);
+    const { rows, plurals, rejected } = parseAndroidXml(xml);
     expect(rows).toEqual([['a', 'v']]);
-    expect(rejected).toBe(2);
+    expect(plurals).toEqual([['cats', { one: 'one cat', other: 'many cats' }]]);
+    expect(rejected).toBe(1);
+  });
+  it('rejects a plurals element with a non-CLDR or duplicate quantity, or inner markup', () => {
+    for (const bad of [
+      '<resources><plurals name="a"><item quantity="million">x</item></plurals></resources>',
+      '<resources><plurals name="a"><item quantity="one">x</item><item quantity="one">y</item></plurals></resources>',
+      '<resources><plurals name="a"><item quantity="one">x <b>bold</b></item></plurals></resources>',
+    ]) {
+      const { plurals, rejected } = parseAndroidXml(bad);
+      expect(plurals).toEqual([]);
+      expect(rejected).toBe(1);
+    }
   });
 });
 
