@@ -1,3 +1,8 @@
+export interface LocalSyncPreview {
+  projectId:string; branch:string; locale:string; fingerprint:string;
+  baselineVerified:false; remoteVerified:false; canApply:false; requiresManual:boolean;
+  decisions: {key:string; base:string|null; local:string|null; remote:string|null; kind:string; suggested:string}[];
+}
 import { Injectable } from '@angular/core';
 
 export interface ProjectLocale { code: string; }
@@ -183,6 +188,7 @@ export class ApiService {
   completeOidc(pendingToken: string, totpCode: string) {
     return this.request<{ accessToken: string }>('/auth/oidc/complete', { method: 'POST', body: JSON.stringify({ pendingToken, totpCode }) });
   }
+  previewLocalSync(projectId:string,input:{branch:string;locale:string;baselineJson:string;remoteJson:string;remoteSha:string}) { return this.request<LocalSyncPreview>(`/projects/${projectId}/sync/preview`,{method:'POST',body:JSON.stringify(input)}); }
   listTokens() { return this.request<ApiTokenInfo[]>('/auth/tokens'); }
   getSamlSpInfo() { return this.request<{ configured: boolean; entityId?: string; acsUrl?: string; metadataPath?: string; idpEntryPoint?: string; requestSigning?: boolean; browserEnabled?: boolean }>('/auth/saml/sp-info'); }
   get2faStatus() { return this.request<{ enabled: boolean; recoveryCodesRemaining: number }>('/auth/2fa/status'); }

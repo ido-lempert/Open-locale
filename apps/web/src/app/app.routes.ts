@@ -1,3 +1,4 @@
+import { SyncPreviewComponent } from './pages/sync-preview.component';
 import { SamlCallbackComponent } from './pages/saml-callback.component';
 import { Routes } from '@angular/router';
 import { OidcCallbackComponent } from './pages/oidc-callback.component';
@@ -19,6 +20,7 @@ export const appRoutes: Routes = [
   { path: 'login', component: LoginComponent },
   { path: 'projects', component: ProjectsComponent, canActivate: [authGuard] },
   { path: 'projects/:id', component: EditorComponent, canActivate: [authGuard] },
+  { path: 'projects/:id/sync', component: SyncPreviewComponent, canActivate: [authGuard] },
   { path: 'projects/:id/settings', component: SettingsComponent, canActivate: [authGuard] },
   { path: 'projects/:id/activity', component: ActivityComponent, canActivate: [authGuard] },
   { path: 'projects/:id/tasks', component: TasksComponent, canActivate: [authGuard] },

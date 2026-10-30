@@ -31,6 +31,7 @@ interface CellState {
       <a [routerLink]="['/projects', projectId, 'tasks']" class="tasks-link">Tasks</a>
       <a [routerLink]="['/projects', projectId, 'activity']" class="activity-link">Activity</a>
       <a [routerLink]="['/projects', projectId, 'snapshots']" class="snapshots-link">Snapshots</a>
+      <a [routerLink]="['/projects', projectId, 'sync']" class="sync-link">File sync preview</a>
       <a [routerLink]="['/projects', projectId, 'settings']" class="settings-link">Settings</a>
       <span class="muted">{{ keys().length }} keys</span>
     </header>
