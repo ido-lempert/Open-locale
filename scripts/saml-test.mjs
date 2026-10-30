@@ -128,6 +128,7 @@ try {
   // Negative legs: each otherwise fully valid and correctly signed.
   const cases = [
     ['wrong audience rejected', { audience: 'someone-else' }],
+    ['validly signed wrong issuer rejected', { wrongIssuer: true }],
     ['wrong Recipient rejected', { recipient: 'http://127.0.0.1:3000/api/auth/saml/acs-evil' }],
     ['wrong Destination rejected', { destination: 'http://127.0.0.1:3000/api/auth/saml/acs-evil' }],
     ['email tampered after signing rejected', { tamperEmail: true }],
@@ -138,13 +139,16 @@ try {
   for (const [name, knobs] of cases) {
     const rid = await freshRequestId();
     const r = await call('/auth/saml/acs', { method: 'POST', body: { SAMLResponse: await mint({ ...knobs, inResponseTo: rid, email: `neg-${knobs.audience ? 'aud' : Math.random().toString(36).slice(2, 8)}@example.com` }) } });
-    check(name, r.status === 401, `got ${r.status}`);
+    check(name, r.status === 401 && (!knobs.wrongIssuer || String(r.json?.message).includes('issuer')), `got ${r.status} ${String(r.json?.message)}`);
   }
   // Adversarial wrapping / namespace-confusion / duplicate-ID / DTD legs.
   // Each response is otherwise fully valid with BOTH signatures valid, so
   // only the structural rule under test can reject it.
   const adversarial = [
     ['DOCTYPE/entity declaration rejected', { doctype: true }],
+    ['wrong Response namespace rejected', { responseNamespace: true }],
+    ['wrong Assertion namespace rejected', { assertionNamespace: true }],
+    ['wrong Subject namespace rejected', { subjectNamespace: true }],
     ['sibling second assertion rejected (wrapping shape)', { siblingAssertion: true }],
     ['hidden duplicate-ID assertion rejected (wrapping primitive)', { deepAssertion: true }],
     ['namespace-confused assertion sibling rejected', { nsAssertion: true }],

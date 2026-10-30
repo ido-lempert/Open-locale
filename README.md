@@ -134,3 +134,21 @@ See docs/PLAN.md.
 ## License
 
 Not yet chosen. MIT is the current recommendation; a LICENSE file lands with that decision.
+
+
+### SAML server configuration (local SP groundwork)
+
+Set `SAML_ENTRY_POINT`, `SAML_IDP_CERT`, and `SAML_IDP_ENTITY_ID` together.
+The IdP entity ID is required: a pinned certificate does not replace issuer
+validation. The API refuses SAML operations when the issuer is missing.
+`SAML_SP_ENTITY_ID` defaults to `open-locale`; `SAML_ACS_URL` defaults to
+`http://127.0.0.1:3000/api/auth/saml/acs`.
+
+Request signing is optional, but `SAML_SP_PRIVATE_KEY` and
+`SAML_SP_SIGNING_CERT` must be configured together. Before generating a
+request or metadata the SP requires a parseable RSA key and matching public
+certificate. Use secret environment configuration for the private key, not
+source control. The read-only settings status is not a cryptographic
+configuration health check. Local mock tests are not external-IdP acceptance.
+Browser SAML completion is still work in progress; the existing ACS returns
+JSON, not a browser session handoff.

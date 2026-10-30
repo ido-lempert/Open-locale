@@ -79,6 +79,12 @@ function buildResponse(knobs = {}) {
     `<saml:Attribute Name="email"><saml:AttributeValue>${email}</saml:AttributeValue></saml:Attribute>` +
     `<saml:Attribute Name="displayName"><saml:AttributeValue>${displayName}</saml:AttributeValue></saml:Attribute>` +
     `</saml:AttributeStatement></saml:Assertion></samlp:Response>`;
+  // Change namespaces/issuer BEFORE signing: cryptographically valid
+  // documents isolate protocol semantics from signature failure.
+  if (knobs.wrongIssuer) xml = xml.replaceAll(IDP_ENTITY_ID, 'urn:other-idp');
+  if (knobs.responseNamespace) xml = xml.replace('xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"', 'xmlns:samlp="urn:other-protocol"');
+  if (knobs.assertionNamespace) xml = xml.replace('xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"', 'xmlns:saml="urn:other-assertion"');
+  if (knobs.subjectNamespace) xml = xml.replace('<saml:Subject>', '<x:Subject xmlns:x="urn:other-subject">').replace('</saml:Subject>', '</x:Subject>');
   if (knobs.signAssertion !== false) {
     xml = signElement(xml, 'Assertion', asrtId, "//*[local-name()='Assertion']/*[local-name()='Issuer']");
   }

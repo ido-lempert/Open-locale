@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
-import { randomBytes } from 'node:crypto';
+import { createPrivateKey, createPublicKey, randomBytes, X509Certificate } from 'node:crypto';
 import { inflateRawSync } from 'node:zlib';
 import { SAML, ValidateInResponseTo, type Profile } from '@node-saml/node-saml';
 import { DOMParser } from '@xmldom/xmldom';
@@ -47,22 +47,39 @@ export class SamlService {
     const idpCert = process.env.SAML_IDP_CERT;
     if (!entryPoint || !idpCert) throw new NotFoundException('SAML is not configured');
     const pem = (v?: string) => (v ? v.replace(/\\n/g, '\n') : undefined);
+    const idpIssuer = process.env.SAML_IDP_ENTITY_ID?.trim();
+    if (!idpIssuer) throw new ServiceUnavailableException('SAML_IDP_ENTITY_ID is required');
+    const spPrivateKey = pem(process.env.SAML_SP_PRIVATE_KEY);
+    const spCert = pem(process.env.SAML_SP_SIGNING_CERT);
+    if (!!spPrivateKey !== !!spCert) throw new ServiceUnavailableException('SAML SP signing requires both key and certificate');
     return {
       entryPoint,
       idpCert,
-      idpIssuer: process.env.SAML_IDP_ENTITY_ID || undefined,
+      idpIssuer,
       issuer: process.env.SAML_SP_ENTITY_ID || 'open-locale',
       callbackUrl: process.env.SAML_ACS_URL || 'http://127.0.0.1:3000/api/auth/saml/acs',
       // Optional SP request signing (HTTP-Redirect binding). The cert is
       // advertised in the SP metadata so the IdP can verify requests.
-      spPrivateKey: pem(process.env.SAML_SP_PRIVATE_KEY),
-      spCert: pem(process.env.SAML_SP_SIGNING_CERT),
+      spPrivateKey,
+      spCert,
     };
   }
 
   private client(): SAML {
     if (!this.saml) {
       const c = this.config();
+      if (c.spPrivateKey && c.spCert) {
+        try {
+          const key = createPrivateKey(c.spPrivateKey);
+          const certPem = c.spCert.includes('-----BEGIN CERTIFICATE-----') ? c.spCert
+            : `-----BEGIN CERTIFICATE-----\n${c.spCert}\n-----END CERTIFICATE-----`;
+          const certKey = new X509Certificate(certPem).publicKey;
+          const publicKey = createPublicKey(key);
+          if (key.asymmetricKeyType !== 'rsa' || !publicKey.export({ type: 'spki', format: 'der' }).equals(certKey.export({ type: 'spki', format: 'der' }))) {
+            throw new Error('Key mismatch');
+          }
+        } catch { throw new ServiceUnavailableException('SAML SP signing key/certificate are invalid or do not match'); }
+      }
       this.saml = new SAML({
         issuer: c.issuer,
         audience: c.issuer,
@@ -170,11 +187,22 @@ export class SamlService {
     }
     const responses = xpath.select("/*[local-name()='Response']", doc) as Element[];
     if (responses.length !== 1) throw new UnauthorizedException('Expected exactly one SAML Response');
+    if (responses[0].namespaceURI !== 'urn:oasis:names:tc:SAML:2.0:protocol') throw new UnauthorizedException('SAML Response namespace mismatch');
     if (responses[0].getAttribute('Destination') !== acsUrl) {
       throw new UnauthorizedException('SAML response Destination mismatch');
     }
     const assertions = xpath.select("/*[local-name()='Response']/*[local-name()='Assertion']", doc) as Element[];
     if (assertions.length !== 1) throw new UnauthorizedException('Expected exactly one SAML assertion');
+    if (assertions[0].namespaceURI !== 'urn:oasis:names:tc:SAML:2.0:assertion') throw new UnauthorizedException('SAML Assertion namespace mismatch');
+    // The verifier uses local-name selectors. Require every assertion-
+    // vocabulary element it might read to have the SAML assertion namespace.
+    const assertionNames = new Set(['Issuer', 'Subject', 'NameID', 'SubjectConfirmation', 'SubjectConfirmationData', 'Conditions', 'AudienceRestriction', 'Audience', 'AuthnStatement', 'AuthnContext', 'AuthnContextClassRef', 'AttributeStatement', 'Attribute', 'AttributeValue']);
+    const elements = xpath.select('//*', doc) as Element[];
+    for (const element of elements) {
+      if (assertionNames.has(element.localName) && element.namespaceURI !== 'urn:oasis:names:tc:SAML:2.0:assertion') {
+        throw new UnauthorizedException('SAML assertion vocabulary namespace mismatch');
+      }
+    }
     const recipients = xpath.select("//*[local-name()='SubjectConfirmationData']/@Recipient", doc) as Attr[];
     if (!recipients.length || recipients.some((r) => r.value !== acsUrl)) {
       throw new UnauthorizedException('SAML assertion Recipient mismatch');
