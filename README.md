@@ -54,7 +54,11 @@ running on the built-in development secret.
 API v1 covering the core translation workflow - projects, keys, translations,
 import/export with branch scoping, and OTA bundle pulls (latest or pinned
 version, ETag revalidation, sha256 integrity verified before any bundle is
-handed to the caller). It is not full API parity; other endpoints
+handed to the caller; on a 304 the digest header is returned for the caller
+to compare against its own cached copy - the SDK never sees cached bytes).
+The digest proves the body matches the header the server sent; it is not an
+authenticity signature and does not protect against an attacker who can
+replace both - that is what TLS and the read-scope token are for. It is not full API parity; other endpoints
 are reachable through its low-level `request` escape hatch. Private to the
 repo (not published). See docs/reviews/0062-sdk.md.
 

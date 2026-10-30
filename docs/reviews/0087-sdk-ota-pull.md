@@ -15,8 +15,10 @@ all. This slice closes the loop: the SDK pulls bundles and verifies them.
   bytes, or the promise rejects with OpenLocaleError. A tampered or
   corrupted bundle is never returned as data.
 - etag from a previous pull sends If-None-Match; a 304 resolves to
-  { notModified: true, sha256 } so callers re-verify their cached copy
-  without re-downloading (the 304 carries the digest by slice-18 design).
+  { notModified: true, sha256 }. The SDK verifies NOTHING on a 304: it never
+  receives the caller's cached bytes. It returns the digest header (carried
+  on 304s by slice-18 design) so the CALLER can compare it against the
+  digest of the copy it holds - no re-download needed for that comparison.
 - Hashing uses WebCrypto (node >=20 and browsers), node:crypto as fallback;
   the zero-dependency constraint holds.
 - Publish stays session-only server-side and is deliberately not exposed in
@@ -34,6 +36,10 @@ all. This slice closes the loop: the SDK pulls bundles and verifies them.
   proven, not assumed.
 
 ## Boundaries
+- Authenticity: the digest proves the received body matches the header the
+  server sent. It detects corruption and body-only tampering. An attacker
+  able to replace BOTH body and header (or a compromised server) defeats it;
+  authenticity comes from TLS and the read-scope token, not the digest.
 - OTA stays PARTIAL: this is SDK-side consumption of the self-hosted
   endpoint; the versioned CDN endpoint and production acceptance are
   user-owned. No coverage change.

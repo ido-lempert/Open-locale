@@ -58,9 +58,15 @@ export function createClient({ url, token, fetchImpl } = {}) {
   // X-OpenLocale-Bundle-SHA256 header must be present and match the exact
   // bytes received, or the promise rejects - a corrupted or tampered bundle
   // is NEVER returned as data. Pass the etag from a previous pull for
-  // conditional revalidation; a 304 resolves to { notModified: true } and
-  // still carries the digest header, so the caller can re-verify its cached
-  // copy without re-downloading.
+  // conditional revalidation; a 304 resolves to { notModified: true, sha256 }.
+  // On a 304 the SDK verifies NOTHING itself - it never sees the caller's
+  // cached bytes; it returns the digest header so the CALLER can compare it
+  // against the digest of the copy it holds.
+  // Scope of the check: the digest proves the body matches the header the
+  // server sent. It detects corruption and body-only tampering. It is NOT an
+  // authenticity signature: an attacker able to replace both body and header
+  // (or a compromised server) defeats it. Authenticity comes from TLS plus
+  // the read-scope token, not from this digest.
   async function otaPull(path, etag) {
     const res = await doFetch(`${base}${path}`, {
       headers: { 'X-Api-Key': token, ...(etag ? { 'If-None-Match': etag } : {}) },
