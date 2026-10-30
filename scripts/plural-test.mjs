@@ -172,6 +172,25 @@ try {
   check('ARB plural import without "other" fails the key (consistent with API 400)', arbNoOther.status === 201 && arbNoOther.json.failed === 1, `${arbNoOther.status} ${JSON.stringify(arbNoOther.json)}`);
   check('ARB missing-other key was not created', (await keys()).every((k) => k.name !== 'arb.no.other'));
 
+  // PO msgid_plural subset (slice 7): slots map to categories via the
+  // file's own header expression; a plain msgid import preserves forms.
+  const poHeader = 'msgid ""\nmsgstr ""\n"Plural-Forms: nplurals=2; plural=(n != 1);\\n"\n\n';
+  const poImp = await call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { po: poHeader + 'msgid "cart.gettext"\nmsgid_plural "cart.gettexts"\nmsgstr[0] "one pear"\nmsgstr[1] "%d pears"\n' } });
+  check('PO plural import accepted', poImp.status === 200 || poImp.status === 201, `status=${poImp.status}`);
+  const ksPo = await keys();
+  const poKey = ksPo.find((k) => k.name === 'cart.gettext');
+  check('PO import sets isPlural and forms', poKey?.isPlural === true && JSON.stringify(formsOf(ksPo, 'cart.gettext', 'en')) === JSON.stringify({ one: 'one pear', other: '%d pears' }));
+  check('PO import sets plain value to the other form', poKey?.translations.find((t) => t.localeCode === 'en')?.value === '%d pears');
+  const poOut = await (await fetch(`${API}/projects/${pid}/export/en/po`, { headers: { Authorization: `Bearer ${jwt}` } })).text();
+  check('PO export emits msgid_plural with a Plural-Forms header', poOut.includes('Plural-Forms: nplurals=2; plural=(n != 1);') && poOut.includes('msgid "cart.gettext"\nmsgid_plural "cart.gettext"\nmsgstr[0] "one pear"\nmsgstr[1] "%d pears"'), poOut.split('\n').find((l) => l.includes('cart.gettext')) ?? '');
+  const poPlain = await call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { po: 'msgid "cart.gettext"\nmsgstr "plain po value"\n' } });
+  check('plain PO import over a plural key accepted', poPlain.status === 200 || poPlain.status === 201, `status=${poPlain.status}`);
+  const ksPo2 = await keys();
+  check('plain PO import preserves pluralForms', JSON.stringify(formsOf(ksPo2, 'cart.gettext', 'en')) === JSON.stringify({ one: 'one pear', other: '%d pears' }));
+  check('plain PO import updates plain value', ksPo2.find((k) => k.name === 'cart.gettext').translations.find((t) => t.localeCode === 'en').value === 'plain po value');
+  const poNoPluralKw = await call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { po: 'msgid "po.indexed"\nmsgstr[0] "a"\nmsgstr[1] "b"\n' } });
+  check('msgstr[n] without msgid_plural rejected (400)', poNoPluralKw.status === 400, String(poNoPluralKw.status));
+
   // isPlural=false clears stored forms explicitly.
   check('isPlural flip accepted', (await call(`/projects/${pid}/keys/${kid}`, { jwt, method: 'PATCH', body: { isPlural: false } })).status === 200);
   check('isPlural=false clears pluralForms', formsOf(await keys(), 'cart.items', 'en') === null);

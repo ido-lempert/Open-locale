@@ -1,4 +1,4 @@
-import { parsePo, toPo, toPot } from './po';
+import { evalPluralExpr, parsePluralFormsHeader, parsePo, PO_PLURAL_FORMS, slotCategories, toPo, toPot } from './po';
 
   it('exports a POT template with every msgstr empty', () => {
     const out = toPot([['app.title', 'Hello'], ['cart.total', 'Total {n}']]);
@@ -17,7 +17,7 @@ import { parsePo, toPo, toPot } from './po';
 
 describe('PO interchange', () => {
   it('exports entries with escaped quotes, newlines, tabs and backslashes', () => {
-    const out = toPo([['app.title', 'My "App"'], ['msg.multi', 'line1\nline2'], ['msg.tab', 'a\tb'], ['msg.bs', 'c:\\path']]);
+    const out = toPo([['app.title', 'My "App"'], ['msg.multi', 'line1\nline2'], ['msg.tab', 'a\tb'], ['msg.bs', 'c:\\path']], []);
     expect(out).toContain('msgid "app.title"\nmsgstr "My \\"App\\""');
     expect(out).toContain('msgstr "line1\\nline2"');
     expect(out).toContain('msgstr "a\\tb"');
@@ -31,7 +31,7 @@ describe('PO interchange', () => {
       ['unicode', 'שלום 🌍'],
       ['empty', ''],
     ];
-    const back = parsePo(toPo(rows));
+    const back = parsePo(toPo(rows, []));
     expect(back.rejected).toBe(0);
     expect(back.rows).toEqual(rows);
   });
@@ -50,11 +50,80 @@ describe('PO interchange', () => {
     expect(rows).toEqual([['live.key', 'live']]);
   });
 
-  it('rejects plurals, indexed msgstr and contexts', () => {
-    const plural = 'msgid "apple"\nmsgid_plural "apples"\nmsgstr[0] "%d apple"\nmsgstr[1] "%d apples"\n';
+  it('parses plural entries into indexed slots and captures the header', () => {
+    const text = 'msgid ""\nmsgstr ""\n"Content-Type: text/plain; charset=UTF-8\\n"\n"Plural-Forms: nplurals=2; plural=(n != 1);\\n"\n\nmsgid "apple"\nmsgid_plural "apples"\nmsgstr[0] "%d apple"\nmsgstr[1] "%d apples"\n';
+    const back = parsePo(text);
+    expect(back.rejected).toBe(0);
+    expect(back.rows).toEqual([]);
+    expect(back.pluralEntries).toEqual([['apple', { 0: '%d apple', 1: '%d apples' }]]);
+    expect(back.headerPluralForms).toBe('nplurals=2; plural=(n != 1);');
+  });
+
+  it('rejects indexed msgstr without msgid_plural, non-consecutive slots and contexts', () => {
+    const noPlural = 'msgid "apple"\nmsgstr[0] "%d apple"\nmsgstr[1] "%d apples"\n';
+    const gap = 'msgid "apple"\nmsgid_plural "apples"\nmsgstr[0] "a"\nmsgstr[2] "b"\n';
+    const dup = 'msgid "apple"\nmsgid_plural "apples"\nmsgstr[0] "a"\nmsgstr[0] "b"\n';
+    const mixed = 'msgid "apple"\nmsgid_plural "apples"\nmsgstr "one"\nmsgstr[0] "a"\n';
     const ctxt = 'msgctxt "button"\nmsgid "save"\nmsgstr "Save"\n';
-    expect(parsePo(plural).rejected).toBe(1);
+    expect(parsePo(noPlural).rejected).toBe(1);
+    expect(parsePo(gap).rejected).toBe(1);
+    expect(parsePo(dup).rejected).toBe(1);
+    expect(parsePo(mixed).rejected).toBe(1);
     expect(parsePo(ctxt).rejected).toBe(1);
+  });
+
+  it('exports plural keys as msgid_plural entries with a Plural-Forms header', () => {
+    const out = toPo([['plain', 'x']], [['apples', { one: '# apple', other: '# apples' }]], 'en');
+    expect(out).toContain('Plural-Forms: nplurals=2; plural=(n != 1);');
+    expect(out).toContain('msgid "apples"\nmsgid_plural "apples"\nmsgstr[0] "# apple"\nmsgstr[1] "# apples"');
+    // Own output re-imports: header captured, slots parsed back.
+    const back = parsePo(out);
+    expect(back.rejected).toBe(0);
+    expect(back.pluralEntries).toEqual([['apples', { 0: '# apple', 1: '# apples' }]]);
+    expect(back.headerPluralForms).toBe('nplurals=2; plural=(n != 1);');
+  });
+
+  it('evaluates the gettext C-expression subset and rejects anything else', () => {
+    expect(evalPluralExpr('(n != 1)', 1)).toBe(0);
+    expect(evalPluralExpr('(n != 1)', 5)).toBe(1);
+    expect(evalPluralExpr('(n==1) ? 0 : (n>=2 && n<=4) ? 1 : 2', 3)).toBe(1);
+    expect(evalPluralExpr('(n==1) ? 0 : (n>=2 && n<=4) ? 1 : 2', 9)).toBe(2);
+    expect(evalPluralExpr('(n%100>=3 && n%100<=10) ? 3 : 5', 107)).toBe(3);
+    expect(evalPluralExpr('(n%100>=3 && n%100<=10) ? 3 : 5', 22)).toBe(5);
+    expect(evalPluralExpr('n/2', 5)).toBe(2); // truncating, like C
+    expect(evalPluralExpr('0', 42)).toBe(0);
+    expect(evalPluralExpr('nonsense', 1)).toBeNull();
+    expect(evalPluralExpr('n % 0', 1)).toBeNull();
+    expect(evalPluralExpr('(n != 1', 1)).toBeNull();
+    expect(evalPluralExpr('n != 1; evil()', 1)).toBeNull();
+  });
+
+  it('maps slots to CLDR categories by evaluating the expression, never declared order', () => {
+    expect(slotCategories('(n != 1)', 2, 'en')).toEqual(['one', 'other']);
+    expect(slotCategories('(n > 1)', 2, 'fr')).toEqual(['one', 'other']);
+    expect(slotCategories('0', 1, 'ja')).toEqual(['other']);
+    expect(slotCategories('(n==1) ? 0 : (n>=2 && n<=4) ? 1 : 2', 3, 'cs')).toEqual(['one', 'few', 'other']);
+    // English expression against Hebrew: n=2 selects 'two' but slot 1 is
+    // already 'other' from n=0 - inconsistent, rejected.
+    expect(slotCategories('(n != 1)', 2, 'he')).toBeNull();
+    // Russian slots carry one/few/many, 'other' never appears for integers.
+    expect(slotCategories('(n%10==1 && n%100!=11) ? 0 : (n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20)) ? 1 : 2', 3, 'ru')).toEqual(['one', 'few', 'many']);
+    // Out-of-range index and unused slots are rejected.
+    expect(slotCategories('3', 2, 'en')).toBeNull();
+    expect(slotCategories('0', 2, 'en')).toBeNull();
+  });
+
+  it('verifies every curated export expression against Intl.PluralRules', () => {
+    for (const [locale, h] of Object.entries(PO_PLURAL_FORMS)) {
+      const parsed = parsePluralFormsHeader(h);
+      expect(parsed).not.toBeNull();
+      const cats = slotCategories(parsed!.expr, parsed!.nplurals, locale);
+      expect(cats).not.toBeNull();
+      // The slots must cover every CLDR category of the locale, including
+      // 'other' - otherwise export could not represent stored forms.
+      const want = new Intl.PluralRules(locale).resolvedOptions().pluralCategories;
+      expect([...cats!].sort()).toEqual([...want].sort());
+    }
   });
 
   it('rejects unterminated strings and unknown directives without dropping the file', () => {

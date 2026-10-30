@@ -15,7 +15,7 @@ import type { ImportJsonDto } from './dto';
 import { parseCsv, toCsv } from './csv';
 import { parseAndroidXml, toAndroidXml } from './android-xml';
 import { parseStringsdict, toStringsdict } from './stringsdict';
-import { parsePo, toPo, toPot } from './po';
+import { parsePluralFormsHeader, parsePo, slotCategories, toPo, toPot } from './po';
 import { toTmx } from './tmx';
 import { parseXliff, toXliff } from './xliff';
 import { parseResx, toResx } from './resx';
@@ -418,8 +418,24 @@ export class TranslationsService {
   }
 
   async exportPo(userId: string, projectId: string, locale: string, branch?: string) {
-    const flat = (await this.exportJson(userId, projectId, locale, true, branch)) as Record<string, string>;
-    return toPo(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)));
+    await this.projects.getFor(userId, projectId);
+    const b = await this.branches.branchFor(projectId, branch);
+    const translations = await this.prisma.translation.findMany({
+      where: { projectId, localeCode: locale, key: { branchId: b.id } },
+      include: { key: true },
+      orderBy: { key: { name: 'asc' } },
+    });
+    const rows: [string, string][] = [];
+    const plurals: [string, Record<string, string>][] = [];
+    for (const t of translations) {
+      const forms = t.pluralForms as Record<string, string> | null;
+      // Plural key with stored forms -> msgid_plural entry, but only when
+      // the locale has a verified Plural-Forms table entry; otherwise a
+      // plain msgid/msgstr from value (documented, lossy for the intent).
+      if (t.key.isPlural && forms && Object.keys(forms).length > 0) plurals.push([t.key.name, forms]);
+      else rows.push([t.key.name, t.value]);
+    }
+    return toPo(rows, plurals, locale);
   }
 
   async exportPot(userId: string, projectId: string, locale: string, branch?: string) {
@@ -585,17 +601,11 @@ export class TranslationsService {
   // dry-run preview share it, so both see identical parsing and identical
   // 400 rejections, in the same order (parse errors before grant checks).
   private parseImport(dto: ImportJsonDto): { entries: Record<string, unknown>; untranslatedSkipped: number; plurals?: Record<string, Record<string, string>> } {
-    if (dto.po != null) {
-      const { rows, rejected } = parsePo(dto.po);
-      if (rejected > 0) {
-        throw new BadRequestException(`${rejected} PO ${rejected === 1 ? 'entry' : 'entries'} rejected: plurals (msgid_plural/msgstr[n]), contexts (msgctxt) and malformed strings are not supported`);
-      }
-      return { entries: Object.fromEntries(rows), untranslatedSkipped: 0 };
-    }
     if (dto.pot != null) {
-      const { rows, rejected } = parsePo(dto.pot);
-      if (rejected > 0) {
-        throw new BadRequestException(`${rejected} POT ${rejected === 1 ? 'entry' : 'entries'} rejected: plurals (msgid_plural/msgstr[n]), contexts (msgctxt) and malformed strings are not supported`);
+      const { rows, pluralEntries, rejected } = parsePo(dto.pot);
+      const total = rejected + pluralEntries.length;
+      if (total > 0) {
+        throw new BadRequestException(`${total} POT ${total === 1 ? 'entry' : 'entries'} rejected: plurals (msgid_plural/msgstr[n]), contexts (msgctxt) and malformed strings are not supported`);
       }
       return { entries: Object.fromEntries(rows), untranslatedSkipped: 0 };
     }
@@ -705,7 +715,42 @@ export class TranslationsService {
   }
 
   async importPo(userId: string, projectId: string, locale: string, po: string, branch?: string) {
-    return this.importJson(userId, projectId, locale, this.parseImport({ po }).entries, branch);
+    const parsed = this.parsePoEntries(po, locale);
+    return this.importJson(userId, projectId, locale, parsed.entries, branch, undefined, parsed.plurals);
+  }
+
+  // PO parsing needs the target locale to map msgstr[n] slots to CLDR
+  // categories via the file's own Plural-Forms expression, so it is split
+  // out of parseImport (which is locale-agnostic for every other format).
+  private parsePoEntries(po: string, locale: string): { entries: Record<string, unknown>; untranslatedSkipped: number; plurals?: Record<string, Record<string, string>> } {
+    const { rows, pluralEntries, headerPluralForms, rejected } = parsePo(po);
+    if (rejected > 0) {
+      throw new BadRequestException(`${rejected} PO ${rejected === 1 ? 'entry' : 'entries'} rejected: contexts (msgctxt), msgstr[n] without msgid_plural, duplicate or non-consecutive slots and malformed strings are not supported`);
+    }
+    const entries: Record<string, unknown> = Object.fromEntries(rows);
+    if (pluralEntries.length === 0) return { entries, untranslatedSkipped: 0 };
+    if (!headerPluralForms) {
+      throw new BadRequestException('PO plural entries require a Plural-Forms metadata header to map msgstr[n] slots to plural categories');
+    }
+    const hf = parsePluralFormsHeader(headerPluralForms);
+    const cats = hf ? slotCategories(hf.expr, hf.nplurals, locale) : null;
+    if (!cats) {
+      throw new BadRequestException(`PO Plural-Forms header could not be mapped to locale ${locale}: the expression must parse, stay within its nplurals range and assign each slot exactly one CLDR category`);
+    }
+    if (!cats.includes('other')) {
+      throw new BadRequestException(`PO plural slots for locale ${locale} have no 'other' category (used for fractional quantities); such files are not supported`);
+    }
+    const plurals: Record<string, Record<string, string>> = {};
+    for (const [msgid, slots] of pluralEntries) {
+      if (Object.keys(slots).length !== cats.length) {
+        throw new BadRequestException(`PO plural entry "${msgid}" has ${Object.keys(slots).length} msgstr slots but the header declares nplurals=${cats.length}`);
+      }
+      const forms: Record<string, string> = {};
+      for (const [i, v] of Object.entries(slots)) forms[cats[Number(i)]] = v;
+      plurals[msgid] = forms;
+      entries[msgid] = forms['other']; // plain value carries the other form
+    }
+    return { entries, untranslatedSkipped: 0, plurals };
   }
 
   async importPot(userId: string, projectId: string, locale: string, pot: string, branch?: string) {
@@ -748,7 +793,9 @@ export class TranslationsService {
   async importPreview(userId: string, projectId: string, locale: string, dto: ImportJsonDto, branch?: string) {
     const parsed = dto.yaml != null
       ? { entries: this.parseYamlEntries(dto, locale), untranslatedSkipped: 0 }
-      : this.parseImport(dto);
+      : dto.po != null
+        ? this.parsePoEntries(dto.po, locale)
+        : this.parseImport(dto);
     await this.projects.assertLocaleWrite(userId, projectId, [locale]);
     const b = await this.branches.branchFor(projectId, branch);
     const project = await this.projects.getFor(userId, projectId);

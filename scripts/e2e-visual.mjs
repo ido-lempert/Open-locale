@@ -834,6 +834,38 @@ try {
     JSON.parse(arbIcuExport)['arb.uikey'] === '{count, plural, one {one ui fig} other {ui figs}}',
     JSON.parse(arbIcuExport)['arb.uikey'] ?? '');
 
+  // --- PO msgid_plural via UI: import a .po with a plural entry + header ---
+  await page.select('select[aria-label="Import/export format"]', 'po');
+  const poPlFile = '/tmp/e2e-import-plural.po';
+  writeFileSync(poPlFile, 'msgid ""\nmsgstr ""\n"Plural-Forms: nplurals=2; plural=(n != 1);\\n"\n\nmsgid "po.uikey"\nmsgid_plural "po.uikeys"\nmsgstr[0] "one ui plum"\nmsgstr[1] "ui plums"\n');
+  const poPlInput = await page.$('input[type=file]');
+  await poPlInput.uploadFile(poPlFile);
+  const poPlNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('(PO (gettext),'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('PO plural import via UI shows summary notice', poPlNotice);
+  check('PO-imported plural key appears in grid', await waitText('po.uikey'));
+  await page.waitForSelector('input[aria-label="po.uikey other form in en"]', { timeout: 10000 });
+  const poPlGridForms = await page.evaluate(() => ({
+    one: document.querySelector('input[aria-label="po.uikey one form in en"]')?.value,
+    other: document.querySelector('input[aria-label="po.uikey other form in en"]')?.value,
+  }));
+  check('PO plural import via UI lands forms in the editor category inputs', poPlGridForms.one === 'one ui plum' && poPlGridForms.other === 'ui plums', JSON.stringify(poPlGridForms));
+  await page.type('input[aria-label="Search keys"]', 'po.uikey');
+  await page.waitForFunction(() => (document.querySelector('.grid tbody')?.textContent || '').includes('po.uikey') && !(document.querySelector('.grid tbody')?.textContent || '').includes('home.title'), { timeout: 10000 });
+  await shot('editor-48-po-plural.png');
+  await page.evaluate(() => { const el = document.querySelector('input[aria-label="Search keys"]'); const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; setter.call(el, ''); el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.waitForFunction(() => (document.querySelector('.grid tbody')?.textContent || '').includes('home.title'), { timeout: 10000 });
+  await page.evaluate(() => {
+    window.__poPlCapture = null;
+    const orig = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (b) => { window.__poPlCapture = b; return orig(b); };
+  });
+  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.startsWith('Export'))?.click());
+  await page.waitForFunction(() => !!window.__poPlCapture, { timeout: 10000 });
+  const poPlExport = await page.evaluate(() => window.__poPlCapture.text());
+  check('PO export via UI emits msgid_plural and the header for the imported key',
+    poPlExport.includes('Plural-Forms: nplurals=2; plural=(n != 1);') && poPlExport.includes('msgid "po.uikey"\nmsgid_plural "po.uikey"\nmsgstr[0] "one ui plum"\nmsgstr[1] "ui plums"'),
+    poPlExport.split('\n').find((l) => l.includes('po.uikey')) ?? '');
+
   // --- Import format conflict handling: a deliberate format choice is never overridden ---
   const conflictPoFile = '/tmp/e2e-conflict.po';
   writeFileSync(conflictPoFile, 'msgid "conflict.po"\nmsgstr "conflict fixture"\n');

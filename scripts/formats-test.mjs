@@ -175,7 +175,27 @@ try {
   const poRound = await call(`${P}/import/he`, { token: at, method: 'POST', body: { po: poOut } });
   check('PO export-import roundtrip stable', poRound.status === 201 && poRound.json.unchangedSkipped >= 2, JSON.stringify(poRound.json));
   const poPlural = await call(`${P}/import/he`, { token: at, method: 'POST', body: { po: 'msgid "apple"\nmsgid_plural "apples"\nmsgstr[0] "%d"\nmsgstr[1] "%d"\n' } });
-  check('PO plural entry rejected (400)', poPlural.status === 400, String(poPlural.status));
+  check('PO plural entry without a Plural-Forms header rejected (400)', poPlural.status === 400, String(poPlural.status));
+  // PO msgid_plural subset (slice 7): slots map to CLDR categories by
+  // evaluating the file's own header expression against the target locale.
+  const heHeader = 'msgid ""\nmsgstr ""\n"Plural-Forms: nplurals=3; plural=(n==1) ? 0 : (n==2) ? 1 : 2;\\n"\n\n';
+  const poPluralIn = heHeader + 'msgid "po.apples"\nmsgid_plural "po.apples"\nmsgstr[0] "tapuz echad"\nmsgstr[1] "shnei tapuzim"\nmsgstr[2] "tapuzim"\n';
+  const poPlImp = await call(`${P}/import/he`, { token: at, method: 'POST', body: { po: poPluralIn } });
+  check('PO plural import accepted', poPlImp.status === 201, `${poPlImp.status} ${JSON.stringify(poPlImp.json)}`);
+  const poPlKeys = (await call(`${P}/keys`, { token: at })).json;
+  const poPlKey = poPlKeys.find((k) => k.name === 'po.apples');
+  check('PO plural import upgrades isPlural and maps slots to categories', poPlKey?.isPlural === true && JSON.stringify(poPlKey?.translations.find((t) => t.localeCode === 'he')?.pluralForms) === JSON.stringify({ one: 'tapuz echad', two: 'shnei tapuzim', other: 'tapuzim' }), JSON.stringify(poPlKey?.translations.find((t) => t.localeCode === 'he')?.pluralForms));
+  check('PO plural import sets plain value to the other form', poPlKey?.translations.find((t) => t.localeCode === 'he')?.value === 'tapuzim');
+  const poPlOut = await (await fetch(`${API}${P}/export/he/po`, { headers: { Authorization: `Bearer ${at}` } })).text();
+  check('PO export emits msgid_plural entries and a Plural-Forms header', poPlOut.includes('Plural-Forms: nplurals=3; plural=(n==1) ? 0 : (n==2) ? 1 : 2;') && poPlOut.includes('msgid "po.apples"\nmsgid_plural "po.apples"\nmsgstr[0] "tapuz echad"\nmsgstr[1] "shnei tapuzim"\nmsgstr[2] "tapuzim"'), poPlOut.split('\n').find((l) => l.includes('po.apples')) ?? '');
+  const poPlRound = await call(`${P}/import/he`, { token: at, method: 'POST', body: { po: poPlOut } });
+  check('PO plural export -> import roundtrips (own output re-imports)', poPlRound.status === 201 && poPlRound.json.keysCreated === 0 && poPlRound.json.failed === 0, JSON.stringify(poPlRound.json));
+  const poEnHeaderForHe = await call(`${P}/import/he`, { token: at, method: 'POST', body: { po: 'msgid ""\nmsgstr ""\n"Plural-Forms: nplurals=2; plural=(n != 1);\\n"\n\nmsgid "po.wrong"\nmsgid_plural "po.wrongs"\nmsgstr[0] "a"\nmsgstr[1] "b"\n' } });
+  check('PO header inconsistent with the target locale rejected (400)', poEnHeaderForHe.status === 400, String(poEnHeaderForHe.status));
+  const poBadExpr = await call(`${P}/import/he`, { token: at, method: 'POST', body: { po: 'msgid ""\nmsgstr ""\n"Plural-Forms: nplurals=2; plural=nonsense();\\n"\n\nmsgid "po.bad"\nmsgid_plural "po.bads"\nmsgstr[0] "a"\nmsgstr[1] "b"\n' } });
+  check('PO unparseable header expression rejected (400)', poBadExpr.status === 400, String(poBadExpr.status));
+  const poSlotMismatch = await call(`${P}/import/he`, { token: at, method: 'POST', body: { po: heHeader + 'msgid "po.slots"\nmsgid_plural "po.slots"\nmsgstr[0] "a"\nmsgstr[1] "b"\n' } });
+  check('PO slot count below declared nplurals rejected (400)', poSlotMismatch.status === 400, String(poSlotMismatch.status));
   const poBefore = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
   const poMixed = await call(`${P}/import/he`, { token: at, method: 'POST', body: { po: 'msgid "po.mixed"\nmsgstr "should not land"\n\nmsgctxt "button"\nmsgid "po.ctx"\nmsgstr "Save"\n' } });
   const poAfter = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
