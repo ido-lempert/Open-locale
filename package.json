@@ -38,7 +38,8 @@
     "test:2fa": "node scripts/2fa-test.mjs",
     "test:oidc": "node scripts/oidc-test.mjs",
     "test:groups": "node scripts/groups-test.mjs",
-    "test:plural": "node scripts/plural-test.mjs"
+    "test:plural": "node scripts/plural-test.mjs",
+    "test:saml": "node scripts/saml-test.mjs"
   },
   "private": true,
   "dependencies": {
@@ -53,12 +54,15 @@
     "@nestjs/core": "^11.2.8",
     "@nestjs/jwt": "^12.0.3",
     "@nestjs/platform-express": "^11.2.8",
+    "@node-saml/node-saml": "^5.2.0",
     "@prisma/client": "^6.19.3",
+    "@xmldom/xmldom": "0.8.15",
     "bcryptjs": "^3.0.3",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "~7.8.0"
+    "rxjs": "~7.8.0",
+    "xpath": "0.0.35"
   },
   "devDependencies": {
     "@angular-devkit/core": "~22.2.0",
