@@ -9,6 +9,11 @@
 export interface MtDriver {
   type: string;
   translate(texts: string[], sourceLocale: string, targetLocale: string, config: Record<string, unknown>): Promise<string[]>;
+  // Optional confidence 0-100 for one translated pair. The pseudo driver's
+  // score checks structural token preservation only - it is a deterministic
+  // plumbing fixture and says nothing about linguistic quality. Real engines
+  // would return their own confidence here. null = not scored.
+  score?(source: string, translated: string): number | null;
 }
 
 // Tokens that must survive translation untouched: ICU/printf placeholders and
@@ -38,10 +43,31 @@ function pseudoOne(text: string, targetLocale: string): string {
   return `[${out} ${pad}·${targetLocale}]`;
 }
 
+// Structural preservation score: the tokens PRESERVE protects must appear in
+// the output exactly as often as in the source. 100 minus 20 per mismatching
+// token, floored at 0. Deterministic; a regression in pseudoOne drops it.
+function preservedTokens(text: string): string[] {
+  return text.match(PRESERVE) ?? [];
+}
+function pseudoScore(source: string, translated: string): number {
+  const want = preservedTokens(source);
+  const got = preservedTokens(translated);
+  const missing = want.filter((t) => {
+    const i = got.indexOf(t);
+    if (i === -1) return true;
+    got.splice(i, 1);
+    return false;
+  });
+  return Math.max(0, 100 - 20 * (missing.length + got.length));
+}
+
 const pseudoDriver: MtDriver = {
   type: 'pseudo',
   async translate(texts, _sourceLocale, targetLocale) {
     return texts.map((t) => pseudoOne(t, targetLocale));
+  },
+  score(source, translated) {
+    return pseudoScore(source, translated);
   },
 };
 

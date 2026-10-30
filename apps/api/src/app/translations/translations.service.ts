@@ -134,7 +134,7 @@ export class TranslationsService {
         translation = await tx.translation.upsert({
           where: { keyId_localeCode: { keyId, localeCode: locale } },
           create: { keyId, projectId, localeCode: locale, value, version: 1, ...(pluralForms ? { pluralForms } : {}) },
-          update: { value, status, version: { increment: 1 }, ...(pluralForms ? { pluralForms } : {}) },
+          update: { value, status, version: { increment: 1 }, mtScore: null, mtProvider: null, ...(pluralForms ? { pluralForms } : {}) },
         });
       }
       if (value) await this.rememberTx(tx, projectId, project.baseLocale, keyId, locale, value);
@@ -947,7 +947,7 @@ export class TranslationsService {
             create: { keyId: key.id, projectId, localeCode: locale, value, version: 1, ...(forms ? { pluralForms: forms } : {}) },
             // A <plurals> import replaces stored forms, same as value (imported
             // wording wins); a <string> import omits the field and preserves them.
-            update: { value, status: 'UNVERIFIED', version: { increment: 1 }, ...(forms ? { pluralForms: forms } : {}) },
+            update: { value, status: 'UNVERIFIED', version: { increment: 1 }, mtScore: null, mtProvider: null, ...(forms ? { pluralForms: forms } : {}) },
           });
           await tx.translationHistory.create({
             data: {

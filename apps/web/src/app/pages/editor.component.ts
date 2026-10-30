@@ -14,6 +14,8 @@ interface CellState {
   status: 'idle' | 'saving' | 'saved' | 'error';
   errorMsg: string;
   review: TranslationStatus;
+  // MT provenance of the saved value; null after any human save.
+  mtScore: number | null; mtProvider: string | null;
 }
 
 @Component({
@@ -180,6 +182,9 @@ interface CellState {
                         }
                       } @else {
                         <span class="cell-status">{{ statusText(k.id, l.code) }}</span>
+                      }
+                      @if (cell(k.id, l.code)().mtScore !== null) {
+                        <span class="mt-badge" [title]="'MT fill by ' + (cell(k.id, l.code)().mtProvider ?? 'provider') + ' - structural preservation score, not a quality review'">MT {{ cell(k.id, l.code)().mtScore }}</span>
                       }
                     </div>
                     @if (l.code !== p.baseLocale && glossaryHints(k, l.code).length) {
@@ -369,14 +374,15 @@ export class EditorComponent implements OnInit {
       for (const k of keys) for (const t of k.translations) {
         this.cells.set(`${k.id}:${t.localeCode}`,
           signal({ value: t.value, saved: t.value, status: 'idle', errorMsg: '', review: t.status ?? 'UNVERIFIED',
-            forms: { ...(t.pluralForms ?? {}) }, savedForms: { ...(t.pluralForms ?? {}) } }));
+            forms: { ...(t.pluralForms ?? {}) }, savedForms: { ...(t.pluralForms ?? {}) },
+            mtScore: t.mtScore ?? null, mtProvider: t.mtProvider ?? null }));
       }
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load keys'); }
   }
   cell(keyId: string, locale: string): WritableSignal<CellState> {
     let s = this.cells.get(`${keyId}:${locale}`);
     if (!s) {
-      s = signal<CellState>({ value: '', saved: '', status: 'idle', errorMsg: '', review: 'UNVERIFIED', forms: {}, savedForms: {} });
+      s = signal<CellState>({ value: '', saved: '', status: 'idle', errorMsg: '', review: 'UNVERIFIED', forms: {}, savedForms: {}, mtScore: null, mtProvider: null });
       this.cells.set(`${keyId}:${locale}`, s);
     }
     return s;
@@ -414,6 +420,8 @@ export class EditorComponent implements OnInit {
       sig.set({ value: latest.value, saved: c.value, errorMsg: '',
         forms: latest.forms, savedForms: formsAtSend ?? latest.savedForms,
         status: latest.value === c.value && this.sameForms(latest.forms, c.forms) ? 'saved' : 'idle',
+        // The server clears MT provenance on a human write; mirror that here.
+        mtScore: null, mtProvider: null,
         review: newerReview ? latest.review : (res.status ?? 'UNVERIFIED') });
       if (newerReview) {
         const st = await this.api.setStatus(this.projectId, k.id, locale, latest.review);

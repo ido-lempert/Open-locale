@@ -88,6 +88,14 @@ try {
   const h1 = (await call(`/projects/${pid}/keys/${k1.id}/translations/he/history`, { jwt })).json;
   check('MT write has a history row with actor attribution', h1.length === 1 && h1[0].changedBy && h1[0].status === 'UNVERIFIED', JSON.stringify(h1[0] && h1[0].status));
 
+  // Slice 14: provider confidence scoring + provenance
+  check('run result carries score aggregates', run1.json.scored === 2 && run1.json.scoreAvg === 100 && run1.json.scoreMin === 100 && run1.json.scoreMax === 100, JSON.stringify({ s: run1.json.scored, a: run1.json.scoreAvg }));
+  check('filled rows carry MT provenance', t1.mtScore === 100 && t1.mtProvider === 'Pseudo' && t2.mtScore === 100, JSON.stringify({ s: t1.mtScore, p: t1.mtProvider }));
+  check('untouched human row has no provenance', t4.mtScore === null || t4.mtScore === undefined, JSON.stringify({ s: t4.mtScore }));
+  const actsMt = (await call(`/projects/${pid}/activity?action=mt.pretranslate`, { jwt })).json;
+  check('activity detail records score summary', actsMt.items?.[0]?.detail?.scoreAvg === 100, JSON.stringify(actsMt.items?.[0]?.detail));
+
+
   const run2 = await call(`/projects/${pid}/mt/pretranslate`, { jwt, method: 'POST', body: { providerId: provider.id, locale: 'he' } });
   check('second run translates nothing (fill-empty-only)', run2.json.translated === 0 && run2.json.skippedExisting === 3 && run2.json.skippedNoSource === 1, JSON.stringify(run2.json));
   const t1b = (await call(`/projects/${pid}/keys?branch=main`, { jwt })).json.find((k) => k.id === k1.id).translations.find((t) => t.localeCode === 'he');
@@ -181,6 +189,18 @@ try {
   await call(`/projects/${pid}/mt/providers/${provider.id}`, { jwt, method: 'DELETE' });
   const gone = await call(`/projects/${pid}/mt/pretranslate`, { jwt, method: 'POST', body: { providerId: provider.id, locale: 'he' } });
   check('deleted provider is 404', gone.status === 404, `got ${gone.status}`);
+
+  // Provenance clearing uses its own key and provider (the shared one is
+  // deleted by an earlier leg) so no other leg's fixture changes.
+  const kp = (await call(`/projects/${pid}/keys`, { jwt, method: 'POST', body: { name: 'a.provclear' } })).json;
+  await call(`/projects/${pid}/keys/${kp.id}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value: 'Clear me' } });
+  const provider2 = (await call(`/projects/${pid}/mt/providers`, { jwt, method: 'POST', body: { name: 'Pseudo-2', type: 'pseudo' } })).json;
+  const provRun = await call(`/projects/${pid}/mt/pretranslate`, { jwt, method: 'POST', body: { providerId: provider2.id, locale: 'he', keyIds: [kp.id] } });
+  check('dedicated key filled with provenance', provRun.json.translated === 1 && provRun.json.scored === 1, JSON.stringify(provRun.json));
+  const humanEdit = await call(`/projects/${pid}/keys/${kp.id}/translations`, { jwt, method: 'PUT', body: { locale: 'he', value: 'תרגום אנושי' } });
+  check('human edit accepted', humanEdit.status === 200 || humanEdit.status === 201, `got ${humanEdit.status}`);
+  const tProv = (await call(`/projects/${pid}/keys?branch=main`, { jwt })).json.find((k) => k.id === kp.id).translations.find((t) => t.localeCode === 'he');
+  check('human edit clears MT provenance', tProv.mtScore === null && tProv.mtProvider === null && tProv.value === 'תרגום אנושי', JSON.stringify({ s: tProv.mtScore, p: tProv.mtProvider }));
 } catch (err) {
   // embedded-postgres can reject with `undefined` when the postmaster dies at
   // startup; through an async finally that exception exits 0 SILENTLY. Catch

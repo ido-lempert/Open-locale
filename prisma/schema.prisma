@@ -182,6 +182,11 @@ model Translation {
   // stays the single-form storage. Written only through the plural-aware API
   // validation (slice 2); no format layer reads it yet.
   pluralForms  Json?
+  // MT provenance of the CURRENT value: set only by a pre-translate fill,
+  // cleared by any human edit, import or snapshot restore (a branch merge
+  // carries it with the value). NULL means "not an MT fill" - never stale.
+  mtScore      Int?
+  mtProvider   String?
   updatedAt    DateTime          @updatedAt
 
   key     Key                  @relation(fields: [keyId], references: [id], onDelete: Cascade)

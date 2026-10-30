@@ -1959,9 +1959,20 @@ try {
   check('panel labels the output as TEST DATA, not translation', await page.evaluate(() => (document.body.textContent || '').includes('TEST DATA') && (document.body.textContent || '').includes('NOT available in this slice')));
   const mtLine = await page.evaluate(() => document.querySelector('p[role=status]')?.textContent || '');
   check('pre-translate filled at least one empty cell', /: ([1-9]\d*) filled/.test(mtLine), mtLine);
+  check('pre-translate result shows provider score summary', /avg 100, min 100, max 100/.test(mtLine), mtLine);
   await page.evaluate(() => { [...document.querySelectorAll('h2')].find((h) => h.textContent.startsWith('Machine translation'))?.scrollIntoView({ block: 'start' }); window.scrollBy(0, -70); });
   await new Promise((r) => setTimeout(r, 300));
   await shot('editor-28-mt.png');
+
+  // --- MT provenance badge in the editor (slice 14) ---
+  await page.goto(`${WEB}/projects/${projId}`, { waitUntil: 'networkidle0' });
+  const mtBadge = await page.waitForSelector('.mt-badge', { timeout: 10000 }).then(() => true).catch(() => false);
+  check('editor shows MT provenance badge', mtBadge);
+  const badgeText = await page.evaluate(() => document.querySelector('.mt-badge')?.textContent || '');
+  check('badge carries the provider score', /MT 100/.test(badgeText), badgeText);
+  await page.evaluate(() => document.querySelector('.mt-badge')?.scrollIntoView({ block: 'center' }));
+  await new Promise((r) => setTimeout(r, 300));
+  await shot('editor-53-mt-score.png');
 
   // --- Automations: add a task.create rule via settings UI, then fire it ---
   await page.goto(`${WEB}/projects/${projId}/settings`, { waitUntil: 'networkidle0' });

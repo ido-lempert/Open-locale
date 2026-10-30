@@ -6,7 +6,7 @@ export interface Project {
   locales: ProjectLocale[]; customStatuses?: string[]; embedOrigins?: string[]; _count?: { keys: number };
 }
 export type TranslationStatus = string; // base UNVERIFIED/TRANSLATED/REVIEWED + project custom statuses
-export interface Translation { keyId: string; localeCode: string; value: string; status: TranslationStatus; version?: number; pluralForms?: Record<string, string> | null; }
+export interface Translation { keyId: string; localeCode: string; value: string; status: TranslationStatus; version?: number; pluralForms?: Record<string, string> | null; mtScore?: number | null; mtProvider?: string | null; }
 export interface HistoryEntry {
   id: string; keyId: string; localeCode: string; value: string;
   status: TranslationStatus; createdAt: string;
@@ -34,6 +34,7 @@ export interface MtProviderInfo {
 }
 export interface MtPretranslateResult {
   translated: number; skippedExisting: number; skippedNoSource: number; totalKeys: number;
+  scored: number; scoreAvg: number | null; scoreMin: number | null; scoreMax: number | null;
 }
 export interface OtaPublicationInfo { id: string; version: number; branch: string; createdAt: string; locales: string[]; translations: number; }
 export interface WebhookInfo { id: string; url: string; events: string[]; active: boolean; createdAt: string; }

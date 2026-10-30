@@ -111,8 +111,11 @@ export class MtService {
     const translated = work.length
       ? await driver.translate(work.map((w) => w.source), sourceLocale, dto.locale, (provider.config ?? {}) as Record<string, unknown>)
       : [];
+    // Provider confidence per pair; null when the driver does not score.
+    const scores: (number | null)[] = work.map((w, i) => (driver.score ? driver.score(w.source, translated[i]) : null));
 
     let written = 0;
+    const writtenScores: number[] = [];
     await this.prisma.$transaction(async (tx) => {
       // Task key locks apply to MT fills too: one locked key rejects the run.
       await this.tasks.assertKeysEditable(tx, userId, projectId, work.map((w) => w.keyId));
@@ -120,22 +123,27 @@ export class MtService {
         // Conditional check-and-write in the writing statement itself: only
         // rows that are STILL empty (or still absent) accept the MT value.
         const rows = await tx.$queryRaw<{ keyId: string }[]>`
-          INSERT INTO "translations" ("keyId", "projectId", "localeCode", "value", "status", "version", "updatedAt")
-          VALUES (${work[i].keyId}::uuid, ${projectId}::uuid, ${dto.locale}, ${translated[i]}, 'UNVERIFIED', 1, now())
+          INSERT INTO "translations" ("keyId", "projectId", "localeCode", "value", "status", "version", "updatedAt", "mtScore", "mtProvider")
+          VALUES (${work[i].keyId}::uuid, ${projectId}::uuid, ${dto.locale}, ${translated[i]}, 'UNVERIFIED', 1, now(), ${scores[i]}, ${provider.name})
           ON CONFLICT ("keyId", "localeCode")
           DO UPDATE SET "value" = EXCLUDED."value", "status" = 'UNVERIFIED',
-                        "version" = "translations"."version" + 1, "updatedAt" = now()
+                        "version" = "translations"."version" + 1, "updatedAt" = now(),
+                        "mtScore" = EXCLUDED."mtScore", "mtProvider" = EXCLUDED."mtProvider"
           WHERE "translations"."value" = ''
           RETURNING "keyId"`;
         if (!rows[0]) continue; // someone wrote a value meanwhile - keep it
         written++;
+        if (scores[i] !== null) writtenScores.push(scores[i]!);
         await tx.translationHistory.create({
           data: { keyId: work[i].keyId, localeCode: dto.locale, value: translated[i], previousValue: '', status: 'UNVERIFIED', changedById: userId },
         });
       }
       await this.activity.record(tx, {
         projectId, actorId: userId, action: 'mt.pretranslate', localeCode: dto.locale,
-        detail: { provider: provider.name, type: provider.type, sourceLocale, branch: branchName, translated: written, skippedExisting, skippedNoSource },
+        detail: {
+          provider: provider.name, type: provider.type, sourceLocale, branch: branchName, translated: written, skippedExisting, skippedNoSource,
+          ...(writtenScores.length ? { scoreAvg: Math.round(writtenScores.reduce((a, b) => a + b, 0) / writtenScores.length), scoreMin: Math.min(...writtenScores), scoreMax: Math.max(...writtenScores) } : {}),
+        },
       });
     });
 
@@ -143,6 +151,12 @@ export class MtService {
       provider: provider.name, locale: dto.locale, sourceLocale, branch: branchName, translated: written,
     }).catch(() => {});
 
-    return { translated: written, skippedExisting, skippedNoSource, totalKeys: keys.length };
+    return {
+      translated: written, skippedExisting, skippedNoSource, totalKeys: keys.length,
+      scored: writtenScores.length,
+      scoreAvg: writtenScores.length ? Math.round(writtenScores.reduce((a, b) => a + b, 0) / writtenScores.length) : null,
+      scoreMin: writtenScores.length ? Math.min(...writtenScores) : null,
+      scoreMax: writtenScores.length ? Math.max(...writtenScores) : null,
+    };
   }
 }
