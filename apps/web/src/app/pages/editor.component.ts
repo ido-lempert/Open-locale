@@ -8,6 +8,8 @@ import { ApiService, BranchInfo, ScreenshotMeta, TmSuggestion, GlossaryTermItem,
 
 interface CellState {
   value: string; saved: string;
+  // Per-CLDR-category text for plural keys; {} for plain keys.
+  forms: Record<string, string>; savedForms: Record<string, string>;
   status: 'idle' | 'saving' | 'saved' | 'error';
   errorMsg: string;
   review: TranslationStatus;
@@ -135,6 +137,19 @@ interface CellState {
                       (focus)="onCellFocus(k, l.code)"
                       (blur)="save(k, l.code)"
                       [attr.aria-label]="k.name + ' in ' + l.code"></textarea>
+                    @if (k.isPlural) {
+                      <div class="plural-forms">
+                        @for (cat of pluralCategories(l.code); track cat) {
+                          <label class="plural-field"><span class="plural-cat">{{ cat }}</span>
+                            <input type="text" [attr.dir]="isRtl(l.code) ? 'rtl' : 'ltr'"
+                              [ngModel]="cell(k.id, l.code)().forms[cat] ?? ''"
+                              (ngModelChange)="editForm(k, l.code, cat, $event)"
+                              (blur)="save(k, l.code)"
+                              [attr.aria-label]="k.name + ' ' + cat + ' form in ' + l.code" />
+                          </label>
+                        }
+                      </div>
+                    }
                     @if (suggestFor() === k.id + ':' + l.code && suggestions().length > 0) {
                       <div class="tm-suggest">
                         @for (sg of suggestions(); track sg.targetText) {
@@ -330,14 +345,15 @@ export class EditorComponent implements OnInit {
       this.cells.clear();
       for (const k of keys) for (const t of k.translations) {
         this.cells.set(`${k.id}:${t.localeCode}`,
-          signal({ value: t.value, saved: t.value, status: 'idle', errorMsg: '', review: t.status ?? 'UNVERIFIED' }));
+          signal({ value: t.value, saved: t.value, status: 'idle', errorMsg: '', review: t.status ?? 'UNVERIFIED',
+            forms: { ...(t.pluralForms ?? {}) }, savedForms: { ...(t.pluralForms ?? {}) } }));
       }
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load keys'); }
   }
   cell(keyId: string, locale: string): WritableSignal<CellState> {
     let s = this.cells.get(`${keyId}:${locale}`);
     if (!s) {
-      s = signal<CellState>({ value: '', saved: '', status: 'idle', errorMsg: '', review: 'UNVERIFIED' });
+      s = signal<CellState>({ value: '', saved: '', status: 'idle', errorMsg: '', review: 'UNVERIFIED', forms: {}, savedForms: {} });
       this.cells.set(`${keyId}:${locale}`, s);
     }
     return s;
@@ -345,21 +361,40 @@ export class EditorComponent implements OnInit {
   edit(k: Key, locale: string, value: string) {
     this.cell(k.id, locale).update((c) => ({ ...c, value }));
   }
+  editForm(k: Key, locale: string, category: string, value: string) {
+    this.cell(k.id, locale).update((c) => ({ ...c, forms: { ...c.forms, [category]: value } }));
+  }
+  pluralCategories(locale: string): string[] {
+    // Browser ICU (Intl.PluralRules) is the same CLDR source the API
+    // validates against; invalid locale codes fall back to "other" only.
+    try { return new Intl.PluralRules(locale).resolvedOptions().pluralCategories; }
+    catch { return ['other']; }
+  }
+  private sameForms(a: Record<string, string>, b: Record<string, string>): boolean {
+    const ka = Object.keys(a), kb = Object.keys(b);
+    return ka.length === kb.length && ka.every((k) => a[k] === b[k]);
+  }
   async save(k: Key, locale: string, force = false) {
     const sig = this.cell(k.id, locale);
     const c = sig();
-    if (!force && c.value === c.saved) return;
+    if (!force && c.value === c.saved && this.sameForms(c.forms, c.savedForms)) return;
     if (c.status === 'saving') return;
     const reviewAtSend = c.review;
+    // Plural keys send every category the locale supports (empty string when
+    // untouched), so the required "other" is always present.
+    const formsAtSend = k.isPlural
+      ? Object.fromEntries(this.pluralCategories(locale).map((cat) => [cat, c.forms[cat] ?? '']))
+      : undefined;
     sig.set({ ...c, status: 'saving' });
     try {
-      const res = await this.api.upsertTranslation(this.projectId, k.id, locale, c.value);
+      const res = await this.api.upsertTranslation(this.projectId, k.id, locale, c.value, formsAtSend);
       const latest = sig();
       const newerReview = latest.review !== reviewAtSend;
       // A review the user chose while the save was in flight wins over the
       // (older) save response, and is re-sent so the server ends consistent.
       sig.set({ value: latest.value, saved: c.value, errorMsg: '',
-        status: latest.value === c.value ? 'saved' : 'idle',
+        forms: latest.forms, savedForms: formsAtSend ?? latest.savedForms,
+        status: latest.value === c.value && this.sameForms(latest.forms, c.forms) ? 'saved' : 'idle',
         review: newerReview ? latest.review : (res.status ?? 'UNVERIFIED') });
       if (newerReview) {
         const st = await this.api.setStatus(this.projectId, k.id, locale, latest.review);

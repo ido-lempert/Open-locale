@@ -129,6 +129,10 @@ button.cell-status.retry {
   }
 }
 
+.plural-forms { margin-top: 2px; display: flex; flex-direction: column; gap: 2px; }
+.plural-field { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.plural-cat { min-width: 42px; color: #888; font-family: monospace; }
+.plural-field input { flex: 1; font: inherit; padding: 2px 4px; }
 .cell-foot { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.2rem; }
 select.review {
   width: auto; font-size: 0.72rem; padding: 0.1rem 0.3rem; border-radius: 6px;

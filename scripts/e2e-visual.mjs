@@ -439,6 +439,38 @@ try {
   await shot('api-docs.png');
   await page.goto(`${WEB}/projects/${projId}`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.grid', { timeout: 10000 });
+  // Plural forms editing: a plural key shows per-CLDR-category inputs; typed
+  // forms save on blur and persist across reload.
+  const jwtPlural = await page.evaluate(() => localStorage.getItem('ol_token'));
+  const pk = await (await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/keys`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwtPlural}` }, body: JSON.stringify({ name: 'plural.demo', isPlural: true }) })).json();
+  check('plural key created via API for editor leg', !!pk.id);
+  await page.goto(`${WEB}/projects/${projId}`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('input[aria-label="plural.demo one form in en"]', { timeout: 10000 });
+  check('editor shows CLDR category inputs for a plural key', true);
+  await page.type('input[aria-label="plural.demo one form in en"]', '1 item');
+  await page.type('input[aria-label="plural.demo other form in en"]', '# items');
+  await page.click('input[aria-label="Search keys"]'); // blur triggers the save
+  let savedForms = null;
+  for (let i = 0; i < 20 && !savedForms; i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    const ks = await (await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/keys`, { headers: { Authorization: `Bearer ${jwtPlural}` } })).json();
+    const f = ks.find((k) => k.name === 'plural.demo')?.translations.find((t) => t.localeCode === 'en')?.pluralForms;
+    if (f && f.one === '1 item' && f.other === '# items') savedForms = f;
+  }
+  check('plural forms saved to the API on blur', !!savedForms, JSON.stringify(savedForms));
+  await page.goto(`${WEB}/projects/${projId}`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('input[aria-label="plural.demo one form in en"]', { timeout: 10000 });
+  const formsAfter = await page.evaluate(() => ({
+    one: document.querySelector('input[aria-label="plural.demo one form in en"]').value,
+    other: document.querySelector('input[aria-label="plural.demo other form in en"]').value,
+  }));
+  check('plural forms persist across reload', formsAfter.one === '1 item' && formsAfter.other === '# items', JSON.stringify(formsAfter));
+  // Filter the grid to the plural key so the category inputs are in frame.
+  await page.evaluate(() => { const el = document.querySelector('input[aria-label="Search keys"]'); const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; setter.call(el, 'plural.demo'); el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.waitForFunction(() => (document.querySelector('.grid tbody')?.textContent || '').includes('plural.demo') && !(document.querySelector('.grid tbody')?.textContent || '').includes('home.title'), { timeout: 10000 });
+  await shot('plural-forms.png');
+  await page.evaluate(() => { const el = document.querySelector('input[aria-label="Search keys"]'); const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; setter.call(el, ''); el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.waitForFunction(() => (document.querySelector('.grid tbody')?.textContent || '').includes('home.title'), { timeout: 10000 });
   const csvFile = '/tmp/e2e-import.csv';
   writeFileSync(csvFile, 'key,value\napp.subtitle,"Welcome, friend"\n');
   // The IO toolbar has a format picker; select CSV first so the import input and the safe/raw note apply to CSV.

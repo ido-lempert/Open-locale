@@ -6,7 +6,7 @@ export interface Project {
   locales: ProjectLocale[]; customStatuses?: string[]; embedOrigins?: string[]; _count?: { keys: number };
 }
 export type TranslationStatus = string; // base UNVERIFIED/TRANSLATED/REVIEWED + project custom statuses
-export interface Translation { keyId: string; localeCode: string; value: string; status: TranslationStatus; version?: number; }
+export interface Translation { keyId: string; localeCode: string; value: string; status: TranslationStatus; version?: number; pluralForms?: Record<string, string> | null; }
 export interface HistoryEntry {
   id: string; keyId: string; localeCode: string; value: string;
   status: TranslationStatus; createdAt: string;
@@ -438,9 +438,9 @@ export class ApiService {
   deleteKey(projectId: string, keyId: string) {
     return this.request<{ removed: string }>(`/projects/${projectId}/keys/${keyId}`, { method: 'DELETE' });
   }
-  upsertTranslation(projectId: string, keyId: string, locale: string, value: string) {
+  upsertTranslation(projectId: string, keyId: string, locale: string, value: string, pluralForms?: Record<string, string>) {
     return this.request<Translation>(`/projects/${projectId}/keys/${keyId}/translations`, {
-      method: 'PUT', body: JSON.stringify({ locale, value }),
+      method: 'PUT', body: JSON.stringify({ locale, value, ...(pluralForms !== undefined ? { pluralForms } : {}) }),
     });
   }
   bulkSetStatus(projectId: string, input: { locale: string; status: string; from?: string; search?: string; tag?: string; branch?: string; dryRun?: boolean; notChangedSince?: string }) {
