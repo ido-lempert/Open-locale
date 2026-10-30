@@ -91,6 +91,29 @@ try {
   await call(`${P}/keys/${localKey.id}/translations`,{jwt,method:'PUT',body:{locale:'en',value:'temporary'}});
   await call(`${P}/keys/${localKey.id}/translations`,{jwt,method:'PUT',body:{locale:'en',value:'edited'}});
   check('edit then revert changes row-generation fingerprint',(await preview()).json.fingerprint!==p.json.fingerprint);
+  const records=()=>call(`${P}/sync/preview-records`,{jwt});
+  check('ordinary previews leave diagnostic history empty',(await records()).json.records.length===0);
+  const recorded=await call(`${P}/sync/preview-records`,{jwt,method:'POST',body:{...input,summary:{total:999},fingerprint:'forged',actorId:member.user.id}});
+  check('explicit recording recomputes summary and actor',recorded.status===201 && recorded.json.record.summary.total===5 && recorded.json.record.actorId===owner.user.id && recorded.json.record.fingerprint!=='forged' && recorded.json.canApply===false);
+  const stored=await prisma.syncPreviewRecord.findUnique({where:{id:recorded.json.record.id}});
+  check('record contains no translation values or raw files',!JSON.stringify(stored).includes('edited') && !('baselineJson' in stored) && !('remoteJson' in stored) && !('decisions' in stored));
+  check('record listing returns saved summary',(await records()).json.records.some(r=>r.id===stored.id));
+  check('member cannot list records',(await call(`${P}/sync/preview-records`,{jwt:member.accessToken})).status===403);
+  check('outsider cannot list records',(await call(`${P}/sync/preview-records`,{jwt:outsider.accessToken})).status===404);
+  check('API token cannot read record history',(await call(`${P}/sync/preview-records`,{apiKey:token.token})).status===403);
+  const recordCount=await prisma.syncPreviewRecord.count();
+  check('bad preview is never persisted',(await call(`${P}/sync/preview-records`,{jwt,method:'POST',body:{...input,remoteJson:'invalid'}})).status===400 && await prisma.syncPreviewRecord.count()===recordCount);
+  check('member cannot persist record',(await call(`${P}/sync/preview-records`,{jwt:member.accessToken,method:'POST',body:input})).status===403);
+  const another=(await call('/projects',{jwt,method:'POST',body:{name:'Other history',slug:'other-history',locales:['en']}})).json;
+  check('history scoped to project',(await call(`/projects/${another.id}/sync/preview-records`,{jwt})).json.records.length===0);
+  await prisma.syncPreviewRecord.createMany({data:Array.from({length:55},(_,i)=>({projectId:project.id,actorId:owner.user.id,branch:'main',locale:'en',fingerprint:'f'+i,remoteSha:'a'.repeat(40),summary:{total:0}}))});
+  check('record listing bounded to latest fifty',(await records()).json.records.length===50);
+  await prisma.syncPreviewRecord.createMany({data:Array.from({length:60},(_,i)=>({projectId:project.id,actorId:owner.user.id,branch:'main',locale:'en',fingerprint:'older'+i,remoteSha:'a'.repeat(40),summary:{total:0},createdAt:new Date('2020-01-01')}))});
+  const trimmed=await call(`${P}/sync/preview-records`,{jwt,method:'POST',body:input});
+  check('explicit recording trims oldest retained history to hundred',trimmed.status===201 && await prisma.syncPreviewRecord.count({where:{projectId:project.id}})===100 && !!await prisma.syncPreviewRecord.findUnique({where:{id:trimmed.json.record.id}}));
+
+  const concurrent=await Promise.all(Array.from({length:4},()=>call(`${P}/sync/preview-records`,{jwt,method:'POST',body:input})));
+  check('concurrent diagnostic records succeed without exceeding retention',concurrent.every(r=>r.status===201) && await prisma.syncPreviewRecord.count({where:{projectId:project.id}})<=100);
   const invalidId=await call('/projects/not-a-uuid/sync/preview',{jwt,method:'POST',body:input});
   check('invalid project id is a bounded client error',invalidId.status===400);
   const bounded=(await call('/projects',{jwt,method:'POST',body:{name:'Bounds',slug:'bounds',locales:['en']}})).json;
@@ -105,6 +128,12 @@ try {
   const key=(await call(`${P}/keys`,{jwt,method:'POST',body:{name:'plural',isPlural:true}})).json;
   check('plural setup succeeded',!!key.id && key.isPlural===true,JSON.stringify(key));
   check('flat-only preview rejects plural branch',(await preview()).status===400);
+  await prisma.project.delete({where:{id:another.id}});
+  const deleted=await prisma.project.create({data:{teamId:project.teamId,name:'Delete records',slug:'delete-records'}});
+  await prisma.syncPreviewRecord.create({data:{projectId:deleted.id,actorId:owner.user.id,branch:'main',locale:'en',fingerprint:'x',remoteSha:'a'.repeat(40),summary:{}}});
+  await prisma.project.delete({where:{id:deleted.id}});
+  check('project deletion cascades diagnostic history',await prisma.syncPreviewRecord.count({where:{projectId:deleted.id}})===0);
+
 } catch (err) { console.error('SUITE INCOMPLETE:',err);process.exitCode=1;failures++; }
 finally {
  if(api) { const stopped=new Promise(resolve=>api.once('close',resolve));api.kill('SIGTERM');await stopped; }

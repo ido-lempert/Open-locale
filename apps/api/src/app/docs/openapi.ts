@@ -232,6 +232,11 @@ export const OPENAPI = {
       post: p('Restore the project to a snapshot (atomic point-in-time recovery; fields added after a snapshot was taken - e.g. pluralForms in older snapshots - are left untouched, so a restore is not an exact historical reconstruction)', 'snapshots'),
     },
     '/api/projects/{projectId}/activity': { get: p('Project activity feed', 'projects') },
+    '/api/projects/{projectId}/sync/preview-records': {
+      get: { ...p('List latest 50 diagnostic preview records (session admin only)', 'sync'), security: [{ bearerAuth: [] }] },
+      post: { ...p('Explicitly record a recomputed local-file preview summary, not file values (session admin only)', 'sync', true), security: [{ bearerAuth: [] }],
+        description: 'Same input as /sync/preview. Stores scope, actor, fingerprint, caller SHA and counts only. Not an accepted baseline, executable job, provider verification or permission to apply. Existing /sync/preview remains non-persistent.' },
+    },
     '/api/projects/{projectId}/sync/preview': {
       post: {
         ...p('Preview caller-supplied flat JSON against stored branch/locale data (session admin only; no writes or remote verification)', 'sync', true),

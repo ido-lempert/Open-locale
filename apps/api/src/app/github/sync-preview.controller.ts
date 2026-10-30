@@ -4,6 +4,7 @@ import {
   Controller,
   ForbiddenException,
   Header,
+  Get,
   Injectable,
   Module,
   Param,
@@ -54,6 +55,72 @@ export class LocalSyncPreviewService {
     private readonly projects: ProjectsService,
     private readonly branches: BranchesService,
   ) {}
+
+  async listRecords(user: AuthPrincipal, projectId: string) {
+    if (user.via !== 'jwt')
+      throw new ForbiddenException('Sync preview requires a signed-in session');
+    await this.projects.requireAdmin(user.userId, projectId);
+    return {
+      source: 'caller-supplied-files',
+      canApply: false,
+      records: await this.prisma.syncPreviewRecord.findMany({
+        where: { projectId },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 50,
+      }),
+    };
+  }
+
+  async record(
+    user: AuthPrincipal,
+    projectId: string,
+    input: LocalSyncPreviewDto,
+  ) {
+    // Recompute, never accept caller-provided summary/fingerprint or actor.
+    const plan = await this.preview(user, projectId, input);
+    const summary = {
+      unchanged: 0,
+      converged: 0,
+      'local-only': 0,
+      'remote-only': 0,
+      conflict: 0,
+      manual: 0,
+      total: plan.decisions.length,
+    };
+    for (const d of plan.decisions) {
+      summary[d.kind]++;
+      if (d.suggested === 'manual') summary.manual++;
+    }
+    // No key names, values, baseline/remote files, or credentials retained.
+    // Re-check current membership before creating persistent history.
+    await this.projects.requireAdmin(user.userId, projectId);
+    const record = await this.prisma.$transaction(async (tx) => {
+      // Serialize create/trim by project even across processes.
+      await tx.$queryRaw`SELECT id FROM projects WHERE id=${projectId}::uuid FOR UPDATE`;
+      const saved = await tx.syncPreviewRecord.create({
+        data: {
+          projectId,
+          actorId: user.userId,
+          branch: plan.branch,
+          locale: plan.locale,
+          fingerprint: plan.fingerprint,
+          remoteSha: plan.remoteSha,
+          summary,
+        },
+      });
+      await tx.$executeRaw`DELETE FROM sync_preview_records WHERE "projectId"=${projectId}::uuid AND id IN (
+        SELECT id FROM sync_preview_records WHERE "projectId"=${projectId}::uuid
+        ORDER BY "createdAt" DESC,id DESC OFFSET 100)`;
+      return saved;
+    });
+    return {
+      record,
+      source: 'caller-supplied-files',
+      baselineVerified: false,
+      remoteVerified: false,
+      canApply: false,
+    };
+  }
 
   async preview(
     user: AuthPrincipal,
@@ -173,6 +240,23 @@ export class LocalSyncPreviewService {
 @UseGuards(JwtAuthGuard)
 export class LocalSyncPreviewController {
   constructor(private readonly previews: LocalSyncPreviewService) {}
+  @Get('preview-records')
+  @Header('Cache-Control', 'no-store')
+  listRecords(
+    @CurrentUser() user: AuthPrincipal,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+  ) {
+    return this.previews.listRecords(user, projectId);
+  }
+  @Post('preview-records')
+  @Header('Cache-Control', 'no-store')
+  record(
+    @CurrentUser() user: AuthPrincipal,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Body() input: LocalSyncPreviewDto,
+  ) {
+    return this.previews.record(user, projectId, input);
+  }
   @Post('preview')
   @Header('Cache-Control', 'no-store')
   preview(
