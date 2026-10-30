@@ -356,10 +356,33 @@ try {
   check('ARB export carries the entries', arbParsed['arb.title'] === 'My App ✓' && arbParsed['arb.multi'] === 'line1\nline2' && arbParsed['arb.simple'] === 'Total: {amount}');
   const arbRound = await call(`${P}/import/he`, { token: at, method: 'POST', body: { arb: arbOut } });
   check('ARB export-import roundtrip stable', arbRound.status === 201 && arbRound.json.unchangedSkipped >= 3, JSON.stringify(arbRound.json));
-  const arbBefore = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
-  const arbPlural = await call(`${P}/import/he`, { token: at, method: 'POST', body: { arb: JSON.stringify({ 'arb.plural': '{count, plural, one {# apple} other {# apples}}', 'arb.ok': 'should not land' }) } });
-  const arbAfterPlural = await (await fetch(`${API}${P}/export/he`, { headers: { Authorization: `Bearer ${at}` } })).json();
-  check('ARB ICU plural rejected (400) and leaves keys unchanged', arbPlural.status === 400 && JSON.stringify(arbBefore) === JSON.stringify(arbAfterPlural) && arbAfterPlural['arb.ok'] === undefined, String(arbPlural.status));
+  // ICU plural subset: a value that is exactly one narrow plural message
+  // imports as a plural key; out-of-subset ICU stays rejected.
+  const arbPlural = await call(`${P}/import/he`, { token: at, method: 'POST', body: { arb: JSON.stringify({ 'arb.plural': '{count, plural, one {# apple} other {# apples}}' }) } });
+  check('ARB in-subset ICU plural import accepted', arbPlural.status === 201, `${arbPlural.status} ${JSON.stringify(arbPlural.json)}`);
+  const arbKeys = (await call(`${P}/keys`, { token: at })).json;
+  const arbPluralKey = arbKeys.find((k) => k.name === 'arb.plural');
+  check('ARB ICU import upgrades isPlural and writes forms', arbPluralKey?.isPlural === true && JSON.stringify(arbPluralKey?.translations.find((t) => t.localeCode === 'he')?.pluralForms) === JSON.stringify({ one: '# apple', other: '# apples' }), JSON.stringify(arbPluralKey?.translations.find((t) => t.localeCode === 'he')?.pluralForms));
+  check('ARB ICU import sets plain value to the other form', arbPluralKey?.translations.find((t) => t.localeCode === 'he')?.value === '# apples');
+  const arbOut2 = JSON.parse(await (await fetch(`${API}${P}/export/he/arb`, { headers: { Authorization: `Bearer ${at}` } })).text());
+  check('ARB export emits an ICU message for plural keys with forms', arbOut2['arb.plural'] === '{count, plural, one {# apple} other {# apples}}', arbOut2['arb.plural'] ?? '');
+  const arbRound2 = await call(`${P}/import/he`, { token: at, method: 'POST', body: { arb: JSON.stringify(arbOut2) } });
+  check('ARB plural export -> import roundtrips (own output re-imports)', arbRound2.status === 201 && arbRound2.json.keysCreated === 0 && arbRound2.json.failed === 0, JSON.stringify(arbRound2.json));
+  const arbSelect = await call(`${P}/import/he`, { token: at, method: 'POST', body: { arb: JSON.stringify({ 'arb.gender': '{g, select, male {he} other {they}}', 'arb.ok': 'should not land' }) } });
+  const arbAfterSelect = await (await fetch(`${API}${P}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('ARB ICU select rejected (400) and leaves keys unchanged', arbSelect.status === 400 && arbAfterSelect['arb.ok'] === undefined && arbAfterSelect['arb.gender'] === undefined, String(arbSelect.status));
+  const arbOffset = await call(`${P}/import/he`, { token: at, method: 'POST', body: { arb: JSON.stringify({ 'arb.off': '{n, plural, offset:1 one {# apple} other {# apples}}' }) } });
+  check('ARB plural with offset rejected (400)', arbOffset.status === 400, String(arbOffset.status));
+  const arbExact = await call(`${P}/import/he`, { token: at, method: 'POST', body: { arb: JSON.stringify({ 'arb.exact': '{n, plural, =0 {none} other {# apples}}' }) } });
+  check('ARB plural with exact-value selector rejected (400)', arbExact.status === 400, String(arbExact.status));
+  const arbNested = await call(`${P}/import/he`, { token: at, method: 'POST', body: { arb: JSON.stringify({ 'arb.nested': '{n, plural, other {{g, select, male {he} other {they}} apples}}' }) } });
+  check('ARB plural with nested message rejected (400)', arbNested.status === 400, String(arbNested.status));
+  const arbMixed = await call(`${P}/import/he`, { token: at, method: 'POST', body: { arb: JSON.stringify({ 'arb.mixed': 'You have {count, plural, one {# apple} other {# apples}}' }) } });
+  check('ARB mixed text-plus-message rejected (400)', arbMixed.status === 400, String(arbMixed.status));
+  const arbQuote = await call(`${P}/import/he`, { token: at, method: 'POST', body: { arb: JSON.stringify({ 'arb.brace': "{n, plural, other {literal '{ brace}}" }) } });
+  check('ARB ICU quoting for literal braces imports unescaped', arbQuote.status === 201 && (await call(`${P}/keys`, { token: at })).json.find((k) => k.name === 'arb.brace')?.translations.find((t) => t.localeCode === 'he')?.pluralForms?.other === 'literal { brace', `${arbQuote.status} ${JSON.stringify(arbQuote.json)}`);
+  const arbBraceOut = JSON.parse(await (await fetch(`${API}${P}/export/he/arb`, { headers: { Authorization: `Bearer ${at}` } })).text());
+  check('ARB export escapes literal braces so output re-imports', arbBraceOut['arb.brace'] === "{count, plural, other {literal '{ brace}}", arbBraceOut['arb.brace'] ?? '');
   const arbNonString = await call(`${P}/import/he`, { token: at, method: 'POST', body: { arb: JSON.stringify({ 'arb.num': 3 }) } });
   check('ARB non-string value rejected (400)', arbNonString.status === 400, String(arbNonString.status));
 

@@ -802,6 +802,38 @@ try {
     sdExport.includes('<plist version="1.0">') && sdExport.includes('<key>sd.uikey</key>') && sdExport.includes('<string>NSStringPluralRuleType</string>') && sdExport.includes('<string>ui apples</string>'),
     sdExport.split('\n').find((l) => l.includes('sd.uikey')) ?? '');
 
+  // --- ARB ICU plural via UI: import an .arb with an in-subset ICU message ---
+  await page.select('select[aria-label="Import/export format"]', 'arb');
+  const arbIcuFile = '/tmp/e2e-import.arb';
+  writeFileSync(arbIcuFile, JSON.stringify({ 'arb.uikey': '{count, plural, one {one ui fig} other {ui figs}}' }));
+  const arbIcuInput = await page.$('input[type=file]');
+  await arbIcuInput.uploadFile(arbIcuFile);
+  const arbIcuNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('(ARB (Flutter),'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('ARB ICU import via UI shows summary notice', arbIcuNotice);
+  check('ARB-imported plural key appears in grid', await waitText('arb.uikey'));
+  await page.waitForSelector('input[aria-label="arb.uikey other form in en"]', { timeout: 10000 });
+  const arbIcuGridForms = await page.evaluate(() => ({
+    one: document.querySelector('input[aria-label="arb.uikey one form in en"]')?.value,
+    other: document.querySelector('input[aria-label="arb.uikey other form in en"]')?.value,
+  }));
+  check('ARB ICU import via UI lands forms in the editor category inputs', arbIcuGridForms.one === 'one ui fig' && arbIcuGridForms.other === 'ui figs', JSON.stringify(arbIcuGridForms));
+  await page.type('input[aria-label="Search keys"]', 'arb.uikey');
+  await page.waitForFunction(() => (document.querySelector('.grid tbody')?.textContent || '').includes('arb.uikey') && !(document.querySelector('.grid tbody')?.textContent || '').includes('home.title'), { timeout: 10000 });
+  await shot('editor-47-arb-icu.png');
+  await page.evaluate(() => { const el = document.querySelector('input[aria-label="Search keys"]'); const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; setter.call(el, ''); el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.waitForFunction(() => (document.querySelector('.grid tbody')?.textContent || '').includes('home.title'), { timeout: 10000 });
+  await page.evaluate(() => {
+    window.__arbIcuCapture = null;
+    const orig = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (b) => { window.__arbIcuCapture = b; return orig(b); };
+  });
+  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.startsWith('Export'))?.click());
+  await page.waitForFunction(() => !!window.__arbIcuCapture, { timeout: 10000 });
+  const arbIcuExport = await page.evaluate(() => window.__arbIcuCapture.text());
+  check('ARB export via UI emits an ICU message for the imported key',
+    JSON.parse(arbIcuExport)['arb.uikey'] === '{count, plural, one {one ui fig} other {ui figs}}',
+    JSON.parse(arbIcuExport)['arb.uikey'] ?? '');
+
   // --- Import format conflict handling: a deliberate format choice is never overridden ---
   const conflictPoFile = '/tmp/e2e-conflict.po';
   writeFileSync(conflictPoFile, 'msgid "conflict.po"\nmsgstr "conflict fixture"\n');

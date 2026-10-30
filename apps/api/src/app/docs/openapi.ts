@@ -177,7 +177,7 @@ export const OPENAPI = {
     '/api/projects/{projectId}/export/{locale}/resx': { get: p('Export a locale as RESX (.NET XML resources)', 'import/export') },
     '/api/projects/{projectId}/export/{locale}/pot': { get: p('Export a locale as a POT (gettext template) with empty msgstr values', 'import/export') },
     '/api/projects/{projectId}/export/{locale}/properties': { get: p('Export a locale as Java .properties', 'import/export') },
-    '/api/projects/{projectId}/export/{locale}/arb': { get: p('Export a locale as Flutter ARB', 'import/export') },
+    '/api/projects/{projectId}/export/{locale}/arb': { get: p('Export a locale as Flutter ARB (plural keys with stored forms emit one ICU plural message, variable name normalized to count)', 'import/export') },
     '/api/projects/{projectId}/export/{locale}/yaml': { get: p('Export a locale as YAML (Rails-style subset)', 'import/export') },
     '/api/projects/{projectId}/export-bundle/{format}': { get: p('Export all locales as one store-only zip (one entry per locale; same read boundary as single-locale exports)', 'import/export') },
     '/api/projects/{projectId}/import-bundle/{format}': { post: p('Import a bundle zip (application/zip body; STORE-ONLY subset - compressed/deflated archives are rejected, not decompressed): one entry per locale, per-locale partial results with skips and failures reported', 'import/export', true) },

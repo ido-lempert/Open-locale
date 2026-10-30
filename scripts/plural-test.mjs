@@ -152,6 +152,26 @@ try {
   check('stringsdict import without "other" fails the key (consistent with API 400)', sdNoOther.status === 201 && sdNoOther.json.failed === 1, `${sdNoOther.status} ${JSON.stringify(sdNoOther.json)}`);
   check('stringsdict missing-other key was not created', (await keys()).every((k) => k.name !== 'sd.no.other'));
 
+  // Flutter ARB ICU subset (slice 6): an in-subset ICU plural message
+  // imports through the same machinery; a plain ARB entry over a plural
+  // key preserves stored forms.
+  const arbImp = await call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { arb: JSON.stringify({ 'cart.flutter': '{count, plural, one {one orange} other {# oranges}}' }) } });
+  check('ARB ICU plural import accepted', arbImp.status === 200 || arbImp.status === 201, `status=${arbImp.status}`);
+  const ksArb = await keys();
+  const arbKey = ksArb.find((k) => k.name === 'cart.flutter');
+  check('ARB import sets isPlural and forms', arbKey?.isPlural === true && JSON.stringify(formsOf(ksArb, 'cart.flutter', 'en')) === JSON.stringify({ one: 'one orange', other: '# oranges' }));
+  check('ARB import sets plain value to the other form', arbKey?.translations.find((t) => t.localeCode === 'en')?.value === '# oranges');
+  const arbOut = JSON.parse(await (await fetch(`${API}/projects/${pid}/export/en/arb`, { headers: { Authorization: `Bearer ${jwt}` } })).text());
+  check('ARB export emits an ICU message', arbOut['cart.flutter'] === '{count, plural, one {one orange} other {# oranges}}', arbOut['cart.flutter'] ?? '');
+  const arbPlain = await call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { arb: JSON.stringify({ 'cart.flutter': 'plain arb value' }) } });
+  check('plain ARB import over a plural key accepted', arbPlain.status === 200 || arbPlain.status === 201, `status=${arbPlain.status}`);
+  const ksArb2 = await keys();
+  check('plain ARB import preserves pluralForms', JSON.stringify(formsOf(ksArb2, 'cart.flutter', 'en')) === JSON.stringify({ one: 'one orange', other: '# oranges' }));
+  check('plain ARB import updates plain value', ksArb2.find((k) => k.name === 'cart.flutter').translations.find((t) => t.localeCode === 'en').value === 'plain arb value');
+  const arbNoOther = await call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { arb: JSON.stringify({ 'arb.no.other': '{count, plural, one {x}}' }) } });
+  check('ARB plural import without "other" fails the key (consistent with API 400)', arbNoOther.status === 201 && arbNoOther.json.failed === 1, `${arbNoOther.status} ${JSON.stringify(arbNoOther.json)}`);
+  check('ARB missing-other key was not created', (await keys()).every((k) => k.name !== 'arb.no.other'));
+
   // isPlural=false clears stored forms explicitly.
   check('isPlural flip accepted', (await call(`/projects/${pid}/keys/${kid}`, { jwt, method: 'PATCH', body: { isPlural: false } })).status === 200);
   check('isPlural=false clears pluralForms', formsOf(await keys(), 'cart.items', 'en') === null);

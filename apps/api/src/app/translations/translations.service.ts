@@ -444,8 +444,25 @@ export class TranslationsService {
   }
 
   async exportArb(userId: string, projectId: string, locale: string, branch?: string) {
-    const flat = (await this.exportJson(userId, projectId, locale, true, branch)) as Record<string, string>;
-    return toArb(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)), locale);
+    await this.projects.getFor(userId, projectId);
+    const b = await this.branches.branchFor(projectId, branch);
+    const translations = await this.prisma.translation.findMany({
+      where: { projectId, localeCode: locale, key: { branchId: b.id } },
+      include: { key: true },
+      orderBy: { key: { name: 'asc' } },
+    });
+    const rows: [string, string][] = [];
+    const plurals: [string, Record<string, string>][] = [];
+    for (const t of translations) {
+      const forms = t.pluralForms as Record<string, string> | null;
+      // Plural key with stored forms -> one ICU plural message (variable
+      // name normalized to "count", documented). A plural key without forms
+      // falls back to a plain entry from value (documented, lossy for the
+      // plural intent but valid ARB).
+      if (t.key.isPlural && forms && Object.keys(forms).length > 0) plurals.push([t.key.name, forms]);
+      else rows.push([t.key.name, t.value]);
+    }
+    return toArb(rows, plurals, locale);
   }
 
   async exportYaml(userId: string, projectId: string, locale: string, branch?: string) {
@@ -604,11 +621,15 @@ export class TranslationsService {
       return { entries: Object.fromEntries(rows), untranslatedSkipped: 0 };
     }
     if (dto.arb != null) {
-      const { rows, rejected } = parseArb(dto.arb);
+      const { rows, plurals, rejected } = parseArb(dto.arb);
       if (rejected > 0) {
-        throw new BadRequestException(`${rejected} ARB ${rejected === 1 ? 'entry' : 'entries'} rejected: non-string or nested values, ICU plural/select messages and malformed JSON are not supported`);
+        throw new BadRequestException(`${rejected} ARB ${rejected === 1 ? 'entry' : 'entries'} rejected: non-string or nested values, ICU select/selectordinal, out-of-subset ICU plural messages (mixed text, offset, exact-value selectors, nested braces, unsupported quoting) and malformed JSON are not supported`);
       }
-      return { entries: Object.fromEntries(rows), untranslatedSkipped: 0 };
+      return {
+        entries: Object.fromEntries(rows),
+        untranslatedSkipped: 0,
+        plurals: Object.fromEntries(plurals),
+      };
     }
     if (dto.yaml != null) {
       return { entries: this.parseYamlEntries(dto), untranslatedSkipped: 0 };
@@ -708,7 +729,8 @@ export class TranslationsService {
   }
 
   async importArb(userId: string, projectId: string, locale: string, arb: string, branch?: string) {
-    return this.importJson(userId, projectId, locale, this.parseImport({ arb }).entries, branch);
+    const parsed = this.parseImport({ arb });
+    return this.importJson(userId, projectId, locale, parsed.entries, branch, undefined, parsed.plurals);
   }
 
   async importYaml(userId: string, projectId: string, locale: string, yaml: string, branch?: string) {
