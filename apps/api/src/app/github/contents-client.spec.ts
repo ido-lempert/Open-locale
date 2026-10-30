@@ -18,8 +18,10 @@ describe('GitHub contents adapter over real HTTP fixture',()=>{
     expect(url).toBe('/repos/owner/repo/contents/locales/en.json?ref=feature%2Ftest');expect(headers.authorization).toBe('Bearer fixture-only-token');expect(headers['x-github-api-version']).toBe('2026-03-10');
   });
   it('updates only with expected SHA and returns verified result fields',async()=>{
-    response={content:{path:'locales/en.json',sha:'b'.repeat(40)},commit:{sha:'c'.repeat(40)}};
-    expect(await client.write('owner','repo','locales/en.json','main','{"hi":"hello"}',sha,'Update translations')).toEqual({fileSha:'b'.repeat(40),commitSha:'c'.repeat(40)});
+    const updatedText='{"hi":"hello"}';
+    const updatedSha=createHash('sha1').update(`blob ${Buffer.byteLength(updatedText)}\0`).update(updatedText).digest('hex');
+    response={content:{path:'locales/en.json',sha:updatedSha},commit:{sha:'c'.repeat(40)}};
+    expect(await client.write('owner','repo','locales/en.json','main','{"hi":"hello"}',sha,'Update translations')).toEqual({fileSha:updatedSha,commitSha:'c'.repeat(40)});
     expect(body.sha).toBe(sha);expect(body.branch).toBe('main');expect(Buffer.from(body.content as string,'base64').toString()).toBe('{"hi":"hello"}');
   });
   it('surfaces SHA conflict without retry or overwrite',async()=>{status=409;response={message:'remote fixture diagnostic'};await expect(client.write('owner','repo','locales/en.json','main','{}',sha,'Update')).rejects.toMatchObject({status:409});expect(calls).toBe(1);});
@@ -31,4 +33,18 @@ describe('GitHub contents adapter over real HTTP fixture',()=>{
   it('sanitizes provider errors rather than returning response body',async()=>{status=403;response={message:'secret diagnostic'};await expect(client.read('owner','repo','locales/en.json','main')).rejects.toThrow('GitHub contents request failed');});
   it('rejects mismatched blob SHA',async()=>{response={type:'file',path:'locales/en.json',sha:'a'.repeat(40),encoding:'base64',size:2,content:'e30='};await expect(client.read('owner','repo','locales/en.json','main')).rejects.toThrow('blob SHA mismatch');});
   it('rejects arbitrary API origins',()=>{expect(()=>new GitHubContentsClient('fixture','https://evil.example')).toThrow();});
+});
+
+describe('update response consistency and reconciliation',()=>{
+  let server:Server,client:GitHubContentsClient,calls:number;
+  beforeEach(async()=>{
+    calls=0;server=createServer((req,res)=>{calls++;req.resume();res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({content:{path:'en.json',sha:'b'.repeat(40)},commit:{sha:'c'.repeat(40)}}));});
+    await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));
+    client=new GitHubContentsClient('fixture-token',`http://127.0.0.1:${(server.address() as AddressInfo).port}`);
+  });
+  afterEach(async()=>{await new Promise<void>(r=>server.close(()=>r()));});
+  it('does not report update success when provider returns a different blob and never retries',async()=>{
+    await expect(client.write('owner','repo','en.json','main','{"a":"requested"}','a'.repeat(40),'Update')).rejects.toThrow('remote outcome requires reconciliation');
+    expect(calls).toBe(1);
+  });
 });

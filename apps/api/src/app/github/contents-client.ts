@@ -50,6 +50,9 @@ export class GitHubContentsClient {
     const content=data.content as Record<string,unknown>|null;
     const commit=data.commit as Record<string,unknown>|null;
     if(!content || content.path!==path || typeof content.sha!=='string' || !SHA.test(content.sha) || !commit || typeof commit.sha!=='string' || !SHA.test(commit.sha)) throw new Error('Malformed GitHub update result; remote outcome requires reconciliation');
+    const bytes=Buffer.from(text,'utf8');
+    const expectedBlob=createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
+    if(content.sha!==expectedBlob) throw new Error('GitHub update blob SHA mismatch; remote outcome requires reconciliation');
     return {fileSha:content.sha,commitSha:commit.sha};
   }
 }
