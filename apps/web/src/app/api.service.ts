@@ -349,7 +349,7 @@ export class ApiService {
     if (!res.ok) throw new Error(`Bundle export failed (HTTP ${res.status})`);
     return res.blob();
   }
-  async exportText(projectId: string, locale: string, kind: 'android' | 'ios' | 'po' | 'pot' | 'xliff' | 'properties' | 'arb' | 'yaml' | 'resx', branch?: string) {
+  async exportText(projectId: string, locale: string, kind: 'android' | 'ios' | 'stringsdict' | 'po' | 'pot' | 'xliff' | 'properties' | 'arb' | 'yaml' | 'resx', branch?: string) {
     const res = await fetch(`${this.base}/projects/${projectId}/export/${locale}/${kind}${branch ? `?branch=${encodeURIComponent(branch)}` : ''}`, {
       headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
     });

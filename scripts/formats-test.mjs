@@ -530,6 +530,34 @@ try {
   const brResxOut = await (await fetch(`${API}${P}/export/en/resx?branch=resx-branch`, { headers: { Authorization: `Bearer ${at}` } })).text();
   check('RESX export reads the named branch', brResxOut.includes('<data name="resx.branchonly" xml:space="preserve">'), '');
 
+  // --- iOS .stringsdict (plural subset: one-level NSStringPluralRuleType) ---
+  const sdDoc = '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n    <key>sd.cats</key>\n    <dict>\n      <key>NSStringFormatSpecTypeKey</key>\n      <string>NSStringPluralRuleType</string>\n      <key>one</key>\n      <string>one cat</string>\n      <key>other</key>\n      <string>many cats</string>\n    </dict>\n    <key>sd.few</key>\n    <dict>\n      <key>NSStringFormatSpecTypeKey</key>\n      <string>NSStringPluralRuleType</string>\n      <key>two</key>\n      <string>two dogs</string>\n      <key>other</key>\n      <string>dogs</string>\n    </dict>\n</dict>\n</plist>';
+  const sdImp = await call(`${P}/import/he`, { token: at, method: 'POST', body: { stringsdict: sdDoc } });
+  check('stringsdict import accepted', sdImp.status === 201, `${sdImp.status} ${JSON.stringify(sdImp.json)}`);
+  const sdKeys = (await call(`${P}/keys`, { token: at })).json;
+  const sdFormsOf = (name) => sdKeys.find((k) => k.name === name)?.translations.find((t) => t.localeCode === 'he')?.pluralForms;
+  check('stringsdict import upgrades isPlural and writes forms', sdKeys.find((k) => k.name === 'sd.cats')?.isPlural === true && JSON.stringify(sdFormsOf('sd.cats')) === JSON.stringify({ one: 'one cat', other: 'many cats' }) && JSON.stringify(sdFormsOf('sd.few')) === JSON.stringify({ two: 'two dogs', other: 'dogs' }), JSON.stringify(sdFormsOf('sd.cats')));
+  const heAfterSd = await (await fetch(`${API}${P}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();
+  check('stringsdict import sets plain value to the other form', heAfterSd['sd.cats'] === 'many cats' && heAfterSd['sd.few'] === 'dogs', JSON.stringify({ c: heAfterSd['sd.cats'], f: heAfterSd['sd.few'] }));
+  const sdOut = await (await fetch(`${API}${P}/export/he/stringsdict`, { headers: { Authorization: `Bearer ${at}` } })).text();
+  check('stringsdict export emits plist entries in the documented subset', sdOut.includes('<plist version="1.0">') && sdOut.includes('<key>sd.few</key>') && sdOut.includes('<string>NSStringPluralRuleType</string>') && sdOut.includes('<key>two</key>') && sdOut.includes('<string>two dogs</string>') && !sdOut.includes('<!DOCTYPE'), sdOut.split('\n').find((l) => l.includes('sd.few')) ?? '');
+  const sdRound = await call(`${P}/import/he`, { token: at, method: 'POST', body: { stringsdict: sdOut } });
+  check('stringsdict export -> import roundtrips (own output re-imports)', sdRound.status === 201 && sdRound.json.keysCreated === 0 && sdRound.json.failed === 0, JSON.stringify(sdRound.json));
+  const sdOutEn = await (await fetch(`${API}${P}/export/en/stringsdict`, { headers: { Authorization: `Bearer ${at}` } })).text();
+  check('stringsdict export omits plural keys without forms in that locale', !sdOutEn.includes('sd.cats') && !sdOutEn.includes('sd.few'), sdOutEn.slice(0, 200));
+  const sdNoPlist = await call(`${P}/import/he`, { token: at, method: 'POST', body: { stringsdict: '<dict><key>sd.x</key><dict></dict></dict>' } });
+  check('stringsdict without a plist root rejected (400)', sdNoPlist.status === 400, String(sdNoPlist.status));
+  const sdDoctype = await call(`${P}/import/he`, { token: at, method: 'POST', body: { stringsdict: '<!DOCTYPE plist [ <!ENTITY xxe SYSTEM "file:///etc/passwd"> ]>\n<plist version="1.0"><dict></dict></plist>' } });
+  check('stringsdict DOCTYPE/entity declaration rejected (400)', sdDoctype.status === 400, String(sdDoctype.status));
+  const sdNonPlural = await call(`${P}/import/he`, { token: at, method: 'POST', body: { stringsdict: '<plist version="1.0"><dict><key>sd.w</key><dict><key>NSStringFormatSpecTypeKey</key><string>NSStringFormatSpecTypeOther</string><key>other</key><string>x</string></dict></dict></plist>' } });
+  check('stringsdict non-plural spec type rejected (400)', sdNonPlural.status === 400, String(sdNonPlural.status));
+  const sdWidth = await call(`${P}/import/he`, { token: at, method: 'POST', body: { stringsdict: '<plist version="1.0"><dict><key>sd.w</key><dict><key>NSStringFormatSpecTypeKey</key><string>NSStringPluralRuleType</string><key>NSStringVariableWidthRuleType</key><dict></dict><key>other</key><string>x</string></dict></dict></plist>' } });
+  check('stringsdict width-variant (unknown dict key) rejected (400)', sdWidth.status === 400, String(sdWidth.status));
+  const sdDup = await call(`${P}/import/he`, { token: at, method: 'POST', body: { stringsdict: '<plist version="1.0"><dict><key>sd.d</key><dict><key>NSStringFormatSpecTypeKey</key><string>NSStringPluralRuleType</string><key>other</key><string>x</string><key>other</key><string>y</string></dict></dict></plist>' } });
+  check('stringsdict duplicate category rejected (400)', sdDup.status === 400, String(sdDup.status));
+  const sdBranchOut = await (await fetch(`${API}${P}/export/he/stringsdict?branch=resx-branch`, { headers: { Authorization: `Bearer ${at}` } })).text();
+  check('stringsdict export scopes to the named branch', !sdBranchOut.includes('sd.cats'), sdBranchOut.slice(0, 200));
+
   // Import dry-run preview: same parsing/grants/locks as a real import, strictly read-only.
   await call(`${P}/import/he`, { token: at, method: 'POST', body: { entries: { 'pv.chg': 'old', 'pv.same': 'same', 'pv.lock': 'orig' } } });
   const pvKeys = (await call(`${P}/keys`, { token: at })).json;
@@ -575,7 +603,7 @@ try {
     }
     return out;
   };
-  const extFor = { csv: '.csv', android: '.xml', ios: '.strings', po: '.po', pot: '.pot', xliff: '.xlf', properties: '.properties', arb: '.arb', yaml: '.yaml', resx: '.resx' };
+  const extFor = { csv: '.csv', android: '.xml', ios: '.strings', stringsdict: '.stringsdict', po: '.po', pot: '.pot', xliff: '.xlf', properties: '.properties', arb: '.arb', yaml: '.yaml', resx: '.resx' };
   const bundleJson = await fetch(`${API}${P}/export-bundle/json`, { headers: { Authorization: `Bearer ${at}` } });
   const jsonEntries = readZip(Buffer.from(await bundleJson.arrayBuffer()));
   check('json bundle: zip content-type, attachment disposition, one entry per locale', bundleJson.status === 200 && (bundleJson.headers.get('content-type') || '').includes('application/zip') && (bundleJson.headers.get('content-disposition') || '').includes('fmt-json.zip') && jsonEntries.size === 2 && jsonEntries.has('en.json') && jsonEntries.has('he.json'), `${bundleJson.status} ${bundleJson.headers.get('content-disposition')} ${[...jsonEntries.keys()].join(',')}`);

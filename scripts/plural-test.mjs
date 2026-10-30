@@ -130,6 +130,28 @@ try {
   check('locked failed import leaves isPlural and forms unchanged', ksL.find((k) => k.name === 'cart.android')?.isPlural === true && JSON.stringify(formsOf(ksL, 'cart.android', 'en')) === JSON.stringify({ one: 'one thing', other: 'many things' }));
   check('locked failed import leaves plain value unchanged', ksL.find((k) => k.name === 'cart.android').translations.find((t) => t.localeCode === 'en').value === 'plain string');
 
+  // iOS .stringsdict format layer (slice 5): same import machinery as
+  // Android - import upgrades metadata, export emits plist entries, and a
+  // .strings import over a plural key preserves stored forms.
+  const sdImp = await call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { stringsdict: '<plist version="1.0"><dict><key>cart.ios</key><dict><key>NSStringFormatSpecTypeKey</key><string>NSStringPluralRuleType</string><key>one</key><string>one apple</string><key>other</key><string>apples</string></dict></dict></plist>' } });
+  check('stringsdict import accepted', sdImp.status === 200 || sdImp.status === 201, `status=${sdImp.status}`);
+  const ksSd = await keys();
+  const sdKey = ksSd.find((k) => k.name === 'cart.ios');
+  check('stringsdict import sets isPlural and forms', sdKey?.isPlural === true && JSON.stringify(formsOf(ksSd, 'cart.ios', 'en')) === JSON.stringify({ one: 'one apple', other: 'apples' }));
+  check('stringsdict import sets plain value to the other form', sdKey?.translations.find((t) => t.localeCode === 'en')?.value === 'apples');
+  const sdOut = await (await fetch(`${API}/projects/${pid}/export/en/stringsdict`, { headers: { Authorization: `Bearer ${jwt}` } })).text();
+  check('stringsdict export emits a plist entry', sdOut.includes('<key>cart.ios</key>') && sdOut.includes('<string>NSStringPluralRuleType</string>') && sdOut.includes('<key>one</key>') && sdOut.includes('<string>one apple</string>'), sdOut.split('\n').find((l) => l.includes('cart.ios')) ?? '');
+  const sdOutAr = await (await fetch(`${API}/projects/${pid}/export/ar/stringsdict`, { headers: { Authorization: `Bearer ${jwt}` } })).text();
+  check('stringsdict export omits keys without forms in that locale', !sdOutAr.includes('cart.ios'), sdOutAr.slice(0, 160));
+  const sdStr = await call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { strings: '"cart.ios" = "plain ios";' } });
+  check('iOS .strings import over a plural key accepted', sdStr.status === 200 || sdStr.status === 201, `status=${sdStr.status}`);
+  const ksSd2 = await keys();
+  check('.strings import preserves pluralForms', JSON.stringify(formsOf(ksSd2, 'cart.ios', 'en')) === JSON.stringify({ one: 'one apple', other: 'apples' }));
+  check('.strings import updates plain value', ksSd2.find((k) => k.name === 'cart.ios').translations.find((t) => t.localeCode === 'en').value === 'plain ios');
+  const sdNoOther = await call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { stringsdict: '<plist version="1.0"><dict><key>sd.no.other</key><dict><key>NSStringFormatSpecTypeKey</key><string>NSStringPluralRuleType</string><key>one</key><string>x</string></dict></dict></plist>' } });
+  check('stringsdict import without "other" fails the key (consistent with API 400)', sdNoOther.status === 201 && sdNoOther.json.failed === 1, `${sdNoOther.status} ${JSON.stringify(sdNoOther.json)}`);
+  check('stringsdict missing-other key was not created', (await keys()).every((k) => k.name !== 'sd.no.other'));
+
   // isPlural=false clears stored forms explicitly.
   check('isPlural flip accepted', (await call(`/projects/${pid}/keys/${kid}`, { jwt, method: 'PATCH', body: { isPlural: false } })).status === 200);
   check('isPlural=false clears pluralForms', formsOf(await keys(), 'cart.items', 'en') === null);

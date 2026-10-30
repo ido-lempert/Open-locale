@@ -14,6 +14,7 @@ import { flattenJson, unflattenJson } from './json-flatten';
 import type { ImportJsonDto } from './dto';
 import { parseCsv, toCsv } from './csv';
 import { parseAndroidXml, toAndroidXml } from './android-xml';
+import { parseStringsdict, toStringsdict } from './stringsdict';
 import { parsePo, toPo, toPot } from './po';
 import { toTmx } from './tmx';
 import { parseXliff, toXliff } from './xliff';
@@ -393,6 +394,24 @@ export class TranslationsService {
     return toAndroidXml(rows, plurals);
   }
 
+  async exportStringsdict(userId: string, projectId: string, locale: string, branch?: string) {
+    await this.projects.getFor(userId, projectId);
+    const b = await this.branches.branchFor(projectId, branch);
+    const translations = await this.prisma.translation.findMany({
+      where: { projectId, localeCode: locale, key: { branchId: b.id, isPlural: true } },
+      include: { key: true },
+      orderBy: { key: { name: 'asc' } },
+    });
+    const plurals: [string, Record<string, string>][] = [];
+    for (const t of translations) {
+      const forms = t.pluralForms as Record<string, string> | null;
+      // Only plural keys WITH stored forms appear; a plural key without
+      // forms has no stringsdict representation (documented).
+      if (forms && Object.keys(forms).length > 0) plurals.push([t.key.name, forms]);
+    }
+    return toStringsdict(plurals);
+  }
+
   async exportIos(userId: string, projectId: string, locale: string, branch?: string) {
     const flat = (await this.exportJson(userId, projectId, locale, true, branch)) as Record<string, string>;
     return toIosStrings(Object.entries(flat).sort(([a], [b]) => a.localeCompare(b)));
@@ -449,6 +468,7 @@ export class TranslationsService {
       csv: { ext: '.csv', run: (l) => this.exportCsv(userId, projectId, l, mode, branch) },
       android: { ext: '.xml', run: (l) => this.exportAndroid(userId, projectId, l, branch) },
       ios: { ext: '.strings', run: (l) => this.exportIos(userId, projectId, l, branch) },
+      stringsdict: { ext: '.stringsdict', run: (l) => this.exportStringsdict(userId, projectId, l, branch) },
       po: { ext: '.po', run: (l) => this.exportPo(userId, projectId, l, branch) },
       pot: { ext: '.pot', run: (l) => this.exportPot(userId, projectId, l, branch) },
       xliff: { ext: '.xlf', run: (l) => this.exportXliff(userId, projectId, l, branch) },
@@ -490,6 +510,7 @@ export class TranslationsService {
       csv: { ext: '.csv', run: (l, t) => this.importCsv(userId, projectId, l, t, branch) },
       android: { ext: '.xml', run: (l, t) => this.importAndroid(userId, projectId, l, t, branch) },
       ios: { ext: '.strings', run: (l, t) => this.importIos(userId, projectId, l, t, branch) },
+      stringsdict: { ext: '.stringsdict', run: (l, t) => this.importStringsdict(userId, projectId, l, t, branch) },
       po: { ext: '.po', run: (l, t) => this.importPo(userId, projectId, l, t, branch) },
       pot: { ext: '.pot', run: (l, t) => this.importPot(userId, projectId, l, t, branch) },
       xliff: { ext: '.xlf', run: (l, t) => this.importXliff(userId, projectId, l, t, branch) },
@@ -620,10 +641,22 @@ export class TranslationsService {
       }
       return { entries: Object.fromEntries(rows), untranslatedSkipped: 0 };
     }
+    if (dto.stringsdict != null) {
+      const { plurals, rejected } = parseStringsdict(dto.stringsdict);
+      if (rejected > 0) {
+        throw new BadRequestException(`${rejected} .stringsdict ${rejected === 1 ? 'entry' : 'entries'} rejected: a missing <plist> root, non-plural or unknown dict keys, duplicate categories, inner markup, nested dicts and DOCTYPE/entity declarations are not supported`);
+      }
+      const pluralRows = plurals.map(([n, f]) => [n, f.other ?? ''] as [string, string]);
+      return {
+        entries: Object.fromEntries(pluralRows),
+        untranslatedSkipped: 0,
+        plurals: Object.fromEntries(plurals),
+      };
+    }
     if (dto.entries != null) {
       return { entries: dto.entries, untranslatedSkipped: 0 };
     }
-    throw new BadRequestException('Provide entries (JSON), csv, xml, strings, po, xliff, properties, arb, yaml or resx');
+    throw new BadRequestException('Provide entries (JSON), csv, xml, strings, stringsdict, po, xliff, properties, arb, yaml or resx');
   }
 
   // YAML parsing needs the target locale for its locale-root rule, so it is
@@ -643,6 +676,11 @@ export class TranslationsService {
 
   async importIos(userId: string, projectId: string, locale: string, strings: string, branch?: string) {
     return this.importJson(userId, projectId, locale, this.parseImport({ strings }).entries, branch);
+  }
+
+  async importStringsdict(userId: string, projectId: string, locale: string, stringsdict: string, branch?: string) {
+    const parsed = this.parseImport({ stringsdict });
+    return this.importJson(userId, projectId, locale, parsed.entries, branch, undefined, parsed.plurals);
   }
 
   async importPo(userId: string, projectId: string, locale: string, po: string, branch?: string) {

@@ -170,6 +170,7 @@ export const OPENAPI = {
     '/api/projects/{projectId}/export/{locale}': { get: p('Export a locale as JSON', 'import/export') },
     '/api/projects/{projectId}/export/{locale}/csv': { get: p('Export a locale as CSV', 'import/export') },
     '/api/projects/{projectId}/export/{locale}/android': { get: p('Export a locale as Android strings.xml (plural keys with stored forms as <plurals> CLDR-quantity items; plural keys without forms as plain <string>)', 'import/export') },
+    '/api/projects/{projectId}/export/{locale}/stringsdict': { get: p('Export plural keys with stored forms as an iOS .stringsdict (one-level NSStringPluralRuleType entries; plural keys without forms are omitted)', 'import/export') },
     '/api/projects/{projectId}/export/{locale}/ios': { get: p('Export a locale as iOS .strings', 'import/export') },
     '/api/projects/{projectId}/export/{locale}/po': { get: p('Export a locale as PO (gettext)', 'import/export') },
     '/api/projects/{projectId}/export/{locale}/xliff': { get: p('Export a locale as XLIFF 1.2', 'import/export') },
@@ -181,7 +182,7 @@ export const OPENAPI = {
     '/api/projects/{projectId}/export-bundle/{format}': { get: p('Export all locales as one store-only zip (one entry per locale; same read boundary as single-locale exports)', 'import/export') },
     '/api/projects/{projectId}/import-bundle/{format}': { post: p('Import a bundle zip (application/zip body; STORE-ONLY subset - compressed/deflated archives are rejected, not decompressed): one entry per locale, per-locale partial results with skips and failures reported', 'import/export', true) },
     '/api/projects/{projectId}/import/{locale}': {
-      post: p('Import translations (JSON, CSV, Android XML, iOS strings, PO, XLIFF, .properties, ARB or YAML; atomic). ?dryRun=true returns the same counters without writing (no snapshot, no import run)', 'import/export', true),
+      post: p('Import translations (JSON, CSV, Android XML, iOS strings/.stringsdict, PO, XLIFF, .properties, ARB or YAML; atomic). ?dryRun=true returns the same counters without writing (no snapshot, no import run)', 'import/export', true),
     },
     '/api/projects/{projectId}/imports': { get: p('List import runs', 'import/export') },
     '/api/projects/{projectId}/tm/suggest': { get: p('Translation memory suggestions', 'translations') },

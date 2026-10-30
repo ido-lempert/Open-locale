@@ -767,6 +767,41 @@ try {
     window.scrollTo(0, 0);
   });
 
+  // --- iOS .stringsdict via UI: picker option, accept attr, import, export blob ---
+  await page.select('select[aria-label="Import/export format"]', 'stringsdict');
+  const sdSel = await page.$eval('select[aria-label="Import/export format"]', (el) => el.value);
+  const sdAccept = await page.$eval('input[type=file]', (el) => el.accept || '');
+  check('format picker offers .stringsdict, selection sticks, file input accepts .stringsdict', sdSel === 'stringsdict' && sdAccept.includes('.stringsdict'), `select=${sdSel} accept=${sdAccept}`);
+  const sdFile = '/tmp/e2e-import.stringsdict';
+  writeFileSync(sdFile, '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n  <key>sd.uikey</key>\n  <dict>\n    <key>NSStringFormatSpecTypeKey</key>\n    <string>NSStringPluralRuleType</string>\n    <key>one</key>\n    <string>one ui apple</string>\n    <key>other</key>\n    <string>ui apples</string>\n  </dict>\n</dict>\n</plist>\n');
+  const sdInput = await page.$('input[type=file]');
+  await sdInput.uploadFile(sdFile);
+  const sdNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('(iOS .stringsdict,'), { timeout: 10000 }).then(() => true).catch(() => false);
+  check('stringsdict import via UI shows summary notice', sdNotice);
+  check('stringsdict-imported key appears in grid', await waitText('sd.uikey'));
+  await page.waitForSelector('input[aria-label="sd.uikey other form in en"]', { timeout: 10000 });
+  const sdGridForms = await page.evaluate(() => ({
+    one: document.querySelector('input[aria-label="sd.uikey one form in en"]')?.value,
+    other: document.querySelector('input[aria-label="sd.uikey other form in en"]')?.value,
+  }));
+  check('stringsdict import via UI lands forms in the editor category inputs', sdGridForms.one === 'one ui apple' && sdGridForms.other === 'ui apples', JSON.stringify(sdGridForms));
+  await page.type('input[aria-label="Search keys"]', 'sd.uikey');
+  await page.waitForFunction(() => (document.querySelector('.grid tbody')?.textContent || '').includes('sd.uikey') && !(document.querySelector('.grid tbody')?.textContent || '').includes('home.title'), { timeout: 10000 });
+  await shot('editor-46-stringsdict.png');
+  await page.evaluate(() => { const el = document.querySelector('input[aria-label="Search keys"]'); const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; setter.call(el, ''); el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.waitForFunction(() => (document.querySelector('.grid tbody')?.textContent || '').includes('home.title'), { timeout: 10000 });
+  await page.evaluate(() => {
+    window.__sdCapture = null;
+    const orig = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (b) => { window.__sdCapture = b; return orig(b); };
+  });
+  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.startsWith('Export'))?.click());
+  await page.waitForFunction(() => !!window.__sdCapture, { timeout: 10000 });
+  const sdExport = await page.evaluate(() => window.__sdCapture.text());
+  check('stringsdict export via UI emits a plist entry for the imported key',
+    sdExport.includes('<plist version="1.0">') && sdExport.includes('<key>sd.uikey</key>') && sdExport.includes('<string>NSStringPluralRuleType</string>') && sdExport.includes('<string>ui apples</string>'),
+    sdExport.split('\n').find((l) => l.includes('sd.uikey')) ?? '');
+
   // --- Import format conflict handling: a deliberate format choice is never overridden ---
   const conflictPoFile = '/tmp/e2e-conflict.po';
   writeFileSync(conflictPoFile, 'msgid "conflict.po"\nmsgstr "conflict fixture"\n');

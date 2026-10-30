@@ -49,6 +49,12 @@ export class TranslationsController {
     return this.translations.exportAndroid(user.userId, projectId, locale, branch);
   }
 
+  @Get('export/:locale/stringsdict')
+  @Header('Content-Type', 'text/xml; charset=utf-8')
+  exportStringsdict(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
+    return this.translations.exportStringsdict(user.userId, projectId, locale, branch);
+  }
+
   @Get('export/:locale/ios')
   @Header('Content-Type', 'text/plain; charset=utf-8')
   exportIos(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
@@ -141,7 +147,8 @@ export class TranslationsController {
     if (dto.csv != null) return this.translations.importCsv(user.userId, projectId, locale, dto.csv, branch);
     if (dto.xml != null) return this.translations.importAndroid(user.userId, projectId, locale, dto.xml, branch);
     if (dto.strings != null) return this.translations.importIos(user.userId, projectId, locale, dto.strings, branch);
+    if (dto.stringsdict != null) return this.translations.importStringsdict(user.userId, projectId, locale, dto.stringsdict, branch);
     if (dto.entries != null) return this.translations.importJson(user.userId, projectId, locale, dto.entries, branch);
-    throw new BadRequestException('Provide entries (JSON), csv, xml, strings, po, pot, xliff, properties, arb, yaml or resx');
+    throw new BadRequestException('Provide entries (JSON), csv, xml, strings, stringsdict, po, pot, xliff, properties, arb, yaml or resx');
   }
 }
