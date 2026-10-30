@@ -51,6 +51,7 @@ async function bootstrap() {
     exclude: [
       { path: 'embed/projects/:projectId', method: RequestMethod.GET },
       { path: 'embed/frame.js', method: RequestMethod.GET },
+      { path: 'embed/host.js', method: RequestMethod.GET },
       { path: 'embed/frame.css', method: RequestMethod.GET },
     ],
   });

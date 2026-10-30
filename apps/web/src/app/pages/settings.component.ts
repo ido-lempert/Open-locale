@@ -139,7 +139,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
         </section>
         <section class="panel">
           <h2>In-context embedding</h2>
-          <p class="muted">Origins allowed to embed the in-context editor (served by the API at /embed/projects/{{ projectId }}) in an iframe and exchange messages with it. Bare origins only (https://app.example.com - no path or trailing slash). The embedded frame answers only these origins and never exposes your session to the host page. Changes here require a signed-in session, not an API token.</p>
+          <p class="muted">Origins allowed to embed the in-context editor (served by the API at /embed/projects/{{ projectId }}) in an iframe and exchange messages with it. Bare origins only (https://app.example.com - no path or trailing slash). The embedded frame answers only these origins and never exposes your session to the host page. Serve /embed/host.js from the API on your page and call OpenLocaleEmbed.init with your iframe element to run the handshake and click-to-locate annotated elements (data-ol-key). Changes here require a signed-in session, not an API token.</p>
           <ul class="locale-list">
             @for (o of project()?.embedOrigins ?? []; track o) {
               <li>

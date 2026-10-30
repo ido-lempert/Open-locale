@@ -20,6 +20,14 @@ export class EmbedController {
       .send(FRAME_JS);
   }
 
+  @Get('host.js')
+  hostJs(@Res() res: Response) {
+    res
+      .type('application/javascript')
+      .setHeader('Cache-Control', 'no-cache')
+      .send(HOST_JS);
+  }
+
   @Get('frame.css')
   frameCss(@Res() res: Response) {
     res.type('text/css').setHeader('Cache-Control', 'no-cache').send(FRAME_CSS);
@@ -63,6 +71,46 @@ li button{padding:.3rem .6rem;font:inherit}
 .conflict .cur{font-style:italic}
 form{display:flex;flex-direction:column;gap:.4rem;max-width:260px;margin-top:.5rem}
 input,button{font:inherit}
+`;
+
+// Host-side companion snippet. A customer's page includes this and calls
+// OpenLocaleEmbed.init({ iframe }); it runs the ping handshake, forwards
+// clicks on elements annotated with data-ol-key as ol:highlight messages,
+// and re-emits frame replies as CustomEvent('ol:embed'). Symmetric with the
+// frame's rules: postMessage targetOrigin is ALWAYS the iframe's own origin
+// (derived from iframe.src, never '*'), inbound replies are accepted only
+// from that iframe's contentWindow AND that exact origin, and no credential
+// ever appears in a message (the frame protocol sends none).
+const HOST_JS = `(() => {
+  const init = ({ iframe }) => {
+    if (!iframe || !iframe.contentWindow) throw new Error('OpenLocaleEmbed.init: an iframe element is required');
+    const target = new URL(iframe.src, location.href).origin;
+    let ready = false;
+    const send = (msg) => iframe.contentWindow.postMessage(Object.assign({ source: 'open-locale-host' }, msg), target);
+    window.addEventListener('message', (event) => {
+      if (event.source !== iframe.contentWindow) return;
+      if (event.origin !== target) return;
+      const d = event.data;
+      if (typeof d !== 'object' || d === null || d.source !== 'open-locale-embed' || typeof d.type !== 'string') return;
+      if (d.type === 'ol:pong') ready = true;
+      window.dispatchEvent(new CustomEvent('ol:embed', { detail: d }));
+    });
+    // Bounded handshake: 10 pings at 500ms, restarted on every iframe load.
+    const startPings = () => {
+      let n = 0;
+      const t = setInterval(() => { if (ready || ++n > 10) clearInterval(t); else send({ type: 'ol:ping' }); }, 500);
+    };
+    iframe.addEventListener('load', () => { ready = false; startPings(); });
+    startPings(); // init may run after the iframe already loaded
+    document.addEventListener('click', (ev) => {
+      const el = ev.target && ev.target.closest ? ev.target.closest('[data-ol-key]') : null;
+      const key = el && el.getAttribute('data-ol-key');
+      if (key && key.length <= 500) send({ type: 'ol:highlight', key });
+    }, true);
+    return { send, isReady: () => ready };
+  };
+  window.OpenLocaleEmbed = { init };
+})();
 `;
 
 // Protocol (mirrors docs/reviews/0030 and 0031): the frame answers only the

@@ -65,6 +65,18 @@ window.addEventListener('message', (e) => {
   }
 });
 </script></body></html>`;
+// Host page that uses the served /embed/host.js snippet instead of
+// hand-rolled postMessage: init runs the handshake, annotated elements
+// click-to-locate, replies arrive as CustomEvent('ol:embed').
+const sdkPage = (pid) => `<!doctype html><html><body>
+<span data-ol-key="hero.title">Hero title on the page</span>
+<iframe id="ol" src="${EMBED_ORIGIN}/embed/projects/${pid}" width="520" height="600"></iframe>
+<script src="${EMBED_ORIGIN}/embed/host.js"></script>
+<script>
+window.__embedEvents = [];
+window.addEventListener('ol:embed', (e) => window.__embedEvents.push(e.detail));
+window.addEventListener('load', () => { window.__handle = OpenLocaleEmbed.init({ iframe: document.getElementById('ol') }); });
+</script></body></html>`;
 const nestedPage = (pid) => `<!doctype html><html><body>
 <iframe id="ol" src="${EMBED_ORIGIN}/embed/projects/${pid}" width="520" height="600"></iframe>
 <script>
@@ -136,6 +148,7 @@ try {
     else if (req.url === '/two') res.end(twoFramePage(pid));
     else if (req.url === '/helper') res.end(helperPage);
     else if (req.url === '/nested') res.end(nestedPage(pid));
+    else if (req.url === '/sdk') res.end(sdkPage(pid));
     else if (req.url.startsWith('/beacon')) res.end('ok');
     else res.end('x');
   });
@@ -238,6 +251,29 @@ try {
     return false;
   })();
   check('nested chain works when every ancestor is allowlisted', beaconed);
+
+  // ---- host.js snippet (slice 21): served asset + real handshake/click ----
+  const hostJs = await fetch(`${EMBED_ORIGIN}/embed/host.js`);
+  check('host.js served as javascript with no-cache', hostJs.status === 200 && (hostJs.headers.get('content-type') || '').includes('javascript') && (hostJs.headers.get('cache-control') || '').includes('no-cache'));
+  await page.goto(`${HOST1}/sdk`, { waitUntil: 'networkidle0' });
+  const sdkPong = await page.waitForFunction(
+    () => (window.__embedEvents || []).some((d) => d && d.type === 'ol:pong'),
+    { timeout: 20000 }, ).then(() => true).catch(() => false);
+  check('host.js runs the handshake: pong arrived as an ol:embed event', sdkPong);
+  await page.click('span[data-ol-key]');
+  const sdkHl = await page.waitForFunction(
+    () => (window.__embedEvents || []).some((d) => d && d.type === 'ol:highlighted' && d.key === 'hero.title' && d.found === true),
+    { timeout: 10000 }, ).then(() => true).catch(() => false);
+  check('click on a data-ol-key element highlights in the frame (found=true)', sdkHl);
+  const beforeForged = await page.evaluate(() => window.__embedEvents.length);
+  await page.evaluate(() => {
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { source: 'open-locale-embed', type: 'ol:pong', keys: 99 },
+      origin: 'https://evil.example.com', source: null,
+    }));
+  });
+  await new Promise((r) => setTimeout(r, 800));
+  check('host.js ignores forged messages (wrong origin/source)', (await page.evaluate(() => window.__embedEvents.length)) === beforeForged);
 
   // Revocation: remove all origins; a fresh load must be blocked by CSP.
   await call(`/projects/${pid}`, { jwt, method: 'PATCH', body: { embedOrigins: [] } });
