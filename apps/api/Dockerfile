@@ -8,6 +8,7 @@ RUN npm ci && npx prisma generate && npx nx build api
 
 # Runtime stage
 FROM node:22-alpine
+RUN apk add --no-cache openssl
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app/node_modules ./node_modules

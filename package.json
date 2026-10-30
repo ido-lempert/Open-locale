@@ -4,6 +4,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "test:integration": "node scripts/phase0-db-test.mjs",
+    "test:docker": "node scripts/docker-static-test.mjs",
     "test:authz": "node scripts/authz-http-test.mjs",
     "test:statuses": "node scripts/status-history-test.mjs",
     "test:comments": "node scripts/comments-test.mjs",

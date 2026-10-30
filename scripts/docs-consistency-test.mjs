@@ -54,7 +54,7 @@ check('spec documents the full surface', documented.size === implemented.size - 
 
 // 4. Security consistency: every operation except the two public auth routes
 //    and the spec itself must declare security.
-const publicOps = new Set(['POST /api/auth/signup', 'POST /api/auth/login', 'GET /api/openapi.json', 'GET /api/auth/oidc/start', 'POST /api/auth/oidc/callback', 'POST /api/auth/oidc/complete']);
+const publicOps = new Set(['POST /api/auth/signup', 'POST /api/auth/login', 'GET /api/openapi.json', 'GET /api/auth/oidc/start', 'POST /api/auth/oidc/callback', 'POST /api/auth/oidc/complete', 'GET /api/health']);
 const unsecured = [];
 for (const [path, ops] of Object.entries(OPENAPI.paths)) {
   for (const [method, op] of Object.entries(ops)) {

@@ -59,6 +59,10 @@ try {
   }
   if (!up) throw new Error('API did not start');
 
+  // Liveness probe: public, and proves a real database round-trip.
+  const health = await call('/health');
+  check('health endpoint reports HTTP + database up', health.status === 200 && health.json?.status === 'ok' && health.json?.db === 'up', JSON.stringify(health.json));
+
   // Unauthenticated access
   const noAuth = await call('/projects');
   check('unauthenticated request rejected with 401', noAuth.status === 401);

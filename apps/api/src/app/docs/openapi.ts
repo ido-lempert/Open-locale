@@ -38,6 +38,7 @@ export const OPENAPI = {
   },
   paths: {
     '/api/openapi.json': { get: pub('This OpenAPI document', 'meta') },
+    '/api/health': { get: pub('Liveness probe: HTTP serving plus a live database round-trip', 'meta') },
     '/api/auth/signup': { post: pub('Create an account', 'auth', true) },
     '/api/auth/login': { post: pub('Log in and receive a session JWT', 'auth', true) },
     '/api/auth/2fa/setup': { post: p('Generate a pending TOTP secret (session only; not enabled until verified)', 'auth') },

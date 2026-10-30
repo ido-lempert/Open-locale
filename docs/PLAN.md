@@ -39,8 +39,10 @@ mobile SDKs. Phases 2-3 will be refined against the API spec as they approach.
 | Local run | docker-compose: db, api, web |
 | CI verification | Real embedded PostgreSQL in tests |
 
-The Docker configuration is prepared but not yet executed; until then,
-database-backed checks run against a real PostgreSQL started by the test harness.
+The Docker configuration is statically verified (scripts/docker-static-test.mjs)
+but not yet executed - the development sandbox has no Docker daemon. Until a real
+`docker compose up` on a machine with Docker, database-backed checks run against
+a real PostgreSQL started by the test harness.
 The repository stays unlicensed for now: MIT is the recommendation.
 
 ## Phase 0 - foundation
