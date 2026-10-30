@@ -94,6 +94,54 @@ try {
   check('rejected ticket fragment scrubbed',!page.url().includes('#'));
   await page.setViewport({width:480,height:800});await page.screenshot({path:'/downloads/saml-browser-error-narrow.png'});
   check('SAML narrow error no horizontal overflow',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  // Deliver real API responses late across reused-route and destroyed-component
+  // boundaries. Transport interception delays delivery, not server validation.
+  for (const scenario of ['access-newer','access-destroy','pending-newer','complete-newer']) {
+    const twoFactor=scenario.startsWith('pending')||scenario.startsWith('complete');
+    await prisma.user.update({where:{id:user.id},data:{totpEnabled:twoFactor}});
+    const verifier='late-saml-verifier-'.repeat(4),challenge=createHash('sha256').update(verifier).digest('base64url');
+    const start=await (await post('/auth/saml/browser/start',{challenge})).json();
+    const loginUrl=new URL(start.url);
+    const requestId=inflateRawSync(Buffer.from(loginUrl.searchParams.get('SAMLRequest'),'base64')).toString().match(/ID="([^"]+)"/)[1];
+    const assertion=await (await fetch('http://127.0.0.1:5556/mint',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({inResponseTo:requestId})})).json();
+    const acs=await post('/auth/saml/acs',{...assertion,RelayState:loginUrl.searchParams.get('RelayState')});
+    const callbackUrl=acs.headers.get('location');
+    await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});
+    await page.evaluate(verifier=>{localStorage.clear();sessionStorage.setItem('ol.saml.verifier',verifier);},verifier);
+    let releaseResponse,heldResolve,deliveredResolve;
+    const releaseGate=new Promise(r=>releaseResponse=r),heldGate=new Promise(r=>heldResolve=r),delivered=new Promise(r=>deliveredResolve=r);
+    const endpoint=scenario.startsWith('complete')?'/auth/saml/complete':'/auth/saml/browser/redeem';
+    await page.setRequestInterception(true);
+    const intercept=async req=>{
+      if(req.method()==='POST'&&req.url().endsWith(endpoint)){
+        const response=await fetch(req.url(),{method:'POST',headers:{'content-type':'application/json'},body:req.postData()});
+        const body=await response.text();
+        check(`${scenario} held response is successful`,response.ok && (twoFactor&&!scenario.startsWith('complete')?!!JSON.parse(body).pendingToken:!!JSON.parse(body).accessToken));
+        heldResolve();await releaseGate;
+        await req.respond({status:response.status,contentType:'application/json',body});deliveredResolve();
+      }else await req.continue();
+    };
+    page.on('request',intercept);
+    await page.goto(callbackUrl,{waitUntil:'domcontentloaded'});
+    if(scenario.startsWith('complete')){
+      const code='MNOP-QRST-UVWX';
+      await prisma.recoveryCode.create({data:{userId:user.id,codeHash:createHash('sha256').update(code).digest('hex')}});
+      await page.waitForSelector('input[name=ssoCode]');await page.type('input[name=ssoCode]',code);await page.click('button.primary');
+    }
+    await Promise.race([heldGate,new Promise((_,reject)=>setTimeout(()=>reject(new Error(`No held ${scenario} response`)),10000))]);
+    const destroy=scenario.endsWith('destroy');
+    await page.evaluate(destroy=>{const c=window.ng.getComponent(document.querySelector('ol-saml-callback'));return c.router.navigateByUrl(destroy?'/login':'/auth/saml/callback#code=newer');},destroy);
+    await page.waitForSelector(destroy?'input[name=password]':'[role=alert]');
+    releaseResponse();await delivered;await new Promise(r=>setTimeout(r,300));
+    // Explicitly settle a rendering turn even when a stale pending-only result
+    // mutates a plain field without any signal transition.
+    await page.evaluate(()=>document.querySelector('h1')?.click());
+    await new Promise(r=>setTimeout(r,100));
+    check(`${scenario} late response cannot authenticate or navigate`,await page.evaluate(()=>!localStorage.getItem('ol_token')) && new URL(page.url()).pathname===(destroy?'/login':'/auth/saml/callback'));
+    check(`${scenario} preserves new screen without stale second-factor form`,await page.evaluate(()=>!document.querySelector('ol-saml-callback') || !window.ng.getComponent(document.querySelector('ol-saml-callback')).pendingToken) && !(await page.$('input[name=ssoCode]')) && (destroy?!!(await page.$('input[name=password]')):await page.evaluate(()=>document.querySelector('[role=alert]')?.textContent.includes('was not started in this tab'))));
+    if(scenario==='access-newer')await page.screenshot({path:'/downloads/saml-stale-response-narrow.png'});
+    page.off('request',intercept);await page.setRequestInterception(false);
+  }
   console.log(failures?'SAML BROWSER CHECKS FAILED':'ALL SAML BROWSER CHECKS PASSED');
   process.exitCode=failures?1:0;
 } catch(e){ console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1; }

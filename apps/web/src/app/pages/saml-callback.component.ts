@@ -24,13 +24,16 @@ import { ApiService } from '../api.service';
   `,
 })
 export class SamlCallbackComponent implements OnInit, OnDestroy {
+  // Each callback owns results only until navigation or a new attempt.
+  private generation = 0;
   private fragmentSubscription?: { unsubscribe(): void };
   busy = signal(true); error = signal(''); code = ''; pendingToken = '';
   constructor(private api: ApiService, private router: Router, private route: ActivatedRoute) {}
   ngOnInit() { this.fragmentSubscription = this.route.fragment.subscribe(() => { void this.consumeFragment(); }); }
-  ngOnDestroy() { this.fragmentSubscription?.unsubscribe(); }
+  ngOnDestroy() { this.generation++; this.pendingToken = ''; this.code = ''; this.fragmentSubscription?.unsubscribe(); }
   private async consumeFragment() {
-    this.pendingToken = ''; this.error.set(''); this.busy.set(true);
+    const generation = ++this.generation;
+    this.pendingToken = ''; this.code = ''; this.error.set(''); this.busy.set(true);
     const params = new URLSearchParams(window.location.hash.slice(1));
     window.history.replaceState(window.history.state, '', window.location.pathname);
     const verifier = sessionStorage.getItem('ol.saml.verifier');
@@ -39,15 +42,17 @@ export class SamlCallbackComponent implements OnInit, OnDestroy {
       const codes = params.getAll('code');
       if (!verifier || codes.length !== 1 || !codes[0]) throw new Error('This SAML sign-in is incomplete or was not started in this tab. Return to sign-in and try again.');
       const result = await this.api.redeemSamlBrowser(codes[0], verifier);
+      if (generation !== this.generation) return;
       if (result.error) throw new Error('SAML sign-in could not be verified. Return to sign-in and try again.');
       if (result.requiresTwoFactor && result.pendingToken) this.pendingToken = result.pendingToken;
       else if (result.accessToken) { this.api.token = result.accessToken; await this.router.navigate(['/projects'], { replaceUrl: true }); }
       else throw new Error('The sign-in response was incomplete.');
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Sign-in failed.'); }
-    finally { this.busy.set(false); }
+    } catch (e) { if (generation === this.generation) this.error.set(e instanceof Error ? e.message : 'Sign-in failed.'); }
+    finally { if (generation === this.generation) this.busy.set(false); }
   }
   async complete() {
     if (!this.pendingToken || this.busy()) return;
+    const generation = ++this.generation;
     this.busy.set(true); this.error.set('');
     const pending = this.pendingToken;
     // The server consumes the pending token even on a wrong code. A failure
@@ -55,11 +60,12 @@ export class SamlCallbackComponent implements OnInit, OnDestroy {
     this.pendingToken = '';
     try {
       const result = await this.api.completeSaml(pending, this.code.trim());
+      if (generation !== this.generation) return;
       if (!result.accessToken) throw new Error('The sign-in response was incomplete.');
       this.api.token = result.accessToken;
       await this.router.navigate(['/projects'], { replaceUrl: true });
-    } catch { this.error.set('Second-factor verification failed. Return to sign-in to start again.'); }
-    finally { this.code = ''; this.busy.set(false); }
+    } catch { if (generation === this.generation) this.error.set('Second-factor verification failed. Return to sign-in to start again.'); }
+    finally { if (generation === this.generation) { this.code = ''; this.busy.set(false); } }
   }
-  restart() { this.pendingToken = ''; this.code = ''; void this.router.navigate(['/login'], { replaceUrl: true }); }
+  restart() { this.generation++; this.pendingToken = ''; this.code = ''; void this.router.navigate(['/login'], { replaceUrl: true }); }
 }
