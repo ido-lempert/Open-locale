@@ -232,6 +232,13 @@ export const OPENAPI = {
       post: p('Restore the project to a snapshot (atomic point-in-time recovery; fields added after a snapshot was taken - e.g. pluralForms in older snapshots - are left untouched, so a restore is not an exact historical reconstruction)', 'snapshots'),
     },
     '/api/projects/{projectId}/activity': { get: p('Project activity feed', 'projects') },
+    '/api/projects/{projectId}/sync/preview': {
+      post: {
+        ...p('Preview caller-supplied flat JSON against stored branch/locale data (session admin only; no writes or remote verification)', 'sync', true),
+        security: [{ bearerAuth: [] }],
+        description: 'Requires explicit branch, locale, baselineJson, remoteJson and remoteSha. JSON file fields are raw strings, each max 32768 characters. Rejects duplicates, nested or plural data. Baseline and remote are unverified caller input. Response canApply=false; fingerprint is diagnostic, not an execution token.',
+      },
+    },
     '/api/projects/{projectId}/qa': { get: p('Run QA checks over translations', 'qa') },
     '/api/projects/{projectId}/reports/quality': { get: p('Quality dashboard: QA findings aggregated by type and locale', 'projects') },
     '/api/projects/{projectId}/reports/usage': { get: p('Usage dashboard: activity volume over a trailing window', 'projects') },
