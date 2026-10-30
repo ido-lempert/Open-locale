@@ -7,11 +7,13 @@
 set -o pipefail
 cd ~/Open-locale
 FAIL=0
+export NX_DAEMON=false NX_ISOLATE_PLUGINS=false
 # Preflight: two suites sharing a PG port poison each other whenever one dies
 # mid-run and leaves its postmaster behind. Fail loudly instead.
 dups=$(grep -h '^const PG_PORT = [0-9]' scripts/*-test.mjs scripts/e2e-visual.mjs | grep -o '[0-9]\{5\}' | sort | uniq -d)
 if [ -n "$dups" ]; then echo "SUITE-FAIL preflight (duplicate PG ports: $(echo $dups | tr '\n' ' '))"; FAIL=1; fi
 mkdir -p /tmp/sweep-legs
+python3 scripts/reaped-runner-test.py > /tmp/sweep-legs/reaped-runner.log 2>&1; rc=$?; [ "$rc" = "0" ] && echo "ok reaped-runner" || { echo "SUITE-FAIL reaped-runner (rc=$rc)"; FAIL=1; }
 for s in integration authz statuses comments activity imports screenshots tasks tm glossary qa formats webhooks tags apitokens docs cli sdk snapshots permissions review migration branches merge-concurrency ota reports incontext incontext-edit mt automations 2fa oidc saml oidc-browser saml-browser groups plural sync-preview sync-browser docker; do
   npm run --silent "test:$s" > "/tmp/sweep-legs/$s.log" 2>&1; rc=$?
   fails=$(grep -cE "^FAIL" "/tmp/sweep-legs/$s.log")
@@ -20,9 +22,9 @@ for s in integration authz statuses comments activity imports screenshots tasks 
   # silently mid-await (empty event loop) and must never count as green.
   if [ "$rc" != "0" ] || [ "$fails" != "0" ] || [ "$passes" = "0" ]; then echo "SUITE-FAIL $s (rc=$rc fail-lines=$fails pass-lines=$passes)"; FAIL=1; else echo "ok $s"; fi
 done
-npx nx test api --skip-nx-cache > /tmp/sweep-legs/unit-api.log 2>&1; rc=$?; [ "$rc" = "0" ] && echo "ok unit-api" || { echo "SUITE-FAIL unit-api (rc=$rc)"; FAIL=1; }
-npx nx test web --skip-nx-cache > /tmp/sweep-legs/unit-web.log 2>&1; rc=$?; [ "$rc" = "0" ] && echo "ok unit-web" || { echo "SUITE-FAIL unit-web (rc=$rc)"; FAIL=1; }
-npx nx build api --skip-nx-cache > /tmp/sweep-legs/build-api.log 2>&1; rc=$?; [ "$rc" = "0" ] && echo "ok build-api" || { echo "SUITE-FAIL build-api (rc=$rc)"; FAIL=1; }
-npx nx build web --skip-nx-cache > /tmp/sweep-legs/build-web.log 2>&1; rc=$?; [ "$rc" = "0" ] && echo "ok build-web" || { echo "SUITE-FAIL build-web (rc=$rc)"; FAIL=1; }
+python3 scripts/run-reaped.py node node_modules/nx/dist/bin/nx.js test api --skip-nx-cache > /tmp/sweep-legs/unit-api.log 2>&1; rc=$?; [ "$rc" = "0" ] && echo "ok unit-api" || { echo "SUITE-FAIL unit-api (rc=$rc)"; FAIL=1; }
+python3 scripts/run-reaped.py node node_modules/nx/dist/bin/nx.js test web --skip-nx-cache > /tmp/sweep-legs/unit-web.log 2>&1; rc=$?; [ "$rc" = "0" ] && echo "ok unit-web" || { echo "SUITE-FAIL unit-web (rc=$rc)"; FAIL=1; }
+python3 scripts/run-reaped.py node node_modules/nx/dist/bin/nx.js build api --skip-nx-cache > /tmp/sweep-legs/build-api.log 2>&1; rc=$?; [ "$rc" = "0" ] && echo "ok build-api" || { echo "SUITE-FAIL build-api (rc=$rc)"; FAIL=1; }
+python3 scripts/run-reaped.py node node_modules/nx/dist/bin/nx.js build web --skip-nx-cache > /tmp/sweep-legs/build-web.log 2>&1; rc=$?; [ "$rc" = "0" ] && echo "ok build-web" || { echo "SUITE-FAIL build-web (rc=$rc)"; FAIL=1; }
 echo "SWEEP-DONE fail=$FAIL"
 exit "$FAIL"
