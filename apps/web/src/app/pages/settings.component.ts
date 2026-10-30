@@ -242,6 +242,26 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           }
         </section>
         <section class="panel">
+          <h2>Single sign-on (SAML)</h2>
+          <p class="muted">Server-level sign-in configuration for this instance (set on the API server, read-only here). SAML lets team members sign in through your identity provider; accounts are created on first login, and members can also link an existing account from a signed-in session.</p>
+          @if (samlInfo(); as saml) {
+            @if (saml.configured) {
+              <ul class="locale-list">
+                <li>Status: <strong>configured</strong></li>
+                <li>Service provider entity ID: <code>{{ saml.entityId }}</code></li>
+                <li>Assertion consumer URL: <code>{{ saml.acsUrl }}</code></li>
+                <li>Identity provider entry point: <code>{{ saml.idpEntryPoint }}</code></li>
+                <li>SP metadata document: <code>{{ saml.metadataPath }}</code></li>
+                <li>AuthnRequest signing: <strong>{{ saml.requestSigning ? 'on' : 'off' }}</strong></li>
+              </ul>
+            } @else {
+              <p class="muted">Not configured. Set SAML_ENTRY_POINT and SAML_IDP_CERT on the API server to enable SAML sign-in; SAML_SP_PRIVATE_KEY and SAML_SP_SIGNING_CERT additionally enable signed requests.</p>
+            }
+          } @else {
+            <p class="muted">Loading SAML configuration...</p>
+          }
+        </section>
+        <section class="panel">
           <h2>Members</h2>
           <ul class="locale-list">
             @for (m of members(); track m.id) {
@@ -380,6 +400,7 @@ export class SettingsComponent implements OnInit {
   otaPubs = signal<OtaPublicationInfo[]>([]); otaBranch = signal('main'); branches = signal<BranchInfo[]>([]); otaNotice = signal('');
   memberEmail = signal(''); memberRole = signal('MEMBER'); memberLocales = signal(''); newStatus = signal('');
   localeTxCount = signal(0);
+  samlInfo = signal<{ configured: boolean; entityId?: string; acsUrl?: string; metadataPath?: string; idpEntryPoint?: string; requestSigning?: boolean } | null>(null);
   projectId = '';
 
   constructor(private api: ApiService, route: ActivatedRoute, private router: Router) {
@@ -399,6 +420,7 @@ export class SettingsComponent implements OnInit {
       this.branches.set(await this.api.listBranches(this.projectId));
       this.mtProviders.set(await this.api.listMtProviders(this.projectId));
       this.autoRules.set(await this.api.listAutomationRules(this.projectId));
+      this.samlInfo.set(await this.api.getSamlSpInfo());
       if (!this.mtProviderId() && this.mtProviders().length) this.mtProviderId.set(this.mtProviders()[0].id);
       if (!this.newRuleProvider() && this.mtProviders().length) this.newRuleProvider.set(this.mtProviders()[0].id);
       if (!this.mtLocale()) {

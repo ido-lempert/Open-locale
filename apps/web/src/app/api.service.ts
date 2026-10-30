@@ -173,6 +173,7 @@ export class ApiService {
   }
 
   listTokens() { return this.request<ApiTokenInfo[]>('/auth/tokens'); }
+  getSamlSpInfo() { return this.request<{ configured: boolean; entityId?: string; acsUrl?: string; metadataPath?: string; idpEntryPoint?: string; requestSigning?: boolean }>('/auth/saml/sp-info'); }
   get2faStatus() { return this.request<{ enabled: boolean; recoveryCodesRemaining: number }>('/auth/2fa/status'); }
   setup2fa(password: string) { return this.request<{ secret: string; otpauthUrl: string }>('/auth/2fa/setup', { method: 'POST', body: JSON.stringify({ password }) }); }
   enable2fa(password: string, code: string) { return this.request<{ enabled: boolean; recoveryCodes: string[] }>('/auth/2fa/enable', { method: 'POST', body: JSON.stringify({ password, code }) }); }

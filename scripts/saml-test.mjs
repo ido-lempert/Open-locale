@@ -94,6 +94,8 @@ try {
   const metaXml = await metaRes.text();
   check('metadata endpoint returns SP descriptor with entity ID and ACS', metaRes.status === 200 && metaXml.includes('entityID="open-locale"') && metaXml.includes('/api/auth/saml/acs'), `status=${metaRes.status}`);
   check('metadata advertises the SP signing certificate', metaXml.includes('use="signing"') && metaXml.includes(spCertB64.slice(0, 40)));
+  const spInfo = await call('/auth/saml/sp-info');
+  check('sp-info reports configured state with public values only', spInfo.json?.configured === true && spInfo.json?.entityId === 'open-locale' && spInfo.json?.acsUrl.endsWith('/api/auth/saml/acs') && spInfo.json?.idpEntryPoint === `${MOCK}/sso` && spInfo.json?.requestSigning === true && !('idpCert' in (spInfo.json ?? {})) && !('privateKey' in (spInfo.json ?? {})), JSON.stringify(spInfo.json).slice(0, 120));
   const login1 = await call('/auth/saml/login');
   const lu = new URL(login1.json.url);
   check('login returns URL on IdP entry point origin', lu.origin === MOCK && lu.pathname === '/sso', lu.origin + lu.pathname);

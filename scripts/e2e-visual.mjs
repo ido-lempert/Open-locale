@@ -39,7 +39,12 @@ try {
   const url = `postgresql://postgres:postgres@localhost:${PG_PORT}/openlocale_e2e`;
   execFileSync(join(root, 'node_modules', '.bin', 'prisma'), ['migrate', 'deploy'], { env: { ...process.env, DATABASE_URL: url }, stdio: 'pipe' });
   api = spawn(process.execPath, [join(root, 'dist', 'apps', 'api', 'main.js')], {
-    env: { ...process.env, DATABASE_URL: url, JWT_SECRET: 'e2e-secret', PORT: String(API_PORT) }, stdio: 'pipe' });
+    env: { ...process.env, DATABASE_URL: url, JWT_SECRET: 'e2e-secret', PORT: String(API_PORT),
+      // Display-only SAML config for the settings-panel leg: sp-info reads
+      // env without contacting any IdP, and no leg triggers the SAML client.
+      SAML_ENTRY_POINT: 'https://idp.example.com/sso', SAML_IDP_CERT: 'e2e-display-idp-cert',
+      SAML_IDP_ENTITY_ID: 'https://idp.example.com/idp', SAML_SP_ENTITY_ID: 'open-locale',
+      SAML_SP_PRIVATE_KEY: 'e2e-display-key', SAML_SP_SIGNING_CERT: 'e2e-display-sp-cert' }, stdio: 'pipe' });
   check('API up', await waitFor(`http://127.0.0.1:${API_PORT}/api/projects`));
   web = spawn(join(root, 'node_modules', '.bin', 'nx'), ['serve', 'web', '--port', String(WEB_PORT)], { cwd: root, stdio: 'pipe' });
   check('web dev server up', await waitFor(WEB, (r) => r.ok, 180));
@@ -2161,6 +2166,25 @@ try {
   await page.waitForSelector('.toolbar', { timeout: 10000 });
   await shot('editor-09-mobile-320.png');
   check('mobile screenshots captured', true);
+
+  // --- SAML panel in settings: read-only instance status (configured) ---
+  await page.setViewport({ width: 1366, height: 900 });
+  await page.goto(`${WEB}/projects/${projId}/settings`, { waitUntil: 'networkidle0' });
+  await page.waitForFunction(() => [...document.querySelectorAll('h2')].some((el) => el.textContent.includes('Single sign-on (SAML)')), { timeout: 10000 });
+  await page.waitForFunction(() => document.body.textContent.includes('Service provider entity ID'), { timeout: 10000 });
+  const samlPanel = await page.evaluate(() => {
+    const h2 = [...document.querySelectorAll('h2')].find((el) => el.textContent.includes('Single sign-on (SAML)'));
+    return h2.closest('section').textContent;
+  });
+  check('SAML panel shows configured status', samlPanel.includes('Status:') && samlPanel.includes('configured'));
+  check('SAML panel shows entity ID and ACS URL', samlPanel.includes('open-locale') && samlPanel.includes('/api/auth/saml/acs'));
+  check('SAML panel shows IdP entry point and metadata path', samlPanel.includes('https://idp.example.com/sso') && samlPanel.includes('/api/auth/saml/metadata'));
+  check('SAML panel shows request signing state', samlPanel.includes('AuthnRequest signing:') && samlPanel.includes('on'));
+  await page.evaluate(() => {
+    const h2 = [...document.querySelectorAll('h2')].find((el) => el.textContent.includes('Single sign-on (SAML)'));
+    h2.scrollIntoView({ block: 'center' });
+  });
+  await shot('settings-saml-panel.png');
 } catch (err) {
   // embedded-postgres can reject with `undefined` when the postmaster dies at
   // startup; through an async finally that exception exits 0 SILENTLY. Catch

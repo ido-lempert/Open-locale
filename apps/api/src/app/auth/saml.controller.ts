@@ -16,6 +16,11 @@ export class SamlController {
     return this.saml.login();
   }
 
+  @Get('sp-info')
+  spInfo() {
+    return this.saml.spInfo();
+  }
+
   @Get('metadata')
   @Header('content-type', 'application/samlmetadata+xml')
   metadata() {

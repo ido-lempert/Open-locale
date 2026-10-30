@@ -108,6 +108,22 @@ export class SamlService {
     return { url: await this.client().getAuthorizeUrlAsync(relayState, {}) };
   }
 
+  // Instance-level SAML status for the settings UI: reads env only (never
+  // constructs the client, never contacts the IdP). Everything returned is
+  // already public via the login redirect URL and the metadata document.
+  spInfo() {
+    if (!process.env.SAML_ENTRY_POINT || !process.env.SAML_IDP_CERT) return { configured: false as const };
+    const c = this.config();
+    return {
+      configured: true as const,
+      entityId: c.issuer,
+      acsUrl: c.callbackUrl,
+      metadataPath: '/api/auth/saml/metadata',
+      idpEntryPoint: c.entryPoint,
+      requestSigning: !!c.spPrivateKey,
+    };
+  }
+
   // SP metadata XML for IdP-side configuration. Advertises the ACS and, when
   // configured, the SP signing certificate. No decryption key is configured
   // in this slice, so no decryption KeyDescriptor is advertised.
