@@ -1,5 +1,5 @@
-// Real local browser -> mock IdP -> Angular callback -> built API + Postgres.
-// No external IdP/account acceptance. Requires nx build api.
+// Real local browser -> Angular file preview -> built API + Postgres.
+// No external provider requests. Requires nx build api.
 import { execFileSync, spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -65,6 +65,31 @@ try {
   page.off('request',intercept);await page.setRequestInterception(false);
   const after=await call(`${P}/export/en?flat=true`,undefined,token);
   check('browser comparison did not write local translations',after.title==='Local title'&&after.remote==='Old text'&&after.conflict==='Local edit');
+  // Caller strings must render literally, not execute as markup.
+  const hostile='<img src=x onerror="window.syncXss=true">';
+  await set('syncBaseline','{}');await set('syncRemote',JSON.stringify({unsafe:hostile}));await page.click('button[name=syncPreview]');
+  await page.waitForSelector('section[aria-label="Preview results"]');
+  check('caller file values rendered as literal text without HTML execution',await page.$eval('tbody',e=>e.textContent.includes('<img src=x')) && !(await page.$('tbody img')) && !await page.evaluate(()=>window.syncXss));
+  const many=Object.fromEntries(Array.from({length:121},(_,i)=>['key'+String(i).padStart(3,'0'),'remote '+i]));
+  await set('syncRemote',JSON.stringify(many));await page.click('button[name=syncPreview]');await page.waitForSelector('button[name=syncNext]');
+  check('large comparison renders only fifty rows',await page.$$eval('tbody tr',rows=>rows.length===50));
+  check('first page has disabled Previous',await page.$eval('button[name=syncPrevious]',e=>e.disabled));
+  await page.click('button[name=syncNext]');
+  await page.waitForFunction(()=>document.querySelector('tbody')?.textContent.includes('key050'));
+  check('next page shows distinct keys',await page.$eval('tbody',e=>e.textContent.includes('key050')&&!e.textContent.includes('key000')));
+  await page.click('button[name=syncNext]');
+  await page.waitForFunction(()=>document.querySelector('tbody')?.textContent.includes('key120'));
+  check('last page preserves remaining keys and disables Next',await page.$eval('tbody',e=>e.textContent.includes('key120')) && await page.$eval('button[name=syncNext]',e=>e.disabled));
+  await page.$eval('nav[aria-label="Comparison pages"]',e=>e.scrollIntoView({block:'end'}));
+  await page.screenshot({path:'/downloads/sync-preview-pagination.png'});
+  await set('syncRemote','{}');await page.click('button[name=syncPreview]');await page.waitForSelector('section[aria-label="Preview results"]');
+  check('new preview resets pagination to first page',!(await page.$('button[name=syncNext]')) && await page.$eval('tbody',e=>e.textContent.includes('title')));
+  // Drive Router navigation without reloading to prove reused scope resets.
+  const second=await call('/projects',{name:'Second scope',slug:'second-scope',locales:['en']},token);
+  await page.evaluate(id=>{const link=window.ng.getDirectives(document.querySelector('.back')).find(d=>d.router);return link.router.navigateByUrl('/projects/'+id+'/sync');},second.id);
+  await page.waitForFunction(id=>location.pathname==='/projects/'+id+'/sync',{},second.id);
+  await page.waitForSelector('textarea[name=syncBaseline]');
+  check('same-component project navigation resets file inputs',await page.$eval('[name=syncBaseline]',e=>e.value==='') && await page.$eval('[name=syncRemote]',e=>e.value==='') && !(await page.$('section[aria-label="Preview results"]')));
   await page.evaluate(t=>localStorage.setItem('ol_token',t),member.accessToken);
   await page.goto(`${WEB}/projects/${project.id}/sync`,{waitUntil:'networkidle0'});await page.waitForSelector('textarea[name=syncBaseline]');
   await set('syncSha','a'.repeat(40));await set('syncBaseline','{}');await set('syncRemote','{}');await page.click('button[name=syncPreview]');await page.waitForSelector('[role=alert]');

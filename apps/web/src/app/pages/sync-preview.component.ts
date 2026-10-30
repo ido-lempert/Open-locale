@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -213,7 +213,7 @@ import { ApiService, BranchInfo, LocalSyncPreview } from '../api.service';
                 </tr>
               </thead>
               <tbody>
-                @for (d of p.decisions; track d.key) {
+                @for (d of visibleDecisions(); track d.key) {
                   <tr [class.manual]="d.suggested === 'manual'">
                     <td>{{ d.key }}</td>
                     <td>{{ display(d.base) }}</td>
@@ -231,6 +231,32 @@ import { ApiService, BranchInfo, LocalSyncPreview } from '../api.service';
               </tbody>
             </table>
           </div>
+          @if (p.decisions.length > pageSize) {
+            <nav aria-label="Comparison pages" class="toolbar">
+              <button
+                type="button"
+                name="syncPrevious"
+                (click)="pageIndex.set(pageIndex() - 1)"
+                [disabled]="pageIndex() === 0"
+              >
+                Previous
+              </button>
+              <span aria-live="polite"
+                >Page {{ pageIndex() + 1 }} of {{ pageCount() }} ({{
+                  pageSize
+                }}
+                keys per page)</span
+              >
+              <button
+                type="button"
+                name="syncNext"
+                (click)="pageIndex.set(pageIndex() + 1)"
+                [disabled]="pageIndex() + 1 >= pageCount()"
+              >
+                Next
+              </button>
+            </nav>
+          }
         </section>
       }
     </main>
@@ -249,6 +275,21 @@ export class SyncPreviewComponent implements OnInit, OnDestroy {
   loading = signal(false);
   error = signal('');
   result = signal<LocalSyncPreview | null>(null);
+  readonly pageSize = 50;
+  pageIndex = signal(0);
+  pageCount = computed(() =>
+    Math.max(
+      1,
+      Math.ceil((this.result()?.decisions.length ?? 0) / this.pageSize),
+    ),
+  );
+  visibleDecisions = computed(
+    () =>
+      this.result()?.decisions.slice(
+        this.pageIndex() * this.pageSize,
+        (this.pageIndex() + 1) * this.pageSize,
+      ) ?? [],
+  );
   private generation = 0;
   constructor(
     private route: ActivatedRoute,
@@ -296,6 +337,7 @@ export class SyncPreviewComponent implements OnInit, OnDestroy {
   invalidate() {
     this.generation++;
     this.result.set(null);
+    this.pageIndex.set(0);
     this.error.set('');
     this.loading.set(false);
   }
@@ -323,6 +365,7 @@ export class SyncPreviewComponent implements OnInit, OnDestroy {
     this.loading.set(true);
     this.error.set('');
     this.result.set(null);
+    this.pageIndex.set(0);
     try {
       const p = await this.api.previewLocalSync(this.projectId, {
         branch: this.branch,
