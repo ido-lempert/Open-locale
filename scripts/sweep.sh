@@ -1,7 +1,9 @@
 #!/bin/bash
 # Full sweep with per-leg exit-code capture: a suite passes only if its
 # command exits 0, prints no FAIL lines AND ran at least one PASS check. No output is piped through
-# tail/grep in a way that could mask a nonzero exit.
+# tail/grep in a way that could mask a nonzero exit. The wrapper itself exits
+# nonzero when any leg fails (fail-closed): SWEEP-DONE fail=N and the process
+# exit code always agree.
 set -o pipefail
 cd ~/Open-locale
 FAIL=0
@@ -19,3 +21,4 @@ npx nx test web --skip-nx-cache > /tmp/sweep-legs/unit-web.log 2>&1; rc=$?; [ "$
 npx nx build api --skip-nx-cache > /tmp/sweep-legs/build-api.log 2>&1; rc=$?; [ "$rc" = "0" ] && echo "ok build-api" || { echo "SUITE-FAIL build-api (rc=$rc)"; FAIL=1; }
 npx nx build web --skip-nx-cache > /tmp/sweep-legs/build-web.log 2>&1; rc=$?; [ "$rc" = "0" ] && echo "ok build-web" || { echo "SUITE-FAIL build-web (rc=$rc)"; FAIL=1; }
 echo "SWEEP-DONE fail=$FAIL"
+exit "$FAIL"
