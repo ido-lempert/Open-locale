@@ -203,6 +203,28 @@ try {
   }
   check('comment count updates on the toggle', countOk);
   await shot('editor-13-comments.png');
+
+  // Comment threading + mentions (slice 12)
+  await page.type('input[name=commentDraft]', 'cc @demo@open-locale.dev please review');
+  await page.evaluate(() => { document.querySelector('.comment-form').requestSubmit(); });
+  await page.waitForFunction(
+    () => document.querySelector('.history-row .mention')?.textContent.includes('@demo@open-locale.dev'),
+    { timeout: 10000 },
+  );
+  check('mention renders highlighted', true);
+  await page.click('.history-row .history-list > li:first-child button[aria-label="Reply to comment"]');
+  await page.waitForFunction(() => document.body.textContent.includes('Replying to'), { timeout: 5000 });
+  check('reply button opens reply mode', true);
+  await page.type('input[name=commentDraft]', 'Confirmed with legal, all good');
+  await page.evaluate(() => { document.querySelector('.comment-form').requestSubmit(); });
+  await page.waitForFunction(
+    () => document.querySelector('.history-row .history-list.replies li')?.textContent.includes('Confirmed with legal'),
+    { timeout: 10000 },
+  );
+  check('reply renders nested under parent', true);
+  const replyMeta = await page.$eval('.history-row .history-list.replies li', (el) => el.textContent);
+  check('nested reply shows author', replyMeta.includes('Demo User'), replyMeta.slice(0, 80));
+  await shot('editor-51-comment-thread.png');
   await page.click('.grid tbody tr:first-child .comments-toggle');
 
   // Activity page
@@ -215,7 +237,10 @@ try {
   await shot('editor-14-activity.png');
   await page.select('select[aria-label="Filter by action"]', 'comment.added');
   await page.waitForFunction(
-    () => document.querySelectorAll('.activity-row').length === 1,
+    () => {
+      const rows = [...document.querySelectorAll('.activity-row')];
+      return rows.length > 0 && rows.every((r) => r.textContent.includes('commented on'));
+    },
     { timeout: 10000 },
   );
   check('activity filter narrows to comments', true);

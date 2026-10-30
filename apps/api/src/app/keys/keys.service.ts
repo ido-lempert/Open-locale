@@ -128,27 +128,54 @@ export class KeysService {
     if (!key) throw new NotFoundException('Key not found');
     return this.prisma.comment.findMany({
       where: { keyId, ...(locale ? { OR: [{ localeCode: locale }, { localeCode: null }] } : {}) },
-      include: { author: { select: { displayName: true, email: true } } },
+      include: {
+        author: { select: { displayName: true, email: true } },
+        mentions: { include: { user: { select: { id: true, displayName: true, email: true } } } },
+      },
       orderBy: { createdAt: 'asc' },
       take: 200,
     });
   }
 
-  async addComment(userId: string, projectId: string, keyId: string, body: string, locale?: string) {
+  // Mention syntax: @email-address of a project member. Unknown tokens and
+  // non-member addresses stay plain text; they are never an error.
+  private static readonly MENTION_RE = /@([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g;
+
+  async addComment(userId: string, projectId: string, keyId: string, body: string, locale?: string, parentId?: string) {
     const project = await this.projects.getFor(userId, projectId);
     const key = await this.prisma.key.findFirst({ where: { id: keyId, projectId } });
     if (!key) throw new NotFoundException('Key not found');
     if (locale && !project.locales.some((l) => l.code === locale)) {
       throw new NotFoundException(`Locale ${locale} is not part of this project`);
     }
+    if (parentId) {
+      const parent = await this.prisma.comment.findFirst({ where: { id: parentId, keyId } });
+      if (!parent) throw new NotFoundException('Parent comment not found');
+      if (parent.parentId) throw new BadRequestException('Replies can only be added to top-level comments');
+    }
+    const tokens = [...body.matchAll(KeysService.MENTION_RE)].map((m) => m[1].toLowerCase());
+    const mentioned = tokens.length
+      ? await this.prisma.teamMember.findMany({
+          where: { teamId: project.teamId, user: { email: { in: [...new Set(tokens)], mode: 'insensitive' } } },
+          select: { user: { select: { id: true, email: true } } },
+        })
+      : [];
     return this.prisma.$transaction(async (tx) => {
       const comment = await tx.comment.create({
-        data: { keyId, body, localeCode: locale ?? null, authorId: userId },
-        include: { author: { select: { displayName: true, email: true } } },
+        data: {
+          keyId, body, localeCode: locale ?? null, authorId: userId,
+          parentId: parentId ?? null,
+          mentions: { create: mentioned.map((m) => ({ userId: m.user.id })) },
+        },
+        include: {
+          author: { select: { displayName: true, email: true } },
+          mentions: { include: { user: { select: { id: true, displayName: true, email: true } } } },
+        },
       });
       await this.activity.record(tx, {
         projectId, actorId: userId, action: 'comment.added',
         keyName: key.name, localeCode: locale ?? undefined,
+        detail: mentioned.length ? { mentions: mentioned.map((m) => m.user.email) } : undefined,
       });
       return comment;
     });

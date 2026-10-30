@@ -29,6 +29,7 @@ model User {
   apiTokens   ApiToken[]
   translationChanges TranslationHistory[]
   comments    Comment[]
+  commentMentions CommentMention[]
   activityEvents ActivityEvent[]
   importRuns  ImportRun[]
   screenshots Screenshot[]
@@ -197,13 +198,33 @@ model Comment {
   localeCode String? // null = applies to all languages
   body       String
   authorId   String?  @db.Uuid
+  // One-level threading: a reply points at a top-level comment. Replies to
+  // replies are rejected by the service, so depth never exceeds one.
+  parentId   String?  @db.Uuid
   createdAt  DateTime @default(now())
 
-  key    Key   @relation(fields: [keyId], references: [id], onDelete: Cascade)
-  author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  key      Key              @relation(fields: [keyId], references: [id], onDelete: Cascade)
+  author   User?            @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  parent   Comment?         @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  Comment[]        @relation("CommentReplies")
+  mentions CommentMention[]
 
   @@index([keyId, createdAt])
+  @@index([parentId])
   @@map("comments")
+}
+
+// Resolved @email mentions: parsed from the body at create time and matched
+// against project members only - unknown tokens stay plain text.
+model CommentMention {
+  commentId String @db.Uuid
+  userId    String @db.Uuid
+
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([commentId, userId])
+  @@map("comment_mentions")
 }
 
 model TranslationHistory {

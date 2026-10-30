@@ -114,7 +114,9 @@ export interface ScreenshotMeta {
 
 export interface CommentEntry {
   id: string; keyId: string; localeCode: string | null; body: string; createdAt: string;
+  parentId: string | null;
   author: { displayName: string; email: string } | null;
+  mentions: { user: { id: string; displayName: string; email: string } }[];
 }
 
 const TOKEN_KEY = 'ol_token';
@@ -421,9 +423,9 @@ export class ApiService {
     const q = locale ? `?locale=${encodeURIComponent(locale)}` : '';
     return this.request<CommentEntry[]>(`/projects/${projectId}/keys/${keyId}/comments${q}`);
   }
-  addComment(projectId: string, keyId: string, body: string, locale?: string) {
+  addComment(projectId: string, keyId: string, body: string, locale?: string, parentId?: string) {
     return this.request<CommentEntry>(`/projects/${projectId}/keys/${keyId}/comments`, {
-      method: 'POST', body: JSON.stringify({ body, ...(locale ? { locale } : {}) }),
+      method: 'POST', body: JSON.stringify({ body, ...(locale ? { locale } : {}), ...(parentId ? { parentId } : {}) }),
     });
   }
   deleteComment(projectId: string, keyId: string, commentId: string) {

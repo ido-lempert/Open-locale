@@ -39,7 +39,7 @@ export class KeysController {
 
   @Post(':keyId/comments')
   addComment(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('keyId') keyId: string, @Body() dto: CreateCommentDto) {
-    return this.keys.addComment(user.userId, projectId, keyId, dto.body, dto.locale);
+    return this.keys.addComment(user.userId, projectId, keyId, dto.body, dto.locale, dto.parentId);
   }
 
   @Post(':keyId/screenshots')

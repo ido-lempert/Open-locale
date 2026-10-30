@@ -98,6 +98,46 @@ try {
   check('author deletes own comment', del.status === 200);
   const after = (await call(base, { token: at })).json;
   check('deleted comment gone', after.length === 1);
+
+  // Threading: one-level replies on the remaining comment c2
+  const reply = await call(base, { token: bt, method: 'POST', body: { body: 'Agreed, will shorten', parentId: c2.id } });
+  check('reply created with parentId', reply.status === 201 && reply.json.parentId === c2.id, `got ${reply.status}`);
+  const nested = await call(base, { token: at, method: 'POST', body: { body: 'nested', parentId: reply.json.id } });
+  check('reply-to-reply rejected (400)', nested.status === 400, `got ${nested.status}`);
+  const deadParent = await call(base, { token: at, method: 'POST', body: { body: 'orphan', parentId: c1.id } });
+  check('reply to deleted parent rejected (404)', deadParent.status === 404, `got ${deadParent.status}`);
+  const nonUuid = await call(base, { token: at, method: 'POST', body: { body: 'x', parentId: 'not-a-uuid' } });
+  check('malformed parentId rejected (400)', nonUuid.status === 400, `got ${nonUuid.status}`);
+  const key2 = (await call(`/projects/${proj.id}/keys`, { token: at, method: 'POST', body: { name: 'cta.cancel' } })).json;
+  const otherKeyComment = (await call(`/projects/${proj.id}/keys/${key2.id}/comments`, { token: at, method: 'POST', body: { body: 'other key comment' } })).json;
+  const crossKey = await call(base, { token: at, method: 'POST', body: { body: 'cross', parentId: otherKeyComment.id } });
+  check('reply to comment on another key rejected (404)', crossKey.status === 404, `got ${crossKey.status}`);
+
+  // Mentions: @email of a project member resolves; anything else stays text
+  const cUser = (await call('/auth/signup', { method: 'POST', body: { email: 'c@cm.io', password: 'password-c', displayName: 'Cara C' } })).json;
+  check('non-member fixture user exists', !!cUser.user?.id);
+  const withMention = await call(base, { token: at, method: 'POST', body: { body: 'cc @b@cm.io please review' } });
+  check('mention of member resolved', withMention.status === 201 && withMention.json.mentions?.length === 1 && withMention.json.mentions[0].user.email === 'b@cm.io', `got ${withMention.status}`);
+  const caseMention = await call(base, { token: at, method: 'POST', body: { body: 'CC @B@CM.IO upper' } });
+  check('mention match is case-insensitive', caseMention.status === 201 && caseMention.json.mentions?.length === 1, `got ${caseMention.status}`);
+  const notMember = await call(base, { token: at, method: 'POST', body: { body: 'cc @c@cm.io not on team' } });
+  check('existing user but non-member stays plain text', notMember.status === 201 && notMember.json.mentions?.length === 0, `got ${notMember.status}`);
+  const unknownTok = await call(base, { token: at, method: 'POST', body: { body: 'hello @world test' } });
+  check('unknown @token stays plain text', unknownTok.status === 201 && unknownTok.json.mentions?.length === 0, `got ${unknownTok.status}`);
+  const dup = await call(base, { token: at, method: 'POST', body: { body: '@b@cm.io and again @b@cm.io' } });
+  check('duplicate mention stored once', dup.status === 201 && dup.json.mentions?.length === 1, `got ${dup.status}`);
+  const listed = (await call(base, { token: at })).json;
+  check('list returns mentions and parentId', listed.every((cm) => Array.isArray(cm.mentions)) && listed.some((cm) => cm.parentId === c2.id));
+
+  const acts = (await call(`/projects/${proj.id}/activity?action=comment.added`, { token: at })).json;
+  const mentAct = acts.items?.find((e) => e.detail?.mentions?.includes('b@cm.io'));
+  check('mention recorded in activity detail', !!mentAct);
+
+  // Deleting a parent cascades its replies
+  const delParent = await call(`${base}/${c2.id}`, { token: at, method: 'DELETE' });
+  check('parent with replies deleted', delParent.status === 200, `got ${delParent.status}`);
+  const afterCascade = (await call(base, { token: at })).json;
+  check('replies cascade with parent', !afterCascade.some((cm) => cm.id === reply.json.id) && !afterCascade.some((cm) => cm.parentId === c2.id));
 } catch (err) {
   // embedded-postgres can reject with `undefined` when the postmaster dies at
   // startup; through an async finally that exception exits 0 SILENTLY. Catch

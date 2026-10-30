@@ -1,4 +1,4 @@
-import { ArrayMaxSize, IsArray, IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, Matches, MaxLength, Min } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength, Min } from 'class-validator';
 
 export class CreateKeyDto {
   @IsString()
@@ -89,6 +89,10 @@ export class CreateCommentDto {
   @IsNotEmpty()
   @MaxLength(2000)
   body!: string;
+
+  @IsOptional()
+  @IsUUID()
+  parentId?: string;
 
   @IsOptional()
   @IsString()

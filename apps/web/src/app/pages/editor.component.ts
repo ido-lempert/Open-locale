@@ -220,17 +220,37 @@ interface CellState {
                   @else {
                     @if (comments().length === 0) { <p class="muted">No comments yet.</p> }
                     <ul class="history-list">
-                      @for (cm of comments(); track cm.id) {
+                      @for (cm of rootComments(); track cm.id) {
                         <li>
                           <code>{{ cm.localeCode ?? 'all' }}</code>
-                          <span>{{ cm.body }}</span>
+                          <span>@for (seg of bodySegments(cm.body); track $index) {<!--
+                            -->@if (seg.mention) { <span class="mention">{{ seg.text }}</span> } @else { <span>{{ seg.text }}</span> }<!--
+                          --> }</span>
                           <span class="muted">{{ cm.author?.displayName ?? 'unknown' }} · {{ cm.createdAt | date:'short' }}</span>
+                          <button [attr.aria-label]="'Reply to comment'" (click)="replyTo.set(cm.id)">reply</button>
                           <button class="danger" [attr.aria-label]="'Delete comment'" (click)="deleteComment(k, cm.id)">&times;</button>
+                          @if (repliesOf(cm.id).length > 0) {
+                            <ul class="history-list replies">
+                              @for (rp of repliesOf(cm.id); track rp.id) {
+                                <li>
+                                  <code>{{ rp.localeCode ?? 'all' }}</code>
+                                  <span>@for (seg of bodySegments(rp.body); track $index) {<!--
+                                    -->@if (seg.mention) { <span class="mention">{{ seg.text }}</span> } @else { <span>{{ seg.text }}</span> }<!--
+                                  --> }</span>
+                                  <span class="muted">{{ rp.author?.displayName ?? 'unknown' }} · {{ rp.createdAt | date:'short' }}</span>
+                                  <button class="danger" [attr.aria-label]="'Delete comment'" (click)="deleteComment(k, rp.id)">&times;</button>
+                                </li>
+                              }
+                            </ul>
+                          }
                         </li>
                       }
                     </ul>
+                    @if (replyTo(); as rt) {
+                      <p class="muted">Replying to {{ commentAuthor(rt) }} <button (click)="replyTo.set(null)">cancel</button></p>
+                    }
                     <form class="comment-form" (ngSubmit)="addComment(k)">
-                      <input aria-label="New comment" placeholder="Add a comment…" maxlength="2000"
+                      <input aria-label="New comment" placeholder="Add a comment… (@email mentions a member)" maxlength="2000"
                         [ngModel]="commentDraft()" (ngModelChange)="commentDraft.set($event)" name="commentDraft" required />
                       <select aria-label="Comment scope" [ngModel]="commentLocale()" (ngModelChange)="commentLocale.set($event)" name="commentLocale">
                         <option value="">all languages</option>
@@ -309,6 +329,7 @@ export class EditorComponent implements OnInit {
   comments = signal<CommentEntry[]>([]);
   commentDraft = signal('');
   commentLocale = signal('');
+  replyTo = signal<string | null>(null);
   commentsLoading = signal(false);
   historyEntries = signal<(HistoryEntry & { locale: string })[]>([]);
   historyLoading = signal(false);
@@ -441,20 +462,42 @@ export class EditorComponent implements OnInit {
   async toggleComments(k: Key) {
     if (this.commentsFor() === k.id) { this.commentsFor.set(null); return; }
     this.commentsFor.set(k.id); this.commentsLoading.set(true); this.comments.set([]);
-    this.commentDraft.set(''); this.commentLocale.set('');
+    this.commentDraft.set(''); this.commentLocale.set(''); this.replyTo.set(null);
     try {
       this.comments.set(await this.api.listComments(this.projectId, k.id));
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load comments'); }
     finally { this.commentsLoading.set(false); }
   }
+  // One-level threads: roots render flat; replies nest under their parent.
+  rootComments() { return this.comments().filter((c) => !c.parentId); }
+  repliesOf(id: string) { return this.comments().filter((c) => c.parentId === id); }
+  commentAuthor(id: string) {
+    return this.comments().find((c) => c.id === id)?.author?.displayName ?? 'comment';
+  }
+  // Splits a body into plain and @email mention segments; every segment is
+  // rendered by interpolation, never innerHTML, so escaping is preserved.
+  bodySegments(body: string): { text: string; mention: boolean }[] {
+    const re = /@([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g;
+    const segs: { text: string; mention: boolean }[] = [];
+    let last = 0;
+    for (const m of body.matchAll(re)) {
+      const i = m.index ?? 0;
+      if (i > last) segs.push({ text: body.slice(last, i), mention: false });
+      segs.push({ text: m[0], mention: true });
+      last = i + m[0].length;
+    }
+    if (last < body.length) segs.push({ text: body.slice(last), mention: false });
+    return segs.length ? segs : [{ text: body, mention: false }];
+  }
   async addComment(k: Key) {
     const body = this.commentDraft().trim();
     if (!body) return;
     try {
-      await this.api.addComment(this.projectId, k.id, body, this.commentLocale() || undefined);
+      await this.api.addComment(this.projectId, k.id, body, this.commentLocale() || undefined, this.replyTo() ?? undefined);
       await this.reload();
       this.comments.set(await this.api.listComments(this.projectId, k.id));
       this.commentDraft.set('');
+      this.replyTo.set(null);
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to add comment'); }
   }
   // Translation memory: only for empty cells with a base-locale source.
