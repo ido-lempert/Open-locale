@@ -146,6 +146,13 @@ export class WebhooksService {
             // and every retry backoff. Failure aborts this hook before a socket.
             // It is not held over transport and does not eliminate later races.
             if (beforeAttempt) await beforeAttempt();
+            // Re-read captured routing before EVERY socket, including retries.
+            // Never switch an in-flight payload to a newly edited destination.
+            const current = await this.prisma.webhook.findUnique({ where: { id: hook.id } });
+            if (!current || current.projectId !== projectId || !current.active ||
+                !current.events.includes(event) || current.url !== hook.url ||
+                current.secret !== hook.secret)
+              throw new WebhookTargetError('Webhook subscription changed during delivery');
             attempts++;
             try {
               const res = await deliverPinned(url, pinned, {

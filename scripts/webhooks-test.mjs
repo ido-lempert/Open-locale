@@ -179,6 +179,26 @@ try {
   await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "leaseUntil"=clock_timestamp()+INTERVAL '60 seconds' WHERE id=${intent.id}::uuid`;
   const guardedJournal=await prisma.webhookDelivery.findFirst({where:{webhookId:repositoryHook.id,success:false,attempts:1}});
   check('suppressed retry journals one actual socket attempt not two',!!guardedJournal);
+  receivedBefore=received.length;failNext=1;afterReceipt=async()=>{afterReceipt=null;await prisma.webhook.update({where:{id:repositoryHook.id},data:{active:false}});};
+  let disabledDuringRetry=false;try{await deliverRepositoryWebhook(prisma,service,intent);}catch{disabledDuringRetry=true;}
+  check('subscription disabled after first failure suppresses retry socket',disabledDuringRetry&&received.length===receivedBefore+1);
+  await prisma.webhook.update({where:{id:repositoryHook.id},data:{active:true}});
+  receivedBefore=received.length;failNext=1;afterReceipt=async()=>{afterReceipt=null;await prisma.webhook.update({where:{id:repositoryHook.id},data:{url:`http://127.0.0.1:${HOOK_PORT}/changed`}});};
+  let reroutedDuringRetry=false;try{await deliverRepositoryWebhook(prisma,service,intent);}catch{reroutedDuringRetry=true;}
+  check('destination edit after first failure sends neither old nor new retry',reroutedDuringRetry&&received.length===receivedBefore+1);
+  await prisma.webhook.update({where:{id:repositoryHook.id},data:{url:repositoryHook.url}});
+  receivedBefore=received.length;failNext=1;afterReceipt=async()=>{afterReceipt=null;await prisma.webhook.update({where:{id:repositoryHook.id},data:{events:['translation.removed']}});};
+  let unsubscribedDuringRetry=false;try{await deliverRepositoryWebhook(prisma,service,intent);}catch{unsubscribedDuringRetry=true;}
+  check('event unsubscribed after first failure suppresses retry socket',unsubscribedDuringRetry&&received.length===receivedBefore+1);
+  await prisma.webhook.update({where:{id:repositoryHook.id},data:{events:repositoryHook.events}});
+  receivedBefore=received.length;failNext=1;afterReceipt=async()=>{afterReceipt=null;await prisma.webhook.update({where:{id:repositoryHook.id},data:{secret:'changed-fixture-secret'}});};
+  let secretDuringRetry=false;try{await deliverRepositoryWebhook(prisma,service,intent);}catch{secretDuringRetry=true;}
+  check('secret rotation after first failure suppresses stale signature retry',secretDuringRetry&&received.length===receivedBefore+1);
+  await prisma.webhook.update({where:{id:repositoryHook.id},data:{secret:repositoryHook.secret}});
+  receivedBefore=received.length;failNext=1;afterReceipt=async()=>{afterReceipt=null;await prisma.webhook.delete({where:{id:repositoryHook.id}});};
+  let deletedDuringRetry=false;try{await deliverRepositoryWebhook(prisma,service,intent);}catch{deletedDuringRetry=true;}
+  check('subscription deletion after first failure suppresses retry socket',deletedDuringRetry&&received.length===receivedBefore+1);
+  await prisma.webhook.create({data:repositoryHook});
   const resetStep=()=>prisma.repositoryLocalEffectIntent.update({where:{id:intent.id},data:{state:'pending',attempts:0,leaseToken:null,leaseUntil:null,finishedAt:null,availableAt:new Date('2020-01-01')}});
   await resetStep();receivedBefore=received.length;const stepped=await runRepositoryWebhookStep(prisma,service);const steppedRow=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:intent.id}});
   check('internal webhook step claims signs delivers and settles completed',stepped.status==='completed'&&steppedRow.state==='completed'&&steppedRow.attempts===1&&steppedRow.leaseToken===null&&steppedRow.finishedAt&&received.length===receivedBefore+1&&JSON.parse(received.at(-1).body).effectId===intent.id);

@@ -350,3 +350,9 @@ leases between receiver attempts suppress later sockets and journal only attempt
 actually made. Guard transactions end before transport; this reduces stale retry
 windows but cannot eliminate changes after the check. Normal non-repository callers
 omit the optional attempt guard. No worker/public route is enabled.
+
+The webhook pipeline now re-reads each captured subscription before every socket.
+Disabled/deleted/unsubscribed hooks, destination edits and signing-secret changes
+abort the captured delivery rather than sending to old or newly edited routing.
+This also applies to normal callers. No lock is held during transport, so changes
+immediately after the check remain a race; no stronger revocation guarantee is made.

@@ -100,7 +100,8 @@ add languages, manage keys and translations, export a file.
   guard added, not dispatch permission. Pending admission capped at10k/8MiB before writes. Internal one-step runner composed, no production handler/worker. Internal webhook adapter added with real signed receiver checks, no enabled worker
   or automation handler. Explicit internal webhook-channel step verified end-to-end; no combined worker
   or automation completion. Repository current-context rechecked per actual webhook attempt including retry.
-  See reviews0134-0154.
+  Webhook subscriptions rechecked per socket; stale captured routing aborted.
+  See reviews0134-0155.
 
 ## Phase 3 - advanced
 
