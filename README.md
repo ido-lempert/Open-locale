@@ -236,3 +236,11 @@ key update generation/length limit and translation row identity/version/value
 any future execution, including unchanged keys. Remote-only draft keys do not get
 invented database identities. Key metadata changes invalidate reviewed fingerprints.
 These are snapshot evidence only, not locks, reservations or apply permission.
+
+An internal `lockLocalPreconditions` transaction helper validates that evidence
+against locked existing key/translation rows under Serializable isolation. It
+rejects changed scope, exact key set, key metadata, row identity/version/value,
+newly created formerly absent translations and plural data. This helper has no
+HTTP route or apply caller and does no writes. It does not reserve absent rows;
+any eventual execution must authorize again, validate target/baseline and make
+writes in the same Serializable transaction, handling serialization conflicts.

@@ -87,7 +87,8 @@ add languages, manage keys and translations, export a file.
   yet. Draft API materializes locale-only set/removal plans without executing
   them. UI reviews materialized set/removal/current/draft values with independent
   pages. Same-snapshot key/row/metadata preconditions prepared for future guarded
-  execution, not an apply path. See reviews0134-0139.
+  execution, plus internal Serializable locked-row validation. No apply path
+  yet. See reviews0134-0140.
 
 ## Phase 3 - advanced
 

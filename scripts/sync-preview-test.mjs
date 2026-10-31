@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
+import { lockLocalPreconditions } from '../apps/api/src/app/github/local-preconditions.ts';
 // Granular permissions: real PostgreSQL + real HTTP API.
 // Roles (OWNER/ADMIN/MEMBER) and per-locale contributor access.
 // Run: node scripts/permissions-test.mjs
@@ -218,6 +219,37 @@ try {
   await prisma.key.update({where:{id:localKey.id},data:{maxLength:7}});
   check('key metadata change invalidates reviewed draft even if text unchanged',(await resolveRepository()).status===409);
   await prisma.key.update({where:{id:localKey.id},data:{maxLength:storedLocalKey.maxLength}});
+  resolvedRepositoryPlan.json=(await repositoryPreview()).json;
+  const validateLocal=expected=>prisma.$transaction(tx=>lockLocalPreconditions(tx,expected),{isolationLevel:'Serializable'});
+  const currentLocalPlan=(await resolveRepository()).json.localChangePlan;
+  check('internal serializable validator locks and validates real snapshot', (await validateLocal(currentLocalPlan.preconditions)).validatedKeys===currentLocalPlan.preconditions.keys.length);
+  let wrongIsolation=false;try{await prisma.$transaction(tx=>lockLocalPreconditions(tx,currentLocalPlan.preconditions));}catch(e){wrongIsolation=e.message.includes('serializable');}
+  check('local validator refuses non-serializable transaction',wrongIsolation);
+  const rejectsLocal=async(expected)=>{try{await validateLocal(expected);return false;}catch{return true;}};
+  check('local validator rejects wrong scope and missing key set',await rejectsLocal({...currentLocalPlan.preconditions,locale:'missing'})&&await rejectsLocal({...currentLocalPlan.preconditions,branchId:crypto.randomUUID()})&&await rejectsLocal({...currentLocalPlan.preconditions,keys:[]}));
+  await prisma.translation.update({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}},data:{version:{increment:1}}});
+  check('local validator rejects status-only row generation change',await rejectsLocal(currentLocalPlan.preconditions));
+  let livePlan=(await repositoryPreview()).json.localPreconditions;
+  const oldRow=await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}});
+  await prisma.translation.delete({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}});await prisma.translation.create({data:{keyId:oldRow.keyId,projectId:oldRow.projectId,localeCode:oldRow.localeCode,value:oldRow.value,version:oldRow.version}});
+  check('local validator rejects deleted recreated ABA row identity',await rejectsLocal(livePlan));
+  livePlan=(await repositoryPreview()).json.localPreconditions;const addedKey=await prisma.key.create({data:{projectId:project.id,branchId:storedLocalKey.branchId,name:'added-after-plan'}});
+  check('local validator rejects added key even without locale value',await rejectsLocal(livePlan));await prisma.key.delete({where:{id:addedKey.id}});
+  livePlan=(await repositoryPreview()).json.localPreconditions;await prisma.key.update({where:{id:localKey.id},data:{maxLength:13}});
+  check('local validator rejects changed key metadata',await rejectsLocal(livePlan));await prisma.key.update({where:{id:localKey.id},data:{maxLength:storedLocalKey.maxLength}});
+  const missingRowKey=await prisma.key.create({data:{projectId:project.id,branchId:storedLocalKey.branchId,name:'absent-row-check'}});livePlan=(await repositoryPreview()).json.localPreconditions;
+  await prisma.translation.create({data:{keyId:missingRowKey.id,projectId:project.id,localeCode:'en',value:'concurrent create'}});
+  check('local validator rejects newly created formerly absent locale row',await rejectsLocal(livePlan));await prisma.key.delete({where:{id:missingRowKey.id}});
+  livePlan=(await repositoryPreview()).json.localPreconditions;
+  let lockedRelease,lockedReached;const lockedGate=new Promise(r=>lockedRelease=r),lockedReady=new Promise(r=>lockedReached=r);
+  const locking=prisma.$transaction(async tx=>{await lockLocalPreconditions(tx,livePlan);lockedReached();await lockedGate;},{isolationLevel:'Serializable',timeout:10000});await lockedReady;
+  let writerDone=false;const blockedWriter=prisma.translation.update({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}},data:{version:{increment:1}}}).then(()=>writerDone=true);await new Promise(r=>setTimeout(r,100));
+  check('validated existing translation row blocks concurrent writer until transaction ends',!writerDone);lockedRelease();await locking;await blockedWriter;
+  check('blocked writer completes after validator transaction releases locks',writerDone);
+  const rollbackVersion=(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).version;
+  try{await prisma.$transaction(async tx=>{await tx.translation.update({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}},data:{value:'must rollback'}});await lockLocalPreconditions(tx,{...livePlan,locale:'missing'});},{isolationLevel:'Serializable'});}catch{}
+  check('failed validation rolls back transaction writes atomically',(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).value==='edited'&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).version===rollbackVersion);
+
   resolvedRepositoryPlan.json=(await repositoryPreview()).json;
   check('repository resolution carries comparison provenance not apply authority',repositoryDraft.json.source==='explicit-repository-preview-resolution'&&repositoryDraft.json.baselineVersion===2&&repositoryDraft.json.targetId===target.id&&repositoryDraft.json.baselineVerified===true&&repositoryDraft.json.remoteVerified===true&&repositoryDraft.json.canApply===false&&repositoryDraft.json.localTranslationsChanged===false&&repositoryDraft.json.remoteWritten===false);
   const absentRepositoryDraft=await resolveRepository({choices:{...repositoryChoices,fromRepo:'local'}});
