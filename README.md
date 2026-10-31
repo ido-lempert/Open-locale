@@ -204,3 +204,16 @@ apply. Conflicts and deletions remain manual. The target screen compares these
 three sources, shows missing versus empty values and manual-review rows, and pages
 comparisons in groups of 50. This screen has no apply, import or push action.
 Refreshing the comparison rereads the remote file.
+
+### Repository comparison draft resolution
+
+Session admins can POST `expectedRevision`, the reviewed `expectedFingerprint`
+and explicit `choices` (`base`, `local`, `remote`) for every differing key to
+`/api/projects/:projectId/sync/repository-targets/:targetId/resolve-preview`.
+The server recomputes the accepted baseline, current stored local scope and fresh
+verified remote bytes. Changed target/baseline/local row generation/remote bytes
+return409; missing/extra/invalid choices return400. A selected missing value
+omits that key from draft JSON only. Response includes exact JSON, SHA256 digest,
+counts and comparison provenance, with `canApply=false`. No local import,
+repository write, baseline advance or sync/diagnostic record. No UI for repository
+draft resolution yet; repository comparison remains read-only.

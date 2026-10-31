@@ -82,7 +82,9 @@ add languages, manage keys and translations, export a file.
 - GitHub integration: two-way sync between a repo and a project.
   Current bounded slice: target screen previews accepted baseline, stored local
   translations and fresh verified remote bytes, with manual-review rows and
-  pagination. No apply or two-way synchronization yet. See review0134.
+  pagination. API-only explicit draft resolution recomputes sources and checks
+  reviewed fingerprint before preparing bytes. No apply or two-way synchronization
+  yet. See reviews0134-0135.
 
 ## Phase 3 - advanced
 

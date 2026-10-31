@@ -20,6 +20,7 @@ import {
 } from '@nestjs/common';
 import {
   IsInt,
+  IsObject,
   IsNotEmpty,
   IsString,
   Matches,
@@ -43,6 +44,7 @@ import {
   RepositoryReadUnavailable,
 } from './repository-reader';
 import { parseSyncJson } from './sync-preview';
+import { resolvePlan, ResolutionChoice } from './resolve-preview';
 import { createHash } from 'node:crypto';
 import {
   LocalSyncPreviewModule,
@@ -68,6 +70,10 @@ class AcceptBaselineDto extends RevisionDto {
   @IsString() @Matches(/^[a-f0-9]{40}$/) expectedRemoteSha!: string;
   @IsString() @Matches(/^[a-f0-9]{64}$/) expectedContentDigest!: string;
   @IsInt() @Min(0) @Max(2147483646) expectedBaselineVersion!: number;
+}
+class ResolveRepositoryDto extends RevisionDto {
+  @IsString() @Matches(/^[a-f0-9]{64}$/) expectedFingerprint!: string;
+  @IsObject() choices!: Record<string, ResolutionChoice>;
 }
 const posture = {
   source: 'repository-target-configuration',
@@ -329,6 +335,41 @@ export class RepositoryTargetsService {
       remoteWritten: false,
     };
   }
+  async resolve(
+    user: AuthPrincipal,
+    projectId: string,
+    id: string,
+    input: ResolveRepositoryDto,
+  ) {
+    // Recompute all three sources from authorized scope, never caller files.
+    const plan = await this.preview(user, projectId, id, input.expectedRevision);
+    if (plan.fingerprint !== input.expectedFingerprint)
+      throw new ConflictException('Repository preview changed; review a fresh comparison');
+    try {
+      return {
+        ...resolvePlan(plan, input.choices, input.expectedFingerprint),
+        source: 'explicit-repository-preview-resolution',
+        projectId,
+        targetId: id,
+        targetRevision: plan.targetRevision,
+        branch: plan.branch,
+        locale: plan.locale,
+        baselineVersion: plan.baselineVersion,
+        baselineSha: plan.baselineSha,
+        remoteSha: plan.remoteSha,
+        baselineProvenanceVerified: true,
+        baselineVerified: true,
+        remoteVerified: true,
+        canApply: false,
+        localTranslationsChanged: false,
+        remoteWritten: false,
+      };
+    } catch {
+      throw new BadRequestException(
+        'Expected one valid explicit choice per differing key within flat JSON bounds',
+      );
+    }
+  }
   async baseline(user: AuthPrincipal, projectId: string, id: string) {
     await this.authorize(user, projectId);
     const target = await this.prisma.repositorySyncTarget.findFirst({
@@ -466,6 +507,16 @@ export class RepositoryTargetsController {
     @Body() input: RevisionDto,
   ) {
     return this.targets.preview(user, projectId, id, input.expectedRevision);
+  }
+  @Post(':targetId/resolve-preview')
+  @Header('Cache-Control', 'no-store')
+  resolve(
+    @CurrentUser() user: AuthPrincipal,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Param('targetId', new ParseUUIDPipe()) id: string,
+    @Body() input: ResolveRepositoryDto,
+  ) {
+    return this.targets.resolve(user, projectId, id, input);
   }
   @Get(':targetId/baseline')
   @Header('Cache-Control', 'no-store')
