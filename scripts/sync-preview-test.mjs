@@ -2,6 +2,8 @@ import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 const writerSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/local-value-writer.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
 const {writeExistingLocalValues}=await import('data:text/javascript;base64,'+Buffer.from(writerSource).toString('base64'));
+const transactionSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-local-transaction.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
+const {repositoryLocalTransaction}=await import('data:text/javascript;base64,'+Buffer.from(transactionSource).toString('base64'));
 import { lockRepositoryWriteScope } from '../apps/api/src/app/github/repository-write-scope.ts';
 import { lockLocalPreconditions } from '../apps/api/src/app/github/local-preconditions.ts';
 // Granular permissions: real PostgreSQL + real HTTP API.
@@ -274,6 +276,24 @@ try {
   let baselineWriteDone=false;const baselineWriter=prisma.repositorySyncBaseline.update({where:{targetId:target.id},data:{version:{increment:1}}}).then(()=>baselineWriteDone=true);await new Promise(r=>setTimeout(r,100));
   check('guard holds accepted baseline row through transaction',!baselineWriteDone);baselineRelease();await heldBaselineScope;await baselineWriter;
   check('baseline replacement completes after release and stale scope denied',baselineWriteDone&&await deniedScope(writeScope));await prisma.repositorySyncBaseline.update({where:{targetId:target.id},data:{version:scopeBaseline.version}});
+  const composeLocal=(await repositoryPreview()).json.localPreconditions;
+  const composeValues=Object.fromEntries(composeLocal.keys.filter(k=>k.translation).map(k=>[k.key,k.translation.value]));
+  const composeJson=JSON.stringify({...composeValues,local:'composed value'},null,2)+'\n';
+  const composeDigest=createHash('sha256').update(composeJson).digest('hex');
+  const composeFingerprint=(await repositoryPreview()).json.fingerprint;
+  const reviewedCompose={scope:writeScope,local:composeLocal,json:composeJson,contentDigest:composeDigest,previewFingerprint:composeFingerprint};
+  const compose=reviewed=>prisma.$transaction(tx=>repositoryLocalTransaction(tx,reviewed,composeDigest,composeFingerprint),{isolationLevel:'Serializable'});
+  const rejectCompose=async reviewed=>{try{await compose(reviewed);return false;}catch{return true;}};
+  const composeBeforeHistory=await prisma.translationHistory.count(),composeBeforeActivity=await prisma.activityEvent.count();
+  check('transaction composition rejects altered bytes digest fingerprint and local scope',await rejectCompose({...reviewedCompose,json:'{}'})&&await rejectCompose({...reviewedCompose,contentDigest:'f'.repeat(64)})&&await rejectCompose({...reviewedCompose,previewFingerprint:'f'.repeat(64)})&&await rejectCompose({...reviewedCompose,local:{...composeLocal,locale:'he'}}));
+  check('composition rejects current non-admin before mutation',await rejectCompose({...reviewedCompose,scope:{...writeScope,actorId:member.user.id}})&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).value==='edited');
+  try{await prisma.$transaction(async tx=>{await repositoryLocalTransaction(tx,reviewedCompose,composeDigest,composeFingerprint);throw new Error('composed rollback');},{isolationLevel:'Serializable'});}catch{}
+  check('composed post-write failure atomically restores value history activity',(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).value==='edited'&&await prisma.translationHistory.count()===composeBeforeHistory&&await prisma.activityEvent.count()===composeBeforeActivity);
+  const composed=await compose(reviewedCompose);
+  check('composition commits rederived exact draft operations under both guards',composed.updatedValues===1&&composed.draftContentDigest===composeDigest&&composed.previewFingerprint===composeFingerprint&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).value==='composed value');
+  check('composition replay fails stale local preconditions without duplicate audit',await rejectCompose(reviewedCompose)&&await prisma.translationHistory.count()===composeBeforeHistory+1&&await prisma.activityEvent.count()===composeBeforeActivity+1);
+  check('composition preserves accepted baseline and repository no-write posture',(await tc(baselinePath,'GET',undefined)).json.baseline.version===writeScope.baselineVersion&&composed.remoteWritten===false&&composed.baselineAdvanced===false);
+  await prisma.translation.update({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}},data:{value:'edited',version:{increment:1}}});
   const writerPreconditions=(await repositoryPreview()).json.localPreconditions;
   const beforeWriterRow=await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}});
   await prisma.translation.update({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}},data:{status:'REVIEWED',mtScore:88,mtProvider:'fixture'}});

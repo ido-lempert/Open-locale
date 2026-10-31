@@ -91,7 +91,8 @@ add languages, manage keys and translations, export a file.
   yet. Isolated existing-key locale-set writer with history/activity rollback
   tests; durable locale-removal audit added, production integration still open.
   Internal current-admin/target/baseline locked transaction guard added; no public
-  execution. See reviews0134-0143.
+  execution. Isolated exact-draft transaction composition added, missing production
+  effects/fresh-source execution integration remain. See reviews0134-0144.
 
 ## Phase 3 - advanced
 

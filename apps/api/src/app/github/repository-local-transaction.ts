@@ -1,0 +1,67 @@
+import { createHash } from 'node:crypto';
+import type { Prisma } from '@prisma/client';
+import { lockRepositoryWriteScope } from './repository-write-scope';
+import type { RepositoryWriteScope } from './repository-write-scope';
+import { localDraftPlan } from './local-draft-plan';
+import { writeExistingLocalValues } from './local-value-writer';
+import type { LocalPreconditions } from './local-preconditions';
+
+export interface ReviewedLocalDraft {
+  scope: RepositoryWriteScope;
+  local: LocalPreconditions;
+  json: string;
+  contentDigest: string;
+  previewFingerprint: string;
+}
+// Isolated composition, no public execution caller. Parent must obtain trusted
+// fresh reviewed sources and authenticate the actor. This does not read GitHub,
+// update TM, deliver webhooks/automations or advance a baseline.
+export async function repositoryLocalTransaction(
+  tx: Prisma.TransactionClient,
+  reviewed: ReviewedLocalDraft,
+  expectedDraftDigest: string,
+  expectedPreviewFingerprint: string,
+) {
+  // Preserve the reviewed values over asynchronous guard/lock acquisition.
+  reviewed = JSON.parse(JSON.stringify(reviewed));
+  if (
+    !/^[a-f0-9]{64}$/.test(expectedDraftDigest) ||
+    !/^[a-f0-9]{64}$/.test(expectedPreviewFingerprint) ||
+    reviewed.contentDigest !== expectedDraftDigest ||
+    reviewed.previewFingerprint !== expectedPreviewFingerprint ||
+    createHash('sha256').update(reviewed.json).digest('hex') !==
+      expectedDraftDigest
+  )
+    throw new Error('Reviewed repository draft binding changed');
+  const { scope, local } = reviewed;
+  if (
+    scope.projectId !== local.projectId ||
+    scope.branchId !== local.branchId ||
+    scope.branch !== local.branch ||
+    scope.locale !== local.locale
+  )
+    throw new Error('Repository draft local scope mismatch');
+  // Re-derive operations from exact draft bytes, never caller-supplied changes.
+  // Unsupported remote-only new keys fail here before any mutation.
+  const plan = localDraftPlan(
+    local.keys.map((k) => ({
+      key: k.key,
+      local: k.translation?.value ?? null,
+    })),
+    reviewed.json,
+    expectedPreviewFingerprint,
+  );
+  await lockRepositoryWriteScope(tx, scope);
+  const result = await writeExistingLocalValues(
+    tx,
+    local,
+    plan.changes,
+    scope.actorId,
+  );
+  return {
+    ...result,
+    draftContentDigest: expectedDraftDigest,
+    previewFingerprint: expectedPreviewFingerprint,
+    source: 'internal-repository-local-transaction' as const,
+  };
+}

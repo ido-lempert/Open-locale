@@ -263,3 +263,11 @@ transaction ends; stale/new requests fail. This is a transaction guard only, not
 an HTTP apply route, source of consent or complete execution service. The future
 caller still needs session authorization, fresh reviewed remote/draft checks,
 local preconditions, same-transaction writes and post-commit delivery handling.
+
+Internal `repositoryLocalTransaction` composes reviewed draft byte/digest/fingerprint
+binding, scope consistency, current locked admin/target/baseline guard and local
+snapshot/write helper in one Serializable transaction. Operations are re-derived
+from draft bytes, never supplied changes. Only existing keys supported, and a
+successful write makes replayed local preconditions stale. It has no public caller
+or fresh remote reader, TM update, webhook/automation delivery or sync-success
+record. Transactional groundwork only, not complete sync/apply integration.
