@@ -1,6 +1,6 @@
 import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiService } from '../api.service';
 
 @Component({
@@ -39,7 +39,7 @@ import { ApiService } from '../api.service';
     </header>
     <main>
       <p class="notice">
-        Link the identity you choose at the configured OIDC provider to your
+        Link the identity you choose at the configured {{ provider }} provider to your
         current account. This does not merge accounts or change project access.
         An identity linked to another account is rejected. You must confirm your
         current password first.
@@ -49,8 +49,9 @@ import { ApiService } from '../api.service';
       } @else if (configured()) {
         <p>
           Continue in this tab. Confirm the provider account you intend to link.
-          The sign-in callback completes the link and may ask for your account's
-          second factor.
+          The provider response links the identity before the browser handoff
+          finishes. You may then need your account's second factor. Closing the
+          callback or failing that check does not undo a validated link.
         </p>
         <form (ngSubmit)="start()">
           <label
@@ -62,7 +63,7 @@ import { ApiService } from '../api.service';
               autocomplete="current-password"
           /></label>
           <button
-            name="startOidcLink"
+            [attr.name]="isSaml ? 'startSamlLink' : 'startOidcLink'"
             class="primary"
             type="submit"
             [disabled]="busy()"
@@ -76,7 +77,7 @@ import { ApiService } from '../api.service';
         </p>
       } @else if (!error()) {
         <p role="status">
-          OIDC single sign-on is not configured on this instance.
+          {{ provider }} browser single sign-on is not configured on this instance.
         </p>
       }
       @if (error()) {
@@ -92,11 +93,16 @@ export class IdentityLinkComponent implements OnInit, OnDestroy {
   busy = signal(false);
   error = signal('');
   private alive = true;
-  constructor(private api: ApiService) {}
+  readonly isSaml: boolean;
+  readonly provider: string;
+  constructor(private api: ApiService, route: ActivatedRoute) {
+    this.isSaml = route.snapshot.data['provider'] === 'saml';
+    this.provider = this.isSaml ? 'SAML' : 'OIDC';
+  }
   async ngOnInit() {
     try {
-      const info = await this.api.getOidcInfo();
-      if (this.alive) this.configured.set(info.configured);
+      const configured = this.isSaml ? !!(await this.api.getSamlSpInfo()).browserEnabled : (await this.api.getOidcInfo()).configured;
+      if (this.alive) this.configured.set(configured);
     } catch {
       if (this.alive)
         this.error.set(
@@ -117,23 +123,31 @@ export class IdentityLinkComponent implements OnInit, OnDestroy {
     const password = this.password;
     this.password = '';
     // Remove previous same-tab attempt even when password verification fails.
-    sessionStorage.removeItem('ol.oidc.state');
+    const stateKey = this.isSaml ? 'ol.saml.verifier' : 'ol.oidc.state';
+    sessionStorage.removeItem(stateKey);
     try {
-      const result = await this.api.startOidcLink(password);
+      let verifier = '';
+      let challenge = '';
+      if (this.isSaml) {
+        verifier = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('');
+        const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+        challenge = btoa(String.fromCharCode(...digest)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      }
+      const result = this.isSaml ? await this.api.startSamlLink(password, challenge) : await this.api.startOidcLink(password);
       if (!this.alive) return;
-      const url = new URL(result.url),
-        states = url.searchParams.getAll('state');
-      if (
-        !['https:', 'http:'].includes(url.protocol) ||
-        states.length !== 1 ||
-        !states[0]
-      )
-        throw new Error('Invalid single sign-on authorization URL');
-      sessionStorage.setItem('ol.oidc.state', states[0]);
+      const url = new URL(result.url);
+      if (!['https:', 'http:'].includes(url.protocol)) throw new Error('Invalid single sign-on authorization URL');
+      if (this.isSaml) {
+        sessionStorage.setItem(stateKey, verifier);
+      } else {
+        const states = url.searchParams.getAll('state');
+        if (states.length !== 1 || !states[0]) throw new Error('Invalid single sign-on authorization URL');
+        sessionStorage.setItem(stateKey, states[0]);
+      }
       window.location.assign(url.toString());
     } catch (e) {
       if (this.alive) {
-        sessionStorage.removeItem('ol.oidc.state');
+        sessionStorage.removeItem(stateKey);
         this.error.set(
           e instanceof Error ? e.message : 'Could not start identity linking',
         );

@@ -20,6 +20,7 @@ export const appRoutes: Routes = [
   { path: 'auth/saml/callback', component: SamlCallbackComponent },
   { path: 'auth/oidc/callback', component: OidcCallbackComponent },
   { path: 'login', component: LoginComponent },
+  { path: 'account/link-saml', component: IdentityLinkComponent, data: { provider: 'saml' }, canActivate: [authGuard] },
   { path: 'account/link-oidc', component: IdentityLinkComponent, canActivate: [authGuard] },
   { path: 'projects', component: ProjectsComponent, canActivate: [authGuard] },
   { path: 'projects/:id', component: EditorComponent, canActivate: [authGuard] },

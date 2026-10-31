@@ -193,6 +193,13 @@ export class ApiService {
     if(!response.ok)throw new Error(typeof body.message==='string'?body.message:'Could not start identity linking');
     return body;
   }
+  async startSamlLink(password:string,challenge:string):Promise<{url:string}>{
+    // Fresh-password401 must not clear the caller's still-valid session.
+    const response=await fetch(`${this.base}/auth/saml/browser/start-link`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${this.token??''}`},body:JSON.stringify({password,challenge})});
+    const body=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(typeof body.message==='string'?body.message:'Could not start identity linking');
+    return body;
+  }
   startOidc() { return this.request<{ url: string }>('/auth/oidc/start'); }
   callbackOidc(code: string, state: string) {
     return this.request<{ accessToken?: string; requiresTwoFactor?: boolean; pendingToken?: string }>('/auth/oidc/callback', { method: 'POST', body: JSON.stringify({ code, state }) });
