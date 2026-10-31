@@ -1,3 +1,9 @@
+export type SyncResolutionChoice = 'base' | 'local' | 'remote';
+export interface SyncResolutionDraft {
+ json:string; contentDigest:string; previewFingerprint:string;
+ explicitChoices:number; outputKeys:number; absentKeys:number;
+ canApply:false; baselineVerified:false; remoteVerified:false;
+}
 export interface SyncPreviewRecord {
  id:string;projectId:string;branch:string;locale:string;fingerprint:string;remoteSha:string;createdAt:string;
  summary:{total:number;conflict:number;manual:number};
@@ -209,6 +215,7 @@ export class ApiService {
   }
   listSyncPreviewRecords(projectId:string){return this.request<{records:SyncPreviewRecord[];canApply:false}>(`/projects/${projectId}/sync/preview-records`);}
   previewLocalSync(projectId:string,input:{branch:string;locale:string;baselineJson:string;remoteJson:string;remoteSha:string}) { return this.request<LocalSyncPreview>(`/projects/${projectId}/sync/preview`,{method:'POST',body:JSON.stringify(input)}); }
+  resolveLocalSync(projectId:string,input:{branch:string;locale:string;baselineJson:string;remoteJson:string;remoteSha:string;expectedFingerprint:string;choices:Record<string,SyncResolutionChoice>}) { return this.request<SyncResolutionDraft>(`/projects/${projectId}/sync/resolve-preview`,{method:'POST',body:JSON.stringify(input)}); }
   async unlinkIdentity(id:string,password:string):Promise<{unlinked:true;signInRequired:true}>{
     // A wrong fresh password is not a revoked session.
     const response=await fetch(`${this.base}/auth/identities/${encodeURIComponent(id)}`,{method:'DELETE',headers:{'Content-Type':'application/json',Authorization:`Bearer ${this.token??''}`},body:JSON.stringify({password})});

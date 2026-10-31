@@ -2,7 +2,13 @@ import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
-import { ApiService, BranchInfo, LocalSyncPreview } from '../api.service';
+import {
+  ApiService,
+  BranchInfo,
+  LocalSyncPreview,
+  SyncResolutionChoice,
+  SyncResolutionDraft,
+} from '../api.service';
 
 @Component({
   selector: 'ol-sync-preview',
@@ -52,7 +58,7 @@ import { ApiService, BranchInfo, LocalSyncPreview } from '../api.service';
       }
       table {
         width: 100%;
-        min-width: 700px;
+        min-width: 1000px;
         border-collapse: collapse;
       }
       th,
@@ -67,8 +73,18 @@ import { ApiService, BranchInfo, LocalSyncPreview } from '../api.service';
         overflow-wrap: anywhere;
         white-space: pre-wrap;
       }
+      th:first-child,
+      td:first-child {
+        min-width: 120px;
+      }
+      td select {
+        min-width: 160px;
+      }
       .manual {
         background: #fff4e8;
+      }
+      .digest {
+        overflow-wrap: anywhere;
       }
       .muted {
         color: #56647b;
@@ -88,7 +104,11 @@ import { ApiService, BranchInfo, LocalSyncPreview } from '../api.service';
     <header class="bar">
       <a [routerLink]="['/projects', projectId]" class="back">&larr; Editor</a>
       <h1>File sync preview</h1>
-      <a [routerLink]="['/projects',projectId,'sync','history']" class="history-link">Diagnostic history</a>
+      <a
+        [routerLink]="['/projects', projectId, 'sync', 'history']"
+        class="history-link"
+        >Diagnostic history</a
+      >
     </header>
     <main>
       <p class="notice">
@@ -211,6 +231,7 @@ import { ApiService, BranchInfo, LocalSyncPreview } from '../api.service';
                   <th>Local</th>
                   <th>Remote</th>
                   <th>Suggested direction</th>
+                  <th>Draft selection</th>
                 </tr>
               </thead>
               <tbody>
@@ -221,10 +242,36 @@ import { ApiService, BranchInfo, LocalSyncPreview } from '../api.service';
                     <td>{{ display(d.local) }}</td>
                     <td>{{ display(d.remote) }}</td>
                     <td>{{ direction(d.suggested) }} ({{ d.kind }})</td>
+                    <td>
+                      @if (needsChoice(d.kind)) {
+                        <label
+                          >Choose for {{ d.key }}
+                          <select
+                            [attr.data-resolution-key]="d.key"
+                            [ngModel]="choices().get(d.key) ?? ''"
+                            (ngModelChange)="choose(d.key, $event)"
+                            [ngModelOptions]="{ standalone: true }"
+                          >
+                            <option value="">Choose explicitly</option>
+                            <option value="base">
+                              Baseline{{ d.base === null ? ' (omit key)' : '' }}
+                            </option>
+                            <option value="local">
+                              Local{{ d.local === null ? ' (omit key)' : '' }}
+                            </option>
+                            <option value="remote">
+                              Remote{{ d.remote === null ? ' (omit key)' : '' }}
+                            </option>
+                          </select>
+                        </label>
+                      } @else {
+                        Kept automatically ({{ d.kind }})
+                      }
+                    </td>
                   </tr>
                 } @empty {
                   <tr>
-                    <td colspan="5">
+                    <td colspan="6">
                       No translated keys in these files or this project locale.
                     </td>
                   </tr>
@@ -258,6 +305,54 @@ import { ApiService, BranchInfo, LocalSyncPreview } from '../api.service';
               </button>
             </nav>
           }
+          <section aria-label="Prepare draft JSON">
+            <h3>Prepare draft JSON</h3>
+            <p class="notice">
+              Choose every differing key, including changes with a suggested
+              direction. Selecting a missing value omits that key from the draft
+              only. This does not import, save or send anything to GitHub. The
+              baseline and remote remain unverified.
+            </p>
+            <p aria-live="polite">
+              {{ choices().size }} of {{ requiredChoices() }} differing keys
+              selected (all comparison pages).
+            </p>
+            <button
+              type="button"
+              name="syncResolve"
+              (click)="resolve()"
+              [disabled]="resolving() || choices().size !== requiredChoices()"
+            >
+              {{ resolving() ? 'Preparing draft...' : 'Prepare draft JSON' }}
+            </button>
+            @if (draft(); as draft) {
+              <section aria-label="Draft JSON result" aria-live="polite">
+                <h3>Draft only. Not applied.</h3>
+                <p>
+                  {{ draft.outputKeys }} output keys;
+                  {{ draft.absentKeys }} absent keys omitted. No translations or
+                  repository files have changed. Review the bytes before using
+                  them elsewhere.
+                </p>
+                <label
+                  >Draft JSON<textarea
+                    name="syncDraft"
+                    readonly
+                    [value]="draft.json"
+                    spellcheck="false"
+                  ></textarea>
+                </label>
+                <p class="digest">SHA256: {{ draft.contentDigest }}</p>
+                <button
+                  type="button"
+                  name="syncDownloadDraft"
+                  (click)="downloadDraft()"
+                >
+                  Download draft JSON
+                </button>
+              </section>
+            }
+          </section>
         </section>
       }
     </main>
@@ -276,6 +371,14 @@ export class SyncPreviewComponent implements OnInit, OnDestroy {
   loading = signal(false);
   error = signal('');
   result = signal<LocalSyncPreview | null>(null);
+  choices = signal(new Map<string, SyncResolutionChoice>());
+  draft = signal<SyncResolutionDraft | null>(null);
+  resolving = signal(false);
+  requiredChoices = computed(
+    () =>
+      this.result()?.decisions.filter((d) => this.needsChoice(d.kind)).length ??
+      0,
+  );
   readonly pageSize = 50;
   pageIndex = signal(0);
   pageCount = computed(() =>
@@ -338,9 +441,77 @@ export class SyncPreviewComponent implements OnInit, OnDestroy {
   invalidate() {
     this.generation++;
     this.result.set(null);
+    this.clearDraft();
     this.pageIndex.set(0);
     this.error.set('');
     this.loading.set(false);
+  }
+  private clearDraft() {
+    this.choices.set(new Map());
+    this.draft.set(null);
+    this.resolving.set(false);
+  }
+  needsChoice(kind: string) {
+    return kind !== 'unchanged' && kind !== 'converged';
+  }
+  choose(key: string, choice: string) {
+    this.generation++;
+    const next = new Map(this.choices());
+    if (choice === 'base' || choice === 'local' || choice === 'remote')
+      next.set(key, choice);
+    else next.delete(key);
+    this.choices.set(next);
+    this.draft.set(null);
+    this.resolving.set(false);
+    this.error.set('');
+  }
+  async resolve() {
+    const p = this.result();
+    if (
+      !p ||
+      this.resolving() ||
+      this.choices().size !== this.requiredChoices()
+    )
+      return;
+    const generation = ++this.generation;
+    this.resolving.set(true);
+    this.error.set('');
+    this.draft.set(null);
+    try {
+      const draft = await this.api.resolveLocalSync(this.projectId, {
+        branch: this.branch,
+        locale: this.locale,
+        baselineJson: this.baselineJson,
+        remoteJson: this.remoteJson,
+        remoteSha: this.remoteSha,
+        expectedFingerprint: p.fingerprint,
+        choices: Object.fromEntries(this.choices()),
+      });
+      if (generation === this.generation) this.draft.set(draft);
+    } catch (e) {
+      if (generation !== this.generation) return;
+      const message =
+        e instanceof Error ? e.message : 'Could not prepare draft';
+      if (message.includes('Preview changed')) {
+        this.result.set(null);
+        this.clearDraft();
+      }
+      this.error.set(message);
+    } finally {
+      if (generation === this.generation) this.resolving.set(false);
+    }
+  }
+  downloadDraft() {
+    const draft = this.draft();
+    if (!draft) return;
+    const url = URL.createObjectURL(
+      new Blob([draft.json], { type: 'application/json' }),
+    );
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'open-locale-draft.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   display(value: string | null) {
     return value === null
@@ -363,6 +534,7 @@ export class SyncPreviewComponent implements OnInit, OnDestroy {
   }
   async preview() {
     const generation = ++this.generation;
+    this.clearDraft();
     this.loading.set(true);
     this.error.set('');
     this.result.set(null);
