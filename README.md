@@ -369,3 +369,10 @@ checks that generation before each socket, so disable/restore and URL-edit/resto
 ABA during backoff also abort the old retry even when final fields match. Direct
 out-of-band database edits must maintain revision themselves; field comparisons
 still catch non-restored changes. No exactly-once or post-check revocation guarantee.
+
+Automation fire now returns matched/succeeded/failed/skipped bookkeeping while
+normal callers remain fire-and-forget. Rule failures and caught per-locale MT errors
+cannot count as success; notify receiver failure aggregate becomes failed run.
+This does not add repository automation execution or exactly-once semantics. No
+rules/zero subscribers are not delivery receipts. Activity write failure also fails
+the rule summary even if a prior effect happened, so retries need deduplication.

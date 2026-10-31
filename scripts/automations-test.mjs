@@ -5,6 +5,8 @@
 // automation writes never re-trigger rules. Real PG + HTTP.
 // Run: node scripts/automations-test.mjs (requires: nx build api)
 import { execFileSync, spawn } from 'node:child_process';
+import { PrismaClient } from '@prisma/client';
+import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
 import { createHmac } from 'node:crypto';
 import EmbeddedPostgres from 'embedded-postgres';
@@ -46,7 +48,12 @@ await new Promise((r) => receiver.listen(HOOK_PORT, '127.0.0.1', r));
 
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-au-'));
 const pg = new EmbeddedPostgres({ databaseDir: dataDir, user: 'postgres', password: 'postgres', port: PG_PORT, persistent: false });
-let api;
+let api,prisma;
+const require=createRequire(import.meta.url);
+const automationBundle=join(root,'.tmp-automation-outcome.cjs');
+execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/automations/automations.service.ts','--bundle','--platform=node','--format=cjs','--packages=external','--outfile='+automationBundle]);
+const {AutomationsService}=require(automationBundle);
+
 try {
   await pg.initialise(); await pg.start(); await pg.createDatabase('openlocale_au');
   const url = `postgresql://postgres:postgres@localhost:${PG_PORT}/openlocale_au`;
@@ -226,6 +233,30 @@ try {
   check('HMAC signature verifies against the one-time secret', !!hit && hit.sig === expectedSig, String(hit && hit.sig));
   const notifRun = await pollFor(async () => (await runs()).find((a) => a.detail && a.detail.message));
   check('notify run recorded in activity with the delivered message', !!notifRun && notifRun.detail.action === 'notify', JSON.stringify(notifRun && notifRun.detail).slice(0, 140));
+  prisma=new PrismaClient({datasources:{db:{url}}});
+  const summaryProject=await prisma.project.create({data:{teamId:(await prisma.project.findUnique({where:{id:pid}})).teamId,name:'Summary fixture',slug:'summary-fixture',baseLocale:'en'}});
+  const summaryBranch=await prisma.branch.create({data:{projectId:summaryProject.id,name:'main'}});
+  const summaryKey=await prisma.key.create({data:{projectId:summaryProject.id,branchId:summaryBranch.id,name:'summary.key'}});
+  const activityBundle=join(root,'.tmp-automation-activity.cjs'),projectsBundle=join(root,'.tmp-automation-projects.cjs'),tasksBundle=join(root,'.tmp-automation-tasks.cjs');
+  for(const [src,out] of [['activity/activity.service.ts',activityBundle],['projects/projects.service.ts',projectsBundle],['tasks/tasks.service.ts',tasksBundle]])execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/'+src,'--bundle','--platform=node','--format=cjs','--packages=external','--outfile='+out]);
+  const {ActivityService}=require(activityBundle),{ProjectsService}=require(projectsBundle),{TasksService}=require(tasksBundle);const activityService=new ActivityService(prisma),projectsService=new ProjectsService(prisma,activityService),tasksService=new TasksService(prisma,projectsService,activityService);
+  const summaryService=new AutomationsService(prisma,projectsService,activityService,{},tasksService,{deliver:async()=>({matched:1,succeeded:0,failed:1})});
+  const summaryCtx={keyId:summaryKey.id,keyName:summaryKey.name,branchName:'main',localeCode:'en',actorId:owner.user.id};
+  const noRules=await summaryService.fire(summaryProject.id,'translation.value',summaryCtx);
+  check('automation no-rule summary is zero without false delivery claim',noRules.matched===0&&noRules.succeeded===0&&noRules.failed===0&&!noRules.skipped);
+  const summaryRule=await prisma.automationRule.create({data:{projectId:summaryProject.id,name:'Summary task',trigger:'translation.value',action:'task.create',config:{title:'Summary task'},creatorId:owner.user.id}});
+  const taskSummary=await summaryService.fire(summaryProject.id,'translation.value',summaryCtx);
+  check('automation successful summary waits for actual task and activity',taskSummary.matched===1&&taskSummary.succeeded===1&&taskSummary.failed===0&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Summary task'}})===1&&await prisma.activityEvent.count({where:{projectId:summaryProject.id,action:'automation.run'}})===1);
+  const branchSummary=await summaryService.fire(summaryProject.id,'translation.value',{...summaryCtx,branchName:'feature'}),localeSummary=await summaryService.fire(summaryProject.id,'translation.value',{...summaryCtx,localeCode:'he'});
+  check('automation summary explicitly skips branch and nonbase trigger',branchSummary.skipped&&localeSummary.skipped&&branchSummary.matched===0&&localeSummary.matched===0);
+  await prisma.automationRule.update({where:{id:summaryRule.id},data:{action:'notify',config:{message:'Summary notification'}}});
+  const failedNotify=await summaryService.fire(summaryProject.id,'translation.value',summaryCtx);
+  check('notification transport aggregate failure becomes failed automation summary',failedNotify.matched===1&&failedNotify.failed===1&&failedNotify.succeeded===0);
+  await prisma.automationRule.update({where:{id:summaryRule.id},data:{action:'pretranslate',config:{providerId:'missing-fixture',locales:['he']}}});
+  const failedMt=await summaryService.fire(summaryProject.id,'translation.value',summaryCtx);
+  check('caught per-locale MT errors cannot count as successful automation',failedMt.matched===1&&failedMt.failed===1&&failedMt.succeeded===0);
+  await prisma.project.delete({where:{id:summaryProject.id}});
+  for(const out of [activityBundle,projectsBundle,tasksBundle])rmSync(out,{force:true});
 } catch (err) {
   // embedded-postgres can reject with `undefined` when the postmaster dies at
   // startup; through an async finally that exception exits 0 SILENTLY. Catch
@@ -233,6 +264,7 @@ try {
   console.error('SUITE INCOMPLETE:', err);
   process.exit(1);
 } finally {
+  rmSync(automationBundle,{force:true});await prisma?.$disconnect();
   receiver.close();
   if (api) api.kill('SIGTERM');
   await pg.stop();

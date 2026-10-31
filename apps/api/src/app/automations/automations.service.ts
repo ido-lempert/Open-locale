@@ -98,22 +98,26 @@ export class AutomationsService {
   // here, not by callers: main branch only; translation.value only for
   // base-locale writes. Never throws.
   async fire(projectId: string, trigger: string, ctx: { keyId: string; keyName: string; branchName: string; localeCode?: string; actorId?: string }) {
+    const summary = { matched: 0, succeeded: 0, failed: 0, skipped: false };
     try {
-      if (ctx.branchName !== 'main') return;
-      const rules = await this.prisma.automationRule.findMany({ where: { projectId, trigger, enabled: true } });
-      if (!rules.length) return;
+      if (ctx.branchName !== 'main') return { ...summary, skipped: true };
       const project = await this.prisma.project.findUnique({ where: { id: projectId }, include: { locales: true } });
-      if (!project) return;
-      if (trigger === 'translation.value' && ctx.localeCode !== project.baseLocale) return;
+      if (!project || (trigger === 'translation.value' && ctx.localeCode !== project.baseLocale))
+        return { ...summary, skipped: true };
+      const rules = await this.prisma.automationRule.findMany({ where: { projectId, trigger, enabled: true } });
+      summary.matched = rules.length;
       for (const rule of rules) {
-        await this.runRule(projectId, project.baseLocale, rule, ctx).catch(() => {});
+        const ok = await this.runRule(projectId, project.baseLocale, rule, ctx).catch(() => false);
+        if (ok) summary.succeeded++; else summary.failed++;
       }
-    } catch { /* automation must never fail the triggering write */ }
+      return summary;
+    } catch { return { ...summary, failed: Math.max(1, summary.matched - summary.succeeded) }; }
   }
 
   private async runRule(projectId: string, baseLocale: string, rule: { id: string; name: string; action: string; config: Prisma.JsonValue; creatorId: string }, ctx: { keyId: string; keyName: string; actorId?: string }) {
     const config = (rule.config ?? {}) as Record<string, unknown>;
     let detail: Record<string, unknown>;
+    let succeeded = true;
     try {
       if (rule.action === 'pretranslate') {
         const locales = (config.locales as string[]) ?? [];
@@ -124,6 +128,7 @@ export class AutomationsService {
               providerId: config.providerId as string, locale, keyIds: [ctx.keyId], branch: 'main',
             });
           } catch (e) {
+            succeeded = false;
             results[locale] = { error: e instanceof Error ? e.message : String(e) };
           }
         }
@@ -134,7 +139,8 @@ export class AutomationsService {
         // URL, so rule authors (admins) cannot aim the egress anywhere new;
         // delivery, signing, retry and journaling are the webhook pipeline's.
         const message = String(config.message ?? '').split('{key}').join(ctx.keyName);
-        await this.webhooks.deliver(projectId, 'automation.notify', { keyId: ctx.keyId, key: ctx.keyName, message });
+        const delivery = await this.webhooks.deliver(projectId, 'automation.notify', { keyId: ctx.keyId, key: ctx.keyName, message });
+        if (delivery.failed) throw new Error('Automation notification delivery incomplete');
         detail = { rule: rule.name, action: rule.action, key: ctx.keyName, message };
       } else {
         const title = String(config.title ?? '').split('{key}').join(ctx.keyName);
@@ -160,6 +166,7 @@ export class AutomationsService {
         };
       }
     } catch (e) {
+      succeeded = false;
       detail = { rule: rule.name, action: rule.action, key: ctx.keyName, error: e instanceof Error ? e.message : String(e) };
     }
     // The run executes AS the creator (actorId = creator): creating a rule is
@@ -175,5 +182,6 @@ export class AutomationsService {
         detail: { ...detail, triggeredBy: ctx.actorId ?? null, runAs: rule.creatorId } as Prisma.InputJsonValue,
       });
     });
+    return succeeded;
   }
 }
