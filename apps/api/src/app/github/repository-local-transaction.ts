@@ -15,7 +15,7 @@ export interface ReviewedLocalDraft {
 }
 // Isolated composition, no public execution caller. Parent must obtain trusted
 // fresh reviewed sources and authenticate the actor. This does not read GitHub,
-// update TM, deliver webhooks/automations or advance a baseline.
+// deliver webhooks/automations or advance a baseline. TM pairs commit with values.
 export async function repositoryLocalTransaction(
   tx: Prisma.TransactionClient,
   reviewed: ReviewedLocalDraft,

@@ -271,3 +271,10 @@ from draft bytes, never supplied changes. Only existing keys supported, and a
 successful write makes replayed local preconditions stale. It has no public caller
 or fresh remote reader, TM update, webhook/automation delivery or sync-success
 record. Transactional groundwork only, not complete sync/apply integration.
+
+Existing normal save/import and isolated locale writer now share the same
+transactional TM helper. Nonempty target saves remember the current nonempty base
+source; base-locale/empty saves do not create or overwrite pairs. Locale removal
+preserves historical TM, matching existing editing semantics. TM commits/rolls
+back with locale value/history/activity. Webhook/automation delivery and the fresh
+source/public execution composition are still outstanding integration work.

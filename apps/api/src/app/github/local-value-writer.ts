@@ -1,3 +1,4 @@
+import { rememberValueTx } from '../translations/remember-value';
 import type { Prisma } from '@prisma/client';
 import { lockLocalPreconditions } from './local-preconditions';
 import type { LocalPreconditions } from './local-preconditions';
@@ -20,6 +21,9 @@ export async function writeExistingLocalValues(
     new Set(changes.map((c) => c.key)).size !== changes.length
   )
     throw new Error('Invalid local value changes');
+  const project = await tx.project.findUniqueOrThrow({
+    where: { id: expected.projectId }, select: { baseLocale: true },
+  });
   const byName = new Map(expected.keys.map((k) => [k.key, k]));
   // Validate the WHOLE batch before the first mutation, including later rows.
   for (const c of changes) {
@@ -112,6 +116,9 @@ export async function writeExistingLocalValues(
       },
       update: { ...data, version: { increment: 1 } },
     });
+    await rememberValueTx(
+      tx, expected.projectId, project.baseLocale, key.keyId, expected.locale, c.nextValue!,
+    );
     await tx.translationHistory.create({
       data: {
         keyId: key.keyId,

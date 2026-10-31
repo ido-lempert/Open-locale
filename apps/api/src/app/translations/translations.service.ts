@@ -1,3 +1,4 @@
+import { rememberValueTx } from './remember-value';
 import { randomUUID } from 'node:crypto';
 import { BadRequestException, ConflictException, HttpException, Injectable, NotFoundException, PayloadTooLargeException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -284,20 +285,7 @@ export class TranslationsService {
   // or targets are never remembered; base-locale saves are their own source.
   private async rememberTx(tx: Parameters<Parameters<PrismaService['$transaction']>[0]>[0],
     projectId: string, baseLocale: string, keyId: string, locale: string, value: string) {
-    if (!value || locale === baseLocale) return;
-    const source = await tx.translation.findUnique({
-      where: { keyId_localeCode: { keyId, localeCode: baseLocale } },
-    });
-    if (!source?.value) return;
-    await tx.tmEntry.upsert({
-      where: {
-        projectId_localeCode_sourceLocaleCode_sourceText: {
-          projectId, localeCode: locale, sourceLocaleCode: baseLocale, sourceText: source.value,
-        },
-      },
-      create: { projectId, localeCode: locale, sourceLocaleCode: baseLocale, sourceText: source.value, targetText: value, keyId },
-      update: { targetText: value, keyId },
-    });
+    return rememberValueTx(tx, projectId, baseLocale, keyId, locale, value);
   }
 
   // Dice bigram similarity 0..1 - no extensions needed; pg_trgm is a Phase 2 scale item.

@@ -92,7 +92,8 @@ add languages, manage keys and translations, export a file.
   tests; durable locale-removal audit added, production integration still open.
   Internal current-admin/target/baseline locked transaction guard added; no public
   execution. Isolated exact-draft transaction composition added, missing production
-  effects/fresh-source execution integration remain. See reviews0134-0144.
+  effects/fresh-source execution integration remain. Transactional TM helper shared
+  with normal save/import and isolated writer. See reviews0134-0145.
 
 ## Phase 3 - advanced
 
