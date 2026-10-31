@@ -94,7 +94,8 @@ add languages, manage keys and translations, export a file.
   execution. Isolated exact-draft transaction composition added, missing production
   effects/fresh-source execution integration remain. Transactional TM helper shared
   with normal save/import and isolated writer. Durable transaction-coupled effect
-  intents added; dispatcher/retry/retention still code work. See reviews0134-0146.
+  intents added; internal bounded lease/retry bookkeeping added. Dispatcher and
+  terminal retention remain code work. See reviews0134-0147.
 
 ## Phase 3 - advanced
 

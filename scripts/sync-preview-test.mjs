@@ -4,6 +4,8 @@ const writerSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/g
 const {writeExistingLocalValues}=await import('data:text/javascript;base64,'+Buffer.from(writerSource).toString('base64'));
 const transactionSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-local-transaction.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
 const {repositoryLocalTransaction}=await import('data:text/javascript;base64,'+Buffer.from(transactionSource).toString('base64'));
+const leaseSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-effect-lease.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
+const {claimRepositoryEffect,settleRepositoryEffect}=await import('data:text/javascript;base64,'+Buffer.from(leaseSource).toString('base64'));
 import { lockRepositoryWriteScope } from '../apps/api/src/app/github/repository-write-scope.ts';
 import { lockLocalPreconditions } from '../apps/api/src/app/github/local-preconditions.ts';
 // Granular permissions: real PostgreSQL + real HTTP API.
@@ -505,6 +507,42 @@ try {
   const trimmed=await call(`${P}/sync/preview-records`,{jwt,method:'POST',body:input});
   check('explicit recording trims oldest retained history to hundred',trimmed.status===201 && await prisma.syncPreviewRecord.count({where:{projectId:project.id}})===100 && !!await prisma.syncPreviewRecord.findUnique({where:{id:trimmed.json.record.id}}));
 
+  // Isolated project queue, real overlapping claims. Earlier intents removed
+  // only in this fixture so selection has a deterministic bounded candidate set.
+  await prisma.repositoryLocalEffectIntent.deleteMany();
+  const leaseProject=await prisma.project.create({data:{teamId:project.teamId,name:'Lease fixture',slug:'lease-fixture'}});
+  const leaseData={projectId:leaseProject.id,targetId:target.id,actorId:owner.user.id,keyId:localKey.id,keyName:'lease-key',branchId:writeScope.branchId,branch:'main',locale:'en',operation:'set-value',value:'queued',draftContentDigest:composeDigest,previewFingerprint:composeFingerprint};
+  await prisma.repositoryLocalEffectIntent.createMany({data:[leaseData,leaseData]});
+  let claimsReady,releaseClaims;const claimsGate=new Promise(r=>releaseClaims=r),claimsStarted=new Promise(r=>claimsReady=r);let arrived=0;
+  const leased=await Promise.all([0,1].map(()=>prisma.$transaction(async tx=>{const row=await claimRepositoryEffect(tx);if(++arrived===2)claimsReady();await claimsGate;return row;},{timeout:10000})).concat([(async()=>{await claimsStarted;releaseClaims();return null;})()]));
+  const leases=leased.filter(Boolean);
+  check('concurrent queue claimers lock disjoint intents',leases.length===2&&leases[0].id!==leases[1].id&&leases.every(r=>r.state==='leased'&&r.attempts===1&&r.leaseToken&&r.leaseUntil));
+  check('active leases cannot be claimed again',await prisma.$transaction(claimRepositoryEffect)===null);
+  const firstLease=leases[0],secondLease=leases[1];
+  check('wrong worker token cannot settle a live lease',!await prisma.$transaction(tx=>settleRepositoryEffect(tx,firstLease.id,secondLease.leaseToken,'completed')));
+  check('successful queue settlement is token fenced',await prisma.$transaction(tx=>settleRepositoryEffect(tx,firstLease.id,firstLease.leaseToken,'completed'))&&!await prisma.$transaction(tx=>settleRepositoryEffect(tx,firstLease.id,firstLease.leaseToken,'retry'))&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:firstLease.id}})).state==='completed');
+  await prisma.repositoryLocalEffectIntent.update({where:{id:secondLease.id},data:{leaseUntil:new Date('2020-01-01')}});
+  check('expired worker cannot settle even before reclaim',!await prisma.$transaction(tx=>settleRepositoryEffect(tx,secondLease.id,secondLease.leaseToken,'completed')));
+  const reclaimed=await prisma.$transaction(claimRepositoryEffect);
+  check('expired lease is reclaimed with new token and incremented attempt',reclaimed.id===secondLease.id&&reclaimed.leaseToken!==secondLease.leaseToken&&reclaimed.attempts===2);
+  check('reclaimed stale worker cannot finish or requeue',!await prisma.$transaction(tx=>settleRepositoryEffect(tx,secondLease.id,secondLease.leaseToken,'retry')));
+  check('retry releases token and sets bounded backoff',await prisma.$transaction(tx=>settleRepositoryEffect(tx,reclaimed.id,reclaimed.leaseToken,'retry'))&&await prisma.$transaction(claimRepositoryEffect)===null&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:reclaimed.id}})).state==='pending');
+  await prisma.repositoryLocalEffectIntent.update({where:{id:reclaimed.id},data:{availableAt:new Date('2020-01-01')}});const lastAttempt=await prisma.$transaction(claimRepositoryEffect);
+  check('third failure becomes terminal without fourth attempt',lastAttempt.attempts===3&&await prisma.$transaction(tx=>settleRepositoryEffect(tx,lastAttempt.id,lastAttempt.leaseToken,'retry'))&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:lastAttempt.id}})).state==='dead'&&await prisma.$transaction(claimRepositoryEffect)===null);
+  const crashIntent=await prisma.repositoryLocalEffectIntent.create({data:{...leaseData,state:'leased',attempts:3,leaseToken:secondLease.leaseToken,leaseUntil:new Date('2020-01-01')}});
+  const exhausted=await prisma.$transaction(claimRepositoryEffect);
+  check('expired final attempt becomes dead without new lease',exhausted===null&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:crashIntent.id}})).state==='dead'&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:crashIntent.id}})).attempts===3&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:crashIntent.id}})).leaseToken===null&&await prisma.$transaction(claimRepositoryEffect)===null);
+  const futureIntent=await prisma.repositoryLocalEffectIntent.create({data:{...leaseData,availableAt:new Date('2099-01-01')}});
+  check('future availability is not claimed',await prisma.$transaction(claimRepositoryEffect)===null);
+  await prisma.repositoryLocalEffectIntent.update({where:{id:futureIntent.id},data:{availableAt:new Date('2020-01-01')}});
+  try{await prisma.$transaction(async tx=>{await claimRepositoryEffect(tx);throw new Error('rollback claim');});}catch{}
+  check('claim rollback preserves pending attempts and no token',(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:futureIntent.id}})).attempts===0&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:futureIntent.id}})).leaseToken===null);
+  const clockLease=await prisma.$transaction(claimRepositoryEffect);
+  let expiredInTransaction=false;await prisma.$transaction(async tx=>{await tx.repositoryLocalEffectIntent.update({where:{id:clockLease.id},data:{leaseUntil:new Date(Date.now()+80)}});await new Promise(r=>setTimeout(r,150));expiredInTransaction=!await settleRepositoryEffect(tx,clockLease.id,clockLease.leaseToken,'completed');});
+  check('lease expiry uses wall clock even within older transaction',expiredInTransaction);
+  let invalidState=false;try{await prisma.repositoryLocalEffectIntent.update({where:{id:clockLease.id},data:{state:'completed',leaseToken:null,leaseUntil:null}});}catch{invalidState=true;}
+  check('database rejects terminal state without finished timestamp',invalidState);
+  await prisma.project.delete({where:{id:leaseProject.id}});
   const concurrent=await Promise.all(Array.from({length:4},()=>call(`${P}/sync/preview-records`,{jwt,method:'POST',body:input})));
   check('concurrent diagnostic records succeed without exceeding retention',concurrent.every(r=>r.status===201) && await prisma.syncPreviewRecord.count({where:{projectId:project.id}})<=100);
   const invalidId=await call('/projects/not-a-uuid/sync/preview',{jwt,method:'POST',body:input});

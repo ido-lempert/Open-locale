@@ -287,3 +287,12 @@ writes too; no-op and stale replay enqueue nothing. These are private pending
 facts, not delivery receipts or execution grants. There is no dispatcher, retry/
 retention policy or public apply caller yet, and no webhook/automation is sent by
 this code. Key/target deletion preserves lineage; project deletion removes payloads.
+
+Internal intent queue bookkeeping now supports one-row SKIP LOCKED claims,
+60-second token-fenced leases, at most three attempts and 30-seconds-per-attempt
+retry backoff. Expired final attempts retire without returning work. Database time
+controls eligibility and settlement; expired/wrong tokens cannot finish/requeue.
+This is at-least-once groundwork, not exactly-once delivery: a crashed lease may
+have performed an effect. No worker/dispatcher is enabled. A future handler must
+check current routing/authority and use the intent ID for downstream deduplication.
+Terminal bookkeeping is not a delivery receipt; terminal retention is still open.

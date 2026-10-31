@@ -645,8 +645,15 @@ model RepositoryLocalEffectIntent {
   value String?
   draftContentDigest String
   previewFingerprint String
+  state String @default("pending")
+  attempts Int @default(0)
+  availableAt DateTime @default(now())
+  leaseToken String? @db.Uuid
+  leaseUntil DateTime?
+  finishedAt DateTime?
   createdAt DateTime @default(now())
   project Project @relation(fields:[projectId],references:[id],onDelete:Cascade)
   @@index([projectId,createdAt])
+  @@index([state,availableAt])
   @@map("repository_local_effect_intents")
 }
