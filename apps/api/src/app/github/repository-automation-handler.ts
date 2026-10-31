@@ -12,16 +12,17 @@ export async function fireRepositoryAutomation(
   automations: Pick<AutomationsService, 'fire'>,
   intent: RepositoryLocalEffectIntent,
 ) {
-  const current = await db.$transaction(
+  const revalidate = () => db.$transaction(
     (tx) => validateRepositoryEffect(tx, intent.id, intent.leaseToken!),
     { isolationLevel: 'Serializable' },
   );
+  const current = await revalidate();
   if (current.operation !== 'set-value')
     return { matched: 0, succeeded: 0, failed: 0, skipped: true };
   const result = await automations.fire(current.projectId, 'translation.value', {
     keyId: current.keyId, keyName: current.keyName, branchName: current.branch,
     localeCode: current.locale, actorId: current.actorId,
-  });
+  }, { beforeRule: async () => { await revalidate(); } });
   if (result.failed) throw new Error('Repository automation run incomplete');
   return result;
 }

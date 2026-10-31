@@ -383,3 +383,8 @@ bounds and creator permission checks apply. Empty set follows normal value-write
 semantics; removal does not invent a value trigger. Failed rule summary throws,
 but partial effects may already exist, so per-rule deduplication remains necessary
 before production retries. No channel checkpoint/combined worker/public apply added.
+
+Repository automation rechecks current intent before each rule, including after
+a previous rule commits. Target change or lease expiry stops remaining rules;
+already completed effects remain. This is not per-rule retry deduplication or
+elimination of the race after a check. Normal automation callers need no guard.

@@ -276,6 +276,26 @@ try {
   const emptyRepoRow=await prisma.translation.create({data:{projectId:summaryProject.id,keyId:summaryKey.id,localeCode:'en',value:''}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{operation:'set-value',value:'',translationRowId:emptyRepoRow.rowId,translationVersion:emptyRepoRow.version}});await prisma.automationRule.update({where:{id:summaryRule.id},data:{action:'task.create',config:{title:'Empty repository task'}}});
   const emptyRepoSummary=await fireRepositoryAutomation(prisma,summaryService,repoIntent);
   check('empty repository set follows normal value automation semantics',emptyRepoSummary.succeeded===1&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Empty repository task'}})===1);
+  // Mutate actual PG context in the first committed automation activity.
+  // Next rule must be stopped before its task or activity, not just summarized.
+  const secondRepoRule=await prisma.automationRule.create({data:{projectId:summaryProject.id,name:'Second repository rule',trigger:'translation.value',action:'task.create',config:{title:'Guarded second task'},creatorId:owner.user.id,createdAt:new Date('2098-01-01')}});
+  for(const mutation of ['target','lease']) {
+    await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:1}});
+    await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{leaseUntil:new Date('2099-01-01')}});
+    const firstTitle='Guarded first '+mutation,secondTitle='Guarded second '+mutation;
+    await prisma.automationRule.update({where:{id:summaryRule.id},data:{config:{title:firstTitle}}});
+    await prisma.automationRule.update({where:{id:secondRepoRule.id},data:{config:{title:secondTitle}}});
+    let mutated=false;
+    const changingActivity={record:async(tx,event)=>{await activityService.record(tx,event);if(event.action==='automation.run'&&!mutated){mutated=true;if(mutation==='target')await tx.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:{increment:1}}});else await tx.$executeRaw`UPDATE repository_local_effect_intents SET "leaseUntil"=clock_timestamp()-interval '1 second' WHERE id=${repoIntent.id}::uuid`;}}};
+    const guardedService=new AutomationsService(prisma,projectsService,changingActivity,{},tasksService,{deliver:async()=>({matched:0,succeeded:0,failed:0})});
+    const beforeRuns=await prisma.activityEvent.count({where:{projectId:summaryProject.id,action:'automation.run'}});let stopped=false;
+    try{await fireRepositoryAutomation(prisma,guardedService,repoIntent);}catch{stopped=true;}
+    check('repository '+mutation+' change after first rule preserves committed first effect',mutated&&await prisma.task.count({where:{projectId:summaryProject.id,title:firstTitle}})===1);
+    check('repository '+mutation+' change suppresses second actual rule task and activity',stopped&&await prisma.task.count({where:{projectId:summaryProject.id,title:secondTitle}})===0&&await prisma.activityEvent.count({where:{projectId:summaryProject.id,action:'automation.run'}})===beforeRuns+1);
+  }
+  await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:1}});
+  await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{leaseUntil:new Date('2099-01-01')}});
+  await prisma.automationRule.delete({where:{id:secondRepoRule.id}});
   const heRepoRow=await prisma.translation.create({data:{projectId:summaryProject.id,keyId:summaryKey.id,localeCode:'he',value:'Target'}});await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{locale:'he'}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{locale:'he',value:heRepoRow.value,translationRowId:heRepoRow.rowId,translationVersion:heRepoRow.version}});
   const nonbaseRepo=await fireRepositoryAutomation(prisma,summaryService,repoIntent);
   check('repository target locale does not trigger base-value automations',nonbaseRepo.skipped&&nonbaseRepo.matched===0);

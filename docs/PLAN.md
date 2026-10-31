@@ -105,7 +105,8 @@ add languages, manage keys and translations, export a file.
   Webhook API-update revision fences captured routing ABA on retry.
   Automation outcome summaries added before repository-channel integration.
   Internal repository automation adapter added, no per-rule retry deduplication
-  or enabled combined worker. See reviews0134-0159.
+  or enabled combined worker. Per-rule current-intent guard stops remaining rules
+  after context change/lease expiry. See reviews0134-0160.
 
 ## Phase 3 - advanced
 
