@@ -326,3 +326,13 @@ Ineligible contexts never reach a handler; handler failures use bounded retry,
 and expired leases report stale rather than completed. Handlers must be bounded,
 recheck current routing/authority, and deduplicate by intent ID. Crash/timeout after
 an effect can cause retry; queue completed is bookkeeping, not delivery receipt.
+
+An internal repository webhook adapter now revalidates current intent eligibility
+immediately before the existing signed/DNS-pinned webhook pipeline. Receiver
+payloads include effectId for downstream deduplication. Sets emit translation.updated;
+removals emit translation.removed with null value (API subscription supported, no
+new settings checkbox yet). Delivery returns aggregate matched/succeeded/failed;
+failed receivers make the adapter throw for bounded queue retry. Other successful
+receivers may receive repeats: this is at-least-once, not exactly-once. Existing
+normal save/import delivery semantics stay fire-and-forget. No worker/startup timer,
+automation handler or public repository apply is connected in this stage.

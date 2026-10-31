@@ -2,6 +2,8 @@
 // Run: node scripts/webhooks-test.mjs
 import { execFileSync, spawn } from 'node:child_process';
 import { createServer } from 'node:http';
+import { PrismaClient } from '@prisma/client';
+import { createRequire } from 'node:module';
 import { createHmac } from 'node:crypto';
 import EmbeddedPostgres from 'embedded-postgres';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -38,7 +40,14 @@ await new Promise((r) => receiver.listen(HOOK_PORT, '127.0.0.1', r));
 
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-wh-'));
 const pg = new EmbeddedPostgres({ databaseDir: dataDir, user: 'postgres', password: 'postgres', port: PG_PORT, persistent: false });
-let api;
+let api,prisma;
+const require=createRequire(import.meta.url);
+const bundlePath=join(root,'.tmp-repository-webhook-test.cjs');
+execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/webhooks/webhooks.service.ts','--bundle','--platform=node','--format=cjs','--packages=external','--outfile='+bundlePath]);
+const {WebhooksService}=require(bundlePath);
+const adapterPath=join(root,'.tmp-repository-webhook-adapter.cjs');
+execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-webhook-handler.ts','--bundle','--platform=node','--format=cjs','--packages=external','--outfile='+adapterPath]);
+const {deliverRepositoryWebhook}=require(adapterPath);
 try {
   await pg.initialise(); await pg.start(); await pg.createDatabase('openlocale_wh');
   const url = `postgresql://postgres:postgres@localhost:${PG_PORT}/openlocale_wh`;
@@ -136,6 +145,35 @@ try {
   const mtHook = await call(`${P}/webhooks`, { token: at, method: 'POST', body: { url: `http://127.0.0.1:${HOOK_PORT}/mt`, events: ['mt.pretranslated'] } });
   check('mt.pretranslated subscription accepted (event list matches emissions)', mtHook.status === 201, `got ${mtHook.status}`);
 
+  prisma=new PrismaClient({datasources:{db:{url}}});
+  process.env.WEBHOOK_ALLOW_PRIVATE_TARGETS='true';
+  const service=new WebhooksService(prisma,{});
+  await prisma.webhook.updateMany({where:{projectId:proj.id},data:{active:false}});
+  const removalSubscription=await call(`${P}/webhooks`,{token:at,method:'POST',body:{url:`http://127.0.0.1:${HOOK_PORT}/removal-subscription`,events:['translation.removed']}});
+  check('repository removal event can be subscribed through authenticated API',removalSubscription.status===201);
+  await prisma.webhook.delete({where:{id:removalSubscription.json.id}});
+  const repositoryHook=await prisma.webhook.create({data:{projectId:proj.id,url:`http://127.0.0.1:${HOOK_PORT}/repository`,events:['translation.updated','translation.removed'],secret:'repository-fixture-signing-key'}});
+  const branch=await prisma.branch.findUnique({where:{projectId_name:{projectId:proj.id,name:'main'}}});
+  const target=await prisma.repositorySyncTarget.create({data:{projectId:proj.id,branchId:branch.id,localBranch:'main',locale:'en',owner:'fixture',repo:'fixture',path:'en.json',remoteBranch:'main'}});
+  const translation=await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:key.id,localeCode:'en'}}});
+  const intentData={projectId:proj.id,targetId:target.id,targetRevision:target.revision,actorId:a.user.id,keyId:key.id,keyName:key.name,branchId:branch.id,branch:'main',locale:'en',operation:'set-value',value:translation.value,translationRowId:translation.rowId,translationVersion:translation.version,draftContentDigest:'a'.repeat(64),previewFingerprint:'b'.repeat(64),state:'leased',attempts:1,leaseToken:a.user.id,leaseUntil:new Date(Date.now()+3600000)};
+  const intent=await prisma.repositoryLocalEffectIntent.create({data:intentData});
+  await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "leaseUntil"=clock_timestamp()+INTERVAL '60 seconds' WHERE id=${intent.id}::uuid`;
+  let receivedBefore=received.length;const adapterResult=await deliverRepositoryWebhook(prisma,service,intent);const emitted=received.at(-1),payload=JSON.parse(emitted.body);
+  check('repository handler uses real signed receiver with effect ID',adapterResult.matched===1&&adapterResult.succeeded===1&&adapterResult.failed===0&&received.length===receivedBefore+1&&payload.effectId===intent.id&&payload.value===translation.value&&payload.operation==='set-value'&&emitted.sig==='sha256='+createHmac('sha256',repositoryHook.secret).update(emitted.body).digest('hex'));
+  failNext=2;let failedAdapter=false;try{await deliverRepositoryWebhook(prisma,service,intent);}catch{failedAdapter=true;}
+  check('repository handler surfaces exhausted receiver failure for queue retry',failedAdapter&&received.length===receivedBefore+3);
+  await prisma.repositorySyncTarget.update({where:{id:target.id},data:{revision:{increment:1}}});receivedBefore=received.length;let staleAdapter=false;try{await deliverRepositoryWebhook(prisma,service,intent);}catch{staleAdapter=true;}
+  check('repository handler rechecks changed context before any socket delivery',staleAdapter&&received.length===receivedBefore);
+  await prisma.repositorySyncTarget.update({where:{id:target.id},data:{revision:target.revision}});
+  await prisma.translation.delete({where:{keyId_localeCode:{keyId:key.id,localeCode:'en'}}});
+  const removalIntent=await prisma.repositoryLocalEffectIntent.create({data:{...intentData,operation:'remove-locale-value',value:null,translationRowId:null,translationVersion:null}});
+  await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "leaseUntil"=clock_timestamp()+INTERVAL '60 seconds' WHERE id=${removalIntent.id}::uuid`;
+  await deliverRepositoryWebhook(prisma,service,removalIntent);const removedPayload=JSON.parse(received.at(-1).body);
+  check('repository removal emits distinct event and null value',received.at(-1).event==='translation.removed'&&removedPayload.effectId===removalIntent.id&&removedPayload.value===null&&removedPayload.operation==='remove-locale-value');
+  await prisma.webhook.update({where:{id:repositoryHook.id},data:{active:false}});receivedBefore=received.length;const disabledResult=await deliverRepositoryWebhook(prisma,service,removalIntent);
+  check('repository delivery respects current disabled subscriptions',disabledResult.matched===0&&disabledResult.failed===0&&received.length===receivedBefore);
+  await prisma.webhook.delete({where:{id:repositoryHook.id}});
   const del = await call(`${P}/webhooks/${hook.id}`, { token: at, method: 'DELETE' });
   check('webhook deleted', del.status === 200 && (await call(`${P}/webhooks`, { token: at })).json.length === 2);
 } catch (err) {
@@ -145,6 +183,7 @@ try {
   console.error('SUITE INCOMPLETE:', err);
   process.exit(1);
 } finally {
+  rmSync(bundlePath,{force:true});rmSync(adapterPath,{force:true});await prisma?.$disconnect();
   api?.kill('SIGTERM');
   receiver.close();
   await pg.stop().catch(() => {});

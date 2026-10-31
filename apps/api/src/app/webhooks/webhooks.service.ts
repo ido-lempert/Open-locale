@@ -127,7 +127,7 @@ export class WebhooksService {
       where: { projectId, active: true, events: { has: event } },
     });
     const body = JSON.stringify({ event, ...payload, at: new Date().toISOString() });
-    await Promise.allSettled(
+    const outcomes = await Promise.allSettled(
       hooks.map(async (hook) => {
         const started = Date.now();
         let attempts = 0;
@@ -187,7 +187,10 @@ export class WebhooksService {
         } catch (journalErr) {
           this.logger.warn(`Webhook ${hook.id} journal write failed: ${journalErr instanceof Error ? journalErr.message : journalErr}`);
         }
+        return error === null && httpStatus !== null;
       }),
     );
+    const succeeded = outcomes.filter((r) => r.status === 'fulfilled' && r.value).length;
+    return { matched: hooks.length, succeeded, failed: hooks.length - succeeded };
   }
 }
