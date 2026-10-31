@@ -8,6 +8,7 @@ import { ApiService, Project } from '../api.service';
   imports: [FormsModule, RouterLink],
   template: `
     <header class="bar"><h1>Projects</h1>
+      <a routerLink="/account/identities" class="identities-link">Linked identities</a>
       <a routerLink="/account/link-oidc" class="identity-link">Link OIDC identity</a>
       <a routerLink="/account/link-saml" class="saml-identity-link">Link SAML identity</a>
       <button (click)="logout()">Log out</button></header>

@@ -6,6 +6,7 @@ import {
   ForbiddenException,
   Get,
   HttpCode,
+  Header,
   NotFoundException,
   Param,
   Post,
@@ -131,6 +132,15 @@ export class AuthController {
       }
     }
     return this.auth.createApiToken(user.userId, dto.name, scopes, expiresAt);
+  }
+
+  @Get('identities')
+  @Header('Cache-Control', 'no-store')
+  @UseGuards(JwtAuthGuard)
+  async listIdentities(@CurrentUser() user: AuthPrincipal) {
+    this.requireSession(user);
+    await this.auth.requireStepUp(user.userId, user);
+    return this.auth.listIdentities(user.userId);
   }
 
   @Get('tokens')

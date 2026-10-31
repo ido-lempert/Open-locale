@@ -29,6 +29,15 @@ export class AuthService {
     private readonly jwt: JwtService,
   ) {}
 
+  // Owner-only read model. Subjects and password/token material are not
+  // needed by the account UI and must not be returned here.
+  listIdentities(userId: string) {
+    return this.prisma.externalIdentity.findMany({
+      where: { userId }, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      select: { id: true, issuer: true, email: true, createdAt: true },
+    });
+  }
+
   async signup(email: string, password: string, displayName: string) {
     const normalized = email.trim().toLowerCase();
     const existing = await this.prisma.user.findUnique({ where: { email: normalized } });

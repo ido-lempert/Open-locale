@@ -1,3 +1,4 @@
+import { IdentitiesComponent } from './pages/identities.component';
 import { IdentityLinkComponent } from './pages/identity-link.component';
 import { SyncHistoryComponent } from './pages/sync-history.component';
 import { SyncPreviewComponent } from './pages/sync-preview.component';
@@ -20,6 +21,7 @@ export const appRoutes: Routes = [
   { path: 'auth/saml/callback', component: SamlCallbackComponent },
   { path: 'auth/oidc/callback', component: OidcCallbackComponent },
   { path: 'login', component: LoginComponent },
+  { path: 'account/identities', component: IdentitiesComponent, canActivate: [authGuard] },
   { path: 'account/link-saml', component: IdentityLinkComponent, data: { provider: 'saml' }, canActivate: [authGuard] },
   { path: 'account/link-oidc', component: IdentityLinkComponent, canActivate: [authGuard] },
   { path: 'projects', component: ProjectsComponent, canActivate: [authGuard] },

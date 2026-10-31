@@ -57,14 +57,51 @@ try {
   await page.type('input[name=ssoCode]',finishRecovery);await page.click('button.primary');await page.waitForFunction(()=>location.pathname==='/projects');
   check('browser link second factor completes to original project',await page.evaluate(async id=>(await fetch('/api/projects/'+id,{headers:{Authorization:'Bearer '+localStorage.getItem('ol_token')}})).ok,project.id));
   check('link second-factor recovery code consumed',!!(await prisma.recoveryCode.findFirst({where:{userId:owner.user.id,codeHash:createHash('sha256').update(finishRecovery).digest('hex')}}))?.usedAt);
+  await page.click('.identities-link');await page.waitForSelector('.provider-email');
+  check('Projects opens linked identities read-only route',new URL(page.url()).pathname==='/account/identities');
+  check('identity list shows issuer and provider metadata',await page.$eval('.issuer',e=>e.textContent==='saml:http://127.0.0.1:5556/idp')&&await page.$eval('.provider-email',e=>e.textContent==='saml-user@example.com'));
+  check('identity list names unverified metadata and no unlink action',(await page.$eval('main',e=>e.textContent)).includes('unverified metadata')&&!(await page.$('button')));
+  const sessionToken=await page.evaluate(()=>localStorage.getItem('ol_token'));
+  const list=await call('/auth/identities',undefined,sessionToken);
+  check('identity API returns only intended owner-safe fields',list.status===200&&list.json.length===1&&Object.keys(list.json[0]).sort().join(',')==='createdAt,email,id,issuer');
+  check('identity list response is no-store',(await fetch(`${API}/auth/identities`,{headers:{Authorization:`Bearer ${sessionToken}`}})).headers.get('cache-control')==='no-store');
+  check('identity list rejects unauthenticated HTTP request',(await call('/auth/identities')).status===401);
+  const token=(await call('/auth/tokens',{name:'list-rejection',scopes:['read','write']},sessionToken)).json.token;
+  check('identity API-token rejection fixture is valid',typeof token==='string'&&token.startsWith('ol_'));
+  const tokenList=await fetch(`${API}/auth/identities`,{headers:{'X-Api-Key':token}});
+  check('identity list rejects API-token principal',tokenList.status===403);
+  // Literal rendering with real stored metadata, including HTML-looking text.
+  await prisma.externalIdentity.update({where:{id:identity.id},data:{issuer:'saml:https://idp.example/'+('long/'.repeat(20))+'<img src=x onerror=alert(1)>',email:'<script>not executable</script>@example.com'}});
+  await page.reload({waitUntil:'networkidle0'});await page.waitForSelector('.provider-email');
+  check('identity metadata renders as literal text without injected elements',await page.$eval('.provider-email',e=>e.textContent.includes('<script>'))&&!(await page.$('main script,main img')));
+  await page.setViewport({width:1280,height:850});await page.screenshot({path:'/downloads/identities-desktop.png',fullPage:true});
+  await page.setViewport({width:480,height:850});await page.screenshot({path:'/downloads/identities-narrow.png',fullPage:true});
+  check('long identity metadata fits narrow viewport',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.setRequestInterception(true);
+  const failList=req=>req.url().endsWith('/auth/identities')?req.respond({status:503,contentType:'application/json',body:'{}'}):req.continue();
+  page.on('request',failList);await page.reload({waitUntil:'networkidle0'});await page.waitForSelector('[role=alert]');
+  check('identity load error hides stale entries and offers retry',!(await page.$('.provider-email'))&&!!(await page.$('main button')));
+  page.off('request',failList);await page.setRequestInterception(false);
+  await page.click('main button');await page.waitForSelector('.provider-email');
+  check('identity retry reloads current entries',!!(await page.$('.issuer')));
+  await prisma.externalIdentity.update({where:{id:identity.id},data:{issuer:'saml:http://127.0.0.1:5556/idp',email:'saml-user@example.com'}});
   // New password account must not steal this already linked provider subject.
   const other=(await call('/auth/signup',{email:'other@link.dev',password:'password-b',displayName:'Other'})).json;
+  const otherList=await call('/auth/identities',undefined,other.accessToken);
+  check('identity list never returns another account bindings',otherList.status===200&&otherList.json.length===0);
+  await page.evaluate(t=>localStorage.setItem('ol_token',t),other.accessToken);await page.goto(`${WEB}/account/identities`,{waitUntil:'networkidle0'});await page.waitForSelector('[role=status]');
+  check('identity empty state has clear no-linked message',(await page.$eval('main',e=>e.textContent)).includes('No single sign-on identities'));
+  await page.screenshot({path:'/downloads/identities-empty.png'});
   await page.evaluate(t=>localStorage.setItem('ol_token',t),other.accessToken);await page.goto(`${WEB}/account/link-saml`,{waitUntil:'networkidle0'});await page.waitForSelector('input[name=linkPassword]');await page.type('input[name=linkPassword]','password-b');await page.click('button[name=startSamlLink]');await page.waitForSelector('[role=alert]');
   check('already-linked provider identity rejected visibly',(await page.$eval('[role=alert]',e=>e.textContent)).includes('could not be verified'));
   check('conflict preserves original identity owner',(await prisma.externalIdentity.findFirst({where:{subject:'idp-sub-saml-user@example.com'}})).userId===owner.user.id);
+  await prisma.user.update({where:{id:other.user.id},data:{totpEnabled:true}});
+  check('identity list requires second-factor session after enable',(await call('/auth/identities',undefined,other.accessToken)).status===403);
   // Unauthenticated account route remains guarded.
   await page.evaluate(()=>localStorage.clear());await page.goto(`${WEB}/account/link-saml`,{waitUntil:'networkidle0'});
   check('link account route requires session',new URL(page.url()).pathname==='/login');
+  await page.goto(`${WEB}/account/identities`,{waitUntil:'networkidle0'});
+  check('identity list route requires session',new URL(page.url()).pathname==='/login');
   console.log(failures?'SAML LINK CHECKS FAILED':'ALL SAML LINK CHECKS PASSED');process.exitCode=failures?1:0;
 } catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);for(const p of await browser?.pages()??[]){console.log('FAILURE_PAGE',p.url(),await p.$eval('body',e=>e.textContent));}process.exitCode=1;}
 finally {

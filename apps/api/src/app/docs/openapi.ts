@@ -59,6 +59,7 @@ export const OPENAPI = {
     '/api/auth/2fa/enable': { post: p('Verify a TOTP code and enable 2FA; returns one-use recovery codes once (session only)', 'auth') },
     '/api/auth/2fa/disable': { post: p('Disable 2FA with a valid TOTP or recovery code (session only)', 'auth') },
     '/api/auth/2fa/status': { get: p('Two-factor status and remaining recovery codes (session only)', 'auth') },
+    '/api/auth/identities': { get: p('List only the signed-in account identities (session and current second factor required)', 'auth') },
     '/api/auth/tokens': {
       post: p('Create a scoped API token (session only; raw token returned once)', 'auth', true),
       get: p('List API token metadata (session only; never includes raw tokens)', 'auth'),

@@ -209,6 +209,7 @@ export class ApiService {
   }
   listSyncPreviewRecords(projectId:string){return this.request<{records:SyncPreviewRecord[];canApply:false}>(`/projects/${projectId}/sync/preview-records`);}
   previewLocalSync(projectId:string,input:{branch:string;locale:string;baselineJson:string;remoteJson:string;remoteSha:string}) { return this.request<LocalSyncPreview>(`/projects/${projectId}/sync/preview`,{method:'POST',body:JSON.stringify(input)}); }
+  listIdentities() { return this.request<{id:string;issuer:string;email:string;createdAt:string}[]>('/auth/identities'); }
   listTokens() { return this.request<ApiTokenInfo[]>('/auth/tokens'); }
   getSamlSpInfo() { return this.request<{ configured: boolean; entityId?: string; acsUrl?: string; metadataPath?: string; idpEntryPoint?: string; requestSigning?: boolean; browserEnabled?: boolean }>('/auth/saml/sp-info'); }
   get2faStatus() { return this.request<{ enabled: boolean; recoveryCodesRemaining: number }>('/auth/2fa/status'); }
