@@ -84,7 +84,8 @@ add languages, manage keys and translations, export a file.
   translations and fresh verified remote bytes, with manual-review rows and
   pagination. Explicit draft selections/download recompute sources and check
   reviewed fingerprint before preparing bytes. No apply or two-way synchronization
-  yet. See reviews0134-0136.
+  yet. Draft API materializes locale-only set/removal plans without executing
+  them. See reviews0134-0137.
 
 ## Phase 3 - advanced
 

@@ -45,6 +45,7 @@ import {
 } from './repository-reader';
 import { parseSyncJson } from './sync-preview';
 import { resolvePlan, ResolutionChoice } from './resolve-preview';
+import { localDraftPlan } from './local-draft-plan';
 import { createHash } from 'node:crypto';
 import {
   LocalSyncPreviewModule,
@@ -346,8 +347,10 @@ export class RepositoryTargetsService {
     if (plan.fingerprint !== input.expectedFingerprint)
       throw new ConflictException('Repository preview changed; review a fresh comparison');
     try {
+      const draft = resolvePlan(plan, input.choices, input.expectedFingerprint);
       return {
-        ...resolvePlan(plan, input.choices, input.expectedFingerprint),
+        ...draft,
+        localChangePlan: localDraftPlan(plan.decisions, draft.json, plan.fingerprint),
         source: 'explicit-repository-preview-resolution',
         projectId,
         targetId: id,

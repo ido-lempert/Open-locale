@@ -219,3 +219,10 @@ repository write, baseline advance or sync/diagnostic record. The target screen 
 JSON/digest review and exact-byte download. Selections survive comparison pages;
 changed selections discard the previous draft. A failed preparation requires a
 fresh comparison. Neither preview nor draft preparation applies changes.
+
+Repository draft responses also include `localChangePlan`: deterministic per-key
+`set-value` or `remove-locale-value` changes from current local values to the
+selected draft, with expected/next values and set/removal/unchanged counts. The
+plan binds the reviewed fingerprint and exact draft digest. A removal is only a
+locale value, never a project key or another locale. This is materialized review
+data, not executable permission; no plan is persisted or applied.
