@@ -311,3 +311,10 @@ pruning at most100 old rows per call with SKIP LOCKED. Pending/leased intents ar
 never age-pruned, even when expired/exhausted. No payload is returned by cleanup.
 This is an internal helper, not a scheduled cleanup or dispatcher; callers still
 need to run it. Pending backlog limits, actual dispatch and public execution remain.
+
+Reviewed local transactions reject new work before locale mutation when a project's
+pending/leased backlog plus proposed changes exceeds10,000 intents or8MiB of key
+names plus set-value UTF8 bytes. Expired/exhausted leased rows still count; terminal
+rows do not. Serializable project locking prevents concurrent final-slot producers
+from exceeding admission limits. No-op drafts remain usable. This is a pending
+payload admission bound, not total database/storage accounting or enabled dispatch.

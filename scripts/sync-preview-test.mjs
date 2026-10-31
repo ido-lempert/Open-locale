@@ -10,6 +10,8 @@ const eligibilitySource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/
 const {validateRepositoryEffect}=await import('data:text/javascript;base64,'+Buffer.from(eligibilitySource).toString('base64'));
 const retentionSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-effect-retention.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
 const {pruneRepositoryEffects}=await import('data:text/javascript;base64,'+Buffer.from(retentionSource).toString('base64'));
+const budgetSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-effect-budget.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
+const {assertRepositoryEffectBudget}=await import('data:text/javascript;base64,'+Buffer.from(budgetSource).toString('base64'));
 import { lockRepositoryWriteScope } from '../apps/api/src/app/github/repository-write-scope.ts';
 import { lockLocalPreconditions } from '../apps/api/src/app/github/local-preconditions.ts';
 // Granular permissions: real PostgreSQL + real HTTP API.
@@ -302,7 +304,35 @@ try {
   let intentFailure=false;try{await compose(reviewedCompose);}catch(e){intentFailure=e.message.includes('injected intent storage failure');}
   check('intent insertion failure rolls back local value history and activity',intentFailure&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).value==='edited'&&await prisma.translationHistory.count()===composeBeforeHistory&&await prisma.activityEvent.count()===composeBeforeActivity&&await prisma.repositoryLocalEffectIntent.count()===composeBeforeIntents);
   await prisma.$executeRawUnsafe(`DROP TRIGGER fail_effect_insert ON repository_local_effect_intents`);await prisma.$executeRawUnsafe(`DROP FUNCTION fail_effect_insert()`);
+  const budgetData={projectId:project.id,targetId:target.id,actorId:owner.user.id,keyId:localKey.id,keyName:'budget',branchId:writeScope.branchId,branch:'main',locale:'en',operation:'set-value',value:'v',draftContentDigest:composeDigest,previewFingerprint:composeFingerprint};
+  await prisma.repositoryLocalEffectIntent.createMany({data:Array.from({length:10000},()=>budgetData)});
+  const budgetHistory=await prisma.translationHistory.count(),budgetActivity=await prisma.activityEvent.count();let deniedBudget=false;
+  try{await compose(reviewedCompose);}catch(e){deniedBudget=e.message.includes('backlog budget');}
+  check('pending effect row cap rejects before local history activity mutation',deniedBudget&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).value==='edited'&&await prisma.translationHistory.count()===budgetHistory&&await prisma.activityEvent.count()===budgetActivity&&await prisma.repositoryLocalEffectIntent.count()===10000);
+  await prisma.repositoryLocalEffectIntent.deleteMany();
+  await prisma.repositoryLocalEffectIntent.create({data:{...budgetData,state:'leased',attempts:3,leaseToken:owner.user.id,leaseUntil:new Date('2020-01-01'),value:'x'.repeat(8*1024*1024)}});
+  deniedBudget=false;try{await compose(reviewedCompose);}catch(e){deniedBudget=e.message.includes('backlog budget');}
+  check('expired exhausted leased payload still consumes byte budget',deniedBudget&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).value==='edited');
+  await prisma.repositoryLocalEffectIntent.deleteMany();
+  await prisma.repositoryLocalEffectIntent.create({data:{...budgetData,keyName:'unicode',value:'א'.repeat(4*1024*1024)}});
+  deniedBudget=false;try{await compose(reviewedCompose);}catch(e){deniedBudget=e.message.includes('backlog budget');}
+  check('backlog payload budget counts UTF8 bytes not characters',deniedBudget);
+  await prisma.repositoryLocalEffectIntent.deleteMany();
+  const noopBudgetJson=JSON.stringify(composeValues),noopBudgetDigest=createHash('sha256').update(noopBudgetJson).digest('hex');
+  await prisma.repositoryLocalEffectIntent.create({data:{...budgetData,value:'x'.repeat(8*1024*1024)}});
+  const noopBudget=await prisma.$transaction(tx=>repositoryLocalTransaction(tx,{...reviewedCompose,json:noopBudgetJson,contentDigest:noopBudgetDigest},noopBudgetDigest,composeFingerprint),{isolationLevel:'Serializable'});
+  check('over-budget existing backlog does not prevent no-op composition',noopBudget.updatedValues===0&&noopBudget.pendingEffectIntents===0);
+  await prisma.repositoryLocalEffectIntent.deleteMany();
+  await prisma.repositoryLocalEffectIntent.createMany({data:Array.from({length:9999},()=>budgetData)});
+  const contenders=await Promise.allSettled([0,1].map(()=>prisma.$transaction(async tx=>{await assertRepositoryEffectBudget(tx,project.id,[{key:'budget',nextValue:'v'}]);await tx.repositoryLocalEffectIntent.create({data:budgetData});},{isolationLevel:'Serializable'})));
+  check('concurrent final-slot producers cannot exceed pending row cap',contenders.filter(r=>r.status==='fulfilled').length===1&&await prisma.repositoryLocalEffectIntent.count()===10000);
+  await prisma.repositoryLocalEffectIntent.deleteMany();
+  let weakBudget=false;try{await prisma.$transaction(tx=>assertRepositoryEffectBudget(tx,project.id,[]));}catch{weakBudget=true;}
+  check('budget helper rejects weak isolation',weakBudget);
+  const terminalBudget=await prisma.repositoryLocalEffectIntent.create({data:{...budgetData,state:'dead',finishedAt:new Date(),value:'x'.repeat(8*1024*1024)}});
   const composed=await compose(reviewedCompose);
+  check('terminal payload does not consume pending effect quota',composed.updatedValues===1);
+  await prisma.repositoryLocalEffectIntent.delete({where:{id:terminalBudget.id}});
   check('composition commits rederived exact draft operations under both guards',composed.updatedValues===1&&composed.draftContentDigest===composeDigest&&composed.previewFingerprint===composeFingerprint&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).value==='composed value');
   check('composition replay fails stale local preconditions without duplicate audit',await rejectCompose(reviewedCompose)&&await prisma.translationHistory.count()===composeBeforeHistory+1&&await prisma.activityEvent.count()===composeBeforeActivity+1);
   const effectIntent=await prisma.repositoryLocalEffectIntent.findFirst({where:{projectId:project.id},orderBy:{createdAt:'desc'}});

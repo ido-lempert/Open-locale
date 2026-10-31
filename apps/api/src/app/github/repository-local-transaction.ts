@@ -1,3 +1,4 @@
+import { assertRepositoryEffectBudget } from './repository-effect-budget';
 import { createHash } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { lockRepositoryWriteScope } from './repository-write-scope';
@@ -52,6 +53,8 @@ export async function repositoryLocalTransaction(
     expectedPreviewFingerprint,
   );
   await lockRepositoryWriteScope(tx, scope);
+  // No-op drafts remain usable even when an existing backlog is over budget.
+  if (plan.changes.length) await assertRepositoryEffectBudget(tx, scope.projectId, plan.changes);
   const result = await writeExistingLocalValues(
     tx,
     local,
