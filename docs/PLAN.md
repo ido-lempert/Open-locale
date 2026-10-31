@@ -106,7 +106,8 @@ add languages, manage keys and translations, export a file.
   Automation outcome summaries added before repository-channel integration.
   Internal repository automation adapter added, no per-rule retry deduplication
   or enabled combined worker. Per-rule current-intent guard stops remaining rules
-  after context change/lease expiry. See reviews0134-0160.
+  after context change/lease expiry. Captured rule freshness/revision guard rejects
+  disabled/deleted/edited/restore-ABA rules. See reviews0134-0161.
 
 ## Phase 3 - advanced
 

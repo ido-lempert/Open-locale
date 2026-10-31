@@ -1,0 +1,1 @@
+ALTER TABLE "automation_rules" ADD COLUMN "revision" INTEGER NOT NULL DEFAULT 1;

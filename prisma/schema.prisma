@@ -494,6 +494,7 @@ model MtProvider {
 }
 
 model AutomationRule {
+  revision  Int      @default(1)
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   projectId String   @db.Uuid
   name      String

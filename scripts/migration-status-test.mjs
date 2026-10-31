@@ -57,8 +57,22 @@ try {
   const beforeRows = await db.query(`SELECT status::text AS s FROM "translations" WHERE "localeCode" = 'he'`);
   check('seeded old-enum row exists before migration', beforeRows.rows[0]?.s === 'REVIEWED');
 
+  // Apply the real prefix up to the new revision migration, then preserve an
+  // existing automation rule through the additive revision upgrade.
+  const revisionPrefix = mkdtempSync(join(tmpdir(), 'ol-rule-revision-prefix-'));
+  mkdirSync(join(revisionPrefix, 'prisma'), { recursive: true });
+  cpSync(join(root, 'prisma', 'schema.prisma'), join(revisionPrefix, 'prisma', 'schema.prisma'));
+  mkdirSync(join(revisionPrefix, 'prisma', 'migrations'), { recursive: true });
+  for (const m of readdirSync(migDir).filter((m) => m < '20261101014300_automation_rule_revision' && !m.endsWith('.toml')))
+    cpSync(join(migDir, m), join(revisionPrefix, 'prisma', 'migrations', m), { recursive: true });
+  execFileSync(join(root, 'node_modules', '.bin', 'prisma'), ['migrate', 'deploy'], { cwd: revisionPrefix, env, stdio: 'pipe' });
+  await db.query(`INSERT INTO automation_rules (id,"projectId",name,trigger,action,config,"creatorId") VALUES ('55555555-5555-5555-5555-555555555555','33333333-3333-3333-3333-333333333333','Existing rule','translation.value','task.create','{"title":"Keep me"}','11111111-1111-1111-1111-111111111111')`);
+  rmSync(revisionPrefix, { recursive: true, force: true });
   // Stage 2: the real migration set converts enum -> text on top of that data.
   execFileSync(join(root, 'node_modules', '.bin', 'prisma'), ['migrate', 'deploy'], { env, stdio: 'pipe' });
+  const migratedRule = (await db.query(`SELECT name,config,revision FROM automation_rules WHERE id='55555555-5555-5555-5555-555555555555'`)).rows[0];
+  check('existing automation rule content preserved through revision migration', migratedRule?.name === 'Existing rule' && migratedRule?.config.title === 'Keep me');
+  check('existing automation rule receives initial revision one', migratedRule?.revision === 1);
   const afterRows = await db.query(`SELECT status FROM "translations" WHERE "localeCode" = 'he'`);
   check('old enum value preserved as text after migration', afterRows.rows[0]?.status === 'REVIEWED');
   const colType = await db.query(`SELECT data_type FROM information_schema.columns WHERE table_name = 'translations' AND column_name = 'status'`);

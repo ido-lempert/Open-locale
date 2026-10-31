@@ -388,3 +388,8 @@ Repository automation rechecks current intent before each rule, including after
 a previous rule commits. Target change or lease expiry stops remaining rules;
 already completed effects remain. This is not per-rule retry deduplication or
 elimination of the race after a check. Normal automation callers need no guard.
+
+Captured automation rules are re-read before execution; disabled/deleted/updated
+rules abort remaining runs. Authenticated updates increment a revision, rejecting
+edit/restore ABA even when visible configuration returns to its earlier value.
+This point-in-time check does not fence edits after the check or deduplicate retries.

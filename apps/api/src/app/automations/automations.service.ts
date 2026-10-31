@@ -79,6 +79,7 @@ export class AutomationsService {
     return this.prisma.automationRule.update({
       where: { id: rule.id },
       data: {
+        revision: { increment: 1 },
         ...(dto.name !== undefined ? { name: dto.name } : {}),
         ...(dto.enabled !== undefined ? { enabled: dto.enabled } : {}),
         ...(dto.config !== undefined ? { config: dto.config as Prisma.InputJsonValue } : {}),
@@ -110,6 +111,12 @@ export class AutomationsService {
         // Optional current-scope guard. A rejection stops remaining rules;
         // already completed effects are not rolled back or replay-safe.
         await options?.beforeRule?.();
+        // Never execute a stale captured rule. Revision fences authenticated
+        // edit/restore ABA as well as ordinary edits. Point-in-time only.
+        const current = await this.prisma.automationRule.findUnique({ where: { id: rule.id } });
+        if (!current || !current.enabled || current.projectId !== projectId ||
+            current.trigger !== trigger || current.revision !== rule.revision)
+          throw new Error('Automation rule changed before execution');
         const ok = await this.runRule(projectId, project.baseLocale, rule, ctx).catch(() => false);
         if (ok) summary.succeeded++; else summary.failed++;
       }

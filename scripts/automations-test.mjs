@@ -296,6 +296,24 @@ try {
   await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:1}});
   await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{leaseUntil:new Date('2099-01-01')}});
   await prisma.automationRule.delete({where:{id:secondRepoRule.id}});
+  for(const mutation of ['disable','delete','config','disable-restore','config-restore']) {
+    const firstTitle='Fresh first '+mutation,secondTitle='Fresh second '+mutation;
+    await prisma.automationRule.update({where:{id:summaryRule.id},data:{config:{title:firstTitle}}});
+    const captured=await prisma.automationRule.create({data:{projectId:summaryProject.id,name:'Freshness '+mutation,trigger:'translation.value',action:'task.create',config:{title:secondTitle},creatorId:owner.user.id,createdAt:new Date('2098-01-01')}});
+    let mutated=false;
+    const changingActivity={record:async(tx,event)=>{await activityService.record(tx,event);if(event.action==='automation.run'&&!mutated){mutated=true;
+      const path=`/projects/${summaryProject.id}/automations/${captured.id}`;
+      if(mutation==='delete'){const res=await call(path,{jwt,method:'DELETE'});if(res.status>=300)throw new Error('fixture delete failed');}
+      else {const configMutation=mutation.startsWith('config');const res=await call(path,{jwt,method:'PATCH',body:configMutation?{config:{title:'Unexpected stale destination '+mutation}}:{enabled:false}});if(res.status>=300)throw new Error('fixture update failed');
+        if(mutation.endsWith('restore')){const restored=await call(path,{jwt,method:'PATCH',body:configMutation?{config:{title:secondTitle}}:{enabled:true}});if(restored.status>=300)throw new Error('fixture restore failed');}
+      }
+    }}};
+    const guardedService=new AutomationsService(prisma,projectsService,changingActivity,{},tasksService,{deliver:async()=>({matched:0,succeeded:0,failed:0})});
+    const beforeRuns=await prisma.activityEvent.count({where:{projectId:summaryProject.id,action:'automation.run'}});let stopped=false;
+    try{await fireRepositoryAutomation(prisma,guardedService,repoIntent);}catch{stopped=true;}
+    check('captured rule '+mutation+' stops second task and activity after actual first effect',mutated&&stopped&&await prisma.task.count({where:{projectId:summaryProject.id,title:firstTitle}})===1&&await prisma.task.count({where:{projectId:summaryProject.id,title:secondTitle}})===0&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Unexpected stale destination '+mutation}})===0&&await prisma.activityEvent.count({where:{projectId:summaryProject.id,action:'automation.run'}})===beforeRuns+1);
+    if(mutation!=='delete'){const changed=await prisma.automationRule.findUnique({where:{id:captured.id}});check('authenticated rule '+mutation+' increments revision',changed.revision===captured.revision+(mutation.endsWith('restore')?2:1));await prisma.automationRule.delete({where:{id:captured.id}});}
+  }
   const heRepoRow=await prisma.translation.create({data:{projectId:summaryProject.id,keyId:summaryKey.id,localeCode:'he',value:'Target'}});await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{locale:'he'}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{locale:'he',value:heRepoRow.value,translationRowId:heRepoRow.rowId,translationVersion:heRepoRow.version}});
   const nonbaseRepo=await fireRepositoryAutomation(prisma,summaryService,repoIntent);
   check('repository target locale does not trigger base-value automations',nonbaseRepo.skipped&&nonbaseRepo.matched===0);
