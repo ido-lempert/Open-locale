@@ -60,7 +60,7 @@ try {
   await page.click('.identities-link');await page.waitForSelector('.provider-email');
   check('Projects opens linked identities read-only route',new URL(page.url()).pathname==='/account/identities');
   check('identity list shows issuer and provider metadata',await page.$eval('.issuer',e=>e.textContent==='saml:http://127.0.0.1:5556/idp')&&await page.$eval('.provider-email',e=>e.textContent==='saml-user@example.com'));
-  check('identity list names unverified metadata and no unlink action',(await page.$eval('main',e=>e.textContent)).includes('unverified metadata')&&!(await page.$('button')));
+  check('identity list labels metadata and requires explicit unlink choice',(await page.$eval('main',e=>e.textContent)).includes('unverified metadata')&&!!(await page.$('button[name=chooseUnlink]'))&&!(await page.$('input[name=unlinkPassword]')));
   const sessionToken=await page.evaluate(()=>localStorage.getItem('ol_token'));
   const list=await call('/auth/identities',undefined,sessionToken);
   check('identity API returns only intended owner-safe fields',list.status===200&&list.json.length===1&&Object.keys(list.json[0]).sort().join(',')==='createdAt,email,id,issuer');
@@ -125,6 +125,21 @@ try {
   const afterUnlink=await call('/auth/login',{email:'existing@link.dev',password:'password-a',totpCode:loginCode});
   check('local password and second factor still permit sign-in after unlink',afterUnlink.status===200&&!!afterUnlink.json.accessToken);
   check('original project survives unlink',(await call('/projects/'+project.id,undefined,afterUnlink.json.accessToken)).status===200);
+  const uiIdentity=await prisma.externalIdentity.create({data:{userId:owner.user.id,issuer:'fixture:unlink-ui',subject:'ui-only',email:'ui@example.com'}});
+  await page.evaluate(t=>localStorage.setItem('ol_token',t),afterUnlink.json.accessToken);
+  await page.goto(`${WEB}/account/identities`,{waitUntil:'networkidle0'});await page.waitForSelector('button[name=chooseUnlink]');await page.click('button[name=chooseUnlink]');await page.waitForSelector('input[name=unlinkPassword]');
+  check('unlink confirmation names sign-out, pending factors and API-token limit',(await page.$eval('.unlink-confirm',e=>e.textContent)).includes('API tokens are not revoked')&&(await page.$eval('.unlink-confirm',e=>e.textContent)).includes('pending second-factor'));
+  await page.type('input[name=unlinkPassword]','discard-this');await page.click('button[name=cancelUnlink]');await page.waitForSelector('button[name=chooseUnlink]');
+  check('cancel clears password and leaves identity unchanged',!(await page.$('input[name=unlinkPassword]'))&&!!(await prisma.externalIdentity.findUnique({where:{id:uiIdentity.id}})));
+  await page.click('button[name=chooseUnlink]');await page.waitForSelector('input[name=unlinkPassword]');await page.type('input[name=unlinkPassword]','wrong-pass');await page.click('button[name=confirmUnlink]');await page.waitForSelector('.unlink-confirm [role=alert]');
+  check('wrong unlink password clears field without deleting or signing out',await page.$eval('input[name=unlinkPassword]',e=>e.value==='')&&!!(await prisma.externalIdentity.findUnique({where:{id:uiIdentity.id}}))&&await page.evaluate(t=>localStorage.getItem('ol_token')===t,afterUnlink.json.accessToken));
+  await page.setViewport({width:1280,height:850});await page.screenshot({path:'/downloads/unlink-desktop.png',fullPage:true});
+  await page.setViewport({width:480,height:850});await page.screenshot({path:'/downloads/unlink-narrow.png',fullPage:true});
+  check('unlink confirmation fits narrow viewport',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.type('input[name=unlinkPassword]','password-a');await page.click('button[name=confirmUnlink]');await page.waitForFunction(()=>location.pathname==='/login');
+  check('successful unlink signs out and explains next step',await page.evaluate(()=>!localStorage.getItem('ol_token'))&&(await page.$eval('[name=loginNotice]',e=>e.textContent)).includes('Identity unlinked'));
+  check('browser-confirmed unlink deletes selected identity',!(await prisma.externalIdentity.findUnique({where:{id:uiIdentity.id}})));
+  check('unlink password never persisted',await page.evaluate(()=>![...Object.values(localStorage),...Object.values(sessionStorage)].some(v=>v.includes('password-a')||v.includes('discard-this'))));
   // An SSO-only fixture cannot unlink, even while its session is valid.
   const ssoIdentity=await prisma.externalIdentity.create({data:{userId:other.user.id,issuer:'fixture:sso',subject:'only',email:'other@link.dev'}});
   await prisma.user.update({where:{id:other.user.id},data:{passwordHash:''}});

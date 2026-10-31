@@ -209,6 +209,13 @@ export class ApiService {
   }
   listSyncPreviewRecords(projectId:string){return this.request<{records:SyncPreviewRecord[];canApply:false}>(`/projects/${projectId}/sync/preview-records`);}
   previewLocalSync(projectId:string,input:{branch:string;locale:string;baselineJson:string;remoteJson:string;remoteSha:string}) { return this.request<LocalSyncPreview>(`/projects/${projectId}/sync/preview`,{method:'POST',body:JSON.stringify(input)}); }
+  async unlinkIdentity(id:string,password:string):Promise<{unlinked:true;signInRequired:true}>{
+    // A wrong fresh password is not a revoked session.
+    const response=await fetch(`${this.base}/auth/identities/${encodeURIComponent(id)}`,{method:'DELETE',headers:{'Content-Type':'application/json',Authorization:`Bearer ${this.token??''}`},body:JSON.stringify({password})});
+    const body=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(typeof body.message==='string'?body.message:'Could not unlink identity');
+    return body;
+  }
   listIdentities() { return this.request<{id:string;issuer:string;email:string;createdAt:string}[]>('/auth/identities'); }
   listTokens() { return this.request<ApiTokenInfo[]>('/auth/tokens'); }
   getSamlSpInfo() { return this.request<{ configured: boolean; entityId?: string; acsUrl?: string; metadataPath?: string; idpEntryPoint?: string; requestSigning?: boolean; browserEnabled?: boolean }>('/auth/saml/sp-info'); }
