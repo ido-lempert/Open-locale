@@ -26,12 +26,14 @@ async function call(path, { token, method = 'GET', body } = {}) {
 }
 
 const received = [];
+let afterReceipt;
 let failNext = 0; // when >0 the receiver answers 500 (retry testing)
 const receiver = createServer((req, res) => {
   let body = '';
   req.on('data', (c) => (body += c));
-  req.on('end', () => {
+  req.on('end', async () => {
     received.push({ event: req.headers['x-openlocale-event'], sig: req.headers['x-openlocale-signature'], body });
+    if(afterReceipt) await afterReceipt();
     if (failNext > 0) { failNext--; res.writeHead(500); res.end('boom'); return; }
     res.writeHead(200); res.end('ok');
   });
@@ -167,6 +169,16 @@ try {
   check('repository handler uses real signed receiver with effect ID',adapterResult.matched===1&&adapterResult.succeeded===1&&adapterResult.failed===0&&received.length===receivedBefore+1&&payload.effectId===intent.id&&payload.value===translation.value&&payload.operation==='set-value'&&emitted.sig==='sha256='+createHmac('sha256',repositoryHook.secret).update(emitted.body).digest('hex'));
   failNext=2;let failedAdapter=false;try{await deliverRepositoryWebhook(prisma,service,intent);}catch{failedAdapter=true;}
   check('repository handler surfaces exhausted receiver failure for queue retry',failedAdapter&&received.length===receivedBefore+3);
+  receivedBefore=received.length;failNext=1;afterReceipt=async()=>{afterReceipt=null;await prisma.repositorySyncTarget.update({where:{id:target.id},data:{revision:{increment:1}}});};
+  let changedDuringRetry=false;try{await deliverRepositoryWebhook(prisma,service,intent);}catch{changedDuringRetry=true;}
+  check('target changed after first failure suppresses retry socket',changedDuringRetry&&received.length===receivedBefore+1);
+  await prisma.repositorySyncTarget.update({where:{id:target.id},data:{revision:target.revision}});
+  receivedBefore=received.length;failNext=1;afterReceipt=async()=>{afterReceipt=null;await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "leaseUntil"=clock_timestamp()-INTERVAL '1 second' WHERE id=${intent.id}::uuid`;};
+  let expiredDuringRetry=false;try{await deliverRepositoryWebhook(prisma,service,intent);}catch{expiredDuringRetry=true;}
+  check('lease expired after first failure suppresses retry socket',expiredDuringRetry&&received.length===receivedBefore+1);
+  await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "leaseUntil"=clock_timestamp()+INTERVAL '60 seconds' WHERE id=${intent.id}::uuid`;
+  const guardedJournal=await prisma.webhookDelivery.findFirst({where:{webhookId:repositoryHook.id,success:false,attempts:1}});
+  check('suppressed retry journals one actual socket attempt not two',!!guardedJournal);
   const resetStep=()=>prisma.repositoryLocalEffectIntent.update({where:{id:intent.id},data:{state:'pending',attempts:0,leaseToken:null,leaseUntil:null,finishedAt:null,availableAt:new Date('2020-01-01')}});
   await resetStep();receivedBefore=received.length;const stepped=await runRepositoryWebhookStep(prisma,service);const steppedRow=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:intent.id}});
   check('internal webhook step claims signs delivers and settles completed',stepped.status==='completed'&&steppedRow.state==='completed'&&steppedRow.attempts===1&&steppedRow.leaseToken===null&&steppedRow.finishedAt&&received.length===receivedBefore+1&&JSON.parse(received.at(-1).body).effectId===intent.id);

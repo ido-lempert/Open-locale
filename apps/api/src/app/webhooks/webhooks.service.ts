@@ -122,7 +122,8 @@ export class WebhooksService {
 
   // Fire-and-forget delivery. Delivery failure must never fail the write that
   // triggered it, so callers invoke this without awaiting user-facing latency.
-  async deliver(projectId: string, event: string, payload: Record<string, unknown>) {
+  async deliver(projectId: string, event: string, payload: Record<string, unknown>,
+    beforeAttempt?: () => Promise<void>) {
     const hooks = await this.prisma.webhook.findMany({
       where: { projectId, active: true, events: { has: event } },
     });
@@ -141,6 +142,10 @@ export class WebhooksService {
           const pinned = await this.resolveApproved(url);
           const signature = createHmac('sha256', hook.secret).update(body).digest('hex');
           while (attempts < WebhooksService.MAX_ATTEMPTS) {
+            // Optional internal guard rechecks current source authority after DNS
+            // and every retry backoff. Failure aborts this hook before a socket.
+            // It is not held over transport and does not eliminate later races.
+            if (beforeAttempt) await beforeAttempt();
             attempts++;
             try {
               const res = await deliverPinned(url, pinned, {

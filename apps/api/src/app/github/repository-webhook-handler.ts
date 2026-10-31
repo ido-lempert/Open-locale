@@ -12,15 +12,17 @@ export async function deliverRepositoryWebhook(
   webhooks: Pick<WebhooksService, 'deliver'>,
   intent: RepositoryLocalEffectIntent,
 ) {
-  const current = await db.$transaction(
+  const validate = () => db.$transaction(
     (tx) => validateRepositoryEffect(tx, intent.id, intent.leaseToken!),
     { isolationLevel: 'Serializable' },
   );
+  const current = await validate();
   const result = await webhooks.deliver(
     current.projectId,
     current.operation === 'set-value' ? 'translation.updated' : 'translation.removed',
     { effectId: current.id, source: 'repository-local-write', key: current.keyName,
       locale: current.locale, operation: current.operation, value: current.value },
+    async () => { await validate(); },
   );
   if (result.failed) throw new Error('Repository webhook delivery incomplete');
   return result;

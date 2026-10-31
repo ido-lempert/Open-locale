@@ -343,3 +343,10 @@ tests cover completed no-redelivery, exhausted failure/backoff and due retry wit
 stable effectId. No timer/startup worker/public route is connected. This helper is
 webhook-channel-only; it does not execute automations or mark overall sync complete.
 Before a production combined worker, per-channel completion needs separate state.
+
+Repository delivery now rechecks current intent eligibility immediately before
+each socket attempt, after DNS and after retry backoff. Target changes or expired
+leases between receiver attempts suppress later sockets and journal only attempts
+actually made. Guard transactions end before transport; this reduces stale retry
+windows but cannot eliminate changes after the check. Normal non-repository callers
+omit the optional attempt guard. No worker/public route is enabled.
