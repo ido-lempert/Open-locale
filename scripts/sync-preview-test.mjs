@@ -8,6 +8,8 @@ const leaseSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/gi
 const {claimRepositoryEffect,settleRepositoryEffect}=await import('data:text/javascript;base64,'+Buffer.from(leaseSource).toString('base64'));
 const eligibilitySource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-effect-eligibility.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
 const {validateRepositoryEffect}=await import('data:text/javascript;base64,'+Buffer.from(eligibilitySource).toString('base64'));
+const retentionSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-effect-retention.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
+const {pruneRepositoryEffects}=await import('data:text/javascript;base64,'+Buffer.from(retentionSource).toString('base64'));
 import { lockRepositoryWriteScope } from '../apps/api/src/app/github/repository-write-scope.ts';
 import { lockLocalPreconditions } from '../apps/api/src/app/github/local-preconditions.ts';
 // Granular permissions: real PostgreSQL + real HTTP API.
@@ -566,6 +568,29 @@ try {
   check('lease expiry uses wall clock even within older transaction',expiredInTransaction);
   let invalidState=false;try{await prisma.repositoryLocalEffectIntent.update({where:{id:clockLease.id},data:{state:'completed',leaseToken:null,leaseUntil:null}});}catch{invalidState=true;}
   check('database rejects terminal state without finished timestamp',invalidState);
+  await prisma.repositoryLocalEffectIntent.deleteMany();
+  const oldTerminal={...leaseData,state:'completed',finishedAt:new Date('2020-01-01')};
+  await prisma.repositoryLocalEffectIntent.createMany({data:Array.from({length:205},(_,i)=>({...oldTerminal,state:i%2?'dead':'completed'}))});
+  const protectedPending=await prisma.repositoryLocalEffectIntent.create({data:{...leaseData,createdAt:new Date('2020-01-01'),availableAt:new Date('2020-01-01')}});
+  const protectedLeased=await prisma.repositoryLocalEffectIntent.create({data:{...leaseData,state:'leased',attempts:3,leaseToken:owner.user.id,leaseUntil:new Date('2020-01-01'),createdAt:new Date('2020-01-01')}});
+  const recentTerminal=await prisma.repositoryLocalEffectIntent.create({data:{...oldTerminal,finishedAt:new Date()}});
+  const lockedTerminal=await prisma.repositoryLocalEffectIntent.findFirst({where:{state:'completed',finishedAt:new Date('2020-01-01')}});
+  let retentionReady,releaseRetention;const retentionGate=new Promise(r=>releaseRetention=r),retentionHeld=new Promise(r=>retentionReady=r);
+  const holdingTerminal=prisma.$transaction(async tx=>{await tx.$queryRaw`SELECT id FROM repository_local_effect_intents WHERE id=${lockedTerminal.id}::uuid FOR UPDATE`;retentionReady();await retentionGate;},{timeout:10000});await retentionHeld;
+  const firstPrune=await prisma.$transaction(pruneRepositoryEffects);
+  check('terminal retention deletes at most hundred old rows per call',firstPrune.removed===100&&await prisma.repositoryLocalEffectIntent.count()===108);
+  check('terminal retention skips a concurrently locked old row',!!await prisma.repositoryLocalEffectIntent.findUnique({where:{id:lockedTerminal.id}}));
+  releaseRetention();await holdingTerminal;
+  const concurrentPrunes=await Promise.all([prisma.$transaction(pruneRepositoryEffects),prisma.$transaction(pruneRepositoryEffects)]);
+  check('concurrent terminal pruners delete disjoint bounded batches',concurrentPrunes.reduce((n,r)=>n+r.removed,0)===105&&concurrentPrunes.every(r=>r.removed<=100)&&await prisma.repositoryLocalEffectIntent.count()===3);
+  check('retention preserves old pending and expired exhausted leased work',!!await prisma.repositoryLocalEffectIntent.findUnique({where:{id:protectedPending.id}})&&!!await prisma.repositoryLocalEffectIntent.findUnique({where:{id:protectedLeased.id}}));
+  check('retention preserves recent terminal bookkeeping',!!await prisma.repositoryLocalEffectIntent.findUnique({where:{id:recentTerminal.id}}));
+  check('empty retention sweep is idempotent',(await prisma.$transaction(pruneRepositoryEffects)).removed===0);
+  const rollbackTerminal=await prisma.repositoryLocalEffectIntent.create({data:oldTerminal});
+  try{await prisma.$transaction(async tx=>{await pruneRepositoryEffects(tx);throw new Error('rollback retention');});}catch{}
+  check('retention rollback preserves terminal payload',!!await prisma.repositoryLocalEffectIntent.findUnique({where:{id:rollbackTerminal.id}}));
+  await prisma.repositoryLocalEffectIntent.update({where:{id:rollbackTerminal.id},data:{finishedAt:new Date(Date.now()-6*24*3600000)}});
+  check('six day terminal row remains inside seven day retention',(await prisma.$transaction(pruneRepositoryEffects)).removed===0);
   await prisma.project.delete({where:{id:leaseProject.id}});
   const concurrent=await Promise.all(Array.from({length:4},()=>call(`${P}/sync/preview-records`,{jwt,method:'POST',body:input})));
   check('concurrent diagnostic records succeed without exceeding retention',concurrent.every(r=>r.status===201) && await prisma.syncPreviewRecord.count({where:{projectId:project.id}})<=100);

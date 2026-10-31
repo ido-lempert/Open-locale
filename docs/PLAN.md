@@ -95,8 +95,9 @@ add languages, manage keys and translations, export a file.
   effects/fresh-source execution integration remain. Transactional TM helper shared
   with normal save/import and isolated writer. Durable transaction-coupled effect
   intents added; internal bounded lease/retry bookkeeping added. Dispatcher and
-  terminal retention remain code work. Internal current-scope/generation eligibility
-  guard added, not dispatch permission. See reviews0134-0148.
+  dispatch remains code work. Bounded internal seven-day terminal cleanup added,
+  not scheduled. Internal current-scope/generation eligibility
+  guard added, not dispatch permission. See reviews0134-0149.
 
 ## Phase 3 - advanced
 

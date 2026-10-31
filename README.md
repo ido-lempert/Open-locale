@@ -305,3 +305,9 @@ waits. Old intents without revision evidence fail closed. This is a point-in-tim
 internal guard, not a dispatcher or permanent grant; no network runs under locks.
 A later change can still invalidate dispatch, and handler routing/deduplication,
 terminal retention and public execution composition remain code work.
+
+Internal terminal-intent cleanup retains seven days of completed/dead bookkeeping,
+pruning at most100 old rows per call with SKIP LOCKED. Pending/leased intents are
+never age-pruned, even when expired/exhausted. No payload is returned by cleanup.
+This is an internal helper, not a scheduled cleanup or dispatcher; callers still
+need to run it. Pending backlog limits, actual dispatch and public execution remain.
