@@ -104,6 +104,7 @@ import {
     <header class="bar">
       <a [routerLink]="['/projects', projectId]" class="back">&larr; Editor</a>
       <h1>File sync preview</h1>
+      <a [routerLink]="['/projects',projectId,'sync','targets']" class="targets-link">Repository targets</a>
       <a
         [routerLink]="['/projects', projectId, 'sync', 'history']"
         class="history-link"

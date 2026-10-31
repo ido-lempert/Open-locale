@@ -160,12 +160,55 @@ try {
   await page.evaluate(id=>{const link=window.ng.getDirectives(document.querySelector('.back')).find(d=>d.router);return link.router.navigateByUrl('/projects/'+id+'/sync/history');},second.id);
   await page.waitForFunction(()=>document.body.textContent.includes('No diagnostic preview records'));
   check('same-component history navigation clears previous project record',!(await page.$('article')) && !(await page.content()).includes(saved.record.fingerprint));
+
+  await page.goto(`${WEB}/projects/${project.id}/sync`,{waitUntil:'networkidle0'});await page.click('.targets-link');await page.waitForSelector('[name=targetOwner]');
+  check('preview links to configuration-only repository target screen',(await page.content()).includes('do not connect to GitHub')&&(await page.content()).includes('No repository target configurations.'));
+  await set('targetOwner','owner');await set('targetRepo','repo');await set('targetPath','locales/en.json');await set('targetRemoteBranch','feature/test');
+  await page.click('[name=targetSave]');await page.waitForSelector('article[data-target-id]');
+  check('UI saves real repository coordinates without connection claim',(await page.$eval('article',e=>e.textContent)).includes('locales/en.json')&&(await page.$eval('article',e=>e.textContent)).includes('Not connected.'));
+  await page.reload({waitUntil:'networkidle0'});await page.waitForSelector('article');
+  check('target configuration persists across reload',(await page.$eval('article',e=>e.textContent)).includes('feature/test'));
+  await page.click('[name=targetEdit]');await set('targetPath','updated/en.json');await page.click('[name=targetSave]');await page.waitForFunction(()=>document.querySelector('article')?.textContent.includes('Revision 2'));
+  check('UI edit uses expected revision and displays new config',(await page.$eval('article',e=>e.textContent)).includes('updated/en.json'));
+  // External update makes the editor revision stale, never silently overwrite.
+  const savedConfig=(await call(`${P}/sync/repository-targets`,undefined,token)).targets[0];
+  await page.click('[name=targetEdit]');await set('targetPath','stale-user-edit.json');
+  const external=await fetch(`${API}${P}/sync/repository-targets/${savedConfig.id}`,{method:'PUT',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({...savedConfig,path:'external/new.json',expectedRevision:savedConfig.revision})});if(!external.ok)throw new Error('external target fixture failed');await external.arrayBuffer();
+  await page.click('[name=targetSave]');await page.waitForSelector('[role=alert]');
+  check('stale revision error preserves edit for inspection',(await page.$eval('[role=alert]',e=>e.textContent)).includes('changed')&&await page.$eval('[name=targetPath]',e=>e.value==='stale-user-edit.json'));
+  check('stale UI edit did not overwrite newer target',(await call(`${P}/sync/repository-targets`,undefined,token)).targets[0].path==='external/new.json');
+  await page.click('[name=targetRefresh]');await page.waitForFunction(()=>document.querySelector('article')?.textContent.includes('external/new.json'));
+  check('explicit refresh replaces stale edit with current configuration',await page.$eval('[name=targetPath]',e=>e.value===''));
+  await page.click('[name=targetEdit]');await set('targetPath','../unsafe');await page.click('[name=targetSave]');await page.waitForSelector('[role=alert]');
+  check('validation failure preserves typed coordinates',(await page.$eval('[role=alert]',e=>e.textContent)).includes('Invalid repository')&&await page.$eval('[name=targetPath]',e=>e.value==='../unsafe'));
+  await page.click('[name=targetCancel]');
+  await page.setViewport({width:1280,height:900});await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'/downloads/repository-targets-desktop.png',fullPage:true});
+  await page.setViewport({width:480,height:900});await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'/downloads/repository-targets-narrow.png',fullPage:true});
+  check('target form and long coordinates fit narrow viewport',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.click('[name=targetRemove]');await page.waitForSelector('[name=targetConfirmRemove]');await page.click('[name=targetCancelRemove]');await page.waitForSelector('[name=targetRemove]');
+  check('removal cancellation keeps configuration',!!await page.$('article')&&!(await page.$('[name=targetConfirmRemove]')));
+  await page.click('[name=targetRemove]');await page.waitForSelector('[name=targetConfirmRemove]');
+  check('removal confirmation limits effect to configuration',(await page.content()).includes('Repository files and translations will not be deleted'));
+  await page.click('[name=targetConfirmRemove]');await page.waitForFunction(()=>document.body.textContent.includes('No repository target configurations.'));
+  check('confirmed removal deletes real config only',(await call(`${P}/sync/repository-targets`,undefined,token)).targets.length===0&&(await call(`${P}/export/en?flat=true`,undefined,token)).title==='Local title');
+  await set('targetOwner','other');await set('targetRepo','other');await set('targetPath','dirty.json');
+  let targetRelease,targetHeld=false;const targetGate=new Promise(r=>targetRelease=r);
+  await page.setRequestInterception(true);const holdTarget=async request=>{if(!targetHeld&&request.method()==='POST'&&request.url().endsWith('/sync/repository-targets')){targetHeld=true;await targetGate;}return request.continue();};page.on('request',holdTarget);
+  await page.click('[name=targetSave]');await page.waitForFunction(()=>document.querySelector('fieldset').disabled);
+  await page.evaluate(id=>{const link=window.ng.getDirectives(document.querySelector('.back')).find(d=>d.router);return link.router.navigateByUrl('/projects/'+id+'/sync/targets');},second.id);
+  await page.waitForFunction(id=>location.pathname==='/projects/'+id+'/sync/targets',{},second.id);await page.waitForSelector('[name=targetOwner]');
+  targetRelease();await new Promise(r=>setTimeout(r,600));page.off('request',holdTarget);await page.setRequestInterception(false);
+  check('late save cannot add old-project configuration to new screen',!(await page.$('article'))&&!(await page.content()).includes('Configuration saved'));
+  check('held target request still saved only to original project',(await call(`${P}/sync/repository-targets`,undefined,token)).targets.some(t=>t.path==='dirty.json')&&(await call(`/projects/${second.id}/sync/repository-targets`,undefined,token)).targets.length===0);
+  check('same-component target route clears previous scope form and records',await page.$eval('[name=targetOwner]',e=>e.value==='')&&!(await page.$('article')));
   await page.evaluate(t=>localStorage.setItem('ol_token',t),member.accessToken);
   await page.goto(`${WEB}/projects/${project.id}/sync`,{waitUntil:'networkidle0'});await page.waitForSelector('textarea[name=syncBaseline]');
   await set('syncSha','a'.repeat(40));await set('syncBaseline','{}');await set('syncRemote','{}');await page.click('button[name=syncPreview]');await page.waitForSelector('[role=alert]');
   check('member gets explicit permission error and no preview',(await page.$eval('[role=alert]',e=>e.textContent)).includes('admin')&&!(await page.$('section[aria-label="Preview results"]')));
   await page.goto(`${WEB}/projects/${project.id}/sync/history`,{waitUntil:'networkidle0'});await page.waitForSelector('[role=alert]');
   check('member history denial exposes no saved record',!(await page.$('article')) && (await page.$eval('[role=alert]',e=>e.textContent)).includes('admin'));
+  await page.goto(`${WEB}/projects/${project.id}/sync/targets`,{waitUntil:'networkidle0'});await page.waitForSelector('[role=alert]');
+  check('member target denial exposes no form or configuration',!(await page.$('[name=targetSave]'))&&!(await page.$('article'))&&(await page.$eval('[role=alert]',e=>e.textContent)).includes('admin'));
   console.log(failures?'SYNC BROWSER CHECKS FAILED':'ALL SYNC BROWSER CHECKS PASSED');process.exitCode=failures?1:0;
 } catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {

@@ -1,3 +1,4 @@
+import { RepositoryTargetsComponent } from './pages/repository-targets.component';
 import { IdentitiesComponent } from './pages/identities.component';
 import { IdentityLinkComponent } from './pages/identity-link.component';
 import { SyncHistoryComponent } from './pages/sync-history.component';
@@ -26,6 +27,7 @@ export const appRoutes: Routes = [
   { path: 'account/link-oidc', component: IdentityLinkComponent, canActivate: [authGuard] },
   { path: 'projects', component: ProjectsComponent, canActivate: [authGuard] },
   { path: 'projects/:id', component: EditorComponent, canActivate: [authGuard] },
+  { path: 'projects/:id/sync/targets', component: RepositoryTargetsComponent, canActivate: [authGuard] },
   { path: 'projects/:id/sync/history', component: SyncHistoryComponent, canActivate: [authGuard] },
   { path: 'projects/:id/sync', component: SyncPreviewComponent, canActivate: [authGuard] },
   { path: 'projects/:id/settings', component: SettingsComponent, canActivate: [authGuard] },

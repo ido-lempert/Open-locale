@@ -1,3 +1,5 @@
+export interface RepositoryTargetInput { localBranch:string;locale:string;owner:string;repo:string;path:string;remoteBranch:string; }
+export interface RepositoryTargetConfig extends RepositoryTargetInput {id:string;revision:number;}
 export type SyncResolutionChoice = 'base' | 'local' | 'remote';
 export interface SyncResolutionDraft {
  json:string; contentDigest:string; previewFingerprint:string;
@@ -213,6 +215,9 @@ export class ApiService {
   completeOidc(pendingToken: string, totpCode: string) {
     return this.request<{ accessToken: string }>('/auth/oidc/complete', { method: 'POST', body: JSON.stringify({ pendingToken, totpCode }) });
   }
+  listRepositoryTargets(projectId:string){return this.request<{targets:RepositoryTargetConfig[];connected:false;canApply:false}>(`/projects/${projectId}/sync/repository-targets`);}
+  saveRepositoryTarget(projectId:string,input:RepositoryTargetInput,id?:string,expectedRevision?:number){return this.request<{target:RepositoryTargetConfig}>(`/projects/${projectId}/sync/repository-targets${id?'/'+encodeURIComponent(id):''}`,{method:id?'PUT':'POST',body:JSON.stringify({...input,...(id?{expectedRevision}:{})})});}
+  removeRepositoryTarget(projectId:string,id:string,expectedRevision:number){return this.request(`/projects/${projectId}/sync/repository-targets/${encodeURIComponent(id)}`,{method:'DELETE',body:JSON.stringify({expectedRevision})});}
   listSyncPreviewRecords(projectId:string){return this.request<{records:SyncPreviewRecord[];canApply:false}>(`/projects/${projectId}/sync/preview-records`);}
   previewLocalSync(projectId:string,input:{branch:string;locale:string;baselineJson:string;remoteJson:string;remoteSha:string}) { return this.request<LocalSyncPreview>(`/projects/${projectId}/sync/preview`,{method:'POST',body:JSON.stringify(input)}); }
   resolveLocalSync(projectId:string,input:{branch:string;locale:string;baselineJson:string;remoteJson:string;remoteSha:string;expectedFingerprint:string;choices:Record<string,SyncResolutionChoice>}) { return this.request<SyncResolutionDraft>(`/projects/${projectId}/sync/resolve-preview`,{method:'POST',body:JSON.stringify(input)}); }
