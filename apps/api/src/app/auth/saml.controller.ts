@@ -53,6 +53,18 @@ export class SamlController {
     return this.saml.startLink(user.userId, epoch);
   }
 
+  // Combined browser handoff + fresh-auth linking. Neither a plain browser
+  // request nor an ordinary link token can substitute for this purpose.
+  @Post('browser/start-link')
+  @UseGuards(JwtAuthGuard)
+  async browserStartLink(@CurrentUser() user: AuthPrincipal, @Body() body: { password?: string; challenge?: string }) {
+    if (user.via !== 'jwt') throw new ForbiddenException('Linking requires a signed-in session');
+    if (typeof body?.password !== 'string' || typeof body?.challenge !== 'string') throw new BadRequestException('password and challenge are required');
+    await this.auth.requirePasswordForUser(user.userId, body.password);
+    const epoch = await this.auth.sessionEpoch(user.userId);
+    return this.saml.startLink(user.userId, epoch, body.challenge);
+  }
+
   @Post('acs')
   @HttpCode(200)
   async acs(@Res({ passthrough: true }) res: Response, @Body('SAMLResponse') samlResponse?: string, @Body('RelayState') relayState?: string) {

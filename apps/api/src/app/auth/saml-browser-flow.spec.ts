@@ -8,6 +8,14 @@ describe('browser SAML one-use verifier handoff',()=>{
     expect(()=>flow.take('browser.state','request')).toThrow();
     expect(()=>flow.assertNotStripped('request')).toThrow();
   });
+  it('binds linking purpose to the consumed state rather than caller input',()=>{
+    const flow=new SamlBrowserFlow();
+    flow.start('ordinary',challenge,'browser.ordinary');
+    flow.start('link',challenge,'browser.link',true);
+    expect(flow.take('browser.ordinary','ordinary')).toEqual({challenge,link:false});
+    expect(flow.take('browser.link','link')).toEqual({challenge,link:true});
+    expect(()=>flow.take('browser.link','link')).toThrow();
+  });
   it('requires verifier and burns ticket on a wrong verifier',()=>{
     const flow=new SamlBrowserFlow();const code=flow.ticket(challenge,{accessToken:'fixture'});
     expect(()=>flow.redeem(code,'b'.repeat(64))).toThrow();

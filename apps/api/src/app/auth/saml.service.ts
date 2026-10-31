@@ -161,7 +161,11 @@ export class SamlService {
   // Linking entry point: the caller has already passed fresh-auth (current
   // password) in the controller; here the flow is bound to the account AND
   // its current authEpoch, carried to the IdP as an opaque RelayState token.
-  async startLink(userId: string, epoch: number): Promise<{ url: string }> {
+  async startLink(userId: string, epoch: number, challenge?: string): Promise<{ url: string }> {
+    if (challenge !== undefined) {
+      this.browserReturnUrl();
+      if (!/^[A-Za-z0-9_-]{43}$/.test(challenge)) throw new BadRequestException('Invalid browser challenge');
+    }
     const now = Date.now();
     for (const [k, v] of this.linkStates) if (v.expiresAt <= now) {
       this.linkStates.delete(k);
@@ -170,7 +174,7 @@ export class SamlService {
     if (this.linkRequests.size >= SamlService.LINK_MAX || this.linkStates.size >= SamlService.LINK_MAX) {
       throw new ServiceUnavailableException('Too many pending SAML link flows');
     }
-    const token = b64url(randomBytes(16));
+    const token = (challenge === undefined ? '' : 'browser.') + b64url(randomBytes(16));
     const result = await this.login(token);
     // Read only our own library-generated AuthnRequest, not IdP input.
     // RelayState alone is not enough: it must answer THIS exact request.
@@ -182,6 +186,7 @@ export class SamlService {
     // Recheck after the awaited library call: concurrent starts cannot
     // overrun the cap. Failed generation leaves no link state behind.
     if (this.linkRequests.size >= SamlService.LINK_MAX || this.linkStates.size >= SamlService.LINK_MAX) throw new ServiceUnavailableException('Too many pending SAML link flows');
+    if (challenge !== undefined) this.browser.start(requestId, challenge, token, true);
     this.linkStates.set(token, { userId, epoch, requestId, expiresAt: now + SamlService.LINK_TTL_MS });
     this.linkRequests.set(requestId, now + SamlService.REQUEST_TTL_MS);
     return result;
@@ -251,15 +256,15 @@ export class SamlService {
     const requestId = this.precheck(Buffer.from(samlResponseB64, 'base64').toString('utf8'), c.callbackUrl) || '';
     if (this.browser.isBrowser(relayState)) {
       const returnUrl = this.browserReturnUrl();
-      const challenge = this.browser.take(relayState!, requestId);
+      const flow = this.browser.take(relayState!, requestId);
       // State/request binding has succeeded. Return a verifier-protected,
       // fixed error result for assertion validation/account failures rather
       // than leaving the browser on raw API JSON. Never forward IdP/XML
       // content or detailed verifier errors into the web page.
       let result: unknown;
-      try { result = await this.validateAcs(samlResponseB64); }
+      try { result = await this.validateAcs(samlResponseB64, flow.link ? relayState : undefined); }
       catch { result = { error: 'SAML sign-in could not be verified. Return to sign-in and try again.' }; }
-      const code = this.browser.ticket(challenge, result);
+      const code = this.browser.ticket(flow.challenge, result);
       returnUrl.hash = new URLSearchParams({ code }).toString();
       return { browserRedirect: returnUrl.toString() };
     }

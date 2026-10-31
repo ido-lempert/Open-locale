@@ -142,6 +142,65 @@ try {
     if(scenario==='access-newer')await page.screenshot({path:'/downloads/saml-stale-response-narrow.png'});
     page.off('request',intercept);await page.setRequestInterception(false);
   }
+  // Combined verifier-protected browser linking, through real HTTP + signed
+  // assertions. No new UI is claimed for this API composition slice.
+  const linkEmail='browser-linker@example.com',password='pass1234';
+  await post('/auth/signup',{email:linkEmail,password,displayName:'Browser Linker'});
+  const linker=await (await post('/auth/login',{email:linkEmail,password})).json();
+  const linkPost=(body,jwt=linker.accessToken)=>fetch(`${API}/auth/saml/browser/start-link`,{method:'POST',headers:{'content-type':'application/json',...(jwt?{Authorization:`Bearer ${jwt}`}:{})},body:JSON.stringify(body)});
+  const linkVerifier='z'.repeat(64),linkChallenge=createHash('sha256').update(linkVerifier).digest('base64url');
+  check('browser link requires session',(await linkPost({password,challenge:linkChallenge},'')).status===401);
+  check('browser link requires correct fresh password',(await linkPost({password:'wrong-pass',challenge:linkChallenge})).status===401);
+  check('browser link requires valid challenge',(await linkPost({password,challenge:'bad'})).status===400);
+  const apiToken=await (await fetch(`${API}/auth/tokens`,{method:'POST',headers:{'content-type':'application/json',Authorization:`Bearer ${linker.accessToken}`},body:JSON.stringify({name:'link-rejection',scopes:['read','write']})})).json();
+  check('browser link API-token rejection fixture created',typeof apiToken.token==='string');
+  const apiTokenStart=await fetch(`${API}/auth/saml/browser/start-link`,{method:'POST',headers:{'content-type':'application/json','X-Api-Key':apiToken.token},body:JSON.stringify({password,challenge:linkChallenge})});
+  check('browser link rejects API-token principal despite correct password',apiTokenStart.status===403);
+  const beginLink=async()=>{
+    const response=await linkPost({password,challenge:linkChallenge});if(!response.ok)throw new Error(`link start failed ${response.status}`);
+    const u=new URL((await response.json()).url);
+    return {relay:u.searchParams.get('RelayState'),id:inflateRawSync(Buffer.from(u.searchParams.get('SAMLRequest'),'base64')).toString().match(/ID="([^"]+)"/)[1]};
+  };
+  const signed=async(id,email)=> (await (await fetch('http://127.0.0.1:5556/mint',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({inResponseTo:id,email})})).json());
+  const accept=async(flow,email)=>post('/auth/saml/acs',{...await signed(flow.id,email),RelayState:flow.relay});
+  const redeem=async(response,v=linkVerifier)=>{
+    if(response.status!==303)throw new Error(`Expected handoff, got ${response.status}`);
+    return post('/auth/saml/browser/redeem',{code:new URLSearchParams(new URL(response.headers.get('location')).hash.slice(1)).get('code'),verifier:v});
+  };
+  const linked=await beginLink(),linkedAcs=await accept(linked,'asserted-browser-link@example.com');
+  check('browser link ACS uses fixed no-store handoff without JWT',linkedAcs.status===303&&linkedAcs.headers.get('cache-control')==='no-store'&&new URL(linkedAcs.headers.get('location')).pathname==='/auth/saml/callback'&&!(await linkedAcs.clone().text()).includes('accessToken'));
+  const linkedResult=await (await redeem(linkedAcs)).json();
+  check('browser link returns original account session',!!linkedResult.accessToken&&linkedResult.user?.id===linker.user.id);
+  check('browser link binds identity without provisioning asserted email',(await prisma.externalIdentity.findFirst({where:{email:'asserted-browser-link@example.com'}}))?.userId===linker.user.id&&!(await prisma.user.findUnique({where:{email:'asserted-browser-link@example.com'}})));
+  const stolen=await accept(await beginLink(),'saml-user@example.com');
+  check('browser link conflict returns safe verifier-protected error',!!(await (await redeem(stolen)).json()).error);
+  check('browser link conflict preserves original binding',(await prisma.externalIdentity.findFirst({where:{email:'saml-user@example.com'}}))?.userId===user.id);
+  const wrongVerifier=await accept(await beginLink(),'wrong-verifier-link@example.com');
+  const wrongCode=new URLSearchParams(new URL(wrongVerifier.headers.get('location')).hash.slice(1)).get('code');
+  check('browser link handoff requires matching verifier',(await post('/auth/saml/browser/redeem',{code:wrongCode,verifier:'w'.repeat(64)})).status===401);
+  check('failed verifier burns browser link ticket',(await post('/auth/saml/browser/redeem',{code:wrongCode,verifier:linkVerifier})).status===401);
+  // Linking completes at validated ACS, not at ticket redemption.
+  check('unredeemed handoff does not roll back validated identity binding',(await prisma.externalIdentity.findFirst({where:{email:'wrong-verifier-link@example.com'}}))?.userId===linker.user.id);
+  const stripped=await beginLink();
+  const strippedBody=await signed(stripped.id,'stripped-browser-link@example.com');
+  check('browser link cannot downgrade by stripping RelayState',(await post('/auth/saml/acs',strippedBody)).status===401);
+  check('stripped browser link creates no identity',!(await prisma.externalIdentity.findFirst({where:{email:'stripped-browser-link@example.com'}})));
+  const swapped=await beginLink(),other=await beginLink();
+  const swappedReply=await post('/auth/saml/acs',{...await signed(other.id,'swapped-browser-link@example.com'),RelayState:swapped.relay});
+  check('browser link rejects another otherwise valid request',swappedReply.status===401);
+  check('swapped browser link creates no identity',!(await prisma.externalIdentity.findFirst({where:{email:'swapped-browser-link@example.com'}})));
+  check('swapped browser link state is burned',(await accept(swapped,'swapped-browser-link@example.com')).status===401);
+  const factorFlow=await beginLink();
+  await prisma.user.update({where:{id:linker.user.id},data:{totpEnabled:true}});
+  const factor=await (await redeem(await accept(factorFlow,'factor-browser-link@example.com'))).json();
+  check('browser link preserves original-account second-factor requirement',factor.requiresTwoFactor===true&&!!factor.pendingToken&&!factor.accessToken);
+  const linkRecovery='LINK-SAML-RECOVERY';await prisma.recoveryCode.create({data:{userId:linker.user.id,codeHash:createHash('sha256').update(linkRecovery).digest('hex')}});
+  const factorDone=await (await post('/auth/saml/complete',{pendingToken:factor.pendingToken,totpCode:linkRecovery})).json();
+  check('browser link second factor issues original account session',!!factorDone.accessToken&&factorDone.user?.id===linker.user.id);
+  linker.accessToken=factorDone.accessToken;
+  const stale=await beginLink();await prisma.user.update({where:{id:linker.user.id},data:{authEpoch:{increment:1}}});
+  check('browser link rejects stale initiating epoch',!!(await (await redeem(await accept(stale,'stale-browser-link@example.com'))).json()).error);
+  check('stale browser link creates no binding',!(await prisma.externalIdentity.findFirst({where:{email:'stale-browser-link@example.com'}})));
   console.log(failures?'SAML BROWSER CHECKS FAILED':'ALL SAML BROWSER CHECKS PASSED');
   process.exitCode=failures?1:0;
 } catch(e){ console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1; }
