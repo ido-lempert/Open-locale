@@ -14,7 +14,7 @@ dups=$(grep -h '^const PG_PORT = [0-9]' scripts/*-test.mjs scripts/e2e-visual.mj
 if [ -n "$dups" ]; then echo "SUITE-FAIL preflight (duplicate PG ports: $(echo $dups | tr '\n' ' '))"; FAIL=1; fi
 mkdir -p /tmp/sweep-legs
 python3 scripts/reaped-runner-test.py > /tmp/sweep-legs/reaped-runner.log 2>&1; rc=$?; [ "$rc" = "0" ] && echo "ok reaped-runner" || { echo "SUITE-FAIL reaped-runner (rc=$rc)"; FAIL=1; }
-for s in integration authz statuses comments activity imports screenshots tasks tm glossary qa formats webhooks tags apitokens docs cli sdk snapshots permissions review migration branches merge-concurrency ota reports incontext incontext-edit mt automations 2fa oidc saml oidc-browser oidc-link-browser saml-link-browser saml-browser groups plural sync-preview sync-browser docker; do
+for s in integration authz statuses comments activity imports screenshots tasks tm glossary qa formats webhooks tags apitokens docs cli sdk snapshots permissions review migration branches merge-concurrency ota reports incontext incontext-edit mt automations 2fa oidc saml oidc-browser oidc-link-browser saml-link-browser saml-browser groups plural sync-preview sync-browser visual-stage-config docker; do
   npm run --silent "test:$s" > "/tmp/sweep-legs/$s.log" 2>&1; rc=$?
   fails=$(grep -cE "^FAIL" "/tmp/sweep-legs/$s.log")
   passes=$(grep -cE "^PASS" "/tmp/sweep-legs/$s.log")

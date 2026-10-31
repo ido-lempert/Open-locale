@@ -3,11 +3,11 @@
 // Run: node scripts/e2e-visual.mjs  (requires: nx build api; npm i puppeteer-core available)
 import { execFileSync, spawn } from 'node:child_process';
 import EmbeddedPostgres from 'embedded-postgres';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, cpSync, mkdirSync, lstatSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 const { default: puppeteer } = await import('puppeteer-core');
-import { createHmac } from 'node:crypto';
+import { createHmac, createHash } from 'node:crypto';
 // Independent RFC 6238 for driving the 2FA UI flow.
 const B32C = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 const b32dec = (s) => { let bits = 0, v = 0; const o = []; for (const ch of s.toUpperCase().replace(/=+$/, '')) { v = (v << 5) | B32C.indexOf(ch); bits += 5; if (bits >= 8) { o.push((v >>> (bits - 8)) & 255); bits -= 8; } } return Buffer.from(o); };
@@ -17,15 +17,31 @@ const PG_PORT = 55434, API_PORT = 3000, WEB_PORT = 4200;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const root = process.cwd();
 const shots = process.env.SHOT_DIR ?? '/downloads';
-let failures = 0;
+let failures = 0, checks = 0;
+const stage = process.env.VISUAL_STAGE;
+const checkpoint = process.env.VISUAL_CHECKPOINT_DIR;
+const sourceHash = createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
+let resume = null;
+if (stage) {
+  if (!['first', 'second'].includes(stage) || !checkpoint?.startsWith('/')) throw new Error('Set VISUAL_STAGE=first|second and an absolute VISUAL_CHECKPOINT_DIR');
+  if (stage === 'first') mkdirSync(checkpoint, {mode:0o700});
+  else {
+    const stat = lstatSync(checkpoint);
+    if (!stat.isDirectory() || stat.isSymbolicLink() || (stat.mode & 0o077) || stat.uid !== process.getuid()) throw new Error('Checkpoint must be an owned private directory');
+    const metadata = lstatSync(join(checkpoint,'state.json'));
+    if (!metadata.isFile() || metadata.isSymbolicLink() || (metadata.mode & 0o077) || metadata.uid !== process.getuid()) throw new Error('Checkpoint state must be private');
+    resume = JSON.parse(readFileSync(join(checkpoint,'state.json'),'utf8'));
+    if (resume.sourceHash !== sourceHash || !Number.isSafeInteger(resume.checks) || resume.checks < 1 || resume.failures !== 0) throw new Error('Checkpoint source mismatch or failed first stage');
+  }
+} else if (checkpoint) throw new Error('VISUAL_CHECKPOINT_DIR requires VISUAL_STAGE');
 // Fail-closed exit: a silent exit before the success path (for example a
 // startup await that never settles with an empty event loop) leaves this at 1.
 process.exitCode = 1;
-const check = (n, c, x = '') => { console.log(`${c ? 'PASS' : (failures++, 'FAIL')} ${n} ${x}`); };
+const check = (n, c, x = '') => { checks++; console.log(`${c ? 'PASS' : (failures++, 'FAIL')} ${n} ${x}`); };
 
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-e2e-'));
-const pg = new EmbeddedPostgres({ databaseDir: dataDir, user: 'postgres', password: 'postgres', port: PG_PORT, persistent: false });
-let api, web, browser;
+const pg = new EmbeddedPostgres({ databaseDir: dataDir, user: 'postgres', password: 'postgres', port: PG_PORT, persistent: !!stage });
+let api, web, browser, projId, savedState;
 const waitFor = async (url, ok = (r) => r.ok || r.status === 401, tries = 120) => {
   for (let i = 0; i < tries; i++) {
     const hit = await fetch(url).then((r) => ok(r)).catch(() => false);
@@ -35,7 +51,10 @@ const waitFor = async (url, ok = (r) => r.ok || r.status === 401, tries = 120) =
   return false;
 };
 try {
-  await pg.initialise(); await pg.start(); await pg.createDatabase('openlocale_e2e');
+  if (resume) cpSync(join(checkpoint,'postgres'), dataDir, {recursive:true});
+  else await pg.initialise();
+  await pg.start();
+  if (!resume) await pg.createDatabase('openlocale_e2e');
   const url = `postgresql://postgres:postgres@localhost:${PG_PORT}/openlocale_e2e`;
   execFileSync(join(root, 'node_modules', '.bin', 'prisma'), ['migrate', 'deploy'], { env: { ...process.env, DATABASE_URL: url }, stdio: 'pipe' });
   api = spawn(process.execPath, [join(root, 'dist', 'apps', 'api', 'main.js')], {
@@ -58,7 +77,19 @@ try {
   page.on('pageerror', (err) => console.log('PAGEERROR:', String(err).slice(0, 300)));
   page.on('console', (msg) => { if (msg.type() === 'error') console.log('CONSOLE:', msg.text().slice(0, 200)); });
   const shot = (n) => page.screenshot({ path: join(shots, n) });
+  const waitText = async (text, ms = 10000) => {
+    try {
+      await page.waitForFunction((t) => document.body.textContent.includes(t), { timeout: ms }, text);
+      return true;
+    } catch {
+      const body = await page.evaluate(() => document.body.innerText.slice(0, 400));
+      console.log(`DIAG waiting for "${text}"; page shows:`, JSON.stringify(body));
+      return false;
+    }
+  };
 
+
+  if (!resume) {
   await page.goto(`${WEB}/login`, { waitUntil: 'networkidle0' });
   check('login page renders', (await page.$('.auth-card')) !== null);
   await shot('editor-01-login.png');
@@ -83,16 +114,6 @@ try {
   check('project appears in list', true);
   await shot('editor-03-projects.png');
 
-  const waitText = async (text, ms = 10000) => {
-    try {
-      await page.waitForFunction((t) => document.body.textContent.includes(t), { timeout: ms }, text);
-      return true;
-    } catch {
-      const body = await page.evaluate(() => document.body.innerText.slice(0, 400));
-      console.log(`DIAG waiting for "${text}"; page shows:`, JSON.stringify(body));
-      return false;
-    }
-  };
   // Open editor, add keys, translate
   await page.click('.cards a');
   await page.waitForSelector('.toolbar', { timeout: 10000 });
@@ -362,7 +383,7 @@ try {
   await page.click('.back');
   await page.waitForSelector('.grid tbody tr', { timeout: 10000 });
 
-  const projId = page.url().split('/').pop();
+  projId = page.url().split('/').pop();
   // --- Glossary: create term via UI, hint appears in editor ---
   await page.click('.glossary-link');
   await page.waitForSelector('.task-form', { timeout: 10000 });
@@ -1111,6 +1132,18 @@ try {
   await page.setViewport({ width: 1280, height: 800 });
   await page.evaluate(() => [...document.querySelectorAll('.import-conflict button')]?.find((b) => b.textContent.trim() === 'Cancel')?.click());
 
+  if (stage === 'first') savedState = {sourceHash,checks,failures,projId,url:page.url(),viewport:page.viewport(),token:await page.evaluate(()=>localStorage.getItem('ol_token'))};
+  } else {
+    projId = resume.projId;
+    const returnUrl = new URL(resume.url);
+    if (returnUrl.origin !== WEB || returnUrl.pathname !== `/projects/${projId}`) throw new Error('Invalid checkpoint return URL');
+    await page.goto(`${WEB}/login`, {waitUntil:'networkidle0'});
+    await page.evaluate(token=>localStorage.setItem('ol_token',token),resume.token);
+    await page.setViewport(resume.viewport);
+    await page.goto(returnUrl.toString(), {waitUntil:'networkidle0'});
+    await page.waitForSelector('.toolbar');
+  }
+  if (stage !== 'first') {
   // Settings screen: rename, add locale, verify grid column appears (on the editor)
   await page.click('.settings-link');
   await page.waitForSelector('.panel', { timeout: 10000 });
@@ -2185,12 +2218,13 @@ try {
     h2.scrollIntoView({ block: 'center' });
   });
   await shot('settings-saml-panel.png');
+  }
 } catch (err) {
   // embedded-postgres can reject with `undefined` when the postmaster dies at
   // startup; through an async finally that exception exits 0 SILENTLY. Catch
   // and exit deterministically instead.
   console.error('SUITE INCOMPLETE:', err);
-  process.exit(1);
+  failures++;
 } finally {
   await browser?.close().catch(() => {});
   const stopped = [web, api].filter(Boolean).map(child => new Promise(resolve => {
@@ -2200,12 +2234,23 @@ try {
     else child.kill('SIGKILL');
   }));
   await Promise.all(stopped);
-  await pg.stop().catch(() => {});
+  let stoppedDatabase = true;
+  await pg.stop().catch(() => { stoppedDatabase = false; failures++; });
+  if (stage === 'first' && stoppedDatabase && failures === 0 && savedState) {
+    cpSync(dataDir, join(checkpoint,'postgres'), {recursive:true});
+    writeFileSync(join(checkpoint,'state.json'),JSON.stringify(savedState),{mode:0o600});
+  } else if (stage) rmSync(checkpoint,{recursive:true,force:true});
   rmSync(dataDir, { recursive: true, force: true });
 }
 if (failures > 0) { console.log(`${failures} FAILURES`); process.exit(1); }
-console.log('E2E visual pass complete');
+if (stage === 'first') {
+  console.log(`E2E_STAGE_FIRST_RC=0 checks=${checks}; second stage still required`);
+  process.exitCode = 0;
+} else {
+  console.log(`E2E visual pass complete${stage ? ' (staged)' : ''}; checks=${checks}${resume ? '; combined='+(resume.checks+checks)+' (two repeated startup checks)' : ''}`);
 // In-script exit marker: the outer shell can be reaped before it records
 // $?, so the suite prints its own deterministic success line.
 console.log('E2E_RC=0');
 process.exitCode = 0;
+
+}
