@@ -228,3 +228,11 @@ locale value, never a project key or another locale. This is materialized review
 data, not executable permission; no plan is persisted or applied. The draft UI
 shows these local changes, current/draft values, explicit locale-only removal
 scope, no-op state and independent 50-row pages.
+
+Repository comparisons and draft local plans carry local preconditions from the
+same repeatable-read snapshot: exact project/branch/locale, key identity/name,
+key update generation/length limit and translation row identity/version/value
+(or explicit missing translation). The complete local key set must match before
+any future execution, including unchanged keys. Remote-only draft keys do not get
+invented database identities. Key metadata changes invalidate reviewed fingerprints.
+These are snapshot evidence only, not locks, reservations or apply permission.

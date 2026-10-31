@@ -86,7 +86,8 @@ add languages, manage keys and translations, export a file.
   reviewed fingerprint before preparing bytes. No apply or two-way synchronization
   yet. Draft API materializes locale-only set/removal plans without executing
   them. UI reviews materialized set/removal/current/draft values with independent
-  pages. See reviews0134-0138.
+  pages. Same-snapshot key/row/metadata preconditions prepared for future guarded
+  execution, not an apply path. See reviews0134-0139.
 
 ## Phase 3 - advanced
 

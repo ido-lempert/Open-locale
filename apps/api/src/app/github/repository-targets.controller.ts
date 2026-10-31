@@ -291,7 +291,7 @@ export class RepositoryTargetsService {
       baselineJson: baseline.text,
       remoteJson: remote.json,
       remoteSha: remote.remoteSha,
-    });
+    }, true);
     await this.authorize(user, projectId);
     const current = await this.prisma.repositorySyncTarget.findFirst({
       where: { id, projectId, revision: expectedRevision },
@@ -350,7 +350,10 @@ export class RepositoryTargetsService {
       const draft = resolvePlan(plan, input.choices, input.expectedFingerprint);
       return {
         ...draft,
-        localChangePlan: localDraftPlan(plan.decisions, draft.json, plan.fingerprint),
+        localChangePlan: {
+          ...localDraftPlan(plan.decisions, draft.json, plan.fingerprint),
+          preconditions: plan.localPreconditions,
+        },
         source: 'explicit-repository-preview-resolution',
         projectId,
         targetId: id,

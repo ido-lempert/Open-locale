@@ -168,6 +168,7 @@ export class LocalSyncPreviewService {
     user: AuthPrincipal,
     projectId: string,
     input: LocalSyncPreviewDto,
+    includePreconditions = false,
   ) {
     if (user.via !== 'jwt')
       throw new ForbiddenException('Sync preview requires a signed-in session');
@@ -214,6 +215,8 @@ export class LocalSyncPreviewService {
             id: true,
             name: true,
             isPlural: true,
+            maxLength: true,
+            updatedAt: true,
             translations: {
               where: { localeCode: input.locale },
               select: {
@@ -259,6 +262,8 @@ export class LocalSyncPreviewService {
           rows.map((k) => [
             k.id,
             k.name,
+            k.updatedAt.toISOString(),
+            k.maxLength,
             k.translations.map((t) => [t.rowId, t.version]),
           ]),
         ]),
@@ -274,6 +279,12 @@ export class LocalSyncPreviewService {
       remoteVerified: false,
       baselineVerified: false,
       canApply: false,
+      ...(includePreconditions ? {localPreconditions: {
+        projectId, branchId: branch.id, branch: branch.name, locale: input.locale,
+        keys: rows.map(k => ({keyId:k.id,key:k.name,keyUpdatedAt:k.updatedAt.toISOString(),maxLength:k.maxLength,
+          translation:k.translations[0] ? {rowId:k.translations[0].rowId,version:k.translations[0].version,value:k.translations[0].value} : null})),
+        requiresExactKeySet:true as const,canApply:false as const,
+      }} : {}),
     };
   }
 }
