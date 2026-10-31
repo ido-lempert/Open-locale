@@ -88,7 +88,8 @@ add languages, manage keys and translations, export a file.
   them. UI reviews materialized set/removal/current/draft values with independent
   pages. Same-snapshot key/row/metadata preconditions prepared for future guarded
   execution, plus internal Serializable locked-row validation. No apply path
-  yet. See reviews0134-0140.
+  yet. Isolated existing-key locale-set writer with history/activity rollback
+  tests; removal and production integration still open. See reviews0134-0141.
 
 ## Phase 3 - advanced
 

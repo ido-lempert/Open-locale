@@ -1,5 +1,7 @@
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
+const writerSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/local-value-writer.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
+const {writeExistingLocalValues}=await import('data:text/javascript;base64,'+Buffer.from(writerSource).toString('base64'));
 import { lockLocalPreconditions } from '../apps/api/src/app/github/local-preconditions.ts';
 // Granular permissions: real PostgreSQL + real HTTP API.
 // Roles (OWNER/ADMIN/MEMBER) and per-locale contributor access.
@@ -250,6 +252,34 @@ try {
   try{await prisma.$transaction(async tx=>{await tx.translation.update({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}},data:{value:'must rollback'}});await lockLocalPreconditions(tx,{...livePlan,locale:'missing'});},{isolationLevel:'Serializable'});}catch{}
   check('failed validation rolls back transaction writes atomically',(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).value==='edited'&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).version===rollbackVersion);
 
+  const writerPreconditions=(await repositoryPreview()).json.localPreconditions;
+  const beforeWriterRow=await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}});
+  await prisma.translation.update({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}},data:{status:'REVIEWED',mtScore:88,mtProvider:'fixture'}});
+  const writerSnapshot=(await repositoryPreview()).json.localPreconditions;
+  const otherLocale=await call(`${P}/import/he`,{jwt,method:'POST',body:{entries:{local:'other locale preserved'}}});if(otherLocale.status!==201)throw new Error('Other locale fixture failed');
+  const writeChange={key:'local',action:'set-value',expectedValue:'edited',nextValue:'writer draft'};
+  const beforeHistory=await prisma.translationHistory.count({where:{keyId:localKey.id,localeCode:'en'}}),beforeActivity=await prisma.activityEvent.count({where:{projectId:project.id}});
+  const writeResult=await prisma.$transaction(tx=>writeExistingLocalValues(tx,writerSnapshot,[writeChange],owner.user.id),{isolationLevel:'Serializable'});
+  const written=await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}});
+  check('internal writer commits exact locale value version and row identity',writeResult.updatedValues===1&&written.value==='writer draft'&&written.version===beforeWriterRow.version+1&&written.rowId===beforeWriterRow.rowId);
+  check('internal human draft write resets review and MT provenance',written.status==='UNVERIFIED'&&written.mtScore===null&&written.mtProvider===null);
+  check('internal write records history and activity in same transaction',await prisma.translationHistory.count({where:{keyId:localKey.id,localeCode:'en'}})===beforeHistory+1&&await prisma.activityEvent.count({where:{projectId:project.id}})===beforeActivity+1&&(await prisma.translationHistory.findFirst({where:{keyId:localKey.id,localeCode:'en'},orderBy:{createdAt:'desc'}})).previousValue==='edited');
+  check('internal writer preserves other locales keys repository and baseline',(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'he'}}})).value==='other locale preserved'&&await prisma.key.count({where:{id:localKey.id}})===1&&writeResult.createdKeys===0&&writeResult.remoteWritten===false&&(await tc(baselinePath,'GET',undefined)).json.baseline.version===2);
+  let batchSnapshot=(await repositoryPreview()).json.localPreconditions;
+  const rejectsWrite=async(changes,snapshot=batchSnapshot)=>{try{await prisma.$transaction(tx=>writeExistingLocalValues(tx,snapshot,changes,owner.user.id),{isolationLevel:'Serializable'});return false;}catch{return true;}};
+  const currentChange={...writeChange,expectedValue:'writer draft',nextValue:'next'};
+  const beforeRejectedHistory=await prisma.translationHistory.count(),beforeRejectedActivity=await prisma.activityEvent.count();
+  check('internal writer refuses removal unknown key duplicate and no-op batches',await rejectsWrite([{...currentChange,action:'remove-locale-value',nextValue:null}])&&await rejectsWrite([{...currentChange,key:'remote-new'}])&&await rejectsWrite([currentChange,currentChange])&&await rejectsWrite([{...currentChange,nextValue:'writer draft'}]));
+  check('invalid later operation cannot partially write earlier valid operation',await rejectsWrite([currentChange,{key:'remote',action:'remove-locale-value',expectedValue:'old',nextValue:null}])&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).value==='writer draft'&&await prisma.translationHistory.count()===beforeRejectedHistory&&await prisma.activityEvent.count()===beforeRejectedActivity);
+  await prisma.key.update({where:{id:localKey.id},data:{maxLength:2}});batchSnapshot=(await repositoryPreview()).json.localPreconditions;
+  check('internal writer rejects oversized draft before mutation',await rejectsWrite([currentChange]));await prisma.key.update({where:{id:localKey.id},data:{maxLength:storedLocalKey.maxLength}});batchSnapshot=(await repositoryPreview()).json.localPreconditions;
+  try{await prisma.$transaction(async tx=>{await writeExistingLocalValues(tx,batchSnapshot,[currentChange],owner.user.id);throw new Error('injected post-write failure');},{isolationLevel:'Serializable'});}catch{}
+  check('post-write failure rolls back value history and activity',(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).value==='writer draft'&&await prisma.translationHistory.count()===beforeRejectedHistory&&await prisma.activityEvent.count()===beforeRejectedActivity);
+  const emptyKey=await prisma.key.create({data:{projectId:project.id,branchId:storedLocalKey.branchId,name:'writer-empty'}});batchSnapshot=(await repositoryPreview()).json.localPreconditions;
+  await prisma.$transaction(tx=>writeExistingLocalValues(tx,batchSnapshot,[{key:'writer-empty',action:'set-value',expectedValue:null,nextValue:''}],owner.user.id),{isolationLevel:'Serializable'});
+  check('writer creates absent locale row with empty text without new key',(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:emptyKey.id,localeCode:'en'}}})).value===''&&await prisma.key.count({where:{id:emptyKey.id}})===1);
+  await prisma.key.delete({where:{id:emptyKey.id}});
+  await prisma.translation.update({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}},data:{value:'edited',version:{increment:1}}});
   resolvedRepositoryPlan.json=(await repositoryPreview()).json;
   check('repository resolution carries comparison provenance not apply authority',repositoryDraft.json.source==='explicit-repository-preview-resolution'&&repositoryDraft.json.baselineVersion===2&&repositoryDraft.json.targetId===target.id&&repositoryDraft.json.baselineVerified===true&&repositoryDraft.json.remoteVerified===true&&repositoryDraft.json.canApply===false&&repositoryDraft.json.localTranslationsChanged===false&&repositoryDraft.json.remoteWritten===false);
   const absentRepositoryDraft=await resolveRepository({choices:{...repositoryChoices,fromRepo:'local'}});

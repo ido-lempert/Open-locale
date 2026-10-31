@@ -244,3 +244,13 @@ newly created formerly absent translations and plural data. This helper has no
 HTTP route or apply caller and does no writes. It does not reserve absent rows;
 any eventual execution must authorize again, validate target/baseline and make
 writes in the same Serializable transaction, handling serialization conflicts.
+
+An isolated `writeExistingLocalValues` helper exercises same-transaction existing-
+key locale sets after locked precondition validation. It validates the entire
+batch before writing, resets review/MT provenance, increments version, and writes
+history/activity atomically. Unknown keys, removal, duplicates, no-op operations
+and length violations are refused. Removal remains unsupported because deleting a
+translation currently cascades its history; no silent clear-to-empty workaround.
+This helper has no production caller or public apply route. It does not provide
+TM updates, webhooks/automation delivery or target/baseline authorization. Those
+remain required integration work before any exposed execution path.
