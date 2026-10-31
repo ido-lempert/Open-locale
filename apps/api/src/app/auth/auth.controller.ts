@@ -134,6 +134,17 @@ export class AuthController {
     return this.auth.createApiToken(user.userId, dto.name, scopes, expiresAt);
   }
 
+  @Delete('identities/:id')
+  @UseGuards(JwtAuthGuard)
+  @Header('Cache-Control', 'no-store')
+  async unlinkIdentity(@CurrentUser() user: AuthPrincipal, @Param('id') id: string, @Body() dto: TotpSetupDto) {
+    this.requireSession(user);
+    await this.auth.requireStepUp(user.userId, user);
+    // Invalid IDs fail before the UUID database cast and reveal no ownership.
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw new BadRequestException('Invalid identity id');
+    return this.auth.unlinkIdentity(user.userId, id, dto.password, user.epoch ?? 0);
+  }
+
   @Get('identities')
   @Header('Cache-Control', 'no-store')
   @UseGuards(JwtAuthGuard)

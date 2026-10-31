@@ -145,6 +145,14 @@ try {
     if(scenario==='access-newer')await page.screenshot({path:'/downloads/oidc-stale-response-narrow.png'});
     page.off('request',intercept);await page.setRequestInterception(false);
   }
+  await prisma.user.update({where:{id:user.id},data:{totpEnabled:true}});
+  await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.waitForSelector('button[name=oidcLogin]');await page.click('button[name=oidcLogin]');await page.waitForSelector('input[name=ssoCode]');
+  const stalePending=await page.evaluate(()=>window.ng.getComponent(document.querySelector('ol-oidc-callback')).pendingToken);
+  const staleRecovery='OIDC-EPOCH-STALE';await prisma.recoveryCode.create({data:{userId:user.id,codeHash:createHash('sha256').update(staleRecovery).digest('hex')}});
+  await prisma.user.update({where:{id:user.id},data:{authEpoch:{increment:1}}});
+  const staleReply=await fetch(`${API}/auth/oidc/complete`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({pendingToken:stalePending,totpCode:staleRecovery})});
+  check('OIDC pending login cannot cross epoch revocation',staleReply.status===401&&!(await staleReply.json()).accessToken);
+  check('stale OIDC pending does not consume recovery code',!(await prisma.recoveryCode.findFirst({where:{userId:user.id,codeHash:createHash('sha256').update(staleRecovery).digest('hex')}})).usedAt);
   console.log(failures?'OIDC BROWSER CHECKS FAILED':'ALL OIDC BROWSER CHECKS PASSED');
   process.exitCode=failures?1:0;
 } catch(e){ console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1; }

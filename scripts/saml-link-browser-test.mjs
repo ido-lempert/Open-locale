@@ -95,6 +95,40 @@ try {
   await page.evaluate(t=>localStorage.setItem('ol_token',t),other.accessToken);await page.goto(`${WEB}/account/link-saml`,{waitUntil:'networkidle0'});await page.waitForSelector('input[name=linkPassword]');await page.type('input[name=linkPassword]','password-b');await page.click('button[name=startSamlLink]');await page.waitForSelector('[role=alert]');
   check('already-linked provider identity rejected visibly',(await page.$eval('[role=alert]',e=>e.textContent)).includes('could not be verified'));
   check('conflict preserves original identity owner',(await prisma.externalIdentity.findFirst({where:{subject:'idp-sub-saml-user@example.com'}})).userId===owner.user.id);
+  const unlink=async(id,password,jwt=sessionToken,apiKey)=>{
+    const response=await fetch(`${API}/auth/identities/${id}`,{method:'DELETE',headers:{'content-type':'application/json',...(jwt?{Authorization:`Bearer ${jwt}`} : {}),...(apiKey?{'X-Api-Key':apiKey}:{})},body:JSON.stringify({password})});
+    return {status:response.status,json:await response.json()};
+  };
+  const beforeEpoch=(await prisma.user.findUnique({where:{id:owner.user.id}})).authEpoch;
+  check('unlink rejects unauthenticated request',(await unlink(identity.id,'password-a','')).status===401);
+  check('unlink rejects valid API token',(await unlink(identity.id,'password-a','',token)).status===403);
+  check('unlink requires fresh correct password',(await unlink(identity.id,'wrong-pass')).status===401);
+  check('unlink rejects malformed identity id',(await unlink('invalid','password-a')).status===400);
+  check('unlink cannot remove another account identity',(await unlink(identity.id,'password-b',other.accessToken)).status===404);
+  check('rejected unlink preserves binding and both epochs',!!(await prisma.externalIdentity.findUnique({where:{id:identity.id}}))&&(await prisma.user.findUnique({where:{id:owner.user.id}})).authEpoch===beforeEpoch&&(await prisma.user.findUnique({where:{id:other.user.id}})).authEpoch===0);
+  // Obtain a real pending SAML login BEFORE unlink; it must not mint a
+  // new-generation session after unlink invalidates the original identity.
+  await page.evaluate(t=>localStorage.setItem('ol_token',t),sessionToken);
+  await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.waitForSelector('button[name=samlLogin]');await page.click('button[name=samlLogin]');await page.waitForSelector('input[name=ssoCode]');
+  const pendingBeforeUnlink=await page.evaluate(()=>window.ng.getComponent(document.querySelector('ol-saml-callback')).pendingToken);
+  const concurrent=await Promise.all([unlink(identity.id,'password-a'),unlink(identity.id,'password-a')]);
+  check('concurrent unlink has exactly one successful winner',concurrent.filter(r=>r.status===200).length===1&&concurrent.filter(r=>r.status===401).length===1);
+  check('unlink returns explicit sign-in-required result',concurrent.some(r=>r.json.unlinked===true&&r.json.signInRequired===true));
+  check('successful unlink deletes only owned binding',!(await prisma.externalIdentity.findUnique({where:{id:identity.id}})));
+  check('unlink increments epoch exactly once',(await prisma.user.findUnique({where:{id:owner.user.id}})).authEpoch===beforeEpoch+1);
+  check('unlink revokes initiating and earlier sessions',(await call('/projects',undefined,sessionToken)).status===401&&(await call('/projects',undefined,owner.accessToken)).status===401);
+  const staleCode='STALE-PENDING-CODE';await prisma.recoveryCode.create({data:{userId:owner.user.id,codeHash:createHash('sha256').update(staleCode).digest('hex')}});
+  const staleComplete=await call('/auth/saml/complete',{pendingToken:pendingBeforeUnlink,totpCode:staleCode});
+  check('unlink invalidates already-pending SAML second-factor login',staleComplete.status===401&&!staleComplete.json.accessToken);
+  check('stale pending rejection does not consume recovery code',!(await prisma.recoveryCode.findFirst({where:{userId:owner.user.id,codeHash:createHash('sha256').update(staleCode).digest('hex')}})).usedAt);
+  const loginCode='POST-UNLINK-LOGIN';await prisma.recoveryCode.create({data:{userId:owner.user.id,codeHash:createHash('sha256').update(loginCode).digest('hex')}});
+  const afterUnlink=await call('/auth/login',{email:'existing@link.dev',password:'password-a',totpCode:loginCode});
+  check('local password and second factor still permit sign-in after unlink',afterUnlink.status===200&&!!afterUnlink.json.accessToken);
+  check('original project survives unlink',(await call('/projects/'+project.id,undefined,afterUnlink.json.accessToken)).status===200);
+  // An SSO-only fixture cannot unlink, even while its session is valid.
+  const ssoIdentity=await prisma.externalIdentity.create({data:{userId:other.user.id,issuer:'fixture:sso',subject:'only',email:'other@link.dev'}});
+  await prisma.user.update({where:{id:other.user.id},data:{passwordHash:''}});
+  check('SSO-only account cannot remove its sign-in identity',(await unlink(ssoIdentity.id,'password-b',other.accessToken)).status===403&&!!(await prisma.externalIdentity.findUnique({where:{id:ssoIdentity.id}})));
   await prisma.user.update({where:{id:other.user.id},data:{totpEnabled:true}});
   check('identity list requires second-factor session after enable',(await call('/auth/identities',undefined,other.accessToken)).status===403);
   // Unauthenticated account route remains guarded.

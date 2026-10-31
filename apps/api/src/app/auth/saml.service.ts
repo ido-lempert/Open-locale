@@ -28,7 +28,7 @@ export class SamlService {
   // Pending SAML logins waiting for the local second factor. Same shape as
   // the OIDC pending store; unifying the two is a documented follow-up -
   // this slice deliberately does not touch the verified OIDC path.
-  private pending = new Map<string, { userId: string; expiresAt: number }>();
+  private pending = new Map<string, { userId: string; epoch: number; expiresAt: number }>();
   private static readonly PENDING_TTL_MS = 5 * 60 * 1000;
   private static readonly PENDING_MAX = Number(process.env.SAML_PENDING_MAX) || 10_000;
   private static readonly LINK_TTL_MS = 10 * 60 * 1000;
@@ -377,7 +377,7 @@ export class SamlService {
         throw new ServiceUnavailableException('Too many pending SAML logins');
       }
       const pendingToken = b64url(randomBytes(16));
-      this.pending.set(pendingToken, { userId, expiresAt: now + SamlService.PENDING_TTL_MS });
+      this.pending.set(pendingToken, { userId, epoch: user.authEpoch, expiresAt: now + SamlService.PENDING_TTL_MS });
       return { requiresTwoFactor: true as const, pendingToken };
     }
     return this.auth.issueOidcTokens(userId, false);
@@ -388,8 +388,9 @@ export class SamlService {
     const p = this.pending.get(pendingToken);
     this.pending.delete(pendingToken);
     if (!p || p.expiresAt < Date.now()) throw new UnauthorizedException('Invalid or expired pending login');
+    if (await this.auth.sessionEpoch(p.userId) !== p.epoch) throw new UnauthorizedException('Pending sign-in is stale');
     const passed = await this.auth.verifySecondFactorForUser(p.userId, totpCode);
     if (!passed) throw new UnauthorizedException('Invalid two-factor code');
-    return this.auth.issueOidcTokens(p.userId, true);
+    return this.auth.issueOidcTokens(p.userId, true, p.epoch);
   }
 }

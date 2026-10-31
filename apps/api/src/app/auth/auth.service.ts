@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import * as bcrypt from 'bcryptjs';
@@ -35,6 +35,22 @@ export class AuthService {
     return this.prisma.externalIdentity.findMany({
       where: { userId }, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
       select: { id: true, issuer: true, email: true, createdAt: true },
+    });
+  }
+
+  // Fresh local password is required so removing an identity cannot remove
+  // the last usable sign-in method. Epoch bump revokes every existing session.
+  async unlinkIdentity(userId: string, identityId: string, password: string, epoch: number) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { passwordHash: true } });
+    if (!user) throw new UnauthorizedException();
+    await this.requirePassword(user, password);
+    return this.prisma.$transaction(async tx => {
+      // Atomic row update serializes concurrent unlink/epoch-changing actions.
+      const claimed = await tx.user.updateMany({ where: { id: userId, authEpoch: epoch, passwordHash: user.passwordHash }, data: { authEpoch: { increment: 1 } } });
+      if (claimed.count !== 1) throw new UnauthorizedException('Session changed; sign in again');
+      const removed = await tx.externalIdentity.deleteMany({ where: { id: identityId, userId } });
+      if (removed.count !== 1) throw new NotFoundException('Identity not found');
+      return { unlinked: true as const, signInRequired: true as const };
     });
   }
 
@@ -228,9 +244,10 @@ export class AuthService {
   // enabling 2FA takes effect on the very next request.
   // OIDC support: issue a session after an SSO login. mfaPassed must be
   // true only when the account's second factor was completed in this flow.
-  async issueOidcTokens(userId: string, mfaPassed: boolean) {
+  async issueOidcTokens(userId: string, mfaPassed: boolean, expectedEpoch?: number) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new UnauthorizedException();
+    if (expectedEpoch !== undefined && user.authEpoch !== expectedEpoch) throw new UnauthorizedException('Pending sign-in is stale');
     return this.issueTokens(user.id, user.email, mfaPassed && user.totpEnabled, user.authEpoch);
   }
 
