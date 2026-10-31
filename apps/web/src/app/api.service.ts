@@ -1,3 +1,4 @@
+export interface RepositoryResolutionDraft extends Omit<SyncResolutionDraft, 'baselineVerified'|'remoteVerified'> {targetId:string;targetRevision:number;baselineVersion:number;baselineSha:string;remoteSha:string;baselineVerified:true;remoteVerified:true;}
 export interface RepositorySyncPreview
   extends Omit<LocalSyncPreview, 'baselineVerified' | 'remoteVerified'> {
   targetId: string;
@@ -229,6 +230,7 @@ export class ApiService {
   }
   getRepositoryBaseline(projectId:string,id:string){return this.request<RepositoryBaselineView>(`/projects/${projectId}/sync/repository-targets/${encodeURIComponent(id)}/baseline`);}
   acceptRepositoryBaseline(projectId:string,id:string,input:{expectedRevision:number;expectedRemoteSha:string;expectedContentDigest:string;expectedBaselineVersion:number}){return this.request<{baseline:RepositoryBaseline}>(`/projects/${projectId}/sync/repository-targets/${encodeURIComponent(id)}/baseline`,{method:'POST',body:JSON.stringify(input)});}
+  resolveRepositoryPreview(projectId:string,id:string,input:{expectedRevision:number;expectedFingerprint:string;choices:Record<string,SyncResolutionChoice>}){return this.request<RepositoryResolutionDraft>(`/projects/${projectId}/sync/repository-targets/${encodeURIComponent(id)}/resolve-preview`,{method:'POST',body:JSON.stringify(input)});}
   previewRepositoryTarget(
     projectId: string,
     id: string,

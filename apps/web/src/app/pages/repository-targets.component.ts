@@ -9,6 +9,8 @@ import {
   RepositoryFileSnapshot,
   RepositoryBaselineView,
   RepositorySyncPreview,
+  RepositoryResolutionDraft,
+  SyncResolutionChoice,
   BranchInfo,
 } from '../api.service';
 const empty = (): RepositoryTargetInput => ({
@@ -28,7 +30,7 @@ const empty = (): RepositoryTargetInput => ({
         overflow-x: auto;
       }
       table {
-        min-width: 850px;
+        min-width: 1050px;
         width: 100%;
         border-collapse: collapse;
       }
@@ -61,7 +63,7 @@ const empty = (): RepositoryTargetInput => ({
         font-family: monospace;
       }
       main {
-        max-width: 1000px;
+        max-width: 1200px;
         margin: 0 auto;
         padding: 24px;
       }
@@ -318,6 +320,7 @@ const empty = (): RepositoryTargetInput => ({
                         <th>Local</th>
                         <th>Repository</th>
                         <th>Difference</th>
+                        <th>Draft selection</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -333,10 +336,30 @@ const empty = (): RepositoryTargetInput => ({
                               d.suggested === 'manual' ? ' - manual review' : ''
                             }}
                           </td>
+                          <td>
+                            @if (
+                              d.kind !== 'unchanged' && d.kind !== 'converged'
+                            ) {
+                              <select
+                                [attr.aria-label]="'Draft value for ' + d.key"
+                                [attr.data-repo-choice]="d.key"
+                                [ngModel]="choices().get(d.key) ?? ''"
+                                (ngModelChange)="choose(d.key, $event)"
+                                [disabled]="busy()"
+                              >
+                                <option value="">Choose...</option>
+                                <option value="base">Accepted baseline</option>
+                                <option value="local">Local</option>
+                                <option value="remote">Repository</option>
+                              </select>
+                            } @else {
+                              Same value retained
+                            }
+                          </td>
                         </tr>
                       } @empty {
                         <tr>
-                          <td colspan="5">No translated keys to compare.</td>
+                          <td colspan="6">No translated keys to compare.</td>
                         </tr>
                       }
                     </tbody>
@@ -364,6 +387,51 @@ const empty = (): RepositoryTargetInput => ({
                     </button>
                   </nav>
                 }
+                <section aria-label="Prepare repository draft">
+                  <h3>Prepare draft JSON</h3>
+                  <p>
+                    Select a value for every differing key, including one-sided
+                    changes. Selecting a missing value omits that key from the
+                    draft only. This does not import translations, write
+                    repository files or run sync.
+                  </p>
+                  <p>
+                    {{ choices().size }} of {{ requiredChoices() }} differing
+                    keys selected.
+                  </p>
+                  <button
+                    name="targetResolve"
+                    type="button"
+                    (click)="resolve(t)"
+                    [disabled]="busy() || choices().size !== requiredChoices()"
+                  >
+                    {{ busy() ? 'Preparing draft...' : 'Prepare draft JSON' }}
+                  </button>
+                  @if (draft(); as d) {
+                    <p class="notice">
+                      Draft only - not applied. {{ d.outputKeys }} output keys;
+                      {{ d.absentKeys }} absent keys omitted. No translations or
+                      repository files have changed. The repository may change
+                      after this read.
+                    </p>
+                    <label
+                      >Draft JSON<textarea
+                        name="targetDraft"
+                        readonly
+                        [value]="d.json"
+                        spellcheck="false"
+                      ></textarea>
+                    </label>
+                    <p class="digest">SHA256: {{ d.contentDigest }}</p>
+                    <button
+                      name="targetDownloadDraft"
+                      type="button"
+                      (click)="downloadDraft()"
+                    >
+                      Download draft JSON
+                    </button>
+                  }
+                </section>
               </section>
             }
             @if (snapshot()?.targetId === t.id) {
@@ -511,6 +579,85 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   snapshot = signal<RepositoryFileSnapshot | null>(null);
   readAt = signal('');
   previewResult = signal<RepositorySyncPreview | null>(null);
+  choices = signal(new Map<string, SyncResolutionChoice>());
+  draft = signal<RepositoryResolutionDraft | null>(null);
+  requiredChoices = computed(
+    () =>
+      this.previewResult()?.decisions.filter(
+        (d) => d.kind !== 'unchanged' && d.kind !== 'converged',
+      ).length ?? 0,
+  );
+  clearDraft() {
+    this.choices.set(new Map());
+    this.draft.set(null);
+  }
+  choose(key: string, value: string) {
+    if (this.busy()) return;
+    const p = this.previewResult();
+    if (
+      !p?.decisions.some(
+        (d) =>
+          d.key === key && d.kind !== 'unchanged' && d.kind !== 'converged',
+      )
+    )
+      return;
+    const next = new Map(this.choices());
+    if (value === 'base' || value === 'local' || value === 'remote')
+      next.set(key, value);
+    else next.delete(key);
+    this.choices.set(next);
+    this.draft.set(null);
+    this.error.set('');
+  }
+  async resolve(t: RepositoryTargetConfig) {
+    const p = this.previewResult();
+    if (
+      this.busy() ||
+      p?.targetId !== t.id ||
+      this.choices().size !== this.requiredChoices()
+    )
+      return;
+    const generation = ++this.generation;
+    this.busy.set(true);
+    this.draft.set(null);
+    this.error.set('');
+    this.message.set('');
+    try {
+      const draft = await this.api.resolveRepositoryPreview(
+        this.projectId,
+        t.id,
+        {
+          expectedRevision: p.targetRevision,
+          expectedFingerprint: p.fingerprint,
+          choices: Object.fromEntries(this.choices()),
+        },
+      );
+      if (generation === this.generation) this.draft.set(draft);
+    } catch (e) {
+      if (generation !== this.generation) return;
+      // A failure may mean any compared source changed. Require a fresh review.
+      this.previewResult.set(null);
+      this.clearDraft();
+      this.previewPage.set(0);
+      this.error.set(
+        e instanceof Error ? e.message : 'Could not prepare repository draft',
+      );
+    } finally {
+      if (generation === this.generation) this.busy.set(false);
+    }
+  }
+  downloadDraft() {
+    const draft = this.draft();
+    if (!draft) return;
+    const url = URL.createObjectURL(
+      new Blob([draft.json], { type: 'application/json' }),
+    );
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'open-locale-repository-draft.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
   previewPage = signal(0);
   previewPages = computed(() =>
     Math.max(1, Math.ceil((this.previewResult()?.decisions.length ?? 0) / 50)),
@@ -539,6 +686,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     this.generation++;
     this.snapshot.set(null);
     this.previewResult.set(null);
+    this.clearDraft();
     this.previewPage.set(0);
     this.baselineView.set(null);
     this.confirmBaseline.set(false);
@@ -549,6 +697,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     this.projectId = id;
     this.snapshot.set(null);
     this.previewResult.set(null);
+    this.clearDraft();
     this.previewPage.set(0);
     this.baselineView.set(null);
     this.confirmBaseline.set(false);
@@ -584,6 +733,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   edit(t: RepositoryTargetConfig) {
     this.snapshot.set(null);
     this.previewResult.set(null);
+    this.clearDraft();
     this.previewPage.set(0);
     this.baselineView.set(null);
     this.confirmBaseline.set(false);
@@ -612,6 +762,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     this.busy.set(true);
     this.snapshot.set(null);
     this.previewResult.set(null);
+    this.clearDraft();
     this.previewPage.set(0);
     this.baselineView.set(null);
     this.confirmBaseline.set(false);
@@ -638,6 +789,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     this.busy.set(true);
     this.snapshot.set(null);
     this.previewResult.set(null);
+    this.clearDraft();
     this.previewPage.set(0);
     this.baselineView.set(null);
     this.confirmBaseline.set(false);
@@ -671,6 +823,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     this.busy.set(true);
     this.snapshot.set(null);
     this.previewResult.set(null);
+    this.clearDraft();
     this.previewPage.set(0);
     this.baselineView.set(null);
     this.confirmBaseline.set(false);
@@ -706,6 +859,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     const generation = ++this.generation;
     this.busy.set(true);
     this.previewResult.set(null);
+    this.clearDraft();
     this.previewPage.set(0);
     this.snapshot.set(null);
     this.baselineView.set(null);
@@ -737,6 +891,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     this.confirmBaseline.set(false);
     this.baselineView.set(null);
     this.previewResult.set(null);
+    this.clearDraft();
     this.previewPage.set(0);
     this.message.set('');
     try {
@@ -793,6 +948,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
       if (generation !== this.generation) return;
       this.snapshot.set(null);
       this.previewResult.set(null);
+      this.clearDraft();
       this.previewPage.set(0);
       this.baselineView.set(null);
       this.confirmBaseline.set(false);
@@ -809,6 +965,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     this.busy.set(true);
     this.snapshot.set(null);
     this.previewResult.set(null);
+    this.clearDraft();
     this.previewPage.set(0);
     this.baselineView.set(null);
     this.confirmBaseline.set(false);

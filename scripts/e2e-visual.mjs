@@ -14,6 +14,8 @@ const b32dec = (s) => { let bits = 0, v = 0; const o = []; for (const ch of s.to
 const totp = (secret, off = 0) => { const c = Math.floor(Date.now() / 1000 / 30) + off; const m = Buffer.alloc(8); m.writeBigUInt64BE(BigInt(c)); const h = createHmac('sha1', b32dec(secret)).update(m).digest(); const o = h[h.length - 1] & 15; return String((((h[o] & 127) << 24) | (h[o + 1] << 16) | (h[o + 2] << 8) | h[o + 3]) % 1e6).padStart(6, '0'); };
 
 const PG_PORT = 55434, API_PORT = 3000, WEB_PORT = 4200;
+const databasePort = process.env.VISUAL_TEST_PG_PORT ? Number(process.env.VISUAL_TEST_PG_PORT) : PG_PORT;
+if (!Number.isInteger(databasePort) || databasePort < 1024 || databasePort > 65535) throw new Error('Invalid visual database port');
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const root = process.cwd();
 const shots = process.env.SHOT_DIR ?? '/downloads';
@@ -37,10 +39,14 @@ if (stage) {
 // Fail-closed exit: a silent exit before the success path (for example a
 // startup await that never settles with an empty event loop) leaves this at 1.
 process.exitCode = 1;
+// A dependency can overwrite exitCode while an unresolved cleanup promise lets
+// Node exit. Only the explicit stage/full success paths may release this guard.
+let completed = false;
+process.on('exit', () => { if (!completed) process.exitCode = 1; });
 const check = (n, c, x = '') => { checks++; console.log(`${c ? 'PASS' : (failures++, 'FAIL')} ${n} ${x}`); };
 
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-e2e-'));
-const pg = new EmbeddedPostgres({ databaseDir: dataDir, user: 'postgres', password: 'postgres', port: PG_PORT, persistent: !!stage });
+const pg = new EmbeddedPostgres({ databaseDir: dataDir, user: 'postgres', password: 'postgres', port: databasePort, persistent: !!stage });
 let api, web, browser, projId, savedState;
 const waitFor = async (url, ok = (r) => r.ok || r.status === 401, tries = 120) => {
   for (let i = 0; i < tries; i++) {
@@ -55,7 +61,7 @@ try {
   else await pg.initialise();
   await pg.start();
   if (!resume) await pg.createDatabase('openlocale_e2e');
-  const url = `postgresql://postgres:postgres@localhost:${PG_PORT}/openlocale_e2e`;
+  const url = `postgresql://postgres:postgres@localhost:${databasePort}/openlocale_e2e`;
   execFileSync(join(root, 'node_modules', '.bin', 'prisma'), ['migrate', 'deploy'], { env: { ...process.env, DATABASE_URL: url }, stdio: 'pipe' });
   api = spawn(process.execPath, [join(root, 'dist', 'apps', 'api', 'main.js')], {
     env: { ...process.env, DATABASE_URL: url, JWT_SECRET: 'e2e-secret', PORT: String(API_PORT),
@@ -2235,7 +2241,11 @@ try {
   }));
   await Promise.all(stopped);
   let stoppedDatabase = true;
-  await pg.stop().catch(() => { stoppedDatabase = false; failures++; });
+  let stopTimer;
+  await Promise.race([
+    pg.stop(),
+    new Promise((_, reject) => { stopTimer = setTimeout(() => reject(new Error('Database stop timed out')), 2000); }),
+  ]).catch(() => { stoppedDatabase = false; failures++; }).finally(() => clearTimeout(stopTimer));
   if (stage === 'first' && stoppedDatabase && failures === 0 && savedState) {
     cpSync(dataDir, join(checkpoint,'postgres'), {recursive:true});
     writeFileSync(join(checkpoint,'state.json'),JSON.stringify(savedState),{mode:0o600});
@@ -2244,9 +2254,11 @@ try {
 }
 if (failures > 0) { console.log(`${failures} FAILURES`); process.exit(1); }
 if (stage === 'first') {
+  completed = true;
   console.log(`E2E_STAGE_FIRST_RC=0 checks=${checks}; second stage still required`);
   process.exitCode = 0;
 } else {
+  completed = true;
   console.log(`E2E visual pass complete${stage ? ' (staged)' : ''}; checks=${checks}${resume ? '; combined='+(resume.checks+checks)+' (two repeated startup checks)' : ''}`);
 // In-script exit marker: the outer shell can be reaped before it records
 // $?, so the suite prints its own deterministic success line.

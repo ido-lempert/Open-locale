@@ -208,6 +208,23 @@ try {
   check('repository comparison marks actual conflicting key for manual review',await page.$eval('section[aria-label="Repository comparison"] tr.manual',e=>e.textContent.includes('manual review')));
   check('repository comparison distinguishes missing and empty values',await page.$eval('section[aria-label="Repository comparison"]',e=>e.textContent.includes('[missing]')&&e.textContent.includes('[empty string]')));
   check('comparison remains explicitly not applied and renders hostile values literally',!(await page.$('section[aria-label="Repository comparison"] img'))&&!await page.evaluate(()=>window.repoXss)&&(await page.content()).includes('Repository comparison - not applied'));
+  const chooseRepo=async(key,value)=>page.$eval(`[data-repo-choice="${key}"]`,(e,v)=>{e.value=v;e.dispatchEvent(new Event('change',{bubbles:true}));},value);
+  check('repository draft requires every differing key explicitly selected',await page.$eval('[name=targetResolve]',e=>e.disabled));
+  for(const key of await page.$$eval('[data-repo-choice]',els=>els.map(e=>e.getAttribute('data-repo-choice'))))await chooseRepo(key,key==='hello'?'remote':'local');
+  await page.click('[name=targetResolve]');await page.waitForSelector('[name=targetDraft]');
+  const repoDraft=await page.$eval('[name=targetDraft]',e=>e.value);
+  check('real repository draft uses exact selected sources',JSON.stringify(JSON.parse(repoDraft))===JSON.stringify({conflict:'Local edit',empty:'',hello:'Changed repository',remote:'Old text',title:'Local title'}));
+  check('repository draft warning has no applied effect claim',(await page.content()).includes('Draft only - not applied.')&&(await call(`${P}/export/en?flat=true`,undefined,token)).title==='Local title');
+  const repoDownloadDir=mkdtempSync(join(tmpdir(),'ol-repo-download-'));const repoCdp=await page.createCDPSession();await repoCdp.send('Page.setDownloadBehavior',{behavior:'allow',downloadPath:repoDownloadDir});await page.click('[name=targetDownloadDraft]');
+  for(let n=0;n<50&&!existsSync(join(repoDownloadDir,'open-locale-repository-draft.json'));n++)await new Promise(r=>setTimeout(r,100));
+  check('downloaded repository draft bytes equal reviewed draft',readFileSync(join(repoDownloadDir,'open-locale-repository-draft.json'),'utf8')===repoDraft);rmSync(repoDownloadDir,{recursive:true,force:true});
+  await page.setViewport({width:1280,height:900});await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'/downloads/repository-draft-desktop.png',fullPage:true});await page.setViewport({width:480,height:900});await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'/downloads/repository-draft-narrow.png',fullPage:true});
+  await page.$eval('.table-wrap',e=>e.scrollIntoView({block:'center'}));await page.$eval('.table-wrap',e=>e.scrollLeft=e.scrollWidth);await page.screenshot({path:'/downloads/repository-draft-narrow-choices.png'});
+  check('repository draft digest and controls fit narrow screen',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await chooseRepo('hello','base');check('changing repository selection clears old draft immediately',!(await page.$('[name=targetDraft]')));
+  repositoryJson=JSON.stringify({hello:'Changed after comparison'});await page.click('[name=targetResolve]');await page.waitForSelector('[role=alert]');
+  check('stale repository draft request clears comparison and selections',!(await page.$('[name=targetDraft]'))&&!(await page.$('section[aria-label="Repository comparison"]'))&&(await page.$eval('[role=alert]',e=>e.textContent)).includes('review a fresh comparison'));
+  repositoryJson=JSON.stringify({title:'Repository title',hello:'Changed repository',unsafe:'<img src=x onerror="window.repoXss=true">',empty:''});await page.click('[name=targetPreview]');await page.waitForSelector('section[aria-label="Repository comparison"]');
   await page.setViewport({width:1280,height:900});await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'/downloads/repository-preview-desktop.png',fullPage:true});
   await page.setViewport({width:480,height:900});await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'/downloads/repository-preview-narrow.png',fullPage:true});
   check('repository comparison scrolls internally without document overflow',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)&&await page.$eval('.table-wrap',e=>e.scrollWidth>e.clientWidth));
@@ -216,6 +233,9 @@ try {
   check('large repository comparison renders fifty rows',await page.$$eval('section[aria-label="Repository comparison"] tbody tr',rows=>rows.length===50));
   await page.click('[name=targetPreviewNext]');await page.waitForFunction(()=>document.querySelector('section[aria-label="Repository comparison"] tbody')?.textContent.includes('repo050'));
   check('repository comparison pagination changes rows',await page.$eval('section[aria-label="Repository comparison"] tbody',e=>!e.textContent.includes('repo000')&&e.textContent.includes('repo050')));
+  await chooseRepo('repo050','remote');await page.click('[name=targetPreviewPrevious]');await page.waitForSelector('[data-repo-choice="repo000"]');await chooseRepo('repo000','local');await page.click('[name=targetPreviewNext]');await page.waitForSelector('[data-repo-choice="repo050"]');
+  check('repository explicit selections survive pagination',await page.$eval('[data-repo-choice="repo050"]',e=>e.value==='remote')&&(await page.$eval('[name=targetResolve]',e=>e.disabled)));
+
   repositoryJson=JSON.stringify({hello:'Repository value',unsafe:'<img src=x onerror="window.repoXss=true">'});
   await page.click('[name=targetRead]');await page.waitForSelector('[name=targetSnapshot]');await page.click('[name=targetLoadBaseline]');await page.waitForSelector('[name=targetPrepareBaseline]');
   const oldRepoJson=repositoryJson;repositoryJson=JSON.stringify({hello:'Changed since review'});
@@ -268,6 +288,15 @@ try {
   await page.waitForFunction(id=>location.pathname==='/projects/'+id+'/sync/targets',{},second.id);await page.waitForSelector('[name=targetOwner]');previewRelease();await new Promise(r=>setTimeout(r,600));
   check('late successful repository preview cannot expose old scope after navigation',!(await page.$('section[aria-label="Repository comparison"]'))&&!(await page.$('article')));
   page.off('request',holdPreview);await page.setRequestInterception(false);
+  await page.goto(`${WEB}/projects/${project.id}/sync/targets`,{waitUntil:'networkidle0'});await page.waitForSelector('[name=targetRemove]');await page.click('[name=targetRemove]');await page.waitForSelector('[name=targetConfirmRemove]');await page.click('[name=targetConfirmRemove]');await page.waitForFunction(()=>document.body.textContent.includes('No repository target configurations.'));
+  // Hold successful draft response across same-component scope change.
+  await set('targetOwner','owner');await set('targetRepo','repo');await set('targetPath','external/new.json');await page.click('[name=targetSave]');await page.waitForSelector('article');await page.click('[name=targetRead]');await page.waitForSelector('[name=targetSnapshot]');await page.click('[name=targetLoadBaseline]');await page.waitForSelector('[name=targetPrepareBaseline]');await page.click('[name=targetPrepareBaseline]');await page.waitForSelector('[name=targetConfirmBaseline]');await page.click('[name=targetConfirmBaseline]');await page.waitForSelector('[name=targetBaseline]');await page.click('[name=targetPreview]');await page.waitForSelector('section[aria-label="Repository comparison"]');
+  for(const key of await page.$$eval('[data-repo-choice]',els=>els.map(e=>e.getAttribute('data-repo-choice'))))await chooseRepo(key,'local');
+  let repoResolveRelease,repoResolveHeld=false;const repoResolveGate=new Promise(r=>repoResolveRelease=r);await page.setRequestInterception(true);const holdRepoResolve=async request=>{if(!repoResolveHeld&&request.url().endsWith('/resolve-preview')){repoResolveHeld=true;await repoResolveGate;}return request.continue();};page.on('request',holdRepoResolve);
+  await page.click('[name=targetResolve]');for(let n=0;n<100&&!repoResolveHeld;n++)await new Promise(r=>setTimeout(r,20));if(!repoResolveHeld)throw new Error('Draft transport never held');
+  await page.evaluate(id=>{const link=window.ng.getDirectives(document.querySelector('.back')).find(d=>d.router);return link.router.navigateByUrl('/projects/'+id+'/sync/targets');},second.id);await page.waitForFunction(id=>location.pathname==='/projects/'+id+'/sync/targets',{},second.id);await page.waitForSelector('[name=targetOwner]');repoResolveRelease();await new Promise(r=>setTimeout(r,600));
+  check('late successful repository draft cannot expose old project bytes',!(await page.$('[name=targetDraft]'))&&!(await page.$('article')));
+  page.off('request',holdRepoResolve);await page.setRequestInterception(false);
   await page.goto(`${WEB}/projects/${project.id}/sync/targets`,{waitUntil:'networkidle0'});await page.waitForSelector('[name=targetRemove]');await page.click('[name=targetRemove]');await page.waitForSelector('[name=targetConfirmRemove]');await page.click('[name=targetConfirmRemove]');await page.waitForFunction(()=>document.body.textContent.includes('No repository target configurations.'));
   // Hold a successful real read while switching reused project route.
   await set('targetOwner','owner');await set('targetRepo','repo');await set('targetPath','external/new.json');await page.click('[name=targetSave]');await page.waitForSelector('article');

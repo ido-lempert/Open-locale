@@ -27,3 +27,10 @@ stage2 or a handled stage failure. If interrupted by a host kill, clean up only
 that run's processes and checkpoint, then restart from stage1. Never commit or
 share a checkpoint. A source change invalidates the checkpoint. Negative
 preflight checks run with `npm run test:visual-stage-config` and in the sweep.
+
+If the default local PostgreSQL port55434 is occupied, use the same explicitly
+chosen `VISUAL_TEST_PG_PORT` for both stages. Do not stop another process to free
+it. The test-only override accepts1024-65535 and does not change application ports.
+Incomplete cleanup is bounded; an exit guard allows exit0 only after the explicit
+stage/full success path. The occupied-port regression proves startup failure
+cannot be reported green, even if a dependency leaves an unresolved stop promise.

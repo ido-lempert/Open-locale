@@ -215,5 +215,7 @@ verified remote bytes. Changed target/baseline/local row generation/remote bytes
 return409; missing/extra/invalid choices return400. A selected missing value
 omits that key from draft JSON only. Response includes exact JSON, SHA256 digest,
 counts and comparison provenance, with `canApply=false`. No local import,
-repository write, baseline advance or sync/diagnostic record. No UI for repository
-draft resolution yet; repository comparison remains read-only.
+repository write, baseline advance or sync/diagnostic record. The target screen offers explicit selections for every differing key, draft
+JSON/digest review and exact-byte download. Selections survive comparison pages;
+changed selections discard the previous draft. A failed preparation requires a
+fresh comparison. Neither preview nor draft preparation applies changes.

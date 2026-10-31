@@ -1,5 +1,6 @@
 // Preflight negative checks must fail before opening a database/browser.
 import { spawnSync } from 'node:child_process';
+import { createServer } from 'node:net';
 import { mkdtempSync, writeFileSync, mkdirSync, chmodSync, rmSync, symlinkSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,7 +12,7 @@ const check=(name,env,expected)=>{
  const result=spawnSync(process.execPath,['scripts/e2e-visual.mjs'],{env:{...process.env,VISUAL_STAGE:'',VISUAL_CHECKPOINT_DIR:'',...env},encoding:'utf8',timeout:10000});
  const output=result.stdout+result.stderr;
  const ok=result.status!==0&&!result.error&&output.includes(expected)&&!output.includes('E2E_RC=0')&&!output.includes('PASS API up');
- console.log(`${ok?'PASS':(failures++,'FAIL')} ${name}`);
+ console.log(`${ok?'PASS':(failures++,'FAIL')} ${name}`);if(!ok)console.log('DIAG',JSON.stringify({status:result.status,error:result.error?.message,output}));
 };
 try{
  check('invalid stage fails before startup',{VISUAL_STAGE:'third',VISUAL_CHECKPOINT_DIR:root},'Set VISUAL_STAGE');
@@ -29,5 +30,9 @@ try{
  const link=join(root,'link');symlinkSync(dir,link);
  check('second stage rejects symlink checkpoint',{VISUAL_STAGE:'second',VISUAL_CHECKPOINT_DIR:link},'owned private directory');
  check('first stage refuses an existing checkpoint',{VISUAL_STAGE:'first',VISUAL_CHECKPOINT_DIR:dir},'EEXIST');
+ const listener=createServer();
+ await new Promise((resolve,reject)=>{listener.once('error',reject);listener.listen(0,'127.0.0.1',resolve);});
+ try { check('occupied database port cannot exit green after incomplete cleanup',{VISUAL_STAGE:'first',VISUAL_CHECKPOINT_DIR:join(root,'occupied'),VISUAL_TEST_PG_PORT:String(listener.address().port)},'SUITE INCOMPLETE:'); }
+ finally { await new Promise(resolve=>listener.close(resolve)); }
 }finally{rmSync(root,{recursive:true,force:true});}
 process.exitCode=failures?1:0;

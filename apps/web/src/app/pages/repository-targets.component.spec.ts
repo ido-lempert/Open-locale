@@ -355,4 +355,80 @@ describe('repository target UI lifecycle', () => {
     expect(c.display(null)).toBe('[missing]');
     expect(c.display('')).toBe('[empty string]');
   });
+  it('requires explicit choices, guards duplicate resolve, clears draft on selection edit', async () => {
+    let finish!: (v: unknown) => void,
+      calls = 0;
+    const c = setup({
+      resolveRepositoryPreview: () => {
+        calls++;
+        return new Promise((r) => (finish = r));
+      },
+    });
+    c.previewResult.set({
+      targetId: 't',
+      targetRevision: 1,
+      fingerprint: 'f',
+      decisions: [{ key: 'x', kind: 'conflict' }],
+    } as unknown as RepositorySyncPreview);
+    await c.resolve(target);
+    expect(calls).toBe(0);
+    c.choose('unknown', 'local');
+    expect(c.choices().size).toBe(0);
+    c.choose('x', 'local');
+    const pending = c.resolve(target);
+    await c.resolve(target);
+    expect(calls).toBe(1);
+    c.choose('x', 'remote');
+    expect(c.choices().get('x')).toBe('local');
+    finish({ json: '{}' });
+    await pending;
+    expect(c.draft()?.json).toBe('{}');
+    c.choose('x', 'remote');
+    expect(c.draft()).toBeNull();
+  });
+  it('resolve failure discards compared sources and choices for fresh review', async () => {
+    const c = setup({
+      resolveRepositoryPreview: async () => {
+        throw new Error('Repository preview changed');
+      },
+    });
+    c.previewResult.set({
+      targetId: 't',
+      targetRevision: 1,
+      decisions: [{ key: 'x', kind: 'local-only' }],
+    } as unknown as RepositorySyncPreview);
+    c.choose('x', 'local');
+    await c.resolve(target);
+    expect(c.previewResult()).toBeNull();
+    expect(c.choices().size).toBe(0);
+    expect(c.draft()).toBeNull();
+    expect(c.busy()).toBe(false);
+    expect(c.error()).toContain('changed');
+  });
+  it('late resolve result cannot restore old draft after destroy or navigation', async () => {
+    for (const action of ['destroy', 'navigate']) {
+      let finish!: (v: unknown) => void;
+      const c = setup({
+        resolveRepositoryPreview: () => new Promise((r) => (finish = r)),
+        getProject: async () => ({
+          baseLocale: 'en',
+          locales: [{ code: 'en' }],
+        }),
+        listBranches: async () => [],
+        listRepositoryTargets: async () => ({ targets: [] }),
+      });
+      c.previewResult.set({
+        targetId: 't',
+        targetRevision: 1,
+        decisions: [],
+      } as unknown as RepositorySyncPreview);
+      const pending = c.resolve(target);
+      if (action === 'destroy') c.ngOnDestroy();
+      else await c.load('second');
+      finish({ json: 'private old draft' });
+      await pending;
+      expect(c.draft()).toBeNull();
+      expect(c.choices().size).toBe(0);
+    }
+  });
 });
