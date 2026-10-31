@@ -376,3 +376,10 @@ cannot count as success; notify receiver failure aggregate becomes failed run.
 This does not add repository automation execution or exactly-once semantics. No
 rules/zero subscribers are not delivery receipts. Activity write failure also fails
 the rule summary even if a prior effect happened, so retries need deduplication.
+
+An internal repository automation adapter revalidates intent before using the
+existing translation.value trigger and awaited outcome summary. Existing main/base
+bounds and creator permission checks apply. Empty set follows normal value-write
+semantics; removal does not invent a value trigger. Failed rule summary throws,
+but partial effects may already exist, so per-rule deduplication remains necessary
+before production retries. No channel checkpoint/combined worker/public apply added.

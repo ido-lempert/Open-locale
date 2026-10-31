@@ -104,7 +104,8 @@ add languages, manage keys and translations, export a file.
   Independent webhook completion checkpoint added; no automation completion.
   Webhook API-update revision fences captured routing ABA on retry.
   Automation outcome summaries added before repository-channel integration.
-  See reviews0134-0158.
+  Internal repository automation adapter added, no per-rule retry deduplication
+  or enabled combined worker. See reviews0134-0159.
 
 ## Phase 3 - advanced
 

@@ -255,6 +255,31 @@ try {
   await prisma.automationRule.update({where:{id:summaryRule.id},data:{action:'pretranslate',config:{providerId:'missing-fixture',locales:['he']}}});
   const failedMt=await summaryService.fire(summaryProject.id,'translation.value',summaryCtx);
   check('caught per-locale MT errors cannot count as successful automation',failedMt.matched===1&&failedMt.failed===1&&failedMt.succeeded===0);
+  const repositoryBundle=join(root,'.tmp-repository-automation.cjs');execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-automation-handler.ts','--bundle','--platform=node','--format=cjs','--packages=external','--outfile='+repositoryBundle]);const {fireRepositoryAutomation}=require(repositoryBundle);
+  await prisma.projectLocale.createMany({data:[{projectId:summaryProject.id,code:'en'},{projectId:summaryProject.id,code:'he'}]});
+  const sourceRow=await prisma.translation.create({data:{projectId:summaryProject.id,keyId:summaryKey.id,localeCode:'en',value:'Repository source'}});
+  const repoTarget=await prisma.repositorySyncTarget.create({data:{projectId:summaryProject.id,branchId:summaryBranch.id,localBranch:'main',locale:'en',owner:'fixture',repo:'fixture',path:'en.json',remoteBranch:'main'}});
+  const repoIntent=await prisma.repositoryLocalEffectIntent.create({data:{projectId:summaryProject.id,targetId:repoTarget.id,targetRevision:1,actorId:owner.user.id,keyId:summaryKey.id,keyName:summaryKey.name,branchId:summaryBranch.id,branch:'main',locale:'en',operation:'set-value',value:sourceRow.value,translationRowId:sourceRow.rowId,translationVersion:sourceRow.version,draftContentDigest:'a'.repeat(64),previewFingerprint:'b'.repeat(64),state:'leased',attempts:1,leaseToken:owner.user.id,leaseUntil:new Date('2099-01-01')}});
+  await prisma.automationRule.update({where:{id:summaryRule.id},data:{action:'task.create',config:{title:'Repository task'}}});
+  const repoSummary=await fireRepositoryAutomation(prisma,summaryService,repoIntent);
+  check('repository automation adapter creates actual task and awaited activity',repoSummary.succeeded===1&&repoSummary.failed===0&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Repository task'}})===1);
+  const repoRun=await prisma.activityEvent.findFirst({where:{projectId:summaryProject.id,action:'automation.run'},orderBy:{createdAt:'desc'}});
+  check('repository automation preserves triggering actor and creator audit',repoRun.detail.triggeredBy===owner.user.id&&repoRun.detail.runAs===owner.user.id);
+  await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:{increment:1}}});let deniedRepo=false;const runsBefore=await prisma.activityEvent.count({where:{projectId:summaryProject.id,action:'automation.run'}});try{await fireRepositoryAutomation(prisma,summaryService,repoIntent);}catch{deniedRepo=true;}
+  check('changed repository context rejects before automation runs',deniedRepo&&await prisma.activityEvent.count({where:{projectId:summaryProject.id,action:'automation.run'}})===runsBefore);
+  await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:1}});
+  await prisma.automationRule.update({where:{id:summaryRule.id},data:{action:'notify',config:{message:'Failed repository notification'}}});let failedRepo=false;try{await fireRepositoryAutomation(prisma,summaryService,repoIntent);}catch{failedRepo=true;}
+  check('repository automation adapter propagates failed rule summary',failedRepo);
+  await prisma.translation.delete({where:{keyId_localeCode:{keyId:summaryKey.id,localeCode:'en'}}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{operation:'remove-locale-value',value:null,translationRowId:null,translationVersion:null}});
+  const removalSummary=await fireRepositoryAutomation(prisma,summaryService,repoIntent);
+  check('repository locale removal does not invent value automation trigger',removalSummary.skipped&&removalSummary.matched===0);
+  const emptyRepoRow=await prisma.translation.create({data:{projectId:summaryProject.id,keyId:summaryKey.id,localeCode:'en',value:''}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{operation:'set-value',value:'',translationRowId:emptyRepoRow.rowId,translationVersion:emptyRepoRow.version}});await prisma.automationRule.update({where:{id:summaryRule.id},data:{action:'task.create',config:{title:'Empty repository task'}}});
+  const emptyRepoSummary=await fireRepositoryAutomation(prisma,summaryService,repoIntent);
+  check('empty repository set follows normal value automation semantics',emptyRepoSummary.succeeded===1&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Empty repository task'}})===1);
+  const heRepoRow=await prisma.translation.create({data:{projectId:summaryProject.id,keyId:summaryKey.id,localeCode:'he',value:'Target'}});await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{locale:'he'}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{locale:'he',value:heRepoRow.value,translationRowId:heRepoRow.rowId,translationVersion:heRepoRow.version}});
+  const nonbaseRepo=await fireRepositoryAutomation(prisma,summaryService,repoIntent);
+  check('repository target locale does not trigger base-value automations',nonbaseRepo.skipped&&nonbaseRepo.matched===0);
+  rmSync(repositoryBundle,{force:true});
   await prisma.project.delete({where:{id:summaryProject.id}});
   for(const out of [activityBundle,projectsBundle,tasksBundle])rmSync(out,{force:true});
 } catch (err) {
