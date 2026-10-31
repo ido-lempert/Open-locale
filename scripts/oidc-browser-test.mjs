@@ -24,7 +24,7 @@ try {
   prisma = new PrismaClient({ datasources:{db:{url}} });
   mock = spawn(process.execPath,['scripts/mock-oidc.mjs'],{env:{...process.env,MOCK_OIDC_PORT:'5555'},stdio:'pipe'});
   await waitFor('http://127.0.0.1:5555/.well-known/openid-configuration');
-  api=spawn(process.execPath,['dist/apps/api/main.js'],{env:{...process.env,DATABASE_URL:url,JWT_SECRET:'browser-oidc-secret',OIDC_PENDING_MAX:'2',OIDC_ISSUER:'http://127.0.0.1:5555',OIDC_REDIRECT_URI:`${WEB}/auth/oidc/callback`,PORT:String(API_PORT)},stdio:'pipe'});
+  api=spawn(process.execPath,['dist/apps/api/main.js'],{env:{...process.env,DATABASE_URL:url,JWT_SECRET:'browser-oidc-secret',OIDC_PENDING_MAX:'2',OIDC_STATE_MAX:'3',OIDC_ISSUER:'http://127.0.0.1:5555',OIDC_REDIRECT_URI:`${WEB}/auth/oidc/callback`,PORT:String(API_PORT)},stdio:'pipe'});
   await waitFor(`${API}/auth/oidc/info`);
   check('OIDC configured endpoint returns only boolean',JSON.stringify(await (await fetch(`${API}/auth/oidc/info`)).json())==='{"configured":true}');
   web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{stdio:'pipe',detached:true});
@@ -167,6 +167,20 @@ try {
   const failed=await fetch(`${API}/auth/oidc/complete`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({pendingToken:admitted.json.pendingToken,totpCode:'WRONG'})});
   check('OIDC pending failed verification consumes capacity entry',failed.status===401);
   check('OIDC pending capacity recovers after consumption',!!(await pendingFlow()).json.pendingToken);
+  const openStates=[];
+  for(let i=0;i<3;i++){
+    const r=await fetch(`${API}/auth/oidc/start`);const body=await r.json();openStates.push(body);
+    check(`bounded authorization state admits slot ${i+1}`,r.status===200&&typeof body.url==='string'&&!JSON.stringify(body).includes('verifier'));
+  }
+  const overflow=await fetch(`${API}/auth/oidc/start`);
+  check('authorization state overflow fails closed over HTTP',overflow.status===503&&!(await overflow.json()).url);
+  const consumedState=new URL(openStates[0].url).searchParams.get('state');
+  const rejectedCode=await fetch(`${API}/auth/oidc/callback`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({state:consumedState,code:'invalid'})});
+  check('failed code exchange consumes bounded authorization state',rejectedCode.status===401);
+  const recovered=await fetch(`${API}/auth/oidc/start`);
+  check('authorization capacity recovers after rejected exchange',recovered.status===200&&!!(await recovered.json()).url);
+  const replay=await fetch(`${API}/auth/oidc/callback`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({state:consumedState,code:'invalid'})});
+  check('consumed authorization state still rejects replay',replay.status===401);
   console.log(failures?'OIDC BROWSER CHECKS FAILED':'ALL OIDC BROWSER CHECKS PASSED');
   process.exitCode=failures?1:0;
 } catch(e){ console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1; }

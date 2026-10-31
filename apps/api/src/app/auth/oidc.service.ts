@@ -1,3 +1,4 @@
+import { OidcStateStore } from './oidc-state';
 import { PendingSso } from './pending-sso';
 // OIDC groundwork: authorization-code + PKCE login against a configured
 // issuer. Local development and tests target the mock issuer in
@@ -15,14 +16,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PinnedFetchError, pinnedRequest } from '../egress/pinned';
 import { AuthService } from './auth.service';
 
-interface OidcState {
-  nonce: string;
-  verifier: string; // server-side only; never leaves the API
-  linkUserId: string | null;
-  linkEpoch: number | null; // authEpoch at start-link; stale linker state fails
-  expiresAt: number;
-}
-
 interface OidcMetadata {
   issuer: string;
   authorization_endpoint: string;
@@ -37,7 +30,7 @@ const LOOPBACK = ['127.0.0.1', '::1', 'localhost'];
 export class OidcService {
   // In-memory state/pending stores: an API restart invalidates in-flight
   // logins (fail closed - users simply restart the flow). Documented limit.
-  private states = new Map<string, OidcState>();
+  private states = new OidcStateStore(process.env.OIDC_STATE_MAX === undefined ? 10_000 : Number(process.env.OIDC_STATE_MAX), process.env.OIDC_STATE_TTL_MS === undefined ? 600_000 : Number(process.env.OIDC_STATE_TTL_MS));
   private pending = new PendingSso(process.env.OIDC_PENDING_MAX === undefined ? 10_000 : Number(process.env.OIDC_PENDING_MAX));
   private metadata: Promise<OidcMetadata> | null = null;
 
@@ -117,20 +110,12 @@ export class OidcService {
     return this.metadata;
   }
 
-  private sweep() {
-    const now = Date.now();
-    for (const [k, v] of this.states) if (v.expiresAt < now) this.states.delete(k);
-  }
-
   async start(linkUserId: string | null, linkEpoch: number | null = null) {
     const { clientId, redirectUri } = this.config();
     const m = await this.meta();
-    const state = b64url(randomBytes(16));
     const nonce = b64url(randomBytes(16));
     const verifier = b64url(randomBytes(32));
-    const ttlMs = Number(process.env.OIDC_STATE_TTL_MS || 10 * 60 * 1000);
-    this.states.set(state, { nonce, verifier, linkUserId, linkEpoch, expiresAt: Date.now() + ttlMs });
-    this.sweep();
+    const state = this.states.create({ nonce, verifier, linkUserId, linkEpoch });
     const challenge = b64url(createHash('sha256').update(verifier).digest());
     const url = new URL(m.authorization_endpoint);
     url.search = new URLSearchParams({
@@ -198,9 +183,7 @@ export class OidcService {
     // State is consumed up front: single-use whatever happens next; the
     // check-and-delete is synchronous, so concurrent submissions have
     // exactly one winner.
-    const s = this.states.get(state);
-    this.states.delete(state);
-    if (!s || s.expiresAt < Date.now()) throw new UnauthorizedException('Invalid or expired state');
+    const s = this.states.consume(state);
     const { issuer, clientId, redirectUri } = this.config();
     const m = await this.meta();
     const tokenRes = await this.guardedJson(m.token_endpoint, {
