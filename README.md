@@ -278,3 +278,12 @@ source; base-locale/empty saves do not create or overwrite pairs. Locale removal
 preserves historical TM, matching existing editing semantics. TM commits/rolls
 back with locale value/history/activity. Webhook/automation delivery and the fresh
 source/public execution composition are still outstanding integration work.
+
+Internal reviewed repository transactions also persist one pending local-effect
+intent per changed locale value in the same transaction, including operation,
+exact set value (empty distinct from removal), actor/key/branch/target lineage and
+reviewed digest/fingerprint. Rollback or failed intent storage rolls back local
+writes too; no-op and stale replay enqueue nothing. These are private pending
+facts, not delivery receipts or execution grants. There is no dispatcher, retry/
+retention policy or public apply caller yet, and no webhook/automation is sent by
+this code. Key/target deletion preserves lineage; project deletion removes payloads.

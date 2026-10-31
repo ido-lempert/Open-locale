@@ -87,6 +87,7 @@ model TeamMember {
 }
 
 model Project {
+  repositoryEffects RepositoryLocalEffectIntent[]
   deletionAudits TranslationDeletionAudit[]
   id             String   @id @default(uuid()) @db.Uuid
   teamId         String   @db.Uuid
@@ -626,4 +627,26 @@ model TranslationDeletionAudit {
   actor User? @relation(fields:[actorId],references:[id],onDelete:SetNull)
   @@index([projectId,createdAt])
   @@map("translation_deletion_audits")
+}
+
+// Transaction-coupled pending local-change facts. No dispatcher in this stage.
+// Not an execution grant or evidence that any webhook/automation was delivered.
+model RepositoryLocalEffectIntent {
+  id String @id @default(uuid()) @db.Uuid
+  projectId String @db.Uuid
+  targetId String @db.Uuid
+  actorId String @db.Uuid
+  keyId String @db.Uuid
+  keyName String
+  branchId String @db.Uuid
+  branch String
+  locale String
+  operation String
+  value String?
+  draftContentDigest String
+  previewFingerprint String
+  createdAt DateTime @default(now())
+  project Project @relation(fields:[projectId],references:[id],onDelete:Cascade)
+  @@index([projectId,createdAt])
+  @@map("repository_local_effect_intents")
 }

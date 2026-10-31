@@ -58,8 +58,26 @@ export async function repositoryLocalTransaction(
     plan.changes,
     scope.actorId,
   );
+  // Durable facts in the SAME transaction, never network delivery under locks.
+  // One intent per actual operation. A replay that fails local generations cannot
+  // enqueue duplicates; a no-op draft has no effects. Scalar lineage survives
+  // key/target/actor deletion; project deletion removes the private payload.
+  if (plan.changes.length) {
+    const keys = new Map(local.keys.map((key) => [key.key, key.keyId]));
+    await tx.repositoryLocalEffectIntent.createMany({
+      data: plan.changes.map((change) => ({
+        projectId: scope.projectId, targetId: scope.targetId,
+        actorId: scope.actorId, keyId: keys.get(change.key)!,
+        keyName: change.key, branchId: scope.branchId, branch: scope.branch,
+        locale: scope.locale, operation: change.action, value: change.nextValue,
+        draftContentDigest: expectedDraftDigest,
+        previewFingerprint: expectedPreviewFingerprint,
+      })),
+    });
+  }
   return {
     ...result,
+    pendingEffectIntents: plan.changes.length,
     draftContentDigest: expectedDraftDigest,
     previewFingerprint: expectedPreviewFingerprint,
     source: 'internal-repository-local-transaction' as const,

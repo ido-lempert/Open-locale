@@ -93,7 +93,8 @@ add languages, manage keys and translations, export a file.
   Internal current-admin/target/baseline locked transaction guard added; no public
   execution. Isolated exact-draft transaction composition added, missing production
   effects/fresh-source execution integration remain. Transactional TM helper shared
-  with normal save/import and isolated writer. See reviews0134-0145.
+  with normal save/import and isolated writer. Durable transaction-coupled effect
+  intents added; dispatcher/retry/retention still code work. See reviews0134-0146.
 
 ## Phase 3 - advanced
 
