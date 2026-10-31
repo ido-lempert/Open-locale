@@ -1,3 +1,5 @@
+import { createServer } from 'node:http';
+import { createHash } from 'node:crypto';
 // Granular permissions: real PostgreSQL + real HTTP API.
 // Roles (OWNER/ADMIN/MEMBER) and per-locale contributor access.
 // Run: node scripts/permissions-test.mjs
@@ -26,14 +28,18 @@ async function call(path, { jwt, apiKey, method = 'GET', body } = {}) {
 
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-sync-'));
 const pg = new EmbeddedPostgres({ databaseDir: dataDir, user: 'postgres', password: 'postgres', port: PG_PORT, persistent: false });
-let api,prisma;
+let api,prisma,repositoryFixture;
+let repoCalls=0,repoText='{"fromRepo":"verified bytes"}',repoStatus=200,repoGate,releaseRepo,repoSeen,repoMethod,repoAuth;
+repositoryFixture=createServer(async(req,res)=>{repoCalls++;repoMethod=req.method;repoAuth=req.headers.authorization;req.resume();if(repoSeen)repoSeen();if(repoGate)await repoGate;const bytes=Buffer.from(repoText);res.writeHead(repoStatus,{'content-type':'application/json'});res.end(JSON.stringify({type:'file',path:'updated/en.json',encoding:'base64',size:bytes.length,sha:createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex'),content:bytes.toString('base64')}));});
+await new Promise(r=>repositoryFixture.listen(0,'127.0.0.1',r));
+const repoOrigin=`http://127.0.0.1:${repositoryFixture.address().port}`;
 try {
   await pg.initialise(); await pg.start(); await pg.createDatabase('openlocale_sync');
   const url = `postgresql://postgres:postgres@localhost:${PG_PORT}/openlocale_sync`;
   execFileSync(join(root, 'node_modules', '.bin', 'prisma'), ['migrate', 'deploy'], {
     env: { ...process.env, DATABASE_URL: url }, stdio: 'pipe' });
   api = spawn(process.execPath, [join(root, 'dist', 'apps', 'api', 'main.js')], {
-    env: { ...process.env, DATABASE_URL: url, JWT_SECRET: 'perm-secret', PORT: String(API_PORT) }, stdio: 'pipe' });
+    env: { ...process.env, DATABASE_URL: url, JWT_SECRET: 'perm-secret', NODE_ENV:'test',GITHUB_READ_OWNER:'owner',GITHUB_READ_REPO:'repo',GITHUB_READ_TOKEN:'fixture-read-only-token',GITHUB_READ_FIXTURE_ORIGIN:repoOrigin, PORT: String(API_PORT) }, stdio: 'pipe' });
   let up = false;
   for (let i = 0; i < 60 && !up; i++) {
     await new Promise((r) => setTimeout(r, 500));
@@ -133,6 +139,31 @@ try {
   check('target metadata ignores forged secret and connected claims',(await tc(T,'POST',{...coordinates,locale:'he',token:'secret-fixture-only',connected:true,revision:999})).json.target.revision===1&&!JSON.stringify(await prisma.repositorySyncTarget.findMany()).includes('secret-fixture-only'));
   const updatedTarget=await tc(`${T}/${target.id}`,'PUT',{...coordinates,path:'updated/en.json',expectedRevision:1});
   check('target replacement increments revision',updatedTarget.status===200&&updatedTarget.json.target.path==='updated/en.json'&&updatedTarget.json.target.revision===2);
+
+  const readTarget=(overrides={},auth=jwt)=>tc(`${T}/${target.id}/read`,'POST',{expectedRevision:2,...overrides},auth);
+  const readResult=await readTarget();
+  check('configured repository read returns verified exact flat JSON only',readResult.status===201&&readResult.json.json===repoText&&readResult.json.remoteVerified===true&&readResult.json.baselineAccepted===false&&readResult.json.canApply===false,JSON.stringify(readResult));
+  check('repository read uses deployment credential with GET only',repoCalls===1&&repoMethod==='GET'&&repoAuth==='Bearer fixture-read-only-token');
+  check('repository read is not accepted baseline or persisted file data',await prisma.syncPreviewRecord.count()===0&&!(JSON.stringify(await prisma.repositorySyncTarget.findUnique({where:{id:target.id}}))).includes('verified bytes'));
+  const readHeaders=await fetch(`${API}${T}/${target.id}/read`,{method:'POST',headers:{Authorization:`Bearer ${jwt}`,'Content-Type':'application/json'},body:JSON.stringify({expectedRevision:2})});
+  check('verified repository bytes are no-store',readHeaders.status===201&&readHeaders.headers.get('cache-control')==='no-store');await readHeaders.arrayBuffer();
+  const beforeDenied=repoCalls;
+  check('read rejects stale revision before network',(await readTarget({expectedRevision:1})).status===409&&repoCalls===beforeDenied);
+  check('read denies member and outsider before network',(await readTarget({},member.accessToken)).status===403&&(await readTarget({},outsider.accessToken)).status===404&&repoCalls===beforeDenied);
+  check('read denies API token before network',(await call(`${T}/${target.id}/read`,{apiKey:token.token,method:'POST',body:{expectedRevision:2}})).status===403&&repoCalls===beforeDenied);
+  repoText='{"nested":{"x":"no"}}';check('repository read rejects nested JSON',(await readTarget()).status===502);repoText='{"fromRepo":"verified bytes"}';
+  repoStatus=403;check('provider rejection sanitized without retries',(await readTarget()).status===502);repoStatus=200;
+  const mismatched=await tc(T,'POST',{...coordinates,localBranch:'feature',repo:'unconfigured'});const countBeforeMissing=repoCalls;
+  check('unconfigured repository scope returns503 without caller credential fallback',(await tc(`${T}/${mismatched.json.target.id}/read`,'POST',{expectedRevision:1,token:'caller-token'})).status===503&&repoCalls===countBeforeMissing);
+  await tc(`${T}/${mismatched.json.target.id}`,'DELETE',{expectedRevision:1});
+  repoGate=new Promise(r=>releaseRepo=r);const requested=new Promise(r=>repoSeen=r);const heldRead=readTarget();await requested;
+  const original=await prisma.repositorySyncTarget.findUnique({where:{id:target.id}});await prisma.repositorySyncTarget.update({where:{id:target.id},data:{revision:3}});releaseRepo();
+  check('target change during remote read discards returned bytes',(await heldRead).status===409);repoGate=undefined;repoSeen=undefined;
+  await prisma.repositorySyncTarget.update({where:{id:target.id},data:{revision:original.revision}});
+  repoGate=new Promise(r=>releaseRepo=r);const requestedAdmin=new Promise(r=>repoSeen=r);const heldAdminRead=readTarget({},admin.accessToken);await requestedAdmin;
+  await prisma.teamMember.update({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},data:{role:'MEMBER'}});releaseRepo();
+  check('lost admin grant during read suppresses file disclosure',(await heldAdminRead).status===403);repoGate=undefined;repoSeen=undefined;
+  await prisma.teamMember.update({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},data:{role:'ADMIN'}});
   check('stale target replacement fails without overwrite',(await tc(`${T}/${target.id}`,'PUT',{...coordinates,expectedRevision:1})).status===409&&(await prisma.repositorySyncTarget.findUnique({where:{id:target.id}})).path==='updated/en.json');
   check('stale target deletion does not remove config',(await tc(`${T}/${target.id}`,'DELETE',{expectedRevision:1})).status===409&&!!await prisma.repositorySyncTarget.findUnique({where:{id:target.id}}));
   const concurrency=await Promise.all([tc(`${T}/${target.id}`,'PUT',{...coordinates,path:'one.json',expectedRevision:2}),tc(`${T}/${target.id}`,'PUT',{...coordinates,path:'two.json',expectedRevision:2})]);
@@ -211,7 +242,7 @@ try {
 } catch (err) { console.error('SUITE INCOMPLETE:',err);process.exitCode=1;failures++; }
 finally {
  if(api) { const stopped=new Promise(resolve=>api.once('close',resolve));api.kill('SIGTERM');await stopped; }
- await prisma?.$disconnect();await pg.stop();rmSync(dataDir,{recursive:true,force:true});
+ await new Promise(r=>repositoryFixture.close(r));await prisma?.$disconnect();await pg.stop();rmSync(dataDir,{recursive:true,force:true});
 }
 console.log(failures ? `sync-preview: ${failures} FAILURES` : 'sync-preview pass complete');
 process.exit(failures?1:0);

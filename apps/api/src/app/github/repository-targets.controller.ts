@@ -15,6 +15,8 @@ import {
   Post,
   Put,
   UseGuards,
+  ServiceUnavailableException,
+  BadGatewayException,
 } from '@nestjs/common';
 import {
   IsInt,
@@ -36,6 +38,12 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthPrincipal } from '../auth/auth.service';
 import { repositoryUrl } from './repository-target';
+import {
+  repositoryReader,
+  RepositoryReadUnavailable,
+} from './repository-reader';
+import { parseSyncJson } from './sync-preview';
+import { createHash } from 'node:crypto';
 class TargetDto {
   @IsString()
   @Matches(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,39}$/)
@@ -172,6 +180,67 @@ export class RepositoryTargetsService {
       throw e;
     }
   }
+  async read(
+    user: AuthPrincipal,
+    projectId: string,
+    id: string,
+    expectedRevision: number,
+  ) {
+    await this.authorize(user, projectId);
+    const target = await this.prisma.repositorySyncTarget.findFirst({
+      where: { id, projectId },
+    });
+    if (!target) throw new NotFoundException('Repository target not found');
+    if (target.revision !== expectedRevision)
+      throw new ConflictException(
+        'Repository target changed; reload configuration',
+      );
+    const coordinates = {
+      owner: target.owner,
+      repo: target.repo,
+      path: target.path,
+      branch: target.remoteBranch,
+    };
+    let file: { text: string; sha: string; path: string };
+    try {
+      const reader = repositoryReader(coordinates);
+      file = await reader.read(
+        coordinates.owner,
+        coordinates.repo,
+        coordinates.path,
+        coordinates.branch,
+      );
+      // This flow is flat-string-only, never silently flatten nested/plural data.
+      parseSyncJson(file.text);
+    } catch (e) {
+      if (e instanceof RepositoryReadUnavailable)
+        throw new ServiceUnavailableException(e.message);
+      throw new BadGatewayException(
+        'Repository file could not be read as bounded flat string JSON',
+      );
+    }
+    // Access/config may have changed while the network request was in flight.
+    // Do not expose bytes from a removed or reconfigured target or lost grant.
+    await this.authorize(user, projectId);
+    const current = await this.prisma.repositorySyncTarget.findFirst({
+      where: { id, projectId, revision: expectedRevision },
+    });
+    if (!current)
+      throw new ConflictException(
+        'Repository target changed; reload configuration',
+      );
+    return {
+      source: 'repository-target-read',
+      targetId: id,
+      targetRevision: target.revision,
+      remoteSha: file.sha,
+      json: file.text,
+      contentDigest: createHash('sha256').update(file.text).digest('hex'),
+      remoteVerified: true,
+      baselineAccepted: false,
+      canApply: false,
+    };
+  }
   async remove(
     user: AuthPrincipal,
     projectId: string,
@@ -216,6 +285,16 @@ export class RepositoryTargetsController {
     @Body() input: TargetDto,
   ) {
     return this.targets.save(user, projectId, input);
+  }
+  @Post(':targetId/read')
+  @Header('Cache-Control', 'no-store')
+  read(
+    @CurrentUser() user: AuthPrincipal,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Param('targetId', new ParseUUIDPipe()) id: string,
+    @Body() input: RevisionDto,
+  ) {
+    return this.targets.read(user, projectId, id, input.expectedRevision);
   }
   @Put(':targetId')
   @Header('Cache-Control', 'no-store')

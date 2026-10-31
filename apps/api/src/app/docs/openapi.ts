@@ -251,6 +251,9 @@ export const OPENAPI = {
       get: {...p('List repository target configurations (session admin, not connected)', 'sync'),security:[{bearerAuth:[]}]},
       post: {...p('Store repository coordinates only (session admin)', 'sync',true),security:[{bearerAuth:[]}],description:'localBranch, locale, owner, repo, path, remoteBranch required. Existing local scope required. Max100/project, unique local branch/locale. No secrets accepted; no remote read/write, credential grant, connected status or baseline. No-store.'},
     },
+    '/api/projects/{projectId}/sync/repository-targets/{targetId}/read': {
+      post: {...p('Read current flat JSON from configured repository target (session admin)', 'sync',true),security:[{bearerAuth:[]}],description:'Requires expectedRevision and deployment-managed GITHUB_READ_OWNER/REPO/TOKEN matching exact repository. No caller token accepted. Reads fixed GitHub API, bounded JSON, verifies blob SHA and checks admin/revision again after network. No baseline acceptance, local import, remote write or sync job. Missing scoped read access503, upstream invalid/failure502, stale revision409. No-store.'},
+    },
     '/api/projects/{projectId}/sync/repository-targets/{targetId}': {
       put: {...p('Replace target coordinates with expectedRevision (session admin)', 'sync',true),security:[{bearerAuth:[]}],description:'Same fields as creation plus positive expectedRevision. Stale revision409, unknown target404. Revision increments atomically. Configuration only, no remote work.'},
       delete: {...p('Remove target configuration with expectedRevision (session admin)', 'sync',true),security:[{bearerAuth:[]}],description:'JSON body expectedRevision required. Stale revision409, wrong project/unknown target404. Does not remove repository files or translations.'},

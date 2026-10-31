@@ -158,3 +158,20 @@ not a session JWT. Redemption also requires the same-tab verifier. Existing
 API-only ACS calls still return JSON. Browser flow state, tickets and replay
 cache are process-local; restart loses pending sign-ins and multi-instance
 routing is not supported by these stores.
+
+### Repository target reads (not sync)
+
+Target configuration does not connect a repository. A deployment operator can
+provide a separately authorized read credential in `GITHUB_READ_TOKEN`, scoped
+by exact `GITHUB_READ_OWNER` and `GITHUB_READ_REPO`. No fallback credential is
+used. Keep the token in deployment secrets, never repository files or browser
+forms. Use read-only Contents access to that one repository. Installing an app,
+creating a token or expanding access is a separate operator decision.
+
+Session admins can POST `expectedRevision` to a target's `/read` endpoint. The
+server reads bounded flat-string JSON from the fixed GitHub API, verifies its
+blob SHA, and rechecks admin access and target revision before returning bytes
+with `Cache-Control: no-store`. This does not accept a baseline, import or push,
+store file bytes, or run sync. Missing matching access returns503; upstream or
+unsupported JSON returns502. No target read UI yet. The internal loopback fixture
+override is ignored in production.
