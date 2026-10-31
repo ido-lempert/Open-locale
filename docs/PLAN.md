@@ -89,7 +89,8 @@ add languages, manage keys and translations, export a file.
   pages. Same-snapshot key/row/metadata preconditions prepared for future guarded
   execution, plus internal Serializable locked-row validation. No apply path
   yet. Isolated existing-key locale-set writer with history/activity rollback
-  tests; removal and production integration still open. See reviews0134-0141.
+  tests; durable locale-removal audit added, production integration still open.
+  See reviews0134-0142.
 
 ## Phase 3 - advanced
 

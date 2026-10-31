@@ -269,8 +269,8 @@ try {
   const rejectsWrite=async(changes,snapshot=batchSnapshot)=>{try{await prisma.$transaction(tx=>writeExistingLocalValues(tx,snapshot,changes,owner.user.id),{isolationLevel:'Serializable'});return false;}catch{return true;}};
   const currentChange={...writeChange,expectedValue:'writer draft',nextValue:'next'};
   const beforeRejectedHistory=await prisma.translationHistory.count(),beforeRejectedActivity=await prisma.activityEvent.count();
-  check('internal writer refuses removal unknown key duplicate and no-op batches',await rejectsWrite([{...currentChange,action:'remove-locale-value',nextValue:null}])&&await rejectsWrite([{...currentChange,key:'remote-new'}])&&await rejectsWrite([currentChange,currentChange])&&await rejectsWrite([{...currentChange,nextValue:'writer draft'}]));
-  check('invalid later operation cannot partially write earlier valid operation',await rejectsWrite([currentChange,{key:'remote',action:'remove-locale-value',expectedValue:'old',nextValue:null}])&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).value==='writer draft'&&await prisma.translationHistory.count()===beforeRejectedHistory&&await prisma.activityEvent.count()===beforeRejectedActivity);
+  check('internal writer refuses malformed removal unknown key duplicate and no-op batches',await rejectsWrite([{...currentChange,action:'remove-locale-value',nextValue:'not absent'}])&&await rejectsWrite([{...currentChange,key:'remote-new'}])&&await rejectsWrite([currentChange,currentChange])&&await rejectsWrite([{...currentChange,nextValue:'writer draft'}]));
+  check('invalid later operation cannot partially write earlier valid operation',await rejectsWrite([currentChange,{key:'remote',action:'remove-locale-value',expectedValue:'wrong stale value',nextValue:null}])&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).value==='writer draft'&&await prisma.translationHistory.count()===beforeRejectedHistory&&await prisma.activityEvent.count()===beforeRejectedActivity);
   await prisma.key.update({where:{id:localKey.id},data:{maxLength:2}});batchSnapshot=(await repositoryPreview()).json.localPreconditions;
   check('internal writer rejects oversized draft before mutation',await rejectsWrite([currentChange]));await prisma.key.update({where:{id:localKey.id},data:{maxLength:storedLocalKey.maxLength}});batchSnapshot=(await repositoryPreview()).json.localPreconditions;
   try{await prisma.$transaction(async tx=>{await writeExistingLocalValues(tx,batchSnapshot,[currentChange],owner.user.id);throw new Error('injected post-write failure');},{isolationLevel:'Serializable'});}catch{}
@@ -278,6 +278,34 @@ try {
   const emptyKey=await prisma.key.create({data:{projectId:project.id,branchId:storedLocalKey.branchId,name:'writer-empty'}});batchSnapshot=(await repositoryPreview()).json.localPreconditions;
   await prisma.$transaction(tx=>writeExistingLocalValues(tx,batchSnapshot,[{key:'writer-empty',action:'set-value',expectedValue:null,nextValue:''}],owner.user.id),{isolationLevel:'Serializable'});
   check('writer creates absent locale row with empty text without new key',(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:emptyKey.id,localeCode:'en'}}})).value===''&&await prisma.key.count({where:{id:emptyKey.id}})===1);
+  const deletionSnapshot=(await repositoryPreview()).json.localPreconditions;
+  const deletedRow=await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}});
+  const deletedHistory=await prisma.translationHistory.findMany({where:{keyId:localKey.id,localeCode:'en'},orderBy:[{createdAt:'asc'},{id:'asc'}]});
+  const removal={key:'local',action:'remove-locale-value',expectedValue:'writer draft',nextValue:null};
+  const auditBefore=await prisma.translationDeletionAudit.count();
+  try{await prisma.$transaction(async tx=>{await writeExistingLocalValues(tx,deletionSnapshot,[removal],owner.user.id);throw new Error('rollback removal');},{isolationLevel:'Serializable'});}catch{}
+  check('removal rollback restores row history and leaves no audit',await prisma.translationDeletionAudit.count()===auditBefore&&await prisma.translationHistory.count({where:{keyId:localKey.id,localeCode:'en'}})===deletedHistory.length&&!!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}}));
+  const removed=await prisma.$transaction(tx=>writeExistingLocalValues(tx,deletionSnapshot,[removal],owner.user.id),{isolationLevel:'Serializable'});
+  const audit=await prisma.translationDeletionAudit.findFirst({where:{keyId:localKey.id},orderBy:{createdAt:'desc'}});
+  const canonicalAudit=v=>JSON.stringify(v,(_,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.entries(x).sort(([a],[b])=>a.localeCompare(b))):x);
+  check('locale removal archives exact row and full ordered history atomically',removed.removedValues===1&&canonicalAudit(audit.snapshot.row)===canonicalAudit(JSON.parse(JSON.stringify(deletedRow)))&&canonicalAudit(audit.snapshot.history)===canonicalAudit(JSON.parse(JSON.stringify(deletedHistory)))&&audit.actorId===owner.user.id&&audit.keyName==='local');
+  check('locale removal deletes only selected translation not key or another locale',!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})&&!!await prisma.key.findUnique({where:{id:localKey.id}})&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'he'}}})).value==='other locale preserved');
+  await prisma.translation.create({data:{keyId:localKey.id,projectId:project.id,localeCode:'en',value:'writer draft',version:deletedRow.version+1}});
+  check('deletion audit survives recreation with new row identity',await prisma.translationDeletionAudit.count({where:{id:audit.id}})===1&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).rowId!==deletedRow.rowId);
+  const boundedKey=await prisma.key.create({data:{projectId:project.id,branchId:storedLocalKey.branchId,name:'audit-bound'}});
+  await prisma.translation.create({data:{keyId:boundedKey.id,projectId:project.id,localeCode:'en',value:'archive me'}});
+  await prisma.translationHistory.createMany({data:Array.from({length:1001},()=>({keyId:boundedKey.id,localeCode:'en',value:'historic',status:'UNVERIFIED',changedById:owner.user.id}))});
+  let boundSnapshot=(await repositoryPreview()).json.localPreconditions;
+  const boundedRemove={key:'audit-bound',action:'remove-locale-value',expectedValue:'archive me',nextValue:null};
+  let rejectedBound=false;try{await prisma.$transaction(tx=>writeExistingLocalValues(tx,boundSnapshot,[boundedRemove],owner.user.id),{isolationLevel:'Serializable'});}catch(e){rejectedBound=e.message.includes('history exceeds bounds');}
+  check('over-bound removal preserves full live row history without partial audit',rejectedBound&&await prisma.translationHistory.count({where:{keyId:boundedKey.id,localeCode:'en'}})===1001&&!!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:boundedKey.id,localeCode:'en'}}})&&await prisma.translationDeletionAudit.count({where:{keyId:boundedKey.id}})===0);
+  await prisma.translationHistory.deleteMany({where:{keyId:boundedKey.id}});await prisma.translationHistory.create({data:{keyId:boundedKey.id,localeCode:'en',value:'x'.repeat(530000),status:'UNVERIFIED'}});boundSnapshot=(await repositoryPreview()).json.localPreconditions;
+  let rejectedBytes=false;try{await prisma.$transaction(tx=>writeExistingLocalValues(tx,boundSnapshot,[boundedRemove],owner.user.id),{isolationLevel:'Serializable'});}catch(e){rejectedBytes=e.message.includes('bytes exceed bounds');}
+  check('over-byte removal refuses truncation and preserves row',rejectedBytes&&!!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:boundedKey.id,localeCode:'en'}}})&&await prisma.translationDeletionAudit.count({where:{keyId:boundedKey.id}})===0);
+  await prisma.translationHistory.deleteMany({where:{keyId:boundedKey.id}});boundSnapshot=(await repositoryPreview()).json.localPreconditions;
+  await prisma.$transaction(tx=>writeExistingLocalValues(tx,boundSnapshot,[boundedRemove],owner.user.id),{isolationLevel:'Serializable'});
+  await prisma.key.delete({where:{id:boundedKey.id}});
+  check('durable deletion audit survives deletion of original key',await prisma.translationDeletionAudit.count({where:{keyId:boundedKey.id}})===1);
   await prisma.key.delete({where:{id:emptyKey.id}});
   await prisma.translation.update({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}},data:{value:'edited',version:{increment:1}}});
   resolvedRepositoryPlan.json=(await repositoryPreview()).json;

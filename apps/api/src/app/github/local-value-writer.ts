@@ -5,9 +5,8 @@ import type { LocalDraftChange } from './local-draft-plan';
 
 // Isolated write building block, NOT a public apply service. Its eventual caller
 // must authorize actor/target/baseline and bind reviewed draft in this same
-// Serializable transaction. Only existing-key set operations supported here.
-// Removing a translation cascades history today, so removal is refused until an
-// explicit durable deletion-audit strategy is implemented. No hidden clear-to-''.
+// Serializable transaction. Existing-key locale sets/removals only. A removal
+// archives the exact row and bounded history before the cascading row delete.
 export async function writeExistingLocalValues(
   tx: Prisma.TransactionClient,
   expected: LocalPreconditions,
@@ -25,18 +24,75 @@ export async function writeExistingLocalValues(
   // Validate the WHOLE batch before the first mutation, including later rows.
   for (const c of changes) {
     const key = byName.get(c.key);
-    if (!key || c.action !== 'set-value' || typeof c.nextValue !== 'string')
-      throw new Error('Only existing-key locale value sets are supported');
+    if (
+      !key ||
+      !['set-value', 'remove-locale-value'].includes(c.action) ||
+      (c.action === 'set-value'
+        ? typeof c.nextValue !== 'string'
+        : c.nextValue !== null || !key.translation)
+    )
+      throw new Error('Invalid existing-key locale operation');
     if (
       (key.translation?.value ?? null) !== c.expectedValue ||
       c.nextValue === c.expectedValue
     )
       throw new Error('Local value change does not match reviewed snapshot');
-    if (key.maxLength !== null && [...c.nextValue].length > key.maxLength)
+    if (
+      c.nextValue !== null &&
+      key.maxLength !== null &&
+      [...c.nextValue].length > key.maxLength
+    )
       throw new Error('Draft locale value exceeds key length limit');
   }
   for (const c of changes) {
     const key = byName.get(c.key)!;
+    if (c.action === 'remove-locale-value') {
+      const row = await tx.translation.findUniqueOrThrow({
+        where: {
+          keyId_localeCode: { keyId: key.keyId, localeCode: expected.locale },
+        },
+      });
+      const history = await tx.translationHistory.findMany({
+        where: { keyId: key.keyId, localeCode: expected.locale },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: 1001,
+      });
+      if (history.length > 1000)
+        throw new Error('Deletion audit history exceeds bounds');
+      const snapshot = JSON.parse(JSON.stringify({ row, history }));
+      if (Buffer.byteLength(JSON.stringify(snapshot)) > 512 * 1024)
+        throw new Error('Deletion audit bytes exceed bounds');
+      await tx.translationDeletionAudit.create({
+        data: {
+          projectId: expected.projectId,
+          keyId: key.keyId,
+          keyName: key.key,
+          localeCode: expected.locale,
+          actorId,
+          snapshot,
+        },
+      });
+      await tx.translation.delete({
+        where: {
+          keyId_localeCode: { keyId: key.keyId, localeCode: expected.locale },
+        },
+      });
+      await tx.activityEvent.create({
+        data: {
+          projectId: expected.projectId,
+          actorId,
+          action: 'translation.value',
+          keyName: key.key,
+          localeCode: expected.locale,
+          detail: {
+            source: 'internal-repository-local-write',
+            operation: 'remove-locale-value',
+            deletionAuditPreserved: true,
+          },
+        },
+      });
+      continue;
+    }
     const data = {
       value: c.nextValue!,
       status: 'UNVERIFIED',
@@ -82,8 +138,9 @@ export async function writeExistingLocalValues(
     });
   }
   return {
-    updatedValues: changes.length,
-    removedValues: 0,
+    updatedValues: changes.filter((c) => c.action === 'set-value').length,
+    removedValues: changes.filter((c) => c.action === 'remove-locale-value')
+      .length,
     createdKeys: 0,
     remoteWritten: false,
     baselineAdvanced: false,

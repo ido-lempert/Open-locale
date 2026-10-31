@@ -246,11 +246,12 @@ any eventual execution must authorize again, validate target/baseline and make
 writes in the same Serializable transaction, handling serialization conflicts.
 
 An isolated `writeExistingLocalValues` helper exercises same-transaction existing-
-key locale sets after locked precondition validation. It validates the entire
-batch before writing, resets review/MT provenance, increments version, and writes
-history/activity atomically. Unknown keys, removal, duplicates, no-op operations
-and length violations are refused. Removal remains unsupported because deleting a
-translation currently cascades its history; no silent clear-to-empty workaround.
-This helper has no production caller or public apply route. It does not provide
-TM updates, webhooks/automation delivery or target/baseline authorization. Those
-remain required integration work before any exposed execution path.
+key locale sets/removals after locked precondition validation. It validates the
+batch, resets review/MT for sets, increments version, and writes history/activity
+atomically. Removal archives the exact row and full ordered history in a durable
+project-owned deletion audit before deleting only that locale row. Audit survives
+translation recreation and key deletion; project deletion removes it. History is
+bounded1000 rows/512KiB; over-bound removal fails atomically, never truncates audit.
+Unknown keys, duplicates, no-op and length violations are refused. This helper has
+no production caller/public apply route, TM updates, webhook/automation delivery
+or target/baseline authorization. Those remain integration work before execution.
