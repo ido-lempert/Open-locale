@@ -247,6 +247,14 @@ export const OPENAPI = {
         description: 'Same file/scope input as preview plus expectedFingerprint (64 lowercase hex characters) and choices mapping every differing key to base, local or remote. Re-reads stored local data. Stale project/branch/locale/row-generation fingerprint returns 409. Missing/extra/invalid choices return 400. Explicit absence omits a key from draft JSON only. Returns json, contentDigest, counts and canApply=false. No persistence, repository verification or apply authority. No-store response.',
       },
     },
+    '/api/projects/{projectId}/sync/repository-targets': {
+      get: {...p('List repository target configurations (session admin, not connected)', 'sync'),security:[{bearerAuth:[]}]},
+      post: {...p('Store repository coordinates only (session admin)', 'sync',true),security:[{bearerAuth:[]}],description:'localBranch, locale, owner, repo, path, remoteBranch required. Existing local scope required. Max100/project, unique local branch/locale. No secrets accepted; no remote read/write, credential grant, connected status or baseline. No-store.'},
+    },
+    '/api/projects/{projectId}/sync/repository-targets/{targetId}': {
+      put: {...p('Replace target coordinates with expectedRevision (session admin)', 'sync',true),security:[{bearerAuth:[]}],description:'Same fields as creation plus positive expectedRevision. Stale revision409, unknown target404. Revision increments atomically. Configuration only, no remote work.'},
+      delete: {...p('Remove target configuration with expectedRevision (session admin)', 'sync',true),security:[{bearerAuth:[]}],description:'JSON body expectedRevision required. Stale revision409, wrong project/unknown target404. Does not remove repository files or translations.'},
+    },
     '/api/projects/{projectId}/sync/preview': {
       post: {
         ...p('Preview caller-supplied flat JSON against stored branch/locale data (session admin only; no writes or remote verification)', 'sync', true),

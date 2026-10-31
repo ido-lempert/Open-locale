@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { pinnedRequest } from '../egress/pinned';
+import { repositoryUrl } from './repository-target';
 
 export interface RepositoryFile { sha: string; path: string; text: string; }
 export class GitHubContentsError extends Error {
@@ -19,10 +20,7 @@ export class GitHubContentsClient {
     if (u.username || u.password || u.search || u.hash || u.pathname !== '/') throw new Error('Invalid GitHub API origin');
   }
   private path(owner: string, repo: string, path: string, branch: string) {
-    if (!/^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/.test(owner) || !/^[A-Za-z0-9_.-]{1,100}$/.test(repo) || ['.','..'].includes(repo)) throw new Error('Invalid repository');
-    if (!path || Buffer.byteLength(path)>1024 || path.startsWith('/') || path.includes('\\') || /[\x00-\x1f\x7f]/.test(path) || path.split('/').some(p=>!p || p==='.' || p==='..')) throw new Error('Invalid repository path');
-    if (!branch || branch.length>255 || /[\x00-\x20\x7f]/.test(branch)) throw new Error('Invalid branch');
-    return `${this.origin}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path.split('/').map(encodeURIComponent).join('/')}`;
+    return repositoryUrl({owner,repo,path,branch},this.origin);
   }
   private async request(url: string, method: string, body?: unknown) {
     const res = await pinnedRequest(url, {method, body:body===undefined?undefined:JSON.stringify(body),headers:{Authorization:`Bearer ${this.token}`,Accept:'application/vnd.github+json','Content-Type':'application/json','User-Agent':'Open-locale','X-GitHub-Api-Version':'2026-03-10'},maxBytes:LIMIT*2,allowPrivate:process.env.NODE_ENV==='test'});
