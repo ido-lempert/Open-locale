@@ -64,10 +64,18 @@ export async function repositoryLocalTransaction(
   // key/target/actor deletion; project deletion removes the private payload.
   if (plan.changes.length) {
     const keys = new Map(local.keys.map((key) => [key.key, key.keyId]));
+    const rows = await tx.translation.findMany({
+      where: { keyId: { in: [...keys.values()] }, localeCode: scope.locale },
+      select: { keyId: true, rowId: true, version: true },
+    });
+    const translations = new Map(rows.map((row) => [row.keyId, row]));
     await tx.repositoryLocalEffectIntent.createMany({
       data: plan.changes.map((change) => ({
         projectId: scope.projectId, targetId: scope.targetId,
         actorId: scope.actorId, keyId: keys.get(change.key)!,
+        targetRevision: scope.targetRevision,
+        translationRowId: translations.get(keys.get(change.key)!)?.rowId ?? null,
+        translationVersion: translations.get(keys.get(change.key)!)?.version ?? null,
         keyName: change.key, branchId: scope.branchId, branch: scope.branch,
         locale: scope.locale, operation: change.action, value: change.nextValue,
         draftContentDigest: expectedDraftDigest,

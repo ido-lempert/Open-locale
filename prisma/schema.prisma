@@ -645,6 +645,9 @@ model RepositoryLocalEffectIntent {
   value String?
   draftContentDigest String
   previewFingerprint String
+  targetRevision Int?
+  translationRowId String? @db.Uuid
+  translationVersion Int?
   state String @default("pending")
   attempts Int @default(0)
   availableAt DateTime @default(now())

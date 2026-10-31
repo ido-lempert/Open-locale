@@ -296,3 +296,12 @@ This is at-least-once groundwork, not exactly-once delivery: a crashed lease may
 have performed an effect. No worker/dispatcher is enabled. A future handler must
 check current routing/authority and use the intent ID for downstream deduplication.
 Terminal bookkeeping is not a delivery receipt; terminal retention is still open.
+
+New intent rows bind target revision and resulting translation row/version. An
+internal Serializable eligibility guard locks and checks current actor admin,
+project/target/key/branch/locale lineage, exact resulting value generation (or
+continued absence for removal) and live lease token, rechecking expiry after lock
+waits. Old intents without revision evidence fail closed. This is a point-in-time
+internal guard, not a dispatcher or permanent grant; no network runs under locks.
+A later change can still invalidate dispatch, and handler routing/deduplication,
+terminal retention and public execution composition remain code work.
