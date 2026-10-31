@@ -80,6 +80,9 @@ add languages, manage keys and translations, export a file.
 - Branching and snapshots: project branches with merge, plus restorable auto snapshots.
 - Granular permissions: per-language contributor access, groups, admin roles.
 - GitHub integration: two-way sync between a repo and a project.
+  Current bounded slice: target screen previews accepted baseline, stored local
+  translations and fresh verified remote bytes, with manual-review rows and
+  pagination. No apply or two-way synchronization yet. See review0134.
 
 ## Phase 3 - advanced
 

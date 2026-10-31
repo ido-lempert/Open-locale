@@ -10,6 +10,7 @@ const plan: LocalSyncPreview = {
   branch: 'main',
   locale: 'en',
   fingerprint: 'f',
+  remoteSha: 'a'.repeat(40),
   baselineVerified: false,
   remoteVerified: false,
   canApply: false,

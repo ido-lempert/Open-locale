@@ -202,6 +202,21 @@ try {
   check('accepted baseline bytes and account id fit narrow viewport',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await page.reload({waitUntil:'networkidle0'});await page.waitForSelector('[name=targetLoadBaseline]');await page.click('[name=targetLoadBaseline]');await page.waitForSelector('[name=targetBaseline]');
   check('accepted baseline persists across reload without granting apply',await page.$eval('[name=targetBaseline]',(e,text)=>e.value===text,repositoryJson)&&!(await page.$$eval('button',els=>els.some(e=>/apply|push|import/i.test(e.textContent)))));
+  repositoryJson=JSON.stringify({title:'Repository title',hello:'Changed repository',unsafe:'<img src=x onerror="window.repoXss=true">',empty:''});
+  await page.click('[name=targetPreview]');await page.waitForSelector('section[aria-label="Repository comparison"]');
+  check('real UI compares accepted baseline stored local and fresh repository',(await page.$eval('section[aria-label="Repository comparison"]',e=>e.textContent)).includes('Changed repository')&&(await page.$eval('section[aria-label="Repository comparison"]',e=>e.textContent)).includes('Local title')&&(await page.$eval('section[aria-label="Repository comparison"]',e=>e.textContent)).includes('Repository value'));
+  check('repository comparison marks actual conflicting key for manual review',await page.$eval('section[aria-label="Repository comparison"] tr.manual',e=>e.textContent.includes('manual review')));
+  check('repository comparison distinguishes missing and empty values',await page.$eval('section[aria-label="Repository comparison"]',e=>e.textContent.includes('[missing]')&&e.textContent.includes('[empty string]')));
+  check('comparison remains explicitly not applied and renders hostile values literally',!(await page.$('section[aria-label="Repository comparison"] img'))&&!await page.evaluate(()=>window.repoXss)&&(await page.content()).includes('Repository comparison - not applied'));
+  await page.setViewport({width:1280,height:900});await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'/downloads/repository-preview-desktop.png',fullPage:true});
+  await page.setViewport({width:480,height:900});await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'/downloads/repository-preview-narrow.png',fullPage:true});
+  check('repository comparison scrolls internally without document overflow',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)&&await page.$eval('.table-wrap',e=>e.scrollWidth>e.clientWidth));
+  const repoMany=Object.fromEntries(Array.from({length:121},(_,n)=>['repo'+String(n).padStart(3,'0'),'remote '+n]));repositoryJson=JSON.stringify(repoMany);
+  await page.click('[name=targetPreview]');await page.waitForSelector('[name=targetPreviewNext]');
+  check('large repository comparison renders fifty rows',await page.$$eval('section[aria-label="Repository comparison"] tbody tr',rows=>rows.length===50));
+  await page.click('[name=targetPreviewNext]');await page.waitForFunction(()=>document.querySelector('section[aria-label="Repository comparison"] tbody')?.textContent.includes('repo050'));
+  check('repository comparison pagination changes rows',await page.$eval('section[aria-label="Repository comparison"] tbody',e=>!e.textContent.includes('repo000')&&e.textContent.includes('repo050')));
+  repositoryJson=JSON.stringify({hello:'Repository value',unsafe:'<img src=x onerror="window.repoXss=true">'});
   await page.click('[name=targetRead]');await page.waitForSelector('[name=targetSnapshot]');await page.click('[name=targetLoadBaseline]');await page.waitForSelector('[name=targetPrepareBaseline]');
   const oldRepoJson=repositoryJson;repositoryJson=JSON.stringify({hello:'Changed since review'});
   await page.click('[name=targetPrepareBaseline]');await page.waitForSelector('[name=targetConfirmBaseline]');await page.click('[name=targetConfirmBaseline]');await page.waitForSelector('[role=alert]');
@@ -240,6 +255,19 @@ try {
   const acceptedOldTarget=(await call(`${P}/sync/repository-targets`,undefined,token)).targets[0];
   check('held acceptance stored baseline on original project only',(await call(`${P}/sync/repository-targets/${acceptedOldTarget.id}/baseline`,undefined,token)).baseline.version===1&&(await call(`/projects/${second.id}/sync/repository-targets`,undefined,token)).targets.length===0);
   page.off('request',holdAcceptance);await page.setRequestInterception(false);
+  await page.goto(`${WEB}/projects/${project.id}/sync/targets`,{waitUntil:'networkidle0'});await page.waitForSelector('[name=targetRemove]');await page.click('[name=targetRemove]');await page.waitForSelector('[name=targetConfirmRemove]');await page.click('[name=targetConfirmRemove]');await page.waitForFunction(()=>document.body.textContent.includes('No repository target configurations.'));
+  // Real preview response held across reused route navigation.
+  await set('targetOwner','owner');await set('targetRepo','repo');await set('targetPath','external/new.json');await page.click('[name=targetSave]');await page.waitForSelector('article');
+  await page.click('[name=targetPreview]');await page.waitForSelector('[role=alert]');
+  check('missing accepted baseline produces actionable comparison error',!(await page.$('section[aria-label="Repository comparison"]'))&&(await page.$eval('[role=alert]',e=>e.textContent)).includes('Accept a comparison baseline'));
+  await page.click('[name=targetRead]');await page.waitForSelector('[name=targetSnapshot]');await page.click('[name=targetLoadBaseline]');await page.waitForSelector('[name=targetPrepareBaseline]');await page.click('[name=targetPrepareBaseline]');await page.waitForSelector('[name=targetConfirmBaseline]');await page.click('[name=targetConfirmBaseline]');await page.waitForSelector('[name=targetBaseline]');
+  let previewRelease,previewHeld=false;const previewGate=new Promise(r=>previewRelease=r);
+  await page.setRequestInterception(true);const holdPreview=async request=>{if(!previewHeld&&request.url().endsWith('/preview')){previewHeld=true;await previewGate;}return request.continue();};page.on('request',holdPreview);
+  await page.click('[name=targetPreview]');for(let n=0;n<100&&!previewHeld;n++)await new Promise(r=>setTimeout(r,20));if(!previewHeld)throw new Error('Preview request never reached held transport');
+  await page.evaluate(id=>{const link=window.ng.getDirectives(document.querySelector('.back')).find(d=>d.router);return link.router.navigateByUrl('/projects/'+id+'/sync/targets');},second.id);
+  await page.waitForFunction(id=>location.pathname==='/projects/'+id+'/sync/targets',{},second.id);await page.waitForSelector('[name=targetOwner]');previewRelease();await new Promise(r=>setTimeout(r,600));
+  check('late successful repository preview cannot expose old scope after navigation',!(await page.$('section[aria-label="Repository comparison"]'))&&!(await page.$('article')));
+  page.off('request',holdPreview);await page.setRequestInterception(false);
   await page.goto(`${WEB}/projects/${project.id}/sync/targets`,{waitUntil:'networkidle0'});await page.waitForSelector('[name=targetRemove]');await page.click('[name=targetRemove]');await page.waitForSelector('[name=targetConfirmRemove]');await page.click('[name=targetConfirmRemove]');await page.waitForFunction(()=>document.body.textContent.includes('No repository target configurations.'));
   // Hold a successful real read while switching reused project route.
   await set('targetOwner','owner');await set('targetRepo','repo');await set('targetPath','external/new.json');await page.click('[name=targetSave]');await page.waitForSelector('article');

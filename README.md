@@ -200,4 +200,7 @@ a freshly verified repository read. It does not accept caller file values.
 Its fingerprint binds target coordinates/revision, baseline version/content and
 local row generations. Missing or changed baseline/target fails closed. Preview
 does not advance the baseline, import, push, save a sync record or authorize an
-apply. Conflicts and deletions remain manual. No repository preview UI yet.
+apply. Conflicts and deletions remain manual. The target screen compares these
+three sources, shows missing versus empty values and manual-review rows, and pages
+comparisons in groups of 50. This screen has no apply, import or push action.
+Refreshing the comparison rereads the remote file.

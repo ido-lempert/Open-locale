@@ -1,3 +1,12 @@
+export interface RepositorySyncPreview
+  extends Omit<LocalSyncPreview, 'baselineVerified' | 'remoteVerified'> {
+  targetId: string;
+  targetRevision: number;
+  baselineVersion: number;
+  baselineSha: string;
+  baselineVerified: true;
+  remoteVerified: true;
+}
 export interface RepositoryBaseline {targetId:string;version:number;targetRevision:number;remoteSha:string;contentDigest:string;text:string;actorId:string;acceptedAt:string;}
 export interface RepositoryBaselineView {targetId:string;targetRevision:number;baseline:RepositoryBaseline|null;baselineAccepted:boolean;canApply:false;}
 export interface RepositoryFileSnapshot {targetId:string;targetRevision:number;json:string;remoteSha:string;contentDigest:string;remoteVerified:true;baselineAccepted:false;canApply:false;}
@@ -14,7 +23,7 @@ export interface SyncPreviewRecord {
  summary:{total:number;conflict:number;manual:number};
 }
 export interface LocalSyncPreview {
-  projectId:string; branch:string; locale:string; fingerprint:string;
+  projectId:string; branch:string; locale:string; fingerprint:string;remoteSha:string;
   baselineVerified:false; remoteVerified:false; canApply:false; requiresManual:boolean;
   decisions: {key:string; base:string|null; local:string|null; remote:string|null; kind:string; suggested:string}[];
 }
@@ -220,6 +229,16 @@ export class ApiService {
   }
   getRepositoryBaseline(projectId:string,id:string){return this.request<RepositoryBaselineView>(`/projects/${projectId}/sync/repository-targets/${encodeURIComponent(id)}/baseline`);}
   acceptRepositoryBaseline(projectId:string,id:string,input:{expectedRevision:number;expectedRemoteSha:string;expectedContentDigest:string;expectedBaselineVersion:number}){return this.request<{baseline:RepositoryBaseline}>(`/projects/${projectId}/sync/repository-targets/${encodeURIComponent(id)}/baseline`,{method:'POST',body:JSON.stringify(input)});}
+  previewRepositoryTarget(
+    projectId: string,
+    id: string,
+    expectedRevision: number,
+  ) {
+    return this.request<RepositorySyncPreview>(
+      `/projects/${projectId}/sync/repository-targets/${encodeURIComponent(id)}/preview`,
+      { method: 'POST', body: JSON.stringify({ expectedRevision }) },
+    );
+  }
   readRepositoryTarget(projectId:string,id:string,expectedRevision:number){return this.request<RepositoryFileSnapshot>(`/projects/${projectId}/sync/repository-targets/${encodeURIComponent(id)}/read`,{method:'POST',body:JSON.stringify({expectedRevision})});}
   listRepositoryTargets(projectId:string){return this.request<{targets:RepositoryTargetConfig[];connected:false;canApply:false}>(`/projects/${projectId}/sync/repository-targets`);}
   saveRepositoryTarget(projectId:string,input:RepositoryTargetInput,id?:string,expectedRevision?:number){return this.request<{target:RepositoryTargetConfig}>(`/projects/${projectId}/sync/repository-targets${id?'/'+encodeURIComponent(id):''}`,{method:id?'PUT':'POST',body:JSON.stringify({...input,...(id?{expectedRevision}:{})})});}

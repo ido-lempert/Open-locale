@@ -1,5 +1,9 @@
 import { RepositoryTargetsComponent } from './repository-targets.component';
-import { ApiService, RepositoryTargetConfig } from '../api.service';
+import {
+  ApiService,
+  RepositoryTargetConfig,
+  RepositorySyncPreview,
+} from '../api.service';
 import { ActivatedRoute } from '@angular/router';
 const target: RepositoryTargetConfig = {
   id: 't',
@@ -280,5 +284,75 @@ describe('repository target UI lifecycle', () => {
     expect(c.snapshot()).toBeNull();
     expect(c.message()).toBe('');
     expect(c.projectId).toBe('second');
+  });
+  it('clears old comparison on retry failure without deleting configurations', async () => {
+    const c = setup({
+      previewRepositoryTarget: async () => {
+        throw new Error('Baseline changed');
+      },
+    });
+    c.previewResult.set({
+      targetId: 't',
+      decisions: [],
+    } as unknown as RepositorySyncPreview);
+    c.previewPage.set(3);
+    await c.preview(target);
+    expect(c.previewResult()).toBeNull();
+    expect(c.previewPage()).toBe(0);
+    expect(c.targets()).toEqual([target]);
+    expect(c.error()).toBe('Baseline changed');
+    expect(c.busy()).toBe(false);
+  });
+  it('ignores late comparison after destruction and project navigation', async () => {
+    for (const action of ['destroy', 'navigate']) {
+      let finish!: (v: unknown) => void;
+      const c = setup({
+        previewRepositoryTarget: () => new Promise((r) => (finish = r)),
+        getProject: async () => ({
+          baseLocale: 'en',
+          locales: [{ code: 'en' }],
+        }),
+        listBranches: async () => [],
+        listRepositoryTargets: async () => ({ targets: [] }),
+      });
+      const pending = c.preview(target);
+      if (action === 'destroy') c.ngOnDestroy();
+      else await c.load('second');
+      finish({ targetId: 't', decisions: [{ key: 'private old data' }] });
+      await pending;
+      expect(c.previewResult()).toBeNull();
+      expect(c.message()).toBe('');
+    }
+  });
+  it('guards duplicate comparisons and invalidates on edit and baseline reload', async () => {
+    let finish!: (v: unknown) => void,
+      calls = 0;
+    const c = setup({
+      previewRepositoryTarget: () => {
+        calls++;
+        return new Promise((r) => (finish = r));
+      },
+      getRepositoryBaseline: async () => ({
+        targetId: 't',
+        targetRevision: 1,
+        baseline: null,
+      }),
+    });
+    const first = c.preview(target);
+    await c.preview(target);
+    expect(calls).toBe(1);
+    finish({ targetId: 't', decisions: [] });
+    await first;
+    expect(c.previewResult()?.targetId).toBe('t');
+    c.edit(target);
+    expect(c.previewResult()).toBeNull();
+    c.previewResult.set({
+      targetId: 't',
+      decisions: [],
+    } as unknown as RepositorySyncPreview);
+    await c.loadBaseline(target);
+    expect(c.previewResult()).toBeNull();
+    expect(c.display(null)).toBe('[missing]');
+    expect(c.display('')).toBe('[empty string]');
   });
 });

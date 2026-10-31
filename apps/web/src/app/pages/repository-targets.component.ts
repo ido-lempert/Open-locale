@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -8,6 +8,7 @@ import {
   RepositoryTargetConfig,
   RepositoryFileSnapshot,
   RepositoryBaselineView,
+  RepositorySyncPreview,
   BranchInfo,
 } from '../api.service';
 const empty = (): RepositoryTargetInput => ({
@@ -23,6 +24,28 @@ const empty = (): RepositoryTargetInput => ({
   imports: [FormsModule, RouterLink],
   styles: [
     `
+      .table-wrap {
+        overflow-x: auto;
+      }
+      table {
+        min-width: 850px;
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 10px;
+        border-bottom: 1px solid #dce2eb;
+        vertical-align: top;
+        min-width: 100px;
+        max-width: 240px;
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+      }
+      .manual {
+        background: #fff4e8;
+      }
       fieldset {
         min-width: 0;
         border: 1px solid #dce2eb;
@@ -250,6 +273,99 @@ const empty = (): RepositoryTargetInput => ({
             >
               Read repository file
             </button>
+            <button
+              name="targetPreview"
+              type="button"
+              (click)="preview(t)"
+              [disabled]="busy()"
+            >
+              Compare repository with local translations
+            </button>
+            @if (previewResult()?.targetId === t.id) {
+              <section aria-label="Repository comparison">
+                <h3>Repository comparison - not applied</h3>
+                <p class="notice">
+                  Accepted baseline version
+                  {{ previewResult()!.baselineVersion }}, current local
+                  {{ previewResult()!.branch }} / {{ previewResult()!.locale }},
+                  and fresh verified repository bytes. Conflicts and missing
+                  values need manual review. Nothing is imported, pushed or
+                  saved.
+                </p>
+                <p>
+                  {{ previewResult()!.decisions.length }} keys compared.
+                  {{
+                    previewResult()!.requiresManual
+                      ? 'Manual review needed.'
+                      : 'No conflicts or deletions requiring manual review.'
+                  }}
+                </p>
+                <p class="digest">
+                  Remote blob SHA: {{ previewResult()!.remoteSha }}
+                </p>
+                <p>Scroll the table horizontally on smaller screens.</p>
+                <div
+                  class="table-wrap"
+                  tabindex="0"
+                  role="region"
+                  aria-label="Repository comparison table"
+                >
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Key</th>
+                        <th>Accepted baseline</th>
+                        <th>Local</th>
+                        <th>Repository</th>
+                        <th>Difference</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (d of previewRows(); track d.key) {
+                        <tr [class.manual]="d.suggested === 'manual'">
+                          <td>{{ d.key }}</td>
+                          <td>{{ display(d.base) }}</td>
+                          <td>{{ display(d.local) }}</td>
+                          <td>{{ display(d.remote) }}</td>
+                          <td>
+                            {{ d.kind
+                            }}{{
+                              d.suggested === 'manual' ? ' - manual review' : ''
+                            }}
+                          </td>
+                        </tr>
+                      } @empty {
+                        <tr>
+                          <td colspan="5">No translated keys to compare.</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+                @if (previewPages() > 1) {
+                  <nav aria-label="Repository comparison pages">
+                    <button
+                      name="targetPreviewPrevious"
+                      type="button"
+                      (click)="previewPage.set(previewPage() - 1)"
+                      [disabled]="previewPage() === 0"
+                    >
+                      Previous</button
+                    ><span
+                      >Page {{ previewPage() + 1 }} of
+                      {{ previewPages() }}</span
+                    ><button
+                      name="targetPreviewNext"
+                      type="button"
+                      (click)="previewPage.set(previewPage() + 1)"
+                      [disabled]="previewPage() + 1 >= previewPages()"
+                    >
+                      Next
+                    </button>
+                  </nav>
+                }
+              </section>
+            }
             @if (snapshot()?.targetId === t.id) {
               <section aria-label="Repository file snapshot">
                 <h3>Verified file snapshot. Not an accepted baseline.</h3>
@@ -394,6 +510,18 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   message = signal('');
   snapshot = signal<RepositoryFileSnapshot | null>(null);
   readAt = signal('');
+  previewResult = signal<RepositorySyncPreview | null>(null);
+  previewPage = signal(0);
+  previewPages = computed(() =>
+    Math.max(1, Math.ceil((this.previewResult()?.decisions.length ?? 0) / 50)),
+  );
+  previewRows = computed(
+    () =>
+      this.previewResult()?.decisions.slice(
+        this.previewPage() * 50,
+        (this.previewPage() + 1) * 50,
+      ) ?? [],
+  );
   baselineView = signal<RepositoryBaselineView | null>(null);
   confirmBaseline = signal(false);
   private generation = 0;
@@ -410,6 +538,8 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.generation++;
     this.snapshot.set(null);
+    this.previewResult.set(null);
+    this.previewPage.set(0);
     this.baselineView.set(null);
     this.confirmBaseline.set(false);
     this.subscription?.unsubscribe();
@@ -418,6 +548,8 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     const generation = ++this.generation;
     this.projectId = id;
     this.snapshot.set(null);
+    this.previewResult.set(null);
+    this.previewPage.set(0);
     this.baselineView.set(null);
     this.confirmBaseline.set(false);
     this.ready.set(false);
@@ -451,6 +583,8 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   }
   edit(t: RepositoryTargetConfig) {
     this.snapshot.set(null);
+    this.previewResult.set(null);
+    this.previewPage.set(0);
     this.baselineView.set(null);
     this.confirmBaseline.set(false);
     this.editing.set({ ...t });
@@ -477,6 +611,8 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     const generation = ++this.generation;
     this.busy.set(true);
     this.snapshot.set(null);
+    this.previewResult.set(null);
+    this.previewPage.set(0);
     this.baselineView.set(null);
     this.confirmBaseline.set(false);
     this.error.set('');
@@ -501,6 +637,8 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
       editing = this.editing();
     this.busy.set(true);
     this.snapshot.set(null);
+    this.previewResult.set(null);
+    this.previewPage.set(0);
     this.baselineView.set(null);
     this.confirmBaseline.set(false);
     this.error.set('');
@@ -532,6 +670,8 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     const generation = ++this.generation;
     this.busy.set(true);
     this.snapshot.set(null);
+    this.previewResult.set(null);
+    this.previewPage.set(0);
     this.baselineView.set(null);
     this.confirmBaseline.set(false);
     this.error.set('');
@@ -554,6 +694,41 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
       if (generation === this.generation) this.busy.set(false);
     }
   }
+  display(value: string | null) {
+    return value === null
+      ? '[missing]'
+      : value === ''
+        ? '[empty string]'
+        : value;
+  }
+  async preview(t: RepositoryTargetConfig) {
+    if (this.busy()) return;
+    const generation = ++this.generation;
+    this.busy.set(true);
+    this.previewResult.set(null);
+    this.previewPage.set(0);
+    this.snapshot.set(null);
+    this.baselineView.set(null);
+    this.confirmBaseline.set(false);
+    this.error.set('');
+    this.message.set('');
+    try {
+      const result = await this.api.previewRepositoryTarget(
+        this.projectId,
+        t.id,
+        t.revision,
+      );
+      if (generation !== this.generation) return;
+      this.previewResult.set(result);
+    } catch (e) {
+      if (generation === this.generation)
+        this.error.set(
+          e instanceof Error ? e.message : 'Could not compare repository',
+        );
+    } finally {
+      if (generation === this.generation) this.busy.set(false);
+    }
+  }
   async loadBaseline(t: RepositoryTargetConfig) {
     if (this.busy()) return;
     const generation = ++this.generation;
@@ -561,6 +736,9 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     this.error.set('');
     this.confirmBaseline.set(false);
     this.baselineView.set(null);
+    this.previewResult.set(null);
+    this.previewPage.set(0);
+    this.message.set('');
     try {
       const view = await this.api.getRepositoryBaseline(this.projectId, t.id);
       if (generation !== this.generation) return;
@@ -614,6 +792,8 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     } catch (e) {
       if (generation !== this.generation) return;
       this.snapshot.set(null);
+      this.previewResult.set(null);
+      this.previewPage.set(0);
       this.baselineView.set(null);
       this.confirmBaseline.set(false);
       this.error.set(
@@ -628,6 +808,8 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     const generation = ++this.generation;
     this.busy.set(true);
     this.snapshot.set(null);
+    this.previewResult.set(null);
+    this.previewPage.set(0);
     this.baselineView.set(null);
     this.confirmBaseline.set(false);
     this.error.set('');
