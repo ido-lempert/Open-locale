@@ -6,6 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const PG_PORT = 55442, API_PORT = 3009;
+const databasePort = process.env.TM_TEST_PG_PORT ? Number(process.env.TM_TEST_PG_PORT) : PG_PORT;
+if (!Number.isInteger(databasePort) || databasePort < 1024 || databasePort > 65535) throw new Error('Invalid TM test database port');
 const API = `http://127.0.0.1:${API_PORT}/api`;
 const root = process.cwd();
 let failures = 0;
@@ -22,11 +24,11 @@ async function call(path, { token, apiKey, method = 'GET', body } = {}) {
 }
 
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-tm-'));
-const pg = new EmbeddedPostgres({ databaseDir: dataDir, user: 'postgres', password: 'postgres', port: PG_PORT, persistent: false });
+const pg = new EmbeddedPostgres({ databaseDir: dataDir, user: 'postgres', password: 'postgres', port: databasePort, persistent: false });
 let api;
 try {
   await pg.initialise(); await pg.start(); await pg.createDatabase('openlocale_tm');
-  const url = `postgresql://postgres:postgres@localhost:${PG_PORT}/openlocale_tm`;
+  const url = `postgresql://postgres:postgres@localhost:${databasePort}/openlocale_tm`;
   execFileSync(join(root, 'node_modules', '.bin', 'prisma'), ['migrate', 'deploy'], {
     env: { ...process.env, DATABASE_URL: url }, stdio: 'pipe' });
   api = spawn(process.execPath, [join(root, 'dist', 'apps', 'api', 'main.js')], {

@@ -414,6 +414,90 @@ const empty = (): RepositoryTargetInput => ({
                       repository files have changed. The repository may change
                       after this read.
                     </p>
+                    <section aria-label="Local draft changes">
+                      <h4>Local value changes - not applied</h4>
+                      <p>
+                        Compared with current stored
+                        {{ previewResult()!.branch }} /
+                        {{ previewResult()!.locale }} values:
+                        {{ d.localChangePlan.setValues }} values to set,
+                        {{ d.localChangePlan.removeLocaleValues }} locale values
+                        to remove,
+                        {{ d.localChangePlan.unchangedValues }} values
+                        unchanged.
+                      </p>
+                      <p class="notice">
+                        A removal affects this locale value only, never the
+                        project key or another locale. These are review data,
+                        not permission to apply. No local values, repository
+                        files or accepted baseline have changed.
+                      </p>
+                      <div
+                        class="table-wrap"
+                        role="region"
+                        aria-label="Local draft changes table"
+                        tabindex="0"
+                      >
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Key</th>
+                              <th>Draft operation</th>
+                              <th>Current local value</th>
+                              <th>Draft local value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @for (c of changeRows(); track c.key) {
+                              <tr
+                                [class.manual]="
+                                  c.action === 'remove-locale-value'
+                                "
+                              >
+                                <td>{{ c.key }}</td>
+                                <td>
+                                  {{
+                                    c.action === 'set-value'
+                                      ? 'Set locale value'
+                                      : 'Remove locale value only'
+                                  }}
+                                </td>
+                                <td>{{ display(c.expectedValue) }}</td>
+                                <td>{{ display(c.nextValue) }}</td>
+                              </tr>
+                            } @empty {
+                              <tr>
+                                <td colspan="4">
+                                  No local value changes in this draft.
+                                </td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                      </div>
+                      @if (changePages() > 1) {
+                        <nav aria-label="Local draft change pages">
+                          <button
+                            type="button"
+                            name="targetChangePrevious"
+                            (click)="changePage.set(changePage() - 1)"
+                            [disabled]="changePage() === 0"
+                          >
+                            Previous</button
+                          ><span
+                            >Page {{ changePage() + 1 }} of
+                            {{ changePages() }}</span
+                          ><button
+                            type="button"
+                            name="targetChangeNext"
+                            (click)="changePage.set(changePage() + 1)"
+                            [disabled]="changePage() + 1 >= changePages()"
+                          >
+                            Next
+                          </button>
+                        </nav>
+                      }
+                    </section>
                     <label
                       >Draft JSON<textarea
                         name="targetDraft"
@@ -581,6 +665,20 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   previewResult = signal<RepositorySyncPreview | null>(null);
   choices = signal(new Map<string, SyncResolutionChoice>());
   draft = signal<RepositoryResolutionDraft | null>(null);
+  changePage = signal(0);
+  changePages = computed(() =>
+    Math.max(
+      1,
+      Math.ceil((this.draft()?.localChangePlan.changes.length ?? 0) / 50),
+    ),
+  );
+  changeRows = computed(
+    () =>
+      this.draft()?.localChangePlan.changes.slice(
+        this.changePage() * 50,
+        (this.changePage() + 1) * 50,
+      ) ?? [],
+  );
   requiredChoices = computed(
     () =>
       this.previewResult()?.decisions.filter(
@@ -590,6 +688,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   clearDraft() {
     this.choices.set(new Map());
     this.draft.set(null);
+    this.changePage.set(0);
   }
   choose(key: string, value: string) {
     if (this.busy()) return;
@@ -607,6 +706,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     else next.delete(key);
     this.choices.set(next);
     this.draft.set(null);
+    this.changePage.set(0);
     this.error.set('');
   }
   async resolve(t: RepositoryTargetConfig) {
@@ -620,6 +720,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     const generation = ++this.generation;
     this.busy.set(true);
     this.draft.set(null);
+    this.changePage.set(0);
     this.error.set('');
     this.message.set('');
     try {

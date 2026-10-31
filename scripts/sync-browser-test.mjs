@@ -213,6 +213,9 @@ try {
   for(const key of await page.$$eval('[data-repo-choice]',els=>els.map(e=>e.getAttribute('data-repo-choice'))))await chooseRepo(key,key==='hello'?'remote':'local');
   await page.click('[name=targetResolve]');await page.waitForSelector('[name=targetDraft]');
   const repoDraft=await page.$eval('[name=targetDraft]',e=>e.value);
+  check('materialized local change table shows exact set and current missing value',await page.$eval('section[aria-label="Local draft changes"] tbody',e=>e.textContent.includes('hello')&&e.textContent.includes('Set locale value')&&e.textContent.includes('[missing]')&&e.textContent.includes('Changed repository')));
+  check('local change review clearly limits deletion scope and denies apply authority',await page.$eval('section[aria-label="Local draft changes"]',e=>e.textContent.includes('never the project key or another locale')&&e.textContent.includes('not permission to apply')));
+
   check('real repository draft uses exact selected sources',JSON.stringify(JSON.parse(repoDraft))===JSON.stringify({conflict:'Local edit',empty:'',hello:'Changed repository',remote:'Old text',title:'Local title'}));
   check('repository draft warning has no applied effect claim',(await page.content()).includes('Draft only - not applied.')&&(await call(`${P}/export/en?flat=true`,undefined,token)).title==='Local title');
   const repoDownloadDir=mkdtempSync(join(tmpdir(),'ol-repo-download-'));const repoCdp=await page.createCDPSession();await repoCdp.send('Page.setDownloadBehavior',{behavior:'allow',downloadPath:repoDownloadDir});await page.click('[name=targetDownloadDraft]');
@@ -220,6 +223,12 @@ try {
   check('downloaded repository draft bytes equal reviewed draft',readFileSync(join(repoDownloadDir,'open-locale-repository-draft.json'),'utf8')===repoDraft);rmSync(repoDownloadDir,{recursive:true,force:true});
   await page.setViewport({width:1280,height:900});await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'/downloads/repository-draft-desktop.png',fullPage:true});await page.setViewport({width:480,height:900});await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'/downloads/repository-draft-narrow.png',fullPage:true});
   await page.$eval('.table-wrap',e=>e.scrollIntoView({block:'center'}));await page.$eval('.table-wrap',e=>e.scrollLeft=e.scrollWidth);await page.screenshot({path:'/downloads/repository-draft-narrow-choices.png'});
+  await chooseRepo('hello','local');await chooseRepo('title','base');await page.click('[name=targetResolve]');await page.waitForSelector('[name=targetDraft]');
+  check('explicit absent selection shows locale-only removal with current value',await page.$eval('section[aria-label="Local draft changes"] tbody',e=>e.textContent.includes('title')&&e.textContent.includes('Remove locale value only')&&e.textContent.includes('Local title')&&e.textContent.includes('[missing]')));
+  await page.setViewport({width:1280,height:900});await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'/downloads/repository-local-changes-desktop.png',fullPage:true});await page.setViewport({width:480,height:900});await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'/downloads/repository-local-changes-narrow.png',fullPage:true});
+  await chooseRepo('title','local');await page.click('[name=targetResolve]');await page.waitForSelector('[name=targetDraft]');
+  check('local matching draft has explicit no-op review',await page.$eval('section[aria-label="Local draft changes"]',e=>e.textContent.includes('No local value changes in this draft.')));
+  await chooseRepo('hello','remote');await page.click('[name=targetResolve]');await page.waitForSelector('[name=targetDraft]');
   check('repository draft digest and controls fit narrow screen',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await chooseRepo('hello','base');check('changing repository selection clears old draft immediately',!(await page.$('[name=targetDraft]')));
   repositoryJson=JSON.stringify({hello:'Changed after comparison'});await page.click('[name=targetResolve]');await page.waitForSelector('[role=alert]');
@@ -235,6 +244,16 @@ try {
   check('repository comparison pagination changes rows',await page.$eval('section[aria-label="Repository comparison"] tbody',e=>!e.textContent.includes('repo000')&&e.textContent.includes('repo050')));
   await chooseRepo('repo050','remote');await page.click('[name=targetPreviewPrevious]');await page.waitForSelector('[data-repo-choice="repo000"]');await chooseRepo('repo000','local');await page.click('[name=targetPreviewNext]');await page.waitForSelector('[data-repo-choice="repo050"]');
   check('repository explicit selections survive pagination',await page.$eval('[data-repo-choice="repo050"]',e=>e.value==='remote')&&(await page.$eval('[name=targetResolve]',e=>e.disabled)));
+  await page.click('[name=targetPreviewPrevious]');await page.waitForSelector('[data-repo-choice="repo000"]');
+  for(let pageIndex=0;pageIndex<3;pageIndex++){
+    for(const key of await page.$$eval('[data-repo-choice]',els=>els.map(e=>e.getAttribute('data-repo-choice'))))await chooseRepo(key,key.startsWith('repo')?'remote':'local');
+    if(pageIndex<2){await page.click('[name=targetPreviewNext]');await page.waitForFunction(n=>document.querySelector('section[aria-label="Repository comparison"] nav')?.textContent.includes('Page '+n),{},pageIndex+2);}
+  }
+  await page.click('[name=targetResolve]');await page.waitForSelector('[name=targetChangeNext]');
+  check('materialized local changes render at most fifty rows',await page.$$eval('section[aria-label="Local draft changes"] tbody tr',els=>els.length===50));
+  await page.click('[name=targetChangeNext]');await page.waitForFunction(()=>document.querySelector('section[aria-label="Local draft changes"] tbody')?.textContent.includes('repo050'));
+  check('local changes paginate independently from comparison',await page.$eval('section[aria-label="Local draft changes"] tbody',e=>e.textContent.includes('repo050')&&!e.textContent.includes('repo000')));
+
 
   repositoryJson=JSON.stringify({hello:'Repository value',unsafe:'<img src=x onerror="window.repoXss=true">'});
   await page.click('[name=targetRead]');await page.waitForSelector('[name=targetSnapshot]');await page.click('[name=targetLoadBaseline]');await page.waitForSelector('[name=targetPrepareBaseline]');

@@ -3,6 +3,7 @@ import {
   ApiService,
   RepositoryTargetConfig,
   RepositorySyncPreview,
+  RepositoryResolutionDraft,
 } from '../api.service';
 import { ActivatedRoute } from '@angular/router';
 const target: RepositoryTargetConfig = {
@@ -430,5 +431,26 @@ describe('repository target UI lifecycle', () => {
       expect(c.draft()).toBeNull();
       expect(c.choices().size).toBe(0);
     }
+  });
+  it('bounds local change rows and resets page when draft review is invalidated', () => {
+    const c = setup({});
+    const changes = Array.from({ length: 121 }, (_, n) => ({
+      key: 'key' + n,
+      action: 'set-value',
+      expectedValue: null,
+      nextValue: 'v',
+    }));
+    c.draft.set({
+      json: '{}',
+      localChangePlan: { changes },
+    } as unknown as RepositoryResolutionDraft);
+    expect(c.changePages()).toBe(3);
+    expect(c.changeRows().length).toBe(50);
+    c.changePage.set(2);
+    expect(c.changeRows().length).toBe(21);
+    c.clearDraft();
+    expect(c.changePage()).toBe(0);
+    expect(c.changeRows()).toEqual([]);
+    expect(c.changePages()).toBe(1);
   });
 });

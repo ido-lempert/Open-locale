@@ -1,4 +1,5 @@
-export interface RepositoryResolutionDraft extends Omit<SyncResolutionDraft, 'baselineVerified'|'remoteVerified'> {targetId:string;targetRevision:number;baselineVersion:number;baselineSha:string;remoteSha:string;baselineVerified:true;remoteVerified:true;}
+export interface LocalDraftChangePlan {source:'local-draft-change-plan';previewFingerprint:string;draftContentDigest:string;changes:{key:string;action:'set-value'|'remove-locale-value';expectedValue:string|null;nextValue:string|null}[];setValues:number;removeLocaleValues:number;unchangedValues:number;deletesKeys:false;touchesOtherLocales:false;canApply:false;}
+export interface RepositoryResolutionDraft extends Omit<SyncResolutionDraft, 'baselineVerified'|'remoteVerified'> {localChangePlan:LocalDraftChangePlan;targetId:string;targetRevision:number;baselineVersion:number;baselineSha:string;remoteSha:string;baselineVerified:true;remoteVerified:true;}
 export interface RepositorySyncPreview
   extends Omit<LocalSyncPreview, 'baselineVerified' | 'remoteVerified'> {
   targetId: string;

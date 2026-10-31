@@ -34,3 +34,7 @@ it. The test-only override accepts1024-65535 and does not change application por
 Incomplete cleanup is bounded; an exit guard allows exit0 only after the explicit
 stage/full success path. The occupied-port regression proves startup failure
 cannot be reported green, even if a dependency leaves an unresolved stop promise.
+
+The translation-memory HTTP fixture similarly accepts `TM_TEST_PG_PORT` when its
+default55442 is occupied. This changes only its isolated database port, not the
+application API or test assertions. Do not stop another process to free a port.

@@ -225,4 +225,6 @@ Repository draft responses also include `localChangePlan`: deterministic per-key
 selected draft, with expected/next values and set/removal/unchanged counts. The
 plan binds the reviewed fingerprint and exact draft digest. A removal is only a
 locale value, never a project key or another locale. This is materialized review
-data, not executable permission; no plan is persisted or applied.
+data, not executable permission; no plan is persisted or applied. The draft UI
+shows these local changes, current/draft values, explicit locale-only removal
+scope, no-op state and independent 50-row pages.
