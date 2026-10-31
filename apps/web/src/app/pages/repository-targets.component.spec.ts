@@ -125,4 +125,60 @@ describe('repository target UI lifecycle', () => {
     expect(c.editing()).toBeNull();
     expect(c.targets()[0].revision).toBe(2);
   });
+  it('read failure clears old snapshot and retains target configuration', async () => {
+    const c = setup({
+      readRepositoryTarget: async () => {
+        throw new Error('Not configured');
+      },
+    });
+    c.snapshot.set({
+      targetId: 't',
+      targetRevision: 1,
+      json: '{}',
+      remoteSha: 'sha',
+      contentDigest: 'digest',
+      remoteVerified: true,
+      baselineAccepted: false,
+      canApply: false,
+    });
+    await c.read(target);
+    expect(c.snapshot()).toBeNull();
+    expect(c.targets()).toEqual([target]);
+    expect(c.error()).toBe('Not configured');
+    expect(c.busy()).toBe(false);
+  });
+  it('late read cannot restore bytes after destruction or scope navigation', async () => {
+    for (const action of ['destroy', 'navigate']) {
+      let finish!: (v: unknown) => void;
+      const c = setup({
+        readRepositoryTarget: () => new Promise((r) => (finish = r)),
+        getProject: async () => ({
+          baseLocale: 'en',
+          locales: [{ code: 'en' }],
+        }),
+        listBranches: async () => [],
+        listRepositoryTargets: async () => ({ targets: [] }),
+      });
+      const pending = c.read(target);
+      if (action === 'destroy') c.ngOnDestroy();
+      else await c.load('second');
+      finish({ targetId: 't', json: 'private old bytes' });
+      await pending;
+      expect(c.snapshot()).toBeNull();
+      expect(c.message()).toBe('');
+    }
+  });
+  it('editing or refreshing target clears fetched snapshot', async () => {
+    const c = setup({
+      readRepositoryTarget: async () => ({ targetId: 't', json: '{}' }),
+      listRepositoryTargets: async () => ({ targets: [target] }),
+    });
+    await c.read(target);
+    expect(c.snapshot()?.json).toBe('{}');
+    c.edit(target);
+    expect(c.snapshot()).toBeNull();
+    await c.read(target);
+    await c.refresh();
+    expect(c.snapshot()).toBeNull();
+  });
 });

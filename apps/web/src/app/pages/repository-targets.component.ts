@@ -6,6 +6,7 @@ import {
   ApiService,
   RepositoryTargetInput,
   RepositoryTargetConfig,
+  RepositoryFileSnapshot,
   BranchInfo,
 } from '../api.service';
 const empty = (): RepositoryTargetInput => ({
@@ -25,6 +26,15 @@ const empty = (): RepositoryTargetInput => ({
         min-width: 0;
         border: 1px solid #dce2eb;
         border-radius: 8px;
+      }
+      .digest {
+        overflow-wrap: anywhere;
+      }
+      textarea {
+        width: 100%;
+        min-height: 180px;
+        box-sizing: border-box;
+        font-family: monospace;
       }
       main {
         max-width: 1000px;
@@ -100,7 +110,8 @@ const empty = (): RepositoryTargetInput => ({
     <main>
       <p class="notice">
         Configuration only. These coordinates do not connect to GitHub, grant
-        credentials, accept a baseline or run sync. No repository files or
+        credentials, accept a baseline or run sync. Reading a file requires
+        separately configured deployment read access. No repository files or
         translations change. Session admins only. Do not paste tokens or
         passwords here.
       </p>
@@ -218,7 +229,35 @@ const empty = (): RepositoryTargetInput => ({
             <p>
               Remote branch: {{ t.remoteBranch }}. Revision {{ t.revision }}.
             </p>
-            <p>Not connected. No accepted baseline. Sync cannot run.</p>
+            <p>No sync connection or accepted baseline. Sync cannot run.</p>
+            <button
+              name="targetRead"
+              type="button"
+              (click)="read(t)"
+              [disabled]="busy()"
+            >
+              Read repository file
+            </button>
+            @if (snapshot()?.targetId === t.id) {
+              <section aria-label="Repository file snapshot">
+                <h3>Verified file snapshot. Not an accepted baseline.</h3>
+                <p>
+                  Read at {{ readAt() }}. Target revision
+                  {{ snapshot()!.targetRevision }}. No import or sync was run.
+                  The repository may change after this read.
+                </p>
+                <p class="digest">Blob SHA: {{ snapshot()!.remoteSha }}</p>
+                <p class="digest">SHA256: {{ snapshot()!.contentDigest }}</p>
+                <label
+                  >Repository JSON<textarea
+                    name="targetSnapshot"
+                    readonly
+                    [value]="snapshot()!.json"
+                    spellcheck="false"
+                  ></textarea>
+                </label>
+              </section>
+            }
             @if (removing()?.id === t.id) {
               <p class="notice">
                 Remove this configuration only? Repository files and
@@ -281,6 +320,8 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   busy = signal(false);
   error = signal('');
   message = signal('');
+  snapshot = signal<RepositoryFileSnapshot | null>(null);
+  readAt = signal('');
   private generation = 0;
   private subscription?: Subscription;
   constructor(
@@ -294,11 +335,13 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   }
   ngOnDestroy() {
     this.generation++;
+    this.snapshot.set(null);
     this.subscription?.unsubscribe();
   }
   async load(id: string) {
     const generation = ++this.generation;
     this.projectId = id;
+    this.snapshot.set(null);
     this.ready.set(false);
     this.busy.set(false);
     this.targets.set([]);
@@ -329,6 +372,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     }
   }
   edit(t: RepositoryTargetConfig) {
+    this.snapshot.set(null);
     this.editing.set({ ...t });
     this.form = {
       localBranch: t.localBranch,
@@ -352,6 +396,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     if (this.busy()) return;
     const generation = ++this.generation;
     this.busy.set(true);
+    this.snapshot.set(null);
     this.error.set('');
     this.message.set('');
     try {
@@ -373,6 +418,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     const form = { ...this.form },
       editing = this.editing();
     this.busy.set(true);
+    this.snapshot.set(null);
     this.error.set('');
     this.message.set('');
     try {
@@ -397,10 +443,36 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
       if (generation === this.generation) this.busy.set(false);
     }
   }
+  async read(t: RepositoryTargetConfig) {
+    if (this.busy()) return;
+    const generation = ++this.generation;
+    this.busy.set(true);
+    this.snapshot.set(null);
+    this.error.set('');
+    this.message.set('');
+    try {
+      const snapshot = await this.api.readRepositoryTarget(
+        this.projectId,
+        t.id,
+        t.revision,
+      );
+      if (generation !== this.generation) return;
+      this.snapshot.set(snapshot);
+      this.readAt.set(new Date().toLocaleString());
+    } catch (e) {
+      if (generation === this.generation)
+        this.error.set(
+          e instanceof Error ? e.message : 'Could not read repository file',
+        );
+    } finally {
+      if (generation === this.generation) this.busy.set(false);
+    }
+  }
   async remove(t: RepositoryTargetConfig) {
     if (this.busy() || this.removing()?.id !== t.id) return;
     const generation = ++this.generation;
     this.busy.set(true);
+    this.snapshot.set(null);
     this.error.set('');
     this.message.set('');
     try {

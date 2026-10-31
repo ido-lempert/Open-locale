@@ -173,5 +173,6 @@ server reads bounded flat-string JSON from the fixed GitHub API, verifies its
 blob SHA, and rechecks admin access and target revision before returning bytes
 with `Cache-Control: no-store`. This does not accept a baseline, import or push,
 store file bytes, or run sync. Missing matching access returns503; upstream or
-unsupported JSON returns502. No target read UI yet. The internal loopback fixture
+unsupported JSON returns502. The target configuration UI can display a read-only file snapshot, never an
+accepted baseline or sync result. The internal loopback fixture
 override is ignored in production.

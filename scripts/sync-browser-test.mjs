@@ -1,3 +1,5 @@
+import {createServer} from 'node:http';
+import {createHash} from 'node:crypto';
 // Real local browser -> Angular file preview -> built API + Postgres.
 // No external provider requests. Requires nx build api.
 import { execFileSync, spawn } from 'node:child_process';
@@ -12,6 +14,11 @@ const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
 let failures = 0, api, web, mock, browser, prisma;
 process.exitCode = 1;
+let repositoryCalls=0;
+const repositoryJson=JSON.stringify({hello:'Repository value',unsafe:'<img src=x onerror="window.repoXss=true">'});
+const repositoryFixture=createServer((req,res)=>{repositoryCalls++;req.resume();const bytes=Buffer.from(repositoryJson);res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({type:'file',path:'external/new.json',encoding:'base64',size:bytes.length,sha:createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex'),content:bytes.toString('base64')}));});
+await new Promise(r=>repositoryFixture.listen(0,'127.0.0.1',r));
+const repositoryOrigin=`http://127.0.0.1:${repositoryFixture.address().port}`;
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-sync-browser-'));
@@ -20,7 +27,7 @@ try {
   await pg.initialise();await pg.start();await pg.createDatabase('sync_browser');
   const url=`postgresql://postgres:postgres@localhost:${PG_PORT}/sync_browser`;
   execFileSync('node_modules/.bin/prisma',['migrate','deploy'],{env:{...process.env,DATABASE_URL:url},stdio:'pipe'});
-  api=spawn(process.execPath,['dist/apps/api/main.js'],{env:{...process.env,DATABASE_URL:url,JWT_SECRET:'sync-browser-secret',PORT:String(API_PORT)},stdio:'pipe'});
+  api=spawn(process.execPath,['dist/apps/api/main.js'],{env:{...process.env,DATABASE_URL:url,JWT_SECRET:'sync-browser-secret',NODE_ENV:'test',GITHUB_READ_OWNER:'owner',GITHUB_READ_REPO:'repo',GITHUB_READ_TOKEN:'fixture-browser-read',GITHUB_READ_FIXTURE_ORIGIN:repositoryOrigin,PORT:String(API_PORT)},stdio:'pipe'});
   await waitFor(`${API}/projects`);
   const call=async(path,body,token)=>{const r=await fetch(`${API}${path}`,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},body:body?JSON.stringify(body):undefined});if(!r.ok)throw new Error(`${path}: ${r.status}`);return r.json();};
   const owner=await call('/auth/signup',{email:'sync-owner@example.com',password:'pass1234',displayName:'Owner'});
@@ -165,7 +172,7 @@ try {
   check('preview links to configuration-only repository target screen',(await page.content()).includes('do not connect to GitHub')&&(await page.content()).includes('No repository target configurations.'));
   await set('targetOwner','owner');await set('targetRepo','repo');await set('targetPath','locales/en.json');await set('targetRemoteBranch','feature/test');
   await page.click('[name=targetSave]');await page.waitForSelector('article[data-target-id]');
-  check('UI saves real repository coordinates without connection claim',(await page.$eval('article',e=>e.textContent)).includes('locales/en.json')&&(await page.$eval('article',e=>e.textContent)).includes('Not connected.'));
+  check('UI saves real repository coordinates without connection claim',(await page.$eval('article',e=>e.textContent)).includes('locales/en.json')&&(await page.$eval('article',e=>e.textContent)).includes('No sync connection'));
   await page.reload({waitUntil:'networkidle0'});await page.waitForSelector('article');
   check('target configuration persists across reload',(await page.$eval('article',e=>e.textContent)).includes('feature/test'));
   await page.click('[name=targetEdit]');await set('targetPath','updated/en.json');await page.click('[name=targetSave]');await page.waitForFunction(()=>document.querySelector('article')?.textContent.includes('Revision 2'));
@@ -179,6 +186,18 @@ try {
   check('stale UI edit did not overwrite newer target',(await call(`${P}/sync/repository-targets`,undefined,token)).targets[0].path==='external/new.json');
   await page.click('[name=targetRefresh]');await page.waitForFunction(()=>document.querySelector('article')?.textContent.includes('external/new.json'));
   check('explicit refresh replaces stale edit with current configuration',await page.$eval('[name=targetPath]',e=>e.value===''));
+  await page.click('[name=targetRead]');await page.waitForSelector('[name=targetSnapshot]');
+  check('real browser reads verified repository bytes through API and fixture',await page.$eval('[name=targetSnapshot]',(e,text)=>e.value===text,repositoryJson)&&repositoryCalls===1);
+  check('read snapshot is clearly not accepted baseline or sync',(await page.content()).includes('Verified file snapshot. Not an accepted baseline.')&&(await page.content()).includes('No import or sync was run.'));
+  check('repository text never executes as markup',!(await page.$('article img'))&&!await page.evaluate(()=>window.repoXss));
+  await page.setViewport({width:1280,height:900});await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'/downloads/repository-read-desktop.png',fullPage:true});
+  await page.setViewport({width:480,height:900});await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'/downloads/repository-read-narrow.png',fullPage:true});
+  check('repository snapshot digests and JSON fit narrow viewport',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.setRequestInterception(true);let readFailure=true;
+  const failRead=async request=>{if(readFailure&&request.url().endsWith('/read')){readFailure=false;return request.respond({status:503,contentType:'application/json',body:JSON.stringify({message:'Repository read access is not configured for this target'})});}return request.continue();};page.on('request',failRead);
+  await page.click('[name=targetRead]');await page.waitForSelector('[role=alert]');
+  check('missing read access error clears old snapshot without losing configuration',!(await page.$('[name=targetSnapshot]'))&&!!await page.$('article')&&(await page.$eval('[role=alert]',e=>e.textContent)).includes('not configured'));
+  page.off('request',failRead);await page.setRequestInterception(false);
   await page.click('[name=targetEdit]');await set('targetPath','../unsafe');await page.click('[name=targetSave]');await page.waitForSelector('[role=alert]');
   check('validation failure preserves typed coordinates',(await page.$eval('[role=alert]',e=>e.textContent)).includes('Invalid repository')&&await page.$eval('[name=targetPath]',e=>e.value==='../unsafe'));
   await page.click('[name=targetCancel]');
@@ -191,6 +210,16 @@ try {
   check('removal confirmation limits effect to configuration',(await page.content()).includes('Repository files and translations will not be deleted'));
   await page.click('[name=targetConfirmRemove]');await page.waitForFunction(()=>document.body.textContent.includes('No repository target configurations.'));
   check('confirmed removal deletes real config only',(await call(`${P}/sync/repository-targets`,undefined,token)).targets.length===0&&(await call(`${P}/export/en?flat=true`,undefined,token)).title==='Local title');
+  // Hold a successful real read while switching reused project route.
+  await set('targetOwner','owner');await set('targetRepo','repo');await set('targetPath','external/new.json');await page.click('[name=targetSave]');await page.waitForSelector('article');
+  let readRelease,readHeld=false;const readGate=new Promise(r=>readRelease=r);
+  await page.setRequestInterception(true);const holdRead=async request=>{if(!readHeld&&request.url().endsWith('/read')){readHeld=true;await readGate;}return request.continue();};page.on('request',holdRead);
+  await page.click('[name=targetRead]');await page.waitForFunction(()=>document.querySelector('[name=targetRead]').disabled);
+  await page.evaluate(id=>{const link=window.ng.getDirectives(document.querySelector('.back')).find(d=>d.router);return link.router.navigateByUrl('/projects/'+id+'/sync/targets');},second.id);
+  await page.waitForFunction(id=>location.pathname==='/projects/'+id+'/sync/targets',{},second.id);await page.waitForSelector('[name=targetOwner]');readRelease();await new Promise(r=>setTimeout(r,600));
+  check('late successful repository read cannot expose old-project bytes after navigation',!(await page.$('[name=targetSnapshot]'))&&!(await page.$('article'))&&!(await page.content()).includes('Repository value'));
+  page.off('request',holdRead);await page.setRequestInterception(false);
+  await page.goto(`${WEB}/projects/${project.id}/sync/targets`,{waitUntil:'networkidle0'});await page.waitForSelector('[name=targetRemove]');await page.click('[name=targetRemove]');await page.waitForSelector('[name=targetConfirmRemove]');await page.click('[name=targetConfirmRemove]');await page.waitForFunction(()=>document.body.textContent.includes('No repository target configurations.'));
   await set('targetOwner','other');await set('targetRepo','other');await set('targetPath','dirty.json');
   let targetRelease,targetHeld=false;const targetGate=new Promise(r=>targetRelease=r);
   await page.setRequestInterception(true);const holdTarget=async request=>{if(!targetHeld&&request.method()==='POST'&&request.url().endsWith('/sync/repository-targets')){targetHeld=true;await targetGate;}return request.continue();};page.on('request',holdTarget);
@@ -222,7 +251,7 @@ finally {
     else child.kill('SIGKILL');
   }));
   await Promise.all(stopped);
-  await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
+  await new Promise(r=>repositoryFixture.close(r));await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
 process.exit(process.exitCode??1);

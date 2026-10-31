@@ -1,3 +1,4 @@
+export interface RepositoryFileSnapshot {targetId:string;targetRevision:number;json:string;remoteSha:string;contentDigest:string;remoteVerified:true;baselineAccepted:false;canApply:false;}
 export interface RepositoryTargetInput { localBranch:string;locale:string;owner:string;repo:string;path:string;remoteBranch:string; }
 export interface RepositoryTargetConfig extends RepositoryTargetInput {id:string;revision:number;}
 export type SyncResolutionChoice = 'base' | 'local' | 'remote';
@@ -215,6 +216,7 @@ export class ApiService {
   completeOidc(pendingToken: string, totpCode: string) {
     return this.request<{ accessToken: string }>('/auth/oidc/complete', { method: 'POST', body: JSON.stringify({ pendingToken, totpCode }) });
   }
+  readRepositoryTarget(projectId:string,id:string,expectedRevision:number){return this.request<RepositoryFileSnapshot>(`/projects/${projectId}/sync/repository-targets/${encodeURIComponent(id)}/read`,{method:'POST',body:JSON.stringify({expectedRevision})});}
   listRepositoryTargets(projectId:string){return this.request<{targets:RepositoryTargetConfig[];connected:false;canApply:false}>(`/projects/${projectId}/sync/repository-targets`);}
   saveRepositoryTarget(projectId:string,input:RepositoryTargetInput,id?:string,expectedRevision?:number){return this.request<{target:RepositoryTargetConfig}>(`/projects/${projectId}/sync/repository-targets${id?'/'+encodeURIComponent(id):''}`,{method:id?'PUT':'POST',body:JSON.stringify({...input,...(id?{expectedRevision}:{})})});}
   removeRepositoryTarget(projectId:string,id:string,expectedRevision:number){return this.request(`/projects/${projectId}/sync/repository-targets/${encodeURIComponent(id)}`,{method:'DELETE',body:JSON.stringify({expectedRevision})});}
