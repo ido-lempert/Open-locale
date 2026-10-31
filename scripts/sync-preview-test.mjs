@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 const writerSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/local-value-writer.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
 const {writeExistingLocalValues}=await import('data:text/javascript;base64,'+Buffer.from(writerSource).toString('base64'));
+import { lockRepositoryWriteScope } from '../apps/api/src/app/github/repository-write-scope.ts';
 import { lockLocalPreconditions } from '../apps/api/src/app/github/local-preconditions.ts';
 // Granular permissions: real PostgreSQL + real HTTP API.
 // Roles (OWNER/ADMIN/MEMBER) and per-locale contributor access.
@@ -252,6 +253,27 @@ try {
   try{await prisma.$transaction(async tx=>{await tx.translation.update({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}},data:{value:'must rollback'}});await lockLocalPreconditions(tx,{...livePlan,locale:'missing'});},{isolationLevel:'Serializable'});}catch{}
   check('failed validation rolls back transaction writes atomically',(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).value==='edited'&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).version===rollbackVersion);
 
+  const scopeBaseline=await prisma.repositorySyncBaseline.findUnique({where:{targetId:target.id}});
+  const writeScope={actorId:owner.user.id,projectId:project.id,targetId:target.id,targetRevision:2,branchId:storedLocalKey.branchId,branch:'main',locale:'en',baselineVersion:scopeBaseline.version,baselineSha:scopeBaseline.remoteSha,baselineDigest:scopeBaseline.contentDigest};
+  const validateWriteScope=scope=>prisma.$transaction(tx=>lockRepositoryWriteScope(tx,scope),{isolationLevel:'Serializable'});
+  const deniedScope=async scope=>{try{await validateWriteScope(scope);return false;}catch{return true;}};
+  check('repository transaction guard validates actual owner and accepted target scope',(await validateWriteScope(writeScope)).adminValidated===true&&(await validateWriteScope(writeScope)).canApply===false);
+  check('repository transaction guard denies member outsider and mismatched scope',await deniedScope({...writeScope,actorId:member.user.id})&&await deniedScope({...writeScope,actorId:outsider.user.id})&&await deniedScope({...writeScope,targetRevision:1})&&await deniedScope({...writeScope,branch:'other'})&&await deniedScope({...writeScope,locale:'he'})&&await deniedScope({...writeScope,projectId:crypto.randomUUID()}));
+  check('repository guard rejects baseline version SHA and digest mismatches',await deniedScope({...writeScope,baselineVersion:999})&&await deniedScope({...writeScope,baselineSha:'f'.repeat(40)})&&await deniedScope({...writeScope,baselineDigest:'f'.repeat(64)}));
+  await prisma.teamMember.update({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},data:{role:'MEMBER'}});
+  check('repository guard denies formerly authorized admin at commit boundary',await deniedScope({...writeScope,actorId:admin.user.id}));await prisma.teamMember.update({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},data:{role:'ADMIN'}});
+  let scopeIsolationDenied=false;try{await prisma.$transaction(tx=>lockRepositoryWriteScope(tx,writeScope));}catch(e){scopeIsolationDenied=e.message.includes('serializable');}
+  check('repository guard rejects non-serializable caller',scopeIsolationDenied);
+  let scopeRelease,scopeReached;const scopeGate=new Promise(r=>scopeRelease=r),scopeReady=new Promise(r=>scopeReached=r);
+  const heldScope=prisma.$transaction(async tx=>{await lockRepositoryWriteScope(tx,{...writeScope,actorId:admin.user.id});scopeReached();await scopeGate;},{isolationLevel:'Serializable',timeout:10000});await scopeReady;
+  let roleWriteDone=false;const roleWriter=prisma.teamMember.update({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},data:{role:'MEMBER'}}).then(()=>roleWriteDone=true);await new Promise(r=>setTimeout(r,100));
+  check('validated admin membership blocks concurrent revocation through transaction',!roleWriteDone);scopeRelease();await heldScope;await roleWriter;
+  check('revocation completes after guard releases and next guard denies',roleWriteDone&&await deniedScope({...writeScope,actorId:admin.user.id}));await prisma.teamMember.update({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},data:{role:'ADMIN'}});
+  let baselineRelease,baselineReached;const baselineLockGate=new Promise(r=>baselineRelease=r),baselineLockReady=new Promise(r=>baselineReached=r);
+  const heldBaselineScope=prisma.$transaction(async tx=>{await lockRepositoryWriteScope(tx,writeScope);baselineReached();await baselineLockGate;},{isolationLevel:'Serializable',timeout:10000});await baselineLockReady;
+  let baselineWriteDone=false;const baselineWriter=prisma.repositorySyncBaseline.update({where:{targetId:target.id},data:{version:{increment:1}}}).then(()=>baselineWriteDone=true);await new Promise(r=>setTimeout(r,100));
+  check('guard holds accepted baseline row through transaction',!baselineWriteDone);baselineRelease();await heldBaselineScope;await baselineWriter;
+  check('baseline replacement completes after release and stale scope denied',baselineWriteDone&&await deniedScope(writeScope));await prisma.repositorySyncBaseline.update({where:{targetId:target.id},data:{version:scopeBaseline.version}});
   const writerPreconditions=(await repositoryPreview()).json.localPreconditions;
   const beforeWriterRow=await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}});
   await prisma.translation.update({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}},data:{status:'REVIEWED',mtScore:88,mtProvider:'fixture'}});

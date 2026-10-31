@@ -255,3 +255,11 @@ bounded1000 rows/512KiB; over-bound removal fails atomically, never truncates au
 Unknown keys, duplicates, no-op and length violations are refused. This helper has
 no production caller/public apply route, TM updates, webhook/automation delivery
 or target/baseline authorization. Those remain integration work before execution.
+
+Internal `lockRepositoryWriteScope` guards a Serializable transaction with locked
+current project/admin membership, target revision/branch/locale and accepted
+baseline version/SHA/digest. Revocation/baseline replacement waits until that
+transaction ends; stale/new requests fail. This is a transaction guard only, not
+an HTTP apply route, source of consent or complete execution service. The future
+caller still needs session authorization, fresh reviewed remote/draft checks,
+local preconditions, same-transaction writes and post-commit delivery handling.

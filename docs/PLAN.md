@@ -90,7 +90,8 @@ add languages, manage keys and translations, export a file.
   execution, plus internal Serializable locked-row validation. No apply path
   yet. Isolated existing-key locale-set writer with history/activity rollback
   tests; durable locale-removal audit added, production integration still open.
-  See reviews0134-0142.
+  Internal current-admin/target/baseline locked transaction guard added; no public
+  execution. See reviews0134-0143.
 
 ## Phase 3 - advanced
 
