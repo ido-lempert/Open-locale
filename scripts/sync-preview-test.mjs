@@ -12,6 +12,8 @@ const retentionSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/ap
 const {pruneRepositoryEffects}=await import('data:text/javascript;base64,'+Buffer.from(retentionSource).toString('base64'));
 const budgetSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-effect-budget.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
 const {assertRepositoryEffectBudget}=await import('data:text/javascript;base64,'+Buffer.from(budgetSource).toString('base64'));
+const runnerSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-effect-runner.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
+const {runRepositoryEffect}=await import('data:text/javascript;base64,'+Buffer.from(runnerSource).toString('base64'));
 import { lockRepositoryWriteScope } from '../apps/api/src/app/github/repository-write-scope.ts';
 import { lockLocalPreconditions } from '../apps/api/src/app/github/local-preconditions.ts';
 // Granular permissions: real PostgreSQL + real HTTP API.
@@ -337,6 +339,23 @@ try {
   check('composition replay fails stale local preconditions without duplicate audit',await rejectCompose(reviewedCompose)&&await prisma.translationHistory.count()===composeBeforeHistory+1&&await prisma.activityEvent.count()===composeBeforeActivity+1);
   const effectIntent=await prisma.repositoryLocalEffectIntent.findFirst({where:{projectId:project.id},orderBy:{createdAt:'desc'}});
   check('composition persists exact pending set context without delivery claim',composed.pendingEffectIntents===1&&effectIntent.projectId===project.id&&effectIntent.actorId===owner.user.id&&effectIntent.targetId===target.id&&effectIntent.keyId===localKey.id&&effectIntent.keyName==='local'&&effectIntent.branchId===writeScope.branchId&&effectIntent.branch==='main'&&effectIntent.locale==='en'&&effectIntent.operation==='set-value'&&effectIntent.value==='composed value'&&effectIntent.draftContentDigest===composeDigest&&effectIntent.previewFingerprint===composeFingerprint);
+  let handlerCalls=0,handlerAfterLocks=false,runnerContext=false;
+  const runCompleted=await runRepositoryEffect(prisma,async intent=>{handlerCalls++;runnerContext=intent.id===effectIntent.id&&intent.value==='composed value';await prisma.$transaction(async tx=>{await tx.$executeRawUnsafe(`SET LOCAL lock_timeout='1s'`);await tx.$queryRaw`SELECT id FROM projects WHERE id=${project.id}::uuid FOR UPDATE`;handlerAfterLocks=true;});});
+  check('single effect runner passes exact context after guard locks release',runCompleted.status==='completed'&&handlerCalls===1&&runnerContext&&handlerAfterLocks);
+  check('completed runner does not run handler twice',(await runRepositoryEffect(prisma,async()=>{handlerCalls++;})).status==='idle'&&handlerCalls===1);
+  const resetRunner=()=>prisma.repositoryLocalEffectIntent.update({where:{id:effectIntent.id},data:{state:'pending',attempts:0,leaseToken:null,leaseUntil:null,finishedAt:null,availableAt:new Date('2020-01-01'),targetRevision:writeScope.targetRevision}});
+  await resetRunner();let concurrentHandlerStarted,releaseHandler;const handlerStarted=new Promise(r=>concurrentHandlerStarted=r),handlerGate=new Promise(r=>releaseHandler=r);let concurrentHandlerCalls=0;
+  const heldRun=runRepositoryEffect(prisma,async()=>{concurrentHandlerCalls++;concurrentHandlerStarted();await handlerGate;});await handlerStarted;
+  const competingRun=await runRepositoryEffect(prisma,async()=>{concurrentHandlerCalls++;});releaseHandler();const heldRunResult=await heldRun;
+  check('concurrent runners do not invoke same active intent handler',competingRun.status==='idle'&&heldRunResult.status==='completed'&&concurrentHandlerCalls===1);
+  await resetRunner();const runnerHistory=await prisma.translationHistory.count(),runnerActivity=await prisma.activityEvent.count();
+  const runFailed=await runRepositoryEffect(prisma,async()=>{throw new Error('private fixture error');});
+  check('handler failure requeues without reverting committed locale or duplicating audit',runFailed.status==='retry'&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:effectIntent.id}})).state==='pending'&&await prisma.translationHistory.count()===runnerHistory&&await prisma.activityEvent.count()===runnerActivity&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).value==='composed value'&&!JSON.stringify(runFailed).includes('private fixture'));
+  await resetRunner();await prisma.repositoryLocalEffectIntent.update({where:{id:effectIntent.id},data:{targetRevision:writeScope.targetRevision+1}});
+  check('ineligible runner never invokes handler',(await runRepositoryEffect(prisma,async()=>{handlerCalls++;})).status==='ineligible'&&handlerCalls===1);
+  await resetRunner();const staleRun=await runRepositoryEffect(prisma,async()=>{await prisma.repositoryLocalEffectIntent.update({where:{id:effectIntent.id},data:{leaseUntil:new Date('2020-01-01')}});});
+  check('runner reports stale instead of completing expired handler lease',staleRun.status==='stale'&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:effectIntent.id}})).state==='leased');
+  await resetRunner();
   const eligibilityLease=await prisma.$transaction(claimRepositoryEffect);
   const eligible=()=>prisma.$transaction(tx=>validateRepositoryEffect(tx,effectIntent.id,eligibilityLease.leaseToken),{isolationLevel:'Serializable'});
   check('committed intent has exact translation generation and current eligibility',(await eligible()).id===effectIntent.id&&effectIntent.targetRevision===writeScope.targetRevision&&effectIntent.translationRowId&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).version===effectIntent.translationVersion);

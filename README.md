@@ -318,3 +318,11 @@ names plus set-value UTF8 bytes. Expired/exhausted leased rows still count; term
 rows do not. Serializable project locking prevents concurrent final-slot producers
 from exceeding admission limits. No-op drafts remain usable. This is a pending
 payload admission bound, not total database/storage accounting or enabled dispatch.
+
+An internal single-step effect runner composes claim, Serializable current-context
+validation, handler call after transaction/locks release, and token-fenced settlement.
+No timer/startup worker or production webhook/automation handler is connected.
+Ineligible contexts never reach a handler; handler failures use bounded retry,
+and expired leases report stale rather than completed. Handlers must be bounded,
+recheck current routing/authority, and deduplicate by intent ID. Crash/timeout after
+an effect can cause retry; queue completed is bookkeeping, not delivery receipt.

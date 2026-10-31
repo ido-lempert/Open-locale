@@ -97,7 +97,7 @@ add languages, manage keys and translations, export a file.
   intents added; internal bounded lease/retry bookkeeping added. Dispatcher and
   dispatch remains code work. Bounded internal seven-day terminal cleanup added,
   not scheduled. Internal current-scope/generation eligibility
-  guard added, not dispatch permission. Pending admission capped at10k/8MiB before writes. See reviews0134-0150.
+  guard added, not dispatch permission. Pending admission capped at10k/8MiB before writes. Internal one-step runner composed, no production handler/worker. See reviews0134-0151.
 
 ## Phase 3 - advanced
 
