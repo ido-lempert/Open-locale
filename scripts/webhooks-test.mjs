@@ -48,6 +48,10 @@ const {WebhooksService}=require(bundlePath);
 const adapterPath=join(root,'.tmp-repository-webhook-adapter.cjs');
 execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-webhook-handler.ts','--bundle','--platform=node','--format=cjs','--packages=external','--outfile='+adapterPath]);
 const {deliverRepositoryWebhook}=require(adapterPath);
+const stepPath=join(root,'.tmp-repository-webhook-step.cjs');
+execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-webhook-step.ts','--bundle','--platform=node','--format=cjs','--packages=external','--outfile='+stepPath]);
+const {runRepositoryWebhookStep}=require(stepPath);
+
 try {
   await pg.initialise(); await pg.start(); await pg.createDatabase('openlocale_wh');
   const url = `postgresql://postgres:postgres@localhost:${PG_PORT}/openlocale_wh`;
@@ -163,8 +167,22 @@ try {
   check('repository handler uses real signed receiver with effect ID',adapterResult.matched===1&&adapterResult.succeeded===1&&adapterResult.failed===0&&received.length===receivedBefore+1&&payload.effectId===intent.id&&payload.value===translation.value&&payload.operation==='set-value'&&emitted.sig==='sha256='+createHmac('sha256',repositoryHook.secret).update(emitted.body).digest('hex'));
   failNext=2;let failedAdapter=false;try{await deliverRepositoryWebhook(prisma,service,intent);}catch{failedAdapter=true;}
   check('repository handler surfaces exhausted receiver failure for queue retry',failedAdapter&&received.length===receivedBefore+3);
+  const resetStep=()=>prisma.repositoryLocalEffectIntent.update({where:{id:intent.id},data:{state:'pending',attempts:0,leaseToken:null,leaseUntil:null,finishedAt:null,availableAt:new Date('2020-01-01')}});
+  await resetStep();receivedBefore=received.length;const stepped=await runRepositoryWebhookStep(prisma,service);const steppedRow=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:intent.id}});
+  check('internal webhook step claims signs delivers and settles completed',stepped.status==='completed'&&steppedRow.state==='completed'&&steppedRow.attempts===1&&steppedRow.leaseToken===null&&steppedRow.finishedAt&&received.length===receivedBefore+1&&JSON.parse(received.at(-1).body).effectId===intent.id);
+  receivedBefore=received.length;check('completed webhook step does not redeliver',(await runRepositoryWebhookStep(prisma,service)).status==='idle'&&received.length===receivedBefore);
+  await resetStep();failNext=2;const retryStep=await runRepositoryWebhookStep(prisma,service);const retryRow=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:intent.id}});
+  check('real receiver failure requeues step with backoff',retryStep.status==='retry'&&retryRow.state==='pending'&&retryRow.attempts===1&&retryRow.leaseToken===null&&retryRow.finishedAt===null&&received.length===receivedBefore+2);
+  receivedBefore=received.length;check('webhook retry backoff makes immediate next step idle',(await runRepositoryWebhookStep(prisma,service)).status==='idle'&&received.length===receivedBefore);
+  await prisma.repositoryLocalEffectIntent.update({where:{id:intent.id},data:{availableAt:new Date('2020-01-01')}});const recoveredStep=await runRepositoryWebhookStep(prisma,service);
+  check('due webhook retry preserves effect ID and settles after success',recoveredStep.status==='completed'&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:intent.id}})).attempts===2&&received.length===receivedBefore+1&&JSON.parse(received.at(-1).body).effectId===intent.id);
+  await prisma.repositoryLocalEffectIntent.update({where:{id:intent.id},data:{state:'leased',attempts:1,leaseToken:a.user.id,leaseUntil:new Date(Date.now()+3600000),finishedAt:null}});
+  await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "leaseUntil"=clock_timestamp()+INTERVAL '60 seconds' WHERE id=${intent.id}::uuid`;
   await prisma.repositorySyncTarget.update({where:{id:target.id},data:{revision:{increment:1}}});receivedBefore=received.length;let staleAdapter=false;try{await deliverRepositoryWebhook(prisma,service,intent);}catch{staleAdapter=true;}
   check('repository handler rechecks changed context before any socket delivery',staleAdapter&&received.length===receivedBefore);
+  await resetStep();receivedBefore=received.length;const invalidStep=await runRepositoryWebhookStep(prisma,service);
+  check('changed target step is ineligible without any receiver socket',invalidStep.status==='ineligible'&&received.length===receivedBefore&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:intent.id}})).state==='pending');
+  await prisma.repositoryLocalEffectIntent.update({where:{id:intent.id},data:{state:'completed',finishedAt:new Date(),leaseToken:null,leaseUntil:null}});
   await prisma.repositorySyncTarget.update({where:{id:target.id},data:{revision:target.revision}});
   await prisma.translation.delete({where:{keyId_localeCode:{keyId:key.id,localeCode:'en'}}});
   const removalIntent=await prisma.repositoryLocalEffectIntent.create({data:{...intentData,operation:'remove-locale-value',value:null,translationRowId:null,translationVersion:null}});
@@ -183,7 +201,7 @@ try {
   console.error('SUITE INCOMPLETE:', err);
   process.exit(1);
 } finally {
-  rmSync(bundlePath,{force:true});rmSync(adapterPath,{force:true});await prisma?.$disconnect();
+  rmSync(bundlePath,{force:true});rmSync(adapterPath,{force:true});rmSync(stepPath,{force:true});await prisma?.$disconnect();
   api?.kill('SIGTERM');
   receiver.close();
   await pg.stop().catch(() => {});

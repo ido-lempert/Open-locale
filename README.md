@@ -336,3 +336,10 @@ failed receivers make the adapter throw for bounded queue retry. Other successfu
 receivers may receive repeats: this is at-least-once, not exactly-once. Existing
 normal save/import delivery semantics stay fire-and-forget. No worker/startup timer,
 automation handler or public repository apply is connected in this stage.
+
+The explicit internal runRepositoryWebhookStep now joins one queue claim to current
+eligibility, signed/pinned webhook delivery and fenced settlement. Real receiver
+tests cover completed no-redelivery, exhausted failure/backoff and due retry with
+stable effectId. No timer/startup worker/public route is connected. This helper is
+webhook-channel-only; it does not execute automations or mark overall sync complete.
+Before a production combined worker, per-channel completion needs separate state.

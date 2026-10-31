@@ -98,7 +98,8 @@ add languages, manage keys and translations, export a file.
   dispatch remains code work. Bounded internal seven-day terminal cleanup added,
   not scheduled. Internal current-scope/generation eligibility
   guard added, not dispatch permission. Pending admission capped at10k/8MiB before writes. Internal one-step runner composed, no production handler/worker. Internal webhook adapter added with real signed receiver checks, no enabled worker
-  or automation handler. See reviews0134-0152.
+  or automation handler. Explicit internal webhook-channel step verified end-to-end; no combined worker
+  or automation completion. See reviews0134-0153.
 
 ## Phase 3 - advanced
 
