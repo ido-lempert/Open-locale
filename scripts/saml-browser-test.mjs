@@ -26,7 +26,7 @@ try {
   mock = spawn(process.execPath,['scripts/mock-saml.mjs'],{env:{...process.env,MOCK_SAML_BROWSER:'1'},stdio:'pipe'});
   await waitFor('http://127.0.0.1:5556/cert');
   const cert=(await (await fetch('http://127.0.0.1:5556/cert')).json()).cert;
-  api=spawn(process.execPath,['dist/apps/api/main.js'],{env:{...process.env,DATABASE_URL:url,JWT_SECRET:'browser-saml-secret',SAML_ENTRY_POINT:'http://127.0.0.1:5556/sso',SAML_IDP_CERT:cert,SAML_IDP_ENTITY_ID:'http://127.0.0.1:5556/idp',SAML_BROWSER_RETURN_URL:`${WEB}/auth/saml/callback`,PORT:String(API_PORT)},stdio:'pipe'});
+  api=spawn(process.execPath,['dist/apps/api/main.js'],{env:{...process.env,DATABASE_URL:url,JWT_SECRET:'browser-saml-secret',SAML_PENDING_MAX:'4',SAML_ENTRY_POINT:'http://127.0.0.1:5556/sso',SAML_IDP_CERT:cert,SAML_IDP_ENTITY_ID:'http://127.0.0.1:5556/idp',SAML_BROWSER_RETURN_URL:`${WEB}/auth/saml/callback`,PORT:String(API_PORT)},stdio:'pipe'});
   await waitFor(`${API}/auth/saml/sp-info`);
   web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{stdio:'pipe',detached:true});
   await waitFor(WEB);
@@ -201,6 +201,19 @@ try {
   const stale=await beginLink();await prisma.user.update({where:{id:linker.user.id},data:{authEpoch:{increment:1}}});
   check('browser link rejects stale initiating epoch',!!(await (await redeem(await accept(stale,'stale-browser-link@example.com'))).json()).error);
   check('stale browser link creates no binding',!(await prisma.externalIdentity.findFirst({where:{email:'stale-browser-link@example.com'}})));
+  const pendingFlow=async()=>{
+    const start=await (await post('/auth/saml/browser/start',{challenge:linkChallenge})).json();
+    const u=new URL(start.url),id=inflateRawSync(Buffer.from(u.searchParams.get('SAMLRequest'),'base64')).toString().match(/ID="([^"]+)"/)[1];
+    return (await redeem(await post('/auth/saml/acs',{...await signed(id,'saml-user@example.com'),RelayState:u.searchParams.get('RelayState')}))).json();
+  };
+  // pending-newer leaves one entry; two of capacity4 remain available.
+  const admitted1=await pendingFlow(),admitted2=await pendingFlow();
+  check('SAML bounded pending store admits remaining slots',!!admitted1.pendingToken&&!!admitted2.pendingToken);
+  const full=await pendingFlow();
+  check('SAML pending overflow yields safe handoff error',!!full.error&&!full.pendingToken&&!full.accessToken);
+  const failed=await post('/auth/saml/complete',{pendingToken:admitted1.pendingToken,totpCode:'WRONG'});
+  check('SAML failed pending verification consumes entry',failed.status===401);
+  check('SAML pending capacity recovers after consumption',!!(await pendingFlow()).pendingToken);
   console.log(failures?'SAML BROWSER CHECKS FAILED':'ALL SAML BROWSER CHECKS PASSED');
   process.exitCode=failures?1:0;
 } catch(e){ console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1; }

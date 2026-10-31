@@ -1,3 +1,4 @@
+import { PendingSso } from './pending-sso';
 // OIDC groundwork: authorization-code + PKCE login against a configured
 // issuer. Local development and tests target the mock issuer in
 // scripts/mock-oidc.mjs; no external IdP is enrolled, no provider account
@@ -37,7 +38,7 @@ export class OidcService {
   // In-memory state/pending stores: an API restart invalidates in-flight
   // logins (fail closed - users simply restart the flow). Documented limit.
   private states = new Map<string, OidcState>();
-  private pending = new Map<string, { userId: string; epoch: number; expiresAt: number }>();
+  private pending = new PendingSso(process.env.OIDC_PENDING_MAX === undefined ? 10_000 : Number(process.env.OIDC_PENDING_MAX));
   private metadata: Promise<OidcMetadata> | null = null;
 
   constructor(private readonly prisma: PrismaService, private readonly auth: AuthService) {}
@@ -119,7 +120,6 @@ export class OidcService {
   private sweep() {
     const now = Date.now();
     for (const [k, v] of this.states) if (v.expiresAt < now) this.states.delete(k);
-    for (const [k, v] of this.pending) if (v.expiresAt < now) this.pending.delete(k);
   }
 
   async start(linkUserId: string | null, linkEpoch: number | null = null) {
@@ -284,8 +284,7 @@ export class OidcService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new UnauthorizedException();
     if (user.totpEnabled) {
-      const pendingToken = b64url(randomBytes(16));
-      this.pending.set(pendingToken, { userId, epoch: user.authEpoch, expiresAt: Date.now() + 5 * 60 * 1000 });
+      const pendingToken = this.pending.create(userId, user.authEpoch);
       return { requiresTwoFactor: true as const, pendingToken };
     }
     return this.auth.issueOidcTokens(userId, false);
@@ -293,9 +292,7 @@ export class OidcService {
 
   async complete(pendingToken: string, totpCode: string) {
     // Synchronous consume-before-verify: concurrent completes have one winner.
-    const p = this.pending.get(pendingToken);
-    this.pending.delete(pendingToken);
-    if (!p || p.expiresAt < Date.now()) throw new UnauthorizedException('Invalid or expired pending login');
+    const p = this.pending.consume(pendingToken);
     if (await this.auth.sessionEpoch(p.userId) !== p.epoch) throw new UnauthorizedException('Pending sign-in is stale');
     const passed = await this.auth.verifySecondFactorForUser(p.userId, totpCode);
     if (!passed) throw new UnauthorizedException('Invalid two-factor code');

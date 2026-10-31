@@ -24,7 +24,7 @@ try {
   prisma = new PrismaClient({ datasources:{db:{url}} });
   mock = spawn(process.execPath,['scripts/mock-oidc.mjs'],{env:{...process.env,MOCK_OIDC_PORT:'5555'},stdio:'pipe'});
   await waitFor('http://127.0.0.1:5555/.well-known/openid-configuration');
-  api=spawn(process.execPath,['dist/apps/api/main.js'],{env:{...process.env,DATABASE_URL:url,JWT_SECRET:'browser-oidc-secret',OIDC_ISSUER:'http://127.0.0.1:5555',OIDC_REDIRECT_URI:`${WEB}/auth/oidc/callback`,PORT:String(API_PORT)},stdio:'pipe'});
+  api=spawn(process.execPath,['dist/apps/api/main.js'],{env:{...process.env,DATABASE_URL:url,JWT_SECRET:'browser-oidc-secret',OIDC_PENDING_MAX:'2',OIDC_ISSUER:'http://127.0.0.1:5555',OIDC_REDIRECT_URI:`${WEB}/auth/oidc/callback`,PORT:String(API_PORT)},stdio:'pipe'});
   await waitFor(`${API}/auth/oidc/info`);
   check('OIDC configured endpoint returns only boolean',JSON.stringify(await (await fetch(`${API}/auth/oidc/info`)).json())==='{"configured":true}');
   web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{stdio:'pipe',detached:true});
@@ -153,6 +153,20 @@ try {
   const staleReply=await fetch(`${API}/auth/oidc/complete`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({pendingToken:stalePending,totpCode:staleRecovery})});
   check('OIDC pending login cannot cross epoch revocation',staleReply.status===401&&!(await staleReply.json()).accessToken);
   check('stale OIDC pending does not consume recovery code',!(await prisma.recoveryCode.findFirst({where:{userId:user.id,codeHash:createHash('sha256').update(staleRecovery).digest('hex')}})).usedAt);
+  const pendingFlow=async()=>{
+    const start=await (await fetch(`${API}/auth/oidc/start`)).json();
+    const location=new URL((await fetch(start.url,{redirect:'manual'})).headers.get('location'));
+    const r=await fetch(`${API}/auth/oidc/callback`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:location.searchParams.get('code'),state:location.searchParams.get('state')})});
+    return {status:r.status,json:await r.json()};
+  };
+  // pending-newer above leaves one unused entry; with capacity2 one slot remains.
+  const admitted=await pendingFlow();
+  check('OIDC bounded pending store admits remaining slot',admitted.status===200&&!!admitted.json.pendingToken);
+  const full=await pendingFlow();
+  check('OIDC pending overflow fails closed over real HTTP',full.status===503&&!full.json.pendingToken&&!full.json.accessToken);
+  const failed=await fetch(`${API}/auth/oidc/complete`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({pendingToken:admitted.json.pendingToken,totpCode:'WRONG'})});
+  check('OIDC pending failed verification consumes capacity entry',failed.status===401);
+  check('OIDC pending capacity recovers after consumption',!!(await pendingFlow()).json.pendingToken);
   console.log(failures?'OIDC BROWSER CHECKS FAILED':'ALL OIDC BROWSER CHECKS PASSED');
   process.exitCode=failures?1:0;
 } catch(e){ console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1; }

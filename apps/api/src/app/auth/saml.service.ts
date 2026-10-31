@@ -1,3 +1,4 @@
+import { PendingSso } from './pending-sso';
 import { BadRequestException, ConflictException, Injectable, NotFoundException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { createPrivateKey, createPublicKey, randomBytes, X509Certificate } from 'node:crypto';
 import { inflateRawSync } from 'node:zlib';
@@ -25,12 +26,8 @@ const b64url = (b: Buffer) => b.toString('base64url');
 export class SamlService {
   private saml: SAML | null = null;
   private browser = new SamlBrowserFlow();
-  // Pending SAML logins waiting for the local second factor. Same shape as
-  // the OIDC pending store; unifying the two is a documented follow-up -
-  // this slice deliberately does not touch the verified OIDC path.
-  private pending = new Map<string, { userId: string; epoch: number; expiresAt: number }>();
-  private static readonly PENDING_TTL_MS = 5 * 60 * 1000;
-  private static readonly PENDING_MAX = Number(process.env.SAML_PENDING_MAX) || 10_000;
+  // Separate protocol store, shared bounded lifecycle implementation.
+  private pending = new PendingSso(process.env.SAML_PENDING_MAX === undefined ? 10_000 : Number(process.env.SAML_PENDING_MAX));
   private static readonly LINK_TTL_MS = 10 * 60 * 1000;
   private static readonly LINK_MAX = Number(process.env.SAML_LINK_MAX) || 10_000;
   // Link flows: opaque RelayState token -> the account that proved fresh
@@ -369,15 +366,7 @@ export class SamlService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new UnauthorizedException();
     if (user.totpEnabled) {
-      // Bounded lifecycle: sweep expired entries on every insert, then fail
-      // closed at a hard cap instead of growing without limit.
-      const now = Date.now();
-      for (const [k, v] of this.pending) if (v.expiresAt <= now) this.pending.delete(k);
-      if (this.pending.size >= SamlService.PENDING_MAX) {
-        throw new ServiceUnavailableException('Too many pending SAML logins');
-      }
-      const pendingToken = b64url(randomBytes(16));
-      this.pending.set(pendingToken, { userId, epoch: user.authEpoch, expiresAt: now + SamlService.PENDING_TTL_MS });
+      const pendingToken = this.pending.create(userId, user.authEpoch);
       return { requiresTwoFactor: true as const, pendingToken };
     }
     return this.auth.issueOidcTokens(userId, false);
@@ -385,9 +374,7 @@ export class SamlService {
 
   async complete(pendingToken: string, totpCode: string) {
     // Synchronous consume-before-verify: concurrent completes have one winner.
-    const p = this.pending.get(pendingToken);
-    this.pending.delete(pendingToken);
-    if (!p || p.expiresAt < Date.now()) throw new UnauthorizedException('Invalid or expired pending login');
+    const p = this.pending.consume(pendingToken);
     if (await this.auth.sessionEpoch(p.userId) !== p.epoch) throw new UnauthorizedException('Pending sign-in is stale');
     const passed = await this.auth.verifySecondFactorForUser(p.userId, totpCode);
     if (!passed) throw new UnauthorizedException('Invalid two-factor code');
