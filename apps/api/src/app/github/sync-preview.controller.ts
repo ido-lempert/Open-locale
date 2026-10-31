@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Body,
   Controller,
   ForbiddenException,
@@ -12,7 +13,13 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { IsNotEmpty, IsString, Matches, MaxLength } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsObject,
+  IsString,
+  Matches,
+  MaxLength,
+} from 'class-validator';
 import { createHash } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
@@ -24,6 +31,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthPrincipal } from '../auth/auth.service';
 import { parseSyncJson, previewSync } from './sync-preview';
+import { resolvePlan, ResolutionChoice } from './resolve-preview';
 
 class LocalSyncPreviewDto {
   @IsString()
@@ -48,6 +56,14 @@ class LocalSyncPreviewDto {
   remoteSha!: string;
 }
 
+class ResolveSyncPreviewDto extends LocalSyncPreviewDto {
+  @IsString()
+  @Matches(/^[a-f0-9]{64}$/)
+  expectedFingerprint!: string;
+  @IsObject()
+  choices!: Record<string, ResolutionChoice>;
+}
+
 @Injectable()
 export class LocalSyncPreviewService {
   constructor(
@@ -55,6 +71,32 @@ export class LocalSyncPreviewService {
     private readonly projects: ProjectsService,
     private readonly branches: BranchesService,
   ) {}
+
+  async resolve(
+    user: AuthPrincipal,
+    projectId: string,
+    input: ResolveSyncPreviewDto,
+  ) {
+    // Re-read current authorized database snapshot; caller cannot supply local
+    // values or downgrade the row-generation/project/locale binding.
+    const plan = await this.preview(user, projectId, input);
+    if (plan.fingerprint !== input.expectedFingerprint)
+      throw new ConflictException('Preview changed; review a fresh preview');
+    try {
+      return {
+        ...resolvePlan(plan, input.choices, input.expectedFingerprint),
+        projectId,
+        branch: plan.branch,
+        locale: plan.locale,
+        baselineVerified: false,
+        remoteVerified: false,
+      };
+    } catch {
+      throw new BadRequestException(
+        'Expected one valid explicit choice per differing key within flat JSON bounds',
+      );
+    }
+  }
 
   async listRecords(user: AuthPrincipal, projectId: string) {
     if (user.via !== 'jwt')
@@ -240,6 +282,15 @@ export class LocalSyncPreviewService {
 @UseGuards(JwtAuthGuard)
 export class LocalSyncPreviewController {
   constructor(private readonly previews: LocalSyncPreviewService) {}
+  @Post('resolve-preview')
+  @Header('Cache-Control', 'no-store')
+  resolve(
+    @CurrentUser() user: AuthPrincipal,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Body() input: ResolveSyncPreviewDto,
+  ) {
+    return this.previews.resolve(user, projectId, input);
+  }
   @Get('preview-records')
   @Header('Cache-Control', 'no-store')
   listRecords(

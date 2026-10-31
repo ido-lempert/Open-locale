@@ -240,6 +240,13 @@ export const OPENAPI = {
       post: { ...p('Explicitly record a recomputed local-file preview summary, not file values (session admin only)', 'sync', true), security: [{ bearerAuth: [] }],
         description: 'Same input as /sync/preview. Stores scope, actor, fingerprint, caller SHA and counts only. Not an accepted baseline, executable job, provider verification or permission to apply. Existing /sync/preview remains non-persistent.' },
     },
+    '/api/projects/{projectId}/sync/resolve-preview': {
+      post: {
+        ...p('Resolve a reviewed flat JSON preview into draft bytes only (session admin)', 'sync', true),
+        security: [{ bearerAuth: [] }],
+        description: 'Same file/scope input as preview plus expectedFingerprint (64 lowercase hex characters) and choices mapping every differing key to base, local or remote. Re-reads stored local data. Stale project/branch/locale/row-generation fingerprint returns 409. Missing/extra/invalid choices return 400. Explicit absence omits a key from draft JSON only. Returns json, contentDigest, counts and canApply=false. No persistence, repository verification or apply authority. No-store response.',
+      },
+    },
     '/api/projects/{projectId}/sync/preview': {
       post: {
         ...p('Preview caller-supplied flat JSON against stored branch/locale data (session admin only; no writes or remote verification)', 'sync', true),
