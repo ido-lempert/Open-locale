@@ -189,4 +189,5 @@ the accepted baseline. Target/project/branch removal cascades its baseline.
 Acceptance means only that an admin selected these verified remote bytes as a
 comparison baseline. It does not claim local translations match them, run an
 import, change a repository file, or grant permission to apply a future plan.
-No baseline acceptance UI yet. Stored bytes are admin-only and no-store.
+The target UI can load the current baseline and explicitly confirm acceptance of
+a displayed verified snapshot. Stored bytes are admin-only and no-store.

@@ -181,4 +181,104 @@ describe('repository target UI lifecycle', () => {
     await c.refresh();
     expect(c.snapshot()).toBeNull();
   });
+  it('baseline acceptance requires explicit confirmation and both reviewed views', async () => {
+    let calls = 0;
+    const c = setup({
+      acceptRepositoryBaseline: async () => {
+        calls++;
+        return { baseline: { version: 1 } };
+      },
+    });
+    await c.acceptBaseline(target);
+    expect(calls).toBe(0);
+    c.snapshot.set({
+      targetId: 't',
+      targetRevision: 1,
+      json: '{}',
+      remoteSha: 'sha',
+      contentDigest: 'digest',
+      remoteVerified: true,
+      baselineAccepted: false,
+      canApply: false,
+    });
+    c.baselineView.set({
+      targetId: 't',
+      targetRevision: 1,
+      baseline: null,
+      baselineAccepted: false,
+      canApply: false,
+    });
+    await c.acceptBaseline(target);
+    expect(calls).toBe(0);
+    c.confirmBaseline.set(true);
+    await c.acceptBaseline(target);
+    expect(calls).toBe(1);
+    expect(c.confirmBaseline()).toBe(false);
+    expect(c.baselineView()?.baseline?.version).toBe(1);
+  });
+  it('baseline acceptance failure discards stale views and keeps configuration', async () => {
+    const c = setup({
+      acceptRepositoryBaseline: async () => {
+        throw new Error('Repository file changed');
+      },
+    });
+    c.snapshot.set({
+      targetId: 't',
+      targetRevision: 1,
+      json: '{}',
+      remoteSha: 'sha',
+      contentDigest: 'digest',
+      remoteVerified: true,
+      baselineAccepted: false,
+      canApply: false,
+    });
+    c.baselineView.set({
+      targetId: 't',
+      targetRevision: 1,
+      baseline: null,
+      baselineAccepted: false,
+      canApply: false,
+    });
+    c.confirmBaseline.set(true);
+    await c.acceptBaseline(target);
+    expect(c.snapshot()).toBeNull();
+    expect(c.baselineView()).toBeNull();
+    expect(c.targets()).toEqual([target]);
+    expect(c.error()).toContain('changed');
+  });
+  it('late acceptance cannot restore baseline after project navigation', async () => {
+    let finish!: (v: unknown) => void;
+    const c = setup({
+      acceptRepositoryBaseline: () => new Promise((r) => (finish = r)),
+      getProject: async () => ({ baseLocale: 'en', locales: [{ code: 'en' }] }),
+      listBranches: async () => [],
+      listRepositoryTargets: async () => ({ targets: [] }),
+    });
+    c.snapshot.set({
+      targetId: 't',
+      targetRevision: 1,
+      json: '{}',
+      remoteSha: 'sha',
+      contentDigest: 'digest',
+      remoteVerified: true,
+      baselineAccepted: false,
+      canApply: false,
+    });
+    c.baselineView.set({
+      targetId: 't',
+      targetRevision: 1,
+      baseline: null,
+      baselineAccepted: false,
+      canApply: false,
+    });
+    c.confirmBaseline.set(true);
+    const pending = c.acceptBaseline(target);
+    await c.load('second');
+    finish({ baseline: { version: 1, text: 'old bytes' } });
+    await pending;
+    expect(c.baselineView()).toBeNull();
+    expect(c.snapshot()).toBeNull();
+    expect(c.message()).toBe('');
+    expect(c.projectId).toBe('second');
+  });
 });

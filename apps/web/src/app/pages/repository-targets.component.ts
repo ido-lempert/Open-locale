@@ -7,6 +7,7 @@ import {
   RepositoryTargetInput,
   RepositoryTargetConfig,
   RepositoryFileSnapshot,
+  RepositoryBaselineView,
   BranchInfo,
 } from '../api.service';
 const empty = (): RepositoryTargetInput => ({
@@ -229,7 +230,18 @@ const empty = (): RepositoryTargetInput => ({
             <p>
               Remote branch: {{ t.remoteBranch }}. Revision {{ t.revision }}.
             </p>
-            <p>No sync connection or accepted baseline. Sync cannot run.</p>
+            <p>
+              No sync connection. Sync cannot run. A comparison baseline is
+              separate from synchronization.
+            </p>
+            <button
+              name="targetLoadBaseline"
+              type="button"
+              (click)="loadBaseline(t)"
+              [disabled]="busy()"
+            >
+              View accepted baseline
+            </button>
             <button
               name="targetRead"
               type="button"
@@ -256,6 +268,66 @@ const empty = (): RepositoryTargetInput => ({
                     spellcheck="false"
                   ></textarea>
                 </label>
+              </section>
+            }
+            @if (baselineView()?.targetId === t.id) {
+              <section aria-label="Accepted comparison baseline">
+                @if (baselineView()!.baseline; as b) {
+                  <h3>
+                    Accepted comparison baseline - version {{ b.version }}
+                  </h3>
+                  <p>
+                    Accepted at {{ b.acceptedAt }} by account {{ b.actorId }}.
+                    This does not mean local translations match the repository
+                    or that sync completed.
+                  </p>
+                  <p class="digest">Accepted blob SHA: {{ b.remoteSha }}</p>
+                  <label
+                    >Accepted baseline JSON<textarea
+                      name="targetBaseline"
+                      readonly
+                      [value]="b.text"
+                      spellcheck="false"
+                    ></textarea>
+                  </label>
+                } @else {
+                  <p>No accepted comparison baseline.</p>
+                }
+                @if (snapshot()?.targetId === t.id) {
+                  @if (confirmBaseline()) {
+                    <p class="notice">
+                      Use the displayed verified file snapshot as the comparison
+                      baseline? This replaces the current baseline only. It does
+                      not import translations, change repository files or grant
+                      permission to apply a future plan.
+                    </p>
+                    <button
+                      name="targetConfirmBaseline"
+                      type="button"
+                      (click)="acceptBaseline(t)"
+                      [disabled]="busy()"
+                    >
+                      Accept comparison baseline
+                    </button>
+                    <button
+                      name="targetCancelBaseline"
+                      type="button"
+                      (click)="confirmBaseline.set(false)"
+                      [disabled]="busy()"
+                    >
+                      Keep current baseline
+                    </button>
+                  } @else {
+                    <button
+                      name="targetPrepareBaseline"
+                      type="button"
+                      (click)="confirmBaseline.set(true)"
+                      [disabled]="busy()"
+                    >
+                      Use snapshot as comparison baseline...
+                    </button>
+                  }
+                }
               </section>
             }
             @if (removing()?.id === t.id) {
@@ -322,6 +394,8 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   message = signal('');
   snapshot = signal<RepositoryFileSnapshot | null>(null);
   readAt = signal('');
+  baselineView = signal<RepositoryBaselineView | null>(null);
+  confirmBaseline = signal(false);
   private generation = 0;
   private subscription?: Subscription;
   constructor(
@@ -336,12 +410,16 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.generation++;
     this.snapshot.set(null);
+    this.baselineView.set(null);
+    this.confirmBaseline.set(false);
     this.subscription?.unsubscribe();
   }
   async load(id: string) {
     const generation = ++this.generation;
     this.projectId = id;
     this.snapshot.set(null);
+    this.baselineView.set(null);
+    this.confirmBaseline.set(false);
     this.ready.set(false);
     this.busy.set(false);
     this.targets.set([]);
@@ -373,6 +451,8 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   }
   edit(t: RepositoryTargetConfig) {
     this.snapshot.set(null);
+    this.baselineView.set(null);
+    this.confirmBaseline.set(false);
     this.editing.set({ ...t });
     this.form = {
       localBranch: t.localBranch,
@@ -397,6 +477,8 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     const generation = ++this.generation;
     this.busy.set(true);
     this.snapshot.set(null);
+    this.baselineView.set(null);
+    this.confirmBaseline.set(false);
     this.error.set('');
     this.message.set('');
     try {
@@ -419,6 +501,8 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
       editing = this.editing();
     this.busy.set(true);
     this.snapshot.set(null);
+    this.baselineView.set(null);
+    this.confirmBaseline.set(false);
     this.error.set('');
     this.message.set('');
     try {
@@ -448,6 +532,8 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     const generation = ++this.generation;
     this.busy.set(true);
     this.snapshot.set(null);
+    this.baselineView.set(null);
+    this.confirmBaseline.set(false);
     this.error.set('');
     this.message.set('');
     try {
@@ -468,11 +554,82 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
       if (generation === this.generation) this.busy.set(false);
     }
   }
+  async loadBaseline(t: RepositoryTargetConfig) {
+    if (this.busy()) return;
+    const generation = ++this.generation;
+    this.busy.set(true);
+    this.error.set('');
+    this.confirmBaseline.set(false);
+    this.baselineView.set(null);
+    try {
+      const view = await this.api.getRepositoryBaseline(this.projectId, t.id);
+      if (generation !== this.generation) return;
+      if (view.targetRevision !== t.revision)
+        throw new Error('Repository target changed; refresh configurations');
+      this.baselineView.set(view);
+    } catch (e) {
+      if (generation === this.generation)
+        this.error.set(
+          e instanceof Error ? e.message : 'Could not load baseline',
+        );
+    } finally {
+      if (generation === this.generation) this.busy.set(false);
+    }
+  }
+  async acceptBaseline(t: RepositoryTargetConfig) {
+    const snapshot = this.snapshot(),
+      view = this.baselineView();
+    if (
+      this.busy() ||
+      !this.confirmBaseline() ||
+      snapshot?.targetId !== t.id ||
+      view?.targetId !== t.id
+    )
+      return;
+    const generation = ++this.generation;
+    this.busy.set(true);
+    this.error.set('');
+    this.message.set('');
+    try {
+      const result = await this.api.acceptRepositoryBaseline(
+        this.projectId,
+        t.id,
+        {
+          expectedRevision: snapshot.targetRevision,
+          expectedRemoteSha: snapshot.remoteSha,
+          expectedContentDigest: snapshot.contentDigest,
+          expectedBaselineVersion: view.baseline?.version ?? 0,
+        },
+      );
+      if (generation !== this.generation) return;
+      this.baselineView.set({
+        ...view,
+        baseline: result.baseline,
+        baselineAccepted: true,
+      });
+      this.confirmBaseline.set(false);
+      this.message.set(
+        'Comparison baseline accepted. No import, repository write or sync was run.',
+      );
+    } catch (e) {
+      if (generation !== this.generation) return;
+      this.snapshot.set(null);
+      this.baselineView.set(null);
+      this.confirmBaseline.set(false);
+      this.error.set(
+        e instanceof Error ? e.message : 'Could not accept baseline',
+      );
+    } finally {
+      if (generation === this.generation) this.busy.set(false);
+    }
+  }
   async remove(t: RepositoryTargetConfig) {
     if (this.busy() || this.removing()?.id !== t.id) return;
     const generation = ++this.generation;
     this.busy.set(true);
     this.snapshot.set(null);
+    this.baselineView.set(null);
+    this.confirmBaseline.set(false);
     this.error.set('');
     this.message.set('');
     try {
