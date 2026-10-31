@@ -576,6 +576,7 @@ model SyncPreviewRecord {
 
 // Configuration only. No secrets, accepted baseline or executable permission.
 model RepositorySyncTarget {
+ baseline RepositorySyncBaseline?
  branchId String @db.Uuid
  branch Branch @relation(fields:[branchId],references:[id],onDelete:Cascade)
  id String @id @default(uuid()) @db.Uuid
@@ -592,4 +593,18 @@ model RepositorySyncTarget {
  project Project @relation(fields:[projectId],references:[id],onDelete:Cascade)
  @@unique([projectId,localBranch,locale])
  @@map("repository_sync_targets")
+}
+
+// Explicitly accepted verified remote bytes, never proof of a completed sync.
+model RepositorySyncBaseline {
+ targetId String @id @db.Uuid
+ target RepositorySyncTarget @relation(fields:[targetId],references:[id],onDelete:Cascade)
+ version Int
+ targetRevision Int
+ remoteSha String
+ contentDigest String
+ text String
+ actorId String @db.Uuid
+ acceptedAt DateTime @default(now())
+ @@map("repository_sync_baselines")
 }

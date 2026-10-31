@@ -176,3 +176,17 @@ store file bytes, or run sync. Missing matching access returns503; upstream or
 unsupported JSON returns502. The target configuration UI can display a read-only file snapshot, never an
 accepted baseline or sync result. The internal loopback fixture
 override is ignored in production.
+
+### Explicit remote baseline acceptance
+
+Session admins can read a target's `/baseline` or explicitly accept reviewed
+remote bytes by POSTing `expectedRevision`, `expectedRemoteSha`,
+`expectedContentDigest` and `expectedBaselineVersion` (0 for the first snapshot).
+The server freshly reads the file, rejects changes since review, and stores one
+current versioned snapshot with its actor. Replacing target coordinates deletes
+the accepted baseline. Target/project/branch removal cascades its baseline.
+
+Acceptance means only that an admin selected these verified remote bytes as a
+comparison baseline. It does not claim local translations match them, run an
+import, change a repository file, or grant permission to apply a future plan.
+No baseline acceptance UI yet. Stored bytes are admin-only and no-store.

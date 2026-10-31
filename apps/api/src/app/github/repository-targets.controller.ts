@@ -60,6 +60,11 @@ class RevisionDto {
 class UpdateTargetDto extends TargetDto {
   @IsInt() @Min(1) @Max(2147483646) expectedRevision!: number;
 }
+class AcceptBaselineDto extends RevisionDto {
+  @IsString() @Matches(/^[a-f0-9]{40}$/) expectedRemoteSha!: string;
+  @IsString() @Matches(/^[a-f0-9]{64}$/) expectedContentDigest!: string;
+  @IsInt() @Min(0) @Max(2147483646) expectedBaselineVersion!: number;
+}
 const posture = {
   source: 'repository-target-configuration',
   connected: false,
@@ -144,6 +149,10 @@ export class RepositoryTargetsService {
             throw new ConflictException(
               'Repository target changed; reload configuration',
             );
+          // Coordinate replacement invalidates all previously accepted bytes.
+          await tx.repositorySyncBaseline.deleteMany({
+            where: { targetId: id },
+          });
           return {
             ...posture,
             target: await tx.repositorySyncTarget.findUniqueOrThrow({
@@ -241,6 +250,89 @@ export class RepositoryTargetsService {
       canApply: false,
     };
   }
+  async baseline(user: AuthPrincipal, projectId: string, id: string) {
+    await this.authorize(user, projectId);
+    const target = await this.prisma.repositorySyncTarget.findFirst({
+      where: { id, projectId },
+    });
+    if (!target) throw new NotFoundException('Repository target not found');
+    const baseline = await this.prisma.repositorySyncBaseline.findUnique({
+      where: { targetId: id },
+    });
+    if (baseline && baseline.targetRevision !== target.revision)
+      throw new ConflictException(
+        'Repository target changed; reload configuration',
+      );
+    return {
+      source: 'accepted-repository-baseline',
+      targetId: id,
+      targetRevision: target.revision,
+      baseline,
+      baselineAccepted: !!baseline,
+      canApply: false,
+    };
+  }
+  async acceptBaseline(
+    user: AuthPrincipal,
+    projectId: string,
+    id: string,
+    input: AcceptBaselineDto,
+  ) {
+    // Fresh verified remote read, not caller file bytes or a trusted-looking SHA.
+    const snapshot = await this.read(
+      user,
+      projectId,
+      id,
+      input.expectedRevision,
+    );
+    if (
+      snapshot.remoteSha !== input.expectedRemoteSha ||
+      snapshot.contentDigest !== input.expectedContentDigest
+    )
+      throw new ConflictException(
+        'Repository file changed; read and review it again',
+      );
+    await this.authorize(user, projectId);
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM projects WHERE id=${projectId}::uuid FOR UPDATE`;
+      const target = await tx.repositorySyncTarget.findFirst({
+        where: { id, projectId, revision: input.expectedRevision },
+      });
+      if (!target)
+        throw new ConflictException(
+          'Repository target changed; reload configuration',
+        );
+      const previous = await tx.repositorySyncBaseline.findUnique({
+        where: { targetId: id },
+      });
+      if ((previous?.version ?? 0) !== input.expectedBaselineVersion)
+        throw new ConflictException(
+          'Repository baseline changed; reload baseline',
+        );
+      const data = {
+        version: input.expectedBaselineVersion + 1,
+        targetRevision: target.revision,
+        remoteSha: snapshot.remoteSha,
+        contentDigest: snapshot.contentDigest,
+        text: snapshot.json,
+        actorId: user.userId,
+        acceptedAt: new Date(),
+      };
+      const baseline = await tx.repositorySyncBaseline.upsert({
+        where: { targetId: id },
+        create: { targetId: id, ...data },
+        update: data,
+      });
+      return {
+        source: 'accepted-repository-baseline',
+        baseline,
+        baselineAccepted: true,
+        canApply: false,
+        localTranslationsChanged: false,
+        remoteWritten: false,
+      };
+    });
+  }
   async remove(
     user: AuthPrincipal,
     projectId: string,
@@ -285,6 +377,25 @@ export class RepositoryTargetsController {
     @Body() input: TargetDto,
   ) {
     return this.targets.save(user, projectId, input);
+  }
+  @Get(':targetId/baseline')
+  @Header('Cache-Control', 'no-store')
+  baseline(
+    @CurrentUser() user: AuthPrincipal,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Param('targetId', new ParseUUIDPipe()) id: string,
+  ) {
+    return this.targets.baseline(user, projectId, id);
+  }
+  @Post(':targetId/baseline')
+  @Header('Cache-Control', 'no-store')
+  acceptBaseline(
+    @CurrentUser() user: AuthPrincipal,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Param('targetId', new ParseUUIDPipe()) id: string,
+    @Body() input: AcceptBaselineDto,
+  ) {
+    return this.targets.acceptBaseline(user, projectId, id, input);
   }
   @Post(':targetId/read')
   @Header('Cache-Control', 'no-store')

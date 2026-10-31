@@ -251,6 +251,10 @@ export const OPENAPI = {
       get: {...p('List repository target configurations (session admin, not connected)', 'sync'),security:[{bearerAuth:[]}]},
       post: {...p('Store repository coordinates only (session admin)', 'sync',true),security:[{bearerAuth:[]}],description:'localBranch, locale, owner, repo, path, remoteBranch required. Existing local scope required. Max100/project, unique local branch/locale. No secrets accepted; no remote read/write, credential grant, connected status or baseline. No-store.'},
     },
+    '/api/projects/{projectId}/sync/repository-targets/{targetId}/baseline': {
+      get: {...p('Read explicitly accepted remote baseline (session admin)', 'sync'),security:[{bearerAuth:[]}],description:'Current accepted remote bytes/actor/version or null. No-store, project scoped. Not proof local translations equal remote or sync completed.'},
+      post: {...p('Accept reviewed remote snapshot as baseline (session admin)', 'sync',true),security:[{bearerAuth:[]}],description:'Requires expectedRevision, expectedRemoteSha, expectedContentDigest, expectedBaselineVersion (0 initially). Fresh verified remote read must match. Atomically versioned acceptance under project lock; stale snapshot/target/baseline409. Stores remote bytes and actor only, no local translation or remote file write. Coordinate updates invalidate baseline. No-store, canApply=false.'},
+    },
     '/api/projects/{projectId}/sync/repository-targets/{targetId}/read': {
       post: {...p('Read current flat JSON from configured repository target (session admin)', 'sync',true),security:[{bearerAuth:[]}],description:'Requires expectedRevision and deployment-managed GITHUB_READ_OWNER/REPO/TOKEN matching exact repository. No caller token accepted. Reads fixed GitHub API, bounded JSON, verifies blob SHA and checks admin/revision again after network. No baseline acceptance, local import, remote write or sync job. Missing scoped read access503, upstream invalid/failure502, stale revision409. No-store.'},
     },
