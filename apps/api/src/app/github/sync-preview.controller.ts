@@ -323,5 +323,6 @@ export class LocalSyncPreviewController {
   imports: [AuthModule, ProjectsModule, BranchesModule],
   controllers: [LocalSyncPreviewController],
   providers: [LocalSyncPreviewService],
+  exports: [LocalSyncPreviewService],
 })
 export class LocalSyncPreviewModule {}

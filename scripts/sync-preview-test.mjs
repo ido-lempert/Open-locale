@@ -151,6 +151,9 @@ try {
   const baselinePath=`${T}/${target.id}/baseline`;
   const acceptInput={expectedRevision:2,expectedRemoteSha:readResult.json.remoteSha,expectedContentDigest:readResult.json.contentDigest,expectedBaselineVersion:0};
   const accept=(overrides={},auth=jwt)=>tc(baselinePath,'POST',{...acceptInput,...overrides},auth);
+  const repositoryPreview=(overrides={},auth=jwt)=>tc(`${T}/${target.id}/preview`,'POST',{expectedRevision:2,...overrides},auth);
+  const countBeforeUnacceptedPreview=repoCalls;
+  check('repository preview requires accepted baseline before remote I/O',(await repositoryPreview()).status===409&&repoCalls===countBeforeUnacceptedPreview);
   check('target begins without accepted baseline',(await tc(baselinePath,'GET',undefined)).json.baseline===null);
   const accepted=await accept();
   check('explicit acceptance stores verified bytes actor and version',accepted.status===201&&accepted.json.baseline.version===1&&accepted.json.baseline.text===repoText&&accepted.json.baseline.actorId===owner.user.id&&accepted.json.baselineAccepted===true&&accepted.json.canApply===false,JSON.stringify(accepted));
@@ -175,6 +178,23 @@ try {
   await prisma.teamMember.update({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},data:{role:'MEMBER'}});releaseRepo();
   check('lost admin during baseline acceptance stores nothing',(await heldAdminAcceptance).status===403&&(await prisma.repositorySyncBaseline.findUnique({where:{targetId:target.id}})).version===2);repoGate=undefined;repoSeen=undefined;
   await prisma.teamMember.update({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},data:{role:'ADMIN'}});
+
+  const repositoryPlan=await repositoryPreview();
+  check('repository preview combines accepted verified base local DB and fresh remote',repositoryPlan.status===201&&repositoryPlan.json.source==='accepted-baseline-repository-preview'&&repositoryPlan.json.baselineVerified===true&&repositoryPlan.json.remoteVerified===true&&repositoryPlan.json.canApply===false&&repositoryPlan.json.baselineVersion===2&&repositoryPlan.json.decisions.find(d=>d.key==='local').local==='edited',JSON.stringify(repositoryPlan));
+  check('repository preview ignores forged caller file values',(await repositoryPreview({baselineJson:'{}',remoteJson:'{}',localJson:'{}'})).json.fingerprint===repositoryPlan.json.fingerprint);
+  repoText='{"fromRepo":"changed remote"}';const changedRepoPlan=await repositoryPreview();
+  check('fresh repository changes alter scoped preview fingerprint',changedRepoPlan.status===201&&changedRepoPlan.json.fingerprint!==repositoryPlan.json.fingerprint&&changedRepoPlan.json.decisions.find(d=>d.key==='fromRepo').remote==='changed remote');repoText='{"fromRepo":"verified bytes"}';
+  check('repository preview never advances baseline',(await tc(baselinePath,'GET',undefined)).json.baseline.version===2&&(await tc(baselinePath,'GET',undefined)).json.baseline.text===repoText);
+  check('repository preview writes no translation or diagnostic history',await prisma.syncPreviewRecord.count()===0&&JSON.stringify((await call(`${P}/export/en?flat=true`,{jwt})).json)===JSON.stringify(before));
+  const repoPreviewHeaders=await fetch(`${API}${T}/${target.id}/preview`,{method:'POST',headers:{Authorization:`Bearer ${jwt}`,'Content-Type':'application/json'},body:JSON.stringify({expectedRevision:2})});check('repository preview is no-store',repoPreviewHeaders.status===201&&repoPreviewHeaders.headers.get('cache-control')==='no-store');await repoPreviewHeaders.arrayBuffer();
+  await prisma.translation.update({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}},data:{version:{increment:1}}});
+  check('repository fingerprint binds local row generation even with identical text',(await repositoryPreview()).json.fingerprint!==repositoryPlan.json.fingerprint);
+  const deniedRepoPreviewCalls=repoCalls;
+  check('repository preview member outsider stale revision denied before remote',(await repositoryPreview({},member.accessToken)).status===403&&(await repositoryPreview({},outsider.accessToken)).status===404&&(await repositoryPreview({expectedRevision:1})).status===409&&repoCalls===deniedRepoPreviewCalls);
+  check('repository preview API token denied',(await call(`${T}/${target.id}/preview`,{apiKey:token.token,method:'POST',body:{expectedRevision:2}})).status===403&&repoCalls===deniedRepoPreviewCalls);
+  repoGate=new Promise(r=>releaseRepo=r);const previewRequested=new Promise(r=>repoSeen=r);const heldPreview=repositoryPreview();await previewRequested;
+  await prisma.repositorySyncBaseline.update({where:{targetId:target.id},data:{version:3}});releaseRepo();
+  check('baseline change during repository read suppresses stale preview',(await heldPreview).status===409);repoGate=undefined;repoSeen=undefined;await prisma.repositorySyncBaseline.update({where:{targetId:target.id},data:{version:2}});
   const beforeDenied=repoCalls;
   check('read rejects stale revision before network',(await readTarget({expectedRevision:1})).status===409&&repoCalls===beforeDenied);
   check('read denies member and outsider before network',(await readTarget({},member.accessToken)).status===403&&(await readTarget({},outsider.accessToken)).status===404&&repoCalls===beforeDenied);

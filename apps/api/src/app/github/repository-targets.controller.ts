@@ -44,6 +44,10 @@ import {
 } from './repository-reader';
 import { parseSyncJson } from './sync-preview';
 import { createHash } from 'node:crypto';
+import {
+  LocalSyncPreviewModule,
+  LocalSyncPreviewService,
+} from './sync-preview.controller';
 class TargetDto {
   @IsString()
   @Matches(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,39}$/)
@@ -77,6 +81,7 @@ export class RepositoryTargetsService {
     private readonly prisma: PrismaService,
     private readonly projects: ProjectsService,
     private readonly branches: BranchesService,
+    private readonly previews: LocalSyncPreviewService,
   ) {}
   private async authorize(user: AuthPrincipal, projectId: string) {
     if (user.via !== 'jwt')
@@ -250,6 +255,80 @@ export class RepositoryTargetsService {
       canApply: false,
     };
   }
+  async preview(
+    user: AuthPrincipal,
+    projectId: string,
+    id: string,
+    expectedRevision: number,
+  ) {
+    await this.authorize(user, projectId);
+    const target = await this.prisma.repositorySyncTarget.findFirst({
+      where: { id, projectId, revision: expectedRevision },
+      include: { baseline: true },
+    });
+    if (!target)
+      throw new ConflictException(
+        'Repository target changed; reload configuration',
+      );
+    if (!target.baseline || target.baseline.targetRevision !== target.revision)
+      throw new ConflictException(
+        'Accept a comparison baseline before repository preview',
+      );
+    const baseline = target.baseline;
+    const remote = await this.read(user, projectId, id, expectedRevision);
+    // Existing snapshot reader enforces project/locale/plural/key/byte bounds
+    // and binds database row generations. No local JSON supplied by caller.
+    const plan = await this.previews.preview(user, projectId, {
+      branch: target.localBranch,
+      locale: target.locale,
+      baselineJson: baseline.text,
+      remoteJson: remote.json,
+      remoteSha: remote.remoteSha,
+    });
+    await this.authorize(user, projectId);
+    const current = await this.prisma.repositorySyncTarget.findFirst({
+      where: { id, projectId, revision: expectedRevision },
+      include: { baseline: true },
+    });
+    if (
+      !current?.baseline ||
+      current.baseline.version !== baseline.version ||
+      current.baseline.contentDigest !== baseline.contentDigest
+    )
+      throw new ConflictException(
+        'Repository target or baseline changed; review again',
+      );
+    const fingerprint = createHash('sha256')
+      .update(
+        JSON.stringify([
+          id,
+          target.revision,
+          target.owner,
+          target.repo,
+          target.path,
+          target.remoteBranch,
+          baseline.version,
+          baseline.remoteSha,
+          baseline.contentDigest,
+          plan.fingerprint,
+        ]),
+      )
+      .digest('hex');
+    return {
+      ...plan,
+      fingerprint,
+      targetId: id,
+      targetRevision: target.revision,
+      baselineVersion: baseline.version,
+      baselineSha: baseline.remoteSha,
+      source: 'accepted-baseline-repository-preview',
+      remoteVerified: true,
+      baselineVerified: true,
+      canApply: false,
+      localTranslationsChanged: false,
+      remoteWritten: false,
+    };
+  }
   async baseline(user: AuthPrincipal, projectId: string, id: string) {
     await this.authorize(user, projectId);
     const target = await this.prisma.repositorySyncTarget.findFirst({
@@ -378,6 +457,16 @@ export class RepositoryTargetsController {
   ) {
     return this.targets.save(user, projectId, input);
   }
+  @Post(':targetId/preview')
+  @Header('Cache-Control', 'no-store')
+  preview(
+    @CurrentUser() user: AuthPrincipal,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Param('targetId', new ParseUUIDPipe()) id: string,
+    @Body() input: RevisionDto,
+  ) {
+    return this.targets.preview(user, projectId, id, input.expectedRevision);
+  }
   @Get(':targetId/baseline')
   @Header('Cache-Control', 'no-store')
   baseline(
@@ -435,7 +524,7 @@ export class RepositoryTargetsController {
   }
 }
 @Module({
-  imports: [AuthModule, ProjectsModule, BranchesModule],
+  imports: [AuthModule, ProjectsModule, BranchesModule, LocalSyncPreviewModule],
   controllers: [RepositoryTargetsController],
   providers: [RepositoryTargetsService],
 })

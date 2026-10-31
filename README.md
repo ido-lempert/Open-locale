@@ -191,3 +191,13 @@ comparison baseline. It does not claim local translations match them, run an
 import, change a repository file, or grant permission to apply a future plan.
 The target UI can load the current baseline and explicitly confirm acceptance of
 a displayed verified snapshot. Stored bytes are admin-only and no-store.
+
+### Accepted-baseline repository preview
+
+Session admins can POST `expectedRevision` to a target's `/preview` endpoint.
+This compares its accepted baseline, stored local branch/locale translations and
+a freshly verified repository read. It does not accept caller file values.
+Its fingerprint binds target coordinates/revision, baseline version/content and
+local row generations. Missing or changed baseline/target fails closed. Preview
+does not advance the baseline, import, push, save a sync record or authorize an
+apply. Conflicts and deletions remain manual. No repository preview UI yet.
