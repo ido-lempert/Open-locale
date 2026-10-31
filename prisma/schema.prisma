@@ -407,6 +407,7 @@ model GlossaryTerm {
 }
 
 model Webhook {
+  revision Int @default(1)
   id        String   @id @default(uuid()) @db.Uuid
   projectId String   @db.Uuid
   url       String

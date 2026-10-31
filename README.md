@@ -363,3 +363,9 @@ redelivery; failed receivers never checkpoint. This records handler completion,
 including zero subscribers, not a receiver receipt or automation/sync completion.
 A crash after a socket but before checkpoint still causes at-least-once retry.
 No combined worker/public route is enabled; automation needs its own state.
+
+Authenticated webhook updates increment a configuration revision. Captured delivery
+checks that generation before each socket, so disable/restore and URL-edit/restore
+ABA during backoff also abort the old retry even when final fields match. Direct
+out-of-band database edits must maintain revision themselves; field comparisons
+still catch non-restored changes. No exactly-once or post-check revocation guarantee.

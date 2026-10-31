@@ -199,6 +199,15 @@ try {
   let deletedDuringRetry=false;try{await deliverRepositoryWebhook(prisma,service,intent);}catch{deletedDuringRetry=true;}
   check('subscription deletion after first failure suppresses retry socket',deletedDuringRetry&&received.length===receivedBefore+1);
   await prisma.webhook.create({data:repositoryHook});
+  receivedBefore=received.length;failNext=1;let disableAbaUpdates=false;
+  afterReceipt=async()=>{afterReceipt=null;const disabled=await call(`${P}/webhooks/${repositoryHook.id}`,{token:at,method:'PATCH',body:{active:false}});const enabled=await call(`${P}/webhooks/${repositoryHook.id}`,{token:at,method:'PATCH',body:{active:true}});disableAbaUpdates=disabled.status===200&&enabled.status===200;};
+  let disableAba=false;try{await deliverRepositoryWebhook(prisma,service,intent);}catch{disableAba=true;}
+  check('disable restore ABA via API aborts captured retry generation',disableAba&&disableAbaUpdates&&received.length===receivedBefore+1&&(await prisma.webhook.findUnique({where:{id:repositoryHook.id}})).active===true);
+  receivedBefore=received.length;failNext=1;let routingAbaUpdates=false;
+  afterReceipt=async()=>{afterReceipt=null;const changed=await call(`${P}/webhooks/${repositoryHook.id}`,{token:at,method:'PATCH',body:{url:`http://127.0.0.1:${HOOK_PORT}/temporary`}});const restored=await call(`${P}/webhooks/${repositoryHook.id}`,{token:at,method:'PATCH',body:{url:repositoryHook.url}});routingAbaUpdates=changed.status===200&&restored.status===200;};
+  let routingAba=false;try{await deliverRepositoryWebhook(prisma,service,intent);}catch{routingAba=true;}
+  check('destination restore ABA via API aborts captured retry generation',routingAba&&routingAbaUpdates&&received.length===receivedBefore+1&&(await prisma.webhook.findUnique({where:{id:repositoryHook.id}})).url===repositoryHook.url);
+  check('authenticated webhook updates monotonically advance revision',(await prisma.webhook.findUnique({where:{id:repositoryHook.id}})).revision===repositoryHook.revision+4);
   const resetStep=()=>prisma.repositoryLocalEffectIntent.update({where:{id:intent.id},data:{state:'pending',attempts:0,leaseToken:null,leaseUntil:null,finishedAt:null,webhookHandledAt:null,availableAt:new Date('2020-01-01')}});
   await resetStep();receivedBefore=received.length;const stepped=await runRepositoryWebhookStep(prisma,service);const steppedRow=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:intent.id}});
   check('internal webhook step claims signs delivers and settles completed',stepped.status==='completed'&&steppedRow.state==='completed'&&steppedRow.attempts===1&&steppedRow.leaseToken===null&&steppedRow.finishedAt&&received.length===receivedBefore+1&&JSON.parse(received.at(-1).body).effectId===intent.id);

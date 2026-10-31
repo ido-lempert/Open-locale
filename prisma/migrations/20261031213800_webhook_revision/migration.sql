@@ -1,0 +1,1 @@
+ALTER TABLE "webhooks" ADD COLUMN "revision" INTEGER NOT NULL DEFAULT 1;

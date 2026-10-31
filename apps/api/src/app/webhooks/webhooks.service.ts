@@ -55,7 +55,7 @@ export class WebhooksService {
     }
     const hook = await this.prisma.webhook.update({
       where: { id: existing.id },
-      data: { url: dto.url, events: dto.events, active: dto.active },
+      data: { url: dto.url, events: dto.events, active: dto.active, revision: { increment: 1 } },
     });
     return WebhooksService.publicView(hook);
   }
@@ -150,7 +150,7 @@ export class WebhooksService {
             // Never switch an in-flight payload to a newly edited destination.
             const current = await this.prisma.webhook.findUnique({ where: { id: hook.id } });
             if (!current || current.projectId !== projectId || !current.active ||
-                !current.events.includes(event) || current.url !== hook.url ||
+                !current.events.includes(event) || current.revision !== hook.revision || current.url !== hook.url ||
                 current.secret !== hook.secret)
               throw new WebhookTargetError('Webhook subscription changed during delivery');
             attempts++;

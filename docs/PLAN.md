@@ -102,7 +102,8 @@ add languages, manage keys and translations, export a file.
   or automation completion. Repository current-context rechecked per actual webhook attempt including retry.
   Webhook subscriptions rechecked per socket; stale captured routing aborted.
   Independent webhook completion checkpoint added; no automation completion.
-  See reviews0134-0156.
+  Webhook API-update revision fences captured routing ABA on retry.
+  See reviews0134-0157.
 
 ## Phase 3 - advanced
 
