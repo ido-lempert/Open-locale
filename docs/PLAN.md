@@ -101,7 +101,8 @@ add languages, manage keys and translations, export a file.
   or automation handler. Explicit internal webhook-channel step verified end-to-end; no combined worker
   or automation completion. Repository current-context rechecked per actual webhook attempt including retry.
   Webhook subscriptions rechecked per socket; stale captured routing aborted.
-  See reviews0134-0155.
+  Independent webhook completion checkpoint added; no automation completion.
+  See reviews0134-0156.
 
 ## Phase 3 - advanced
 

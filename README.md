@@ -356,3 +356,10 @@ Disabled/deleted/unsubscribed hooks, destination edits and signing-secret change
 abort the captured delivery rather than sending to old or newly edited routing.
 This also applies to normal callers. No lock is held during transport, so changes
 immediately after the check remain a race; no stronger revocation guarantee is made.
+
+Internal webhook steps persist webhookHandledAt independently of the queue state,
+fenced by live lease token. A requeued intent with this checkpoint skips webhook
+redelivery; failed receivers never checkpoint. This records handler completion,
+including zero subscribers, not a receiver receipt or automation/sync completion.
+A crash after a socket but before checkpoint still causes at-least-once retry.
+No combined worker/public route is enabled; automation needs its own state.

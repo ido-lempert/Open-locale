@@ -199,15 +199,24 @@ try {
   let deletedDuringRetry=false;try{await deliverRepositoryWebhook(prisma,service,intent);}catch{deletedDuringRetry=true;}
   check('subscription deletion after first failure suppresses retry socket',deletedDuringRetry&&received.length===receivedBefore+1);
   await prisma.webhook.create({data:repositoryHook});
-  const resetStep=()=>prisma.repositoryLocalEffectIntent.update({where:{id:intent.id},data:{state:'pending',attempts:0,leaseToken:null,leaseUntil:null,finishedAt:null,availableAt:new Date('2020-01-01')}});
+  const resetStep=()=>prisma.repositoryLocalEffectIntent.update({where:{id:intent.id},data:{state:'pending',attempts:0,leaseToken:null,leaseUntil:null,finishedAt:null,webhookHandledAt:null,availableAt:new Date('2020-01-01')}});
   await resetStep();receivedBefore=received.length;const stepped=await runRepositoryWebhookStep(prisma,service);const steppedRow=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:intent.id}});
   check('internal webhook step claims signs delivers and settles completed',stepped.status==='completed'&&steppedRow.state==='completed'&&steppedRow.attempts===1&&steppedRow.leaseToken===null&&steppedRow.finishedAt&&received.length===receivedBefore+1&&JSON.parse(received.at(-1).body).effectId===intent.id);
+  check('successful webhook step persists independent channel checkpoint',!!steppedRow.webhookHandledAt);
+  await prisma.repositoryLocalEffectIntent.update({where:{id:intent.id},data:{state:'pending',finishedAt:null,availableAt:new Date('2020-01-01')}});receivedBefore=received.length;
+  const checkpointReplay=await runRepositoryWebhookStep(prisma,service);
+  check('requeued checkpointed webhook channel skips receiver redelivery',checkpointReplay.status==='completed'&&received.length===receivedBefore&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:intent.id}})).webhookHandledAt.getTime()===steppedRow.webhookHandledAt.getTime());
   receivedBefore=received.length;check('completed webhook step does not redeliver',(await runRepositoryWebhookStep(prisma,service)).status==='idle'&&received.length===receivedBefore);
   await resetStep();failNext=2;const retryStep=await runRepositoryWebhookStep(prisma,service);const retryRow=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:intent.id}});
   check('real receiver failure requeues step with backoff',retryStep.status==='retry'&&retryRow.state==='pending'&&retryRow.attempts===1&&retryRow.leaseToken===null&&retryRow.finishedAt===null&&received.length===receivedBefore+2);
+  check('failed receiver step never writes webhook channel checkpoint',retryRow.webhookHandledAt===null);
   receivedBefore=received.length;check('webhook retry backoff makes immediate next step idle',(await runRepositoryWebhookStep(prisma,service)).status==='idle'&&received.length===receivedBefore);
   await prisma.repositoryLocalEffectIntent.update({where:{id:intent.id},data:{availableAt:new Date('2020-01-01')}});const recoveredStep=await runRepositoryWebhookStep(prisma,service);
   check('due webhook retry preserves effect ID and settles after success',recoveredStep.status==='completed'&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:intent.id}})).attempts===2&&received.length===receivedBefore+1&&JSON.parse(received.at(-1).body).effectId===intent.id);
+  await resetStep();receivedBefore=received.length;
+  afterReceipt=async()=>{afterReceipt=null;await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "leaseUntil"=clock_timestamp()-INTERVAL '1 second' WHERE id=${intent.id}::uuid`;};
+  const lostCheckpoint=await runRepositoryWebhookStep(prisma,service);
+  check('expired post-delivery lease cannot write checkpoint or claim completion',lostCheckpoint.status==='stale'&&received.length===receivedBefore+1&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:intent.id}})).webhookHandledAt===null);
   await prisma.repositoryLocalEffectIntent.update({where:{id:intent.id},data:{state:'leased',attempts:1,leaseToken:a.user.id,leaseUntil:new Date(Date.now()+3600000),finishedAt:null}});
   await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "leaseUntil"=clock_timestamp()+INTERVAL '60 seconds' WHERE id=${intent.id}::uuid`;
   await prisma.repositorySyncTarget.update({where:{id:target.id},data:{revision:{increment:1}}});receivedBefore=received.length;let staleAdapter=false;try{await deliverRepositoryWebhook(prisma,service,intent);}catch{staleAdapter=true;}
