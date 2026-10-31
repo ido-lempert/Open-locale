@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { GitHubContentsClient } from './contents-client';
 import { parseSyncJson, previewSync } from './sync-preview';
+import { resolvePlan, ResolutionChoice } from './resolve-preview';
 
 export interface RepositoryTarget {
   owner: string;
@@ -26,6 +27,40 @@ export function gitBlobSha(text: string): string {
 // the baseline ever came from GitHub or was accepted as a sync baseline.
 export class RepositoryPreview {
   constructor(private readonly contents: GitHubContentsClient) {}
+  async resolve(
+    target: RepositoryTarget,
+    baseline: RepositoryBaseline,
+    localJson: string,
+    expectedFingerprint: string,
+    choices: Record<string, ResolutionChoice>,
+  ) {
+    // Snapshot selections before remote I/O too. Only own plain-map values;
+    // caller mutation during a fetch must not alter a reviewed selection.
+    if (
+      !choices ||
+      typeof choices !== 'object' ||
+      Array.isArray(choices) ||
+      ![null, Object.prototype].includes(Object.getPrototypeOf(choices))
+    )
+      throw new Error('Expected explicit resolution choices');
+    if (!/^[a-f0-9]{64}$/.test(expectedFingerprint))
+      throw new Error('Expected repository preview fingerprint');
+    const snapshot = Object.assign(Object.create(null), choices) as Record<
+      string,
+      ResolutionChoice
+    >;
+    // A fresh read, not caller remote bytes or a reused mutable plan. The
+    // repo/branch/path/baseline fingerprint must still match before drafting.
+    const plan = await this.preview(target, baseline, localJson);
+    return {
+      ...resolvePlan(plan, snapshot, expectedFingerprint),
+      target: plan.target,
+      baselineSha: plan.baselineSha,
+      remoteSha: plan.remoteSha,
+      source: 'repository-preview-resolution' as const,
+      remoteSource: 'contents-adapter-read' as const,
+    };
+  }
   async preview(
     target: RepositoryTarget,
     baseline: RepositoryBaseline,
