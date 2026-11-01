@@ -77,6 +77,9 @@ class ResolveRepositoryDto extends RevisionDto {
   @IsString() @Matches(/^[a-f0-9]{64}$/) expectedFingerprint!: string;
   @IsObject() choices!: Record<string, ResolutionChoice>;
 }
+class ApplyRepositoryLocalDto extends ResolveRepositoryDto {
+  @IsString() @Matches(/^[a-f0-9]{64}$/) expectedDraftDigest!: string;
+}
 const posture = {
   source: 'repository-target-configuration',
   connected: false,
@@ -379,14 +382,14 @@ export class RepositoryTargetsService {
       );
     }
   }
-  // Internal service entry only. Deliberately NOT exposed by the controller.
+  // Explicit local apply service. Controller requires reviewed binding fields.
   // Recompute fresh authorized sources outside DB locks, bind exact reviewed
   // bytes, then revalidate scope/local generations in one Serializable write.
   // A remote repository may change after its read; this is a local-only import,
   // not a remote compare-and-swap or a successful two-way sync.
   async executeReviewedLocal(
     user: AuthPrincipal, projectId: string, id: string,
-    input: ResolveRepositoryDto & { expectedDraftDigest: string },
+    input: ApplyRepositoryLocalDto,
   ) {
     input = JSON.parse(JSON.stringify(input));
     user = { ...user };
@@ -556,6 +559,16 @@ export class RepositoryTargetsController {
     @Body() input: ResolveRepositoryDto,
   ) {
     return this.targets.resolve(user, projectId, id, input);
+  }
+  @Post(':targetId/apply-local')
+  @Header('Cache-Control', 'no-store')
+  applyLocal(
+    @CurrentUser() user: AuthPrincipal,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Param('targetId', new ParseUUIDPipe()) id: string,
+    @Body() input: ApplyRepositoryLocalDto,
+  ) {
+    return this.targets.executeReviewedLocal(user, projectId, id, input);
   }
   @Get(':targetId/baseline')
   @Header('Cache-Control', 'no-store')

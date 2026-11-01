@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { createHash } from 'node:crypto';
+import { createHash,createHmac } from 'node:crypto';
 import { createRequire } from 'node:module';
 const require=createRequire(import.meta.url);
 const freshBundle=join(process.cwd(),'.tmp-fresh-execution.cjs');
@@ -667,7 +667,10 @@ try {
   const {writeFileSync}=await import('node:fs');
   writeFileSync(serviceEntry,`export {ProjectsService} from './apps/api/src/app/projects/projects.service';
 export {BranchesService} from './apps/api/src/app/branches/branches.service';
-export {LocalSyncPreviewService} from './apps/api/src/app/github/sync-preview.controller';`);
+export {LocalSyncPreviewService} from './apps/api/src/app/github/sync-preview.controller';
+export {WebhooksService} from './apps/api/src/app/webhooks/webhooks.service';
+export {AutomationsService} from './apps/api/src/app/automations/automations.service';
+export {runRepositoryEffectStep} from './apps/api/src/app/github/repository-effect-step';`);
   execFileSync('node_modules/.bin/esbuild',[serviceEntry,'--bundle','--platform=node','--format=cjs','--packages=external','--outfile='+serviceBundle]);
   const {ProjectsService,BranchesService,LocalSyncPreviewService}=require(serviceBundle);
   const realProjects=new ProjectsService(prisma,{}),realBranches=new BranchesService(prisma,realProjects,{},{},{},{});
@@ -747,6 +750,59 @@ export {LocalSyncPreviewService} from './apps/api/src/app/github/sync-preview.co
   freshService.resolve=async(...args)=>{const result=await originalFreshResolve(...args);localRaceSeam=true;await prisma.translation.update({where:{keyId_localeCode:{keyId:freshAfter.keyId,localeCode:'he'}},data:{version:{increment:1}}});return result;};
   check('fresh post-resolution local generation change denies commit before new effect',await freshReject({...localRaceInput,expectedDraftDigest:localRaceDraft.contentDigest})&&localRaceSeam&&(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}})).value==='after'&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}})===1);
   freshService.resolve=originalFreshResolve;
+  // Public local-only apply boundary: all reviewed bytes still recomputed.
+  const localApplyPath=freshPath+'/sync/repository-targets/'+freshTarget.id+'/apply-local';
+  const applyHttp=(body,auth=jwt,apiKey)=>call(localApplyPath,{jwt:auth,apiKey,method:'POST',body});
+  const httpPlan=await freshService.preview(actor,freshProject.id,freshTarget.id,1);
+  const httpInput={expectedRevision:1,expectedFingerprint:httpPlan.fingerprint,choices:{existing:'remote'}};
+  const httpDraft=await freshService.resolve(actor,freshProject.id,freshTarget.id,httpInput);
+  const httpRequest={...httpInput,expectedDraftDigest:httpDraft.contentDigest};
+  const httpBefore=await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}});
+  const httpBeforeCount=repoCalls;
+  check('HTTP local apply rejects member outsider API token before remote',(await applyHttp(httpRequest,member.accessToken)).status===403&&(await applyHttp(httpRequest,outsider.accessToken)).status===404&&(await applyHttp(httpRequest,null,token.token)).status===403&&repoCalls===httpBeforeCount);
+  const invalidHttp=[{...httpRequest,expectedDraftDigest:undefined},{...httpRequest,expectedDraftDigest:'bad'},{...httpRequest,expectedRevision:0},{...httpRequest,choices:[]}];
+  check('HTTP local apply validates mandatory reviewed fields before remote',(await Promise.all(invalidHttp.map(body=>applyHttp(body)))).every(r=>r.status===400)&&repoCalls===httpBeforeCount);
+  check('HTTP local apply changed digest and fingerprint deny without writes',(await applyHttp({...httpRequest,expectedDraftDigest:'f'.repeat(64)})).status===409&&(await applyHttp({...httpRequest,expectedFingerprint:'f'.repeat(64)})).status===409&&(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}})).version===httpBefore.version);
+  repoText=JSON.stringify({existing:'changed HTTP bytes'});
+  check('HTTP local apply rereads changed remote and leaves reviewed local untouched',(await applyHttp(httpRequest)).status===409&&(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}})).version===httpBefore.version);
+  repoText=JSON.stringify({existing:'third'});repoStatus=503;
+  check('HTTP remote read failure cannot change values or enqueue effects',(await applyHttp(httpRequest)).status===502&&(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}})).value==='after'&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}})===1);
+  repoStatus=200;
+  check('HTTP unauthenticated local apply is rejected before remote',(await applyHttp(httpRequest,null)).status===401);
+  await prisma.$executeRawUnsafe(`CREATE FUNCTION http_fail_intent() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'http intent fixture'; END $$`);
+  await prisma.$executeRawUnsafe(`CREATE TRIGGER http_fail_intent BEFORE INSERT ON repository_local_effect_intents FOR EACH ROW EXECUTE FUNCTION http_fail_intent()`);
+  const httpRollbackHistory=await prisma.translationHistory.count({where:{keyId:httpBefore.keyId,localeCode:'he'}}),httpRollbackActivity=await prisma.activityEvent.count({where:{projectId:freshProject.id}});
+  const failedHttp=await applyHttp(httpRequest);
+  check('HTTP intent storage failure atomically rolls back value history TM activity and intent',failedHttp.status===500&&(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}})).value==='after'&&await prisma.translationHistory.count({where:{keyId:httpBefore.keyId,localeCode:'he'}})===httpRollbackHistory&&await prisma.activityEvent.count({where:{projectId:freshProject.id}})===httpRollbackActivity&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}})===1&&await prisma.tmEntry.count({where:{projectId:freshProject.id,targetText:'third'}})===0);
+  await prisma.$executeRawUnsafe(`DROP TRIGGER http_fail_intent ON repository_local_effect_intents`);await prisma.$executeRawUnsafe(`DROP FUNCTION http_fail_intent()`);
+  const actualHttp=await fetch(API+localApplyPath,{method:'POST',headers:{Authorization:'Bearer '+jwt,'Content-Type':'application/json'},body:JSON.stringify({...httpRequest,actorId:outsider.user.id,json:'{}',localJson:'{}',remoteJson:'{}'})});const actualHttpJson=await actualHttp.json();
+  check('HTTP reviewed apply commits actual locale value with session actor and no-store',actualHttp.status===201&&actualHttp.headers.get('cache-control')==='no-store'&&actualHttpJson.updatedValues===1&&actualHttpJson.pendingEffectIntents===1&&(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}})).value==='third'&&(await prisma.repositoryLocalEffectIntent.findFirst({where:{projectId:freshProject.id,value:'third'}})).actorId===owner.user.id);
+  check('HTTP local apply replay conflicts without duplicate effects',(await applyHttp(httpRequest)).status===409&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}})===2);
+  repoText='{}';
+  const removeHttpPlan=await freshService.preview(actor,freshProject.id,freshTarget.id,1);
+  const removeHttpInput={expectedRevision:1,expectedFingerprint:removeHttpPlan.fingerprint,choices:{existing:'remote'}};
+  const removeHttpDraft=await freshService.resolve(actor,freshProject.id,freshTarget.id,removeHttpInput);
+  const removeHttpRequest={...removeHttpInput,expectedDraftDigest:removeHttpDraft.contentDigest};
+  const httpRemove=await applyHttp(removeHttpRequest);
+  check('HTTP explicit absent choice removes locale only preserving key base locale and deletion audit',httpRemove.status===201&&httpRemove.json.removedValues===1&&httpRemove.json.pendingEffectIntents===1&&await prisma.translation.count({where:{keyId:freshAfter.keyId,localeCode:'he'}})===0&&await prisma.key.count({where:{id:freshAfter.keyId}})===1&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:freshAfter.keyId,localeCode:'en'}}})).value==='before'&&await prisma.translationDeletionAudit.count({where:{projectId:freshProject.id,keyId:freshAfter.keyId}})===1&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id,operation:'remove-locale-value',value:null}})===1);
+  check('HTTP apply never writes remote advances baseline or claims sync',actualHttpJson.remoteWritten===false&&actualHttpJson.baselineAdvanced===false&&actualHttpJson.repositorySyncAccepted===false&&httpRemove.json.remoteWritten===false&&httpRemove.json.baselineAdvanced===false&&JSON.stringify(await prisma.repositorySyncBaseline.findUnique({where:{targetId:freshTarget.id}}))===JSON.stringify(freshBaselineBefore)&&repoMethod==='GET');
+  const effectReceipts=[];const effectReceiver=createServer((req,res)=>{let body='';req.on('data',b=>body+=b);req.on('end',()=>{effectReceipts.push({event:req.headers['x-openlocale-event'],signature:req.headers['x-openlocale-signature'],body});res.writeHead(200).end();});});
+  await new Promise(r=>effectReceiver.listen(0,'127.0.0.1',r));
+  const {WebhooksService,AutomationsService,runRepositoryEffectStep}=require(serviceBundle);
+  const effectSecret='fixture-http-apply-secret';
+  await prisma.webhook.create({data:{projectId:freshProject.id,url:`http://127.0.0.1:${effectReceiver.address().port}/hook`,events:['translation.removed'],secret:effectSecret}});
+  const priorPrivate=process.env.WEBHOOK_ALLOW_PRIVATE_TARGETS;process.env.WEBHOOK_ALLOW_PRIVATE_TARGETS='true';
+  try {
+    // Older set-value intents are genuinely superseded by deletion. They must
+    // fail eligibility, not send outdated values before the removal receipt.
+    const realHooks=new WebhooksService(prisma,realProjects),realAutomations=new AutomationsService(prisma,realProjects,{},{},{},realHooks);
+    const steps=[];for(let n=0;n<3;n++)steps.push(await runRepositoryEffectStep(prisma,realHooks,realAutomations));
+    const removalEffect=await prisma.repositoryLocalEffectIntent.findFirst({where:{projectId:freshProject.id,operation:'remove-locale-value'}});
+    const receipt=effectReceipts[0],payload=receipt&&JSON.parse(receipt.body);
+    check('HTTP-generated intent delivers actual signed removal and both checkpoints',steps.filter(x=>x.status==='completed').length===1&&effectReceipts.length===1&&receipt.event==='translation.removed'&&receipt.signature==='sha256='+createHmac('sha256',effectSecret).update(receipt.body).digest('hex')&&payload.effectId===removalEffect.id&&payload.value===null&&payload.locale==='he'&&removalEffect.state==='completed'&&!!removalEffect.webhookHandledAt&&!!removalEffect.automationHandledAt);
+    check('HTTP-generated superseded set intents never deliver older value',steps.filter(x=>x.status==='ineligible').length===2&&effectReceipts.every(r=>JSON.parse(r.body).operation==='remove-locale-value'));
+  } finally {await new Promise(r=>effectReceiver.close(r));if(priorPrivate===undefined)delete process.env.WEBHOOK_ALLOW_PRIVATE_TARGETS;else process.env.WEBHOOK_ALLOW_PRIVATE_TARGETS=priorPrivate;}
+
   for(const [k,v] of Object.entries(priorEnv)){if(v===undefined)delete process.env[k];else process.env[k]=v;}
   rmSync(serviceEntry,{force:true});rmSync(serviceBundle,{force:true});
   const key=(await call(`${P}/keys`,{jwt,method:'POST',body:{name:'plural',isPlural:true}})).json;

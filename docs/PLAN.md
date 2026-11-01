@@ -120,8 +120,10 @@ add languages, manage keys and translations, export a file.
   Opt-in Nest worker (defaultOFF),one intent/5sec,no local overlap,shutdown drain.
   Internal fresh-source service recomputes authorized resolution and binds exact reviewed
   fingerprint/digest before Serializable local write/history/TM/intents. Existing-key
-  sets/removals only; no HTTP apply route or baseline advance/remote write/accepted sync.
-  Public execution remains absent. See reviews0134-0173.
+  sets/removals only; no baseline advance/remote write/accepted sync.
+  Explicit session-admin apply-local API now binds revision/fingerprint/choices/digest,
+  commits local-only set/removal/history/TM/intents atomically. UI remains preview-only;
+  no baseline advance, remote write or accepted sync. See reviews0134-0174.
 
 ## Phase 3 - advanced
 

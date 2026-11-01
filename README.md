@@ -449,7 +449,14 @@ remote repositories. Crash gaps still permit duplicate effects.
 
 Internal fresh-source local execution now recomputes repository preview/resolution,
 checks the reviewed fingerprint and exact draft digest, and runs the existing
-Serializable local write plus history/TM/intents. It has no HTTP apply route. Only
+Serializable local write plus history/TM/intents. The internal service is also exposed by the reviewed local-only endpoint below. Only
 existing-key locale set/removal is supported; remote-only new keys fail closed.
 It does not advance the accepted baseline, write remote files, or accept a sync.
 Remote bytes are fresh at read time, not locked against later repository changes.
+
+`POST /api/projects/{projectId}/sync/repository-targets/{targetId}/apply-local`
+now exposes that local-only write to signed-in project admins. Send the reviewed
+`expectedRevision`, `expectedFingerprint`, `choices`, and `expectedDraftDigest` from
+resolve-preview. The service rereads all sources and commits atomically or rejects.
+The web screen remains preview-only. This endpoint does not enable the default-off
+effect worker, push repository files, advance the baseline or accept a sync.
