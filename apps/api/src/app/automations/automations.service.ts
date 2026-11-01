@@ -110,21 +110,24 @@ export class AutomationsService {
       for (const rule of rules) {
         // Optional current-scope guard. A rejection stops remaining rules;
         // already completed effects are not rolled back or replay-safe.
-        await options?.beforeRule?.();
-        // Never execute a stale captured rule. Revision fences authenticated
-        // edit/restore ABA as well as ordinary edits. Point-in-time only.
-        const current = await this.prisma.automationRule.findUnique({ where: { id: rule.id } });
-        if (!current || !current.enabled || current.projectId !== projectId ||
-            current.trigger !== trigger || current.revision !== rule.revision)
-          throw new Error('Automation rule changed before execution');
-        const ok = await this.runRule(projectId, project.baseLocale, rule, ctx).catch(() => false);
+        const beforeEffect = async () => {
+          await options?.beforeRule?.();
+          // Never execute a stale captured rule. Revision fences authenticated
+          // edit/restore ABA as well as ordinary edits. Point-in-time only.
+          const current = await this.prisma.automationRule.findUnique({ where: { id: rule.id } });
+          if (!current || !current.enabled || current.projectId !== projectId ||
+              current.trigger !== trigger || current.revision !== rule.revision)
+            throw new Error('Automation rule changed before execution');
+        };
+        await beforeEffect();
+        const ok = await this.runRule(projectId, project.baseLocale, rule, ctx, beforeEffect).catch(() => false);
         if (ok) summary.succeeded++; else summary.failed++;
       }
       return summary;
     } catch { return { ...summary, failed: Math.max(1, summary.matched - summary.succeeded) }; }
   }
 
-  private async runRule(projectId: string, baseLocale: string, rule: { id: string; name: string; action: string; config: Prisma.JsonValue; creatorId: string }, ctx: { keyId: string; keyName: string; actorId?: string }) {
+  private async runRule(projectId: string, baseLocale: string, rule: { id: string; name: string; action: string; config: Prisma.JsonValue; creatorId: string }, ctx: { keyId: string; keyName: string; actorId?: string }, beforeEffect?: () => Promise<void>) {
     const config = (rule.config ?? {}) as Record<string, unknown>;
     let detail: Record<string, unknown>;
     let succeeded = true;
@@ -149,7 +152,7 @@ export class AutomationsService {
         // URL, so rule authors (admins) cannot aim the egress anywhere new;
         // delivery, signing, retry and journaling are the webhook pipeline's.
         const message = String(config.message ?? '').split('{key}').join(ctx.keyName);
-        const delivery = await this.webhooks.deliver(projectId, 'automation.notify', { keyId: ctx.keyId, key: ctx.keyName, message });
+        const delivery = await this.webhooks.deliver(projectId, 'automation.notify', { keyId: ctx.keyId, key: ctx.keyName, message }, beforeEffect);
         if (delivery.failed) throw new Error('Automation notification delivery incomplete');
         detail = { rule: rule.name, action: rule.action, key: ctx.keyName, message };
       } else {

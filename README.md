@@ -393,3 +393,8 @@ Captured automation rules are re-read before execution; disabled/deleted/updated
 rules abort remaining runs. Authenticated updates increment a revision, rejecting
 edit/restore ABA even when visible configuration returns to its earlier value.
 This point-in-time check does not fence edits after the check or deduplicate retries.
+
+Automation notify carries current repository intent and captured rule guards to
+each actual webhook socket attempt, after DNS and retry backoff. A target/lease/
+rule change after a failed attempt suppresses another socket. Checks still have
+a post-check race and do not supply per-rule retry deduplication.

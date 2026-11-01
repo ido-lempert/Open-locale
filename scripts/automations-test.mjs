@@ -39,10 +39,13 @@ const pollFor = async (fn, tries = 20) => {
 
 // Local webhook receiver for the notify action legs (fixture-only loopback).
 const received = [];
+let repositoryReceipt;
 const receiver = createServer((req, res) => {
   let b = '';
   req.on('data', (c) => (b += c));
-  req.on('end', () => { received.push({ event: req.headers['x-openlocale-event'], sig: req.headers['x-openlocale-signature'], body: b }); res.writeHead(200).end(); });
+  req.on('end', async () => { received.push({ event: req.headers['x-openlocale-event'], sig: req.headers['x-openlocale-signature'], body: b });
+    if(repositoryReceipt){try{await repositoryReceipt();res.writeHead(500).end('retry fixture');}catch{res.writeHead(500).end('fixture mutation failed');}return;}
+    res.writeHead(200).end(); });
 });
 await new Promise((r) => receiver.listen(HOOK_PORT, '127.0.0.1', r));
 
@@ -314,6 +317,30 @@ try {
     check('captured rule '+mutation+' stops second task and activity after actual first effect',mutated&&stopped&&await prisma.task.count({where:{projectId:summaryProject.id,title:firstTitle}})===1&&await prisma.task.count({where:{projectId:summaryProject.id,title:secondTitle}})===0&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Unexpected stale destination '+mutation}})===0&&await prisma.activityEvent.count({where:{projectId:summaryProject.id,action:'automation.run'}})===beforeRuns+1);
     if(mutation!=='delete'){const changed=await prisma.automationRule.findUnique({where:{id:captured.id}});check('authenticated rule '+mutation+' increments revision',changed.revision===captured.revision+(mutation.endsWith('restore')?2:1));await prisma.automationRule.delete({where:{id:captured.id}});}
   }
+  const webhookBundle=join(root,'.tmp-automation-webhooks.cjs');execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/webhooks/webhooks.service.ts','--bundle','--platform=node','--format=cjs','--packages=external','--outfile='+webhookBundle]);const {WebhooksService}=require(webhookBundle);
+  process.env.WEBHOOK_ALLOW_PRIVATE_TARGETS='true';
+  const socketService=new AutomationsService(prisma,projectsService,activityService,{},tasksService,new WebhooksService(prisma,projectsService));
+  const socketHook=await prisma.webhook.create({data:{projectId:summaryProject.id,url:`http://127.0.0.1:${HOOK_PORT}/repository-notify`,events:['automation.notify'],secret:'repository-notify-fixture'}});
+  for(const mutation of ['target','lease','rule-restore']) {
+    await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:1}});
+    await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{leaseUntil:new Date('2099-01-01')}});
+    await prisma.automationRule.update({where:{id:summaryRule.id},data:{action:'notify',config:{message:'Repository socket '+mutation}}});
+    const capturedRevision=(await prisma.automationRule.findUnique({where:{id:summaryRule.id}})).revision;
+    let mutated=false;const receiptBefore=received.length;
+    repositoryReceipt=async()=>{if(mutated)return;mutated=true;
+      if(mutation==='target')await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:{increment:1}}});
+      else if(mutation==='lease')await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "leaseUntil"=clock_timestamp()-interval '1 second' WHERE id=${repoIntent.id}::uuid`;
+      else {const path=`/projects/${summaryProject.id}/automations/${summaryRule.id}`;for(const enabled of [false,true]){const r=await call(path,{jwt,method:'PATCH',body:{enabled}});if(r.status>=300)throw new Error('receiver fixture update failed');}}
+    };
+    let failed=false;try{await fireRepositoryAutomation(prisma,socketService,repoIntent);}catch{failed=true;}repositoryReceipt=undefined;
+    const journal=await prisma.webhookDelivery.findFirst({where:{webhookId:socketHook.id},orderBy:{createdAt:'desc'}});
+    check('repository notify '+mutation+' change after real500 suppresses second socket',mutated&&failed&&received.length===receiptBefore+1&&journal?.attempts===1&&journal?.success===false);
+    const hit=received[receiptBefore],sig='sha256='+createHmac('sha256',socketHook.secret).update(hit.body).digest('hex');
+    check('repository notify '+mutation+' first socket signed and guard abort journaled',hit.event==='automation.notify'&&hit.sig===sig&&typeof journal?.error==='string'&&journal.error.length>0);
+    if(mutation==='rule-restore')check('notify socket ABA uses actual authenticated revision changes',(await prisma.automationRule.findUnique({where:{id:summaryRule.id}})).revision===capturedRevision+2);
+  }
+  await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:1}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{leaseUntil:new Date('2099-01-01')}});
+  rmSync(webhookBundle,{force:true});
   const heRepoRow=await prisma.translation.create({data:{projectId:summaryProject.id,keyId:summaryKey.id,localeCode:'he',value:'Target'}});await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{locale:'he'}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{locale:'he',value:heRepoRow.value,translationRowId:heRepoRow.rowId,translationVersion:heRepoRow.version}});
   const nonbaseRepo=await fireRepositoryAutomation(prisma,summaryService,repoIntent);
   check('repository target locale does not trigger base-value automations',nonbaseRepo.skipped&&nonbaseRepo.matched===0);
