@@ -111,7 +111,8 @@ add languages, manage keys and translations, export a file.
   rule guard per socket/retry and before each pretranslate target locale.
   MT revalidates after provider computation before write transaction.
   Internal automation-only step/checkpoint added; no combined worker or per-rule
-  partial retry ledger. See reviews0134-0165.
+  partial retry ledger. Explicit internal combined step added under one lease,
+  independent channel checkpoints; no production timer. See reviews0134-0166.
 
 ## Phase 3 - advanced
 

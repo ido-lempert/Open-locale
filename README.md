@@ -412,3 +412,8 @@ An explicitly invoked internal automation-channel step persists an independent
 lease-token/deadline-fenced handled timestamp. Checkpointed requeues skip automation
 replay; failed runs cannot checkpoint. Crash before checkpoint can still duplicate
 effects. This is not webhook/overall sync completion or an enabled combined worker.
+
+An explicit internal combined step runs webhook then automation under one lease,
+with independent channel checkpoints. If automation fails after webhook handling,
+a due retry skips that webhook channel. No timer/public apply is enabled; this
+bookkeeping does not make partial rules replay-safe or establish sync acceptance.

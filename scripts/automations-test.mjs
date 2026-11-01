@@ -409,6 +409,26 @@ try {
   const expiryService=new AutomationsService(prisma,projectsService,expiringActivity,{},tasksService,{deliver:async()=>({matched:0,succeeded:0,failed:0})});
   const expiredStep=await runRepositoryAutomationStep(prisma,expiryService),expiredRow=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}});
   check('post-effect expired lease cannot checkpoint or settle automation completion',expiredStep.status==='stale'&&expiredRow.automationHandledAt===null&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Expired checkpoint task'}})===1);
+  const combinedBundle=join(root,'.tmp-repository-combined-step.cjs');execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-effect-step.ts','--bundle','--platform=node','--format=cjs','--packages=external','--outfile='+combinedBundle]);const {runRepositoryEffectStep}=require(combinedBundle);
+  await prisma.webhook.update({where:{id:socketHook.id},data:{events:['translation.updated']}});
+  const liveWebhooks=new WebhooksService(prisma,projectsService);
+  const resetCombined=async()=>{await resetStep();await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{webhookHandledAt:null}});};
+  await resetCombined();await prisma.automationRule.update({where:{id:summaryRule.id},data:{action:'task.create',config:{title:'Combined task'}}});let socketBefore=received.length;
+  const combinedOk=await runRepositoryEffectStep(prisma,liveWebhooks,summaryService),combinedRow=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}});
+  check('combined explicit step signs actual receiver then creates task with both checkpoints',combinedOk.status==='completed'&&!!combinedRow.webhookHandledAt&&!!combinedRow.automationHandledAt&&received.length===socketBefore+1&&JSON.parse(received.at(-1).body).effectId===repoIntent.id&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Combined task'}})===1);
+  const combinedHit=received.at(-1);check('combined first channel actual signature verifies',combinedHit.sig==='sha256='+createHmac('sha256',socketHook.secret).update(combinedHit.body).digest('hex'));
+  await resetCombined();await prisma.automationRule.update({where:{id:summaryRule.id},data:{action:'notify',config:{message:'Combined failure fixture'}}});socketBefore=received.length;
+  const combinedFailed=await runRepositoryEffectStep(prisma,liveWebhooks,summaryService),partialCombined=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}});
+  check('combined automation failure preserves webhook checkpoint but not automation completion',combinedFailed.status==='retry'&&partialCombined.state==='pending'&&!!partialCombined.webhookHandledAt&&partialCombined.automationHandledAt===null&&received.length===socketBefore+1);
+  await prisma.automationRule.update({where:{id:summaryRule.id},data:{action:'task.create',config:{title:'Combined recovered task'}}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{availableAt:new Date('2020-01-01')}});socketBefore=received.length;
+  const combinedRetry=await runRepositoryEffectStep(prisma,liveWebhooks,summaryService),recoveredCombined=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}});
+  check('combined due retry skips handled webhook and executes remaining actual task',combinedRetry.status==='completed'&&received.length===socketBefore&&!!recoveredCombined.automationHandledAt&&recoveredCombined.webhookHandledAt.getTime()===partialCombined.webhookHandledAt.getTime()&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Combined recovered task'}})===1);
+  socketBefore=received.length;check('combined completed row is idle without another receiver call',(await runRepositoryEffectStep(prisma,liveWebhooks,summaryService)).status==='idle'&&received.length===socketBefore);
+  await resetCombined();await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:{increment:1}}});socketBefore=received.length;
+  const invalidCombined=await runRepositoryEffectStep(prisma,liveWebhooks,summaryService);
+  check('combined changed target is ineligible before either channel',invalidCombined.status==='ineligible'&&received.length===socketBefore&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}})).webhookHandledAt===null);
+  await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:1}});
+  rmSync(combinedBundle,{force:true});
   // Fresh leased row for remaining direct-adapter scope checks.
   await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{state:'leased',leaseToken:owner.user.id,leaseUntil:new Date('2099-01-01')}});
   rmSync(stepBundle,{force:true});
