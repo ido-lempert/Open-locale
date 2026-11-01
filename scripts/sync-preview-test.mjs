@@ -582,7 +582,15 @@ try {
   let missingLocale;try{await prisma.$transaction(async tx=>{await tx.projectLocale.delete({where:{projectId_code:{projectId:project.id,code:'en'}}});missingLocale=await inspectDeletionRecovery(tx,project.id,audit.id);throw new Error('rollback locale fixture');});}catch(e){if(e?.message!=='rollback locale fixture')throw e;}
   check('internal recovery denies removed project locale',missingLocale.reason==='locale-unavailable');
   check('internal recovery diagnostic never alters archived snapshot',JSON.stringify(await prisma.translationDeletionAudit.findUnique({where:{id:audit.id}}))===recoveryBefore);
-  const recoveryScope={projectId:project.id,actorId:owner.user.id,auditId:audit.id,expectedValueDigest:recovery.valueDigest};
+  const recoveryScope={projectId:project.id,actorId:owner.user.id,auditId:audit.id,expectedBranchId:recovery.branchId,expectedValueDigest:recovery.valueDigest};
+  const recoveryOtherBranch=await prisma.branch.create({data:{projectId:project.id,name:'recovery-other'}});
+  let movedRecoveryDenied=false;try{await prisma.$transaction(async tx=>{await tx.key.update({where:{id:localKey.id},data:{branchId:recoveryOtherBranch.id}});await lockDeletionRecovery(tx,recoveryScope);},{isolationLevel:'Serializable'});}catch(e){movedRecoveryDenied=e.name==='RepositoryLocalError';}
+  check('locked recovery rejects actual key movement away from reviewed branch',movedRecoveryDenied&&(await prisma.key.findUnique({where:{id:localKey.id}})).branchId===recovery.branchId);
+  let wrongBranchDenied=false;try{await prisma.$transaction(tx=>lockDeletionRecovery(tx,{...recoveryScope,expectedBranchId:recoveryOtherBranch.id}),{isolationLevel:'Serializable'});}catch(e){wrongBranchDenied=e.name==='RepositoryLocalError';}
+  check('locked recovery rejects different existing project branch binding',wrongBranchDenied);
+  await prisma.branch.delete({where:{id:recoveryOtherBranch.id}});
+  let deletedBranchDenied=false;try{await prisma.$transaction(tx=>lockDeletionRecovery(tx,{...recoveryScope,expectedBranchId:recoveryOtherBranch.id}),{isolationLevel:'Serializable'});}catch(e){deletedBranchDenied=e.name==='RepositoryLocalError';}
+  check('locked recovery rejects deleted reviewed branch',deletedBranchDenied);
   const guardedRecovery=await prisma.$transaction(tx=>lockDeletionRecovery(tx,recoveryScope),{isolationLevel:'Serializable'});
   check('locked recovery revalidates current owner and candidate without write authority',guardedRecovery.eligible&&guardedRecovery.adminValidated&&guardedRecovery.canRestore===false);
   check('locked recovery accepts current project admin',(await prisma.$transaction(tx=>lockDeletionRecovery(tx,{...recoveryScope,actorId:admin.user.id}),{isolationLevel:'Serializable'})).adminValidated);
@@ -596,11 +604,12 @@ try {
   }
   let revoked=false;try{await prisma.$transaction(async tx=>{await tx.teamMember.update({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},data:{role:'MEMBER'}});await lockDeletionRecovery(tx,{...recoveryScope,actorId:admin.user.id});},{isolationLevel:'Serializable'});}catch(e){revoked=e.name==='RepositoryLocalError';}
   check('locked recovery denies current in-transaction admin revocation',revoked);
-  for(const resource of ['project','audit','key','locale','generation']){
+  for(const resource of ['project','audit','branch','key','locale','generation']){
     let acquired,release;const held=new Promise(r=>acquired=r),gate=new Promise(r=>release=r);
     const holding=prisma.$transaction(async tx=>{
       if(resource==='project')await tx.$queryRaw`SELECT id FROM projects WHERE id=${project.id}::uuid FOR UPDATE`;
       if(resource==='audit')await tx.$queryRaw`SELECT id FROM translation_deletion_audits WHERE id=${audit.id}::uuid FOR UPDATE`;
+      if(resource==='branch')await tx.$queryRaw`SELECT id FROM branches WHERE id=${recovery.branchId}::uuid FOR UPDATE`;
       if(resource==='key')await tx.$queryRaw`SELECT id FROM keys WHERE id=${localKey.id}::uuid FOR UPDATE`;
       if(resource==='locale')await tx.$queryRaw`SELECT code FROM project_locales WHERE "projectId"=${project.id}::uuid AND code='en' FOR UPDATE`;
       if(resource==='generation')await tx.$queryRaw`SELECT "auditId" FROM repository_removal_generations WHERE "projectId"=${project.id}::uuid AND "keyId"=${localKey.id}::uuid AND locale='en' FOR UPDATE`;

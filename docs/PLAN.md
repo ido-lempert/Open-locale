@@ -147,7 +147,8 @@ add languages, manage keys and translations, export a file.
   current absence/key/locale and exact removal generation;no restore execution/API. Internal Serializable recovery guard locks current admin/scope/generation with
   per-lock2sec timeout,binds digest;no restore execution/API. Isolated internal recovery writer adds fresh row/new history/activity/TM with
   rollback proof;no public restore API/UI or repository effect composition. Actual PostgreSQL competing recovery/normal-create races preserve winning row
-  and deny stale success without duplicate history/activity. See reviews0134-0198.
+  and deny stale success without duplicate history/activity. Internal recovery binds reviewed branch UUID and locks branch scope,denying
+  key movement/deleted branch despite matching digest. See reviews0134-0199.
 
 ## Phase 3 - advanced
 

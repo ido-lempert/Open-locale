@@ -7,7 +7,7 @@ import { rememberValueTx } from '../translations/remember-value';
 // repository effect dispatch,baseline advance or remote write is implemented.
 export async function writeDeletionRecovery(
   tx: Prisma.TransactionClient,
-  scope: { projectId: string; actorId: string; auditId: string; expectedValueDigest: string },
+  scope: { projectId: string; actorId: string; auditId: string; expectedBranchId: string; expectedValueDigest: string },
 ) {
   const plan = await lockDeletionRecovery(tx, scope);
   const audit = await tx.translationDeletionAudit.findUniqueOrThrow({ where: { id: scope.auditId } });

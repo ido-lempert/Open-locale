@@ -588,3 +588,7 @@ Serializable recoveries and a normal locale creation. The losing stale transacti
 fails serialization (competing recovery) or the exact key/locale unique constraint
 (normal creation),without recovery success or duplicate history/activity. No
 automatic retry of the stale review is added.
+
+Internal recovery also binds the reviewed branch UUID and locks that project branch.
+A key moved to another branch or a deleted/mismatched reviewed branch is rejected,
+even when archived value digest still matches. No public recovery surface is added.
