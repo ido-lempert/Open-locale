@@ -547,3 +547,9 @@ marker, so an older intent cannot become eligible merely because the value is
 absent again. Legacy removal intents without this marker fail closed. Marker and
 intent roll back with the deletion audit; project deletion cascades markers. No
 new remote write or exactly-once delivery guarantee is added.
+
+Session project admins can read `GET /api/projects/{projectId}/sync/deletion-audits`
+for the latest 50 deletion audit metadata rows, ordered newest timestamp/ID first.
+It includes audit/key IDs, key name, locale, actor ID and timestamp only, never the
+stored translation/history snapshot. Metadata survives key deletion. This no-store
+read does not restore/delete anything or grant restore permission. No web list yet.

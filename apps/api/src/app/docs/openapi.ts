@@ -235,6 +235,9 @@ export const OPENAPI = {
       post: p('Restore the project to a snapshot (atomic point-in-time recovery; fields added after a snapshot was taken - e.g. pluralForms in older snapshots - are left untouched, so a restore is not an exact historical reconstruction)', 'snapshots'),
     },
     '/api/projects/{projectId}/activity': { get: p('Project activity feed', 'projects') },
+    '/api/projects/{projectId}/sync/deletion-audits': {
+      get: {...p('List latest 50 local deletion audit metadata records (session admin only)', 'sync'),security:[{bearerAuth:[]}],description:'No-store. Project-scoped,createdAt descending then id descending. Returns id,keyId,keyName,localeCode,actorId,createdAt only;no stored snapshot,translation value or history. Metadata survives key deletion. Not a restore grant;canRestore=false,snapshotIncluded=false. No mutation.'},
+    },
     '/api/projects/{projectId}/sync/preview-records': {
       get: { ...p('List latest 50 diagnostic preview records (session admin only)', 'sync'), security: [{ bearerAuth: [] }] },
       post: { ...p('Explicitly record a recomputed local-file preview summary, not file values (session admin only)', 'sync', true), security: [{ bearerAuth: [] }],

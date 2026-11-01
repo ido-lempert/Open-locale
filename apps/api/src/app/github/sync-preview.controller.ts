@@ -98,6 +98,18 @@ export class LocalSyncPreviewService {
     }
   }
 
+  async listDeletionAudits(user: AuthPrincipal, projectId: string) {
+    if (user.via !== 'jwt') throw new ForbiddenException('Deletion audit metadata requires a signed-in session');
+    await this.projects.requireAdmin(user.userId, projectId);
+    return {
+      source: 'local-deletion-audit-metadata',
+      audits: await this.prisma.translationDeletionAudit.findMany({
+        where: { projectId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 50,
+        select: { id: true, keyId: true, keyName: true, localeCode: true, actorId: true, createdAt: true },
+      }),
+      snapshotIncluded: false, canRestore: false,
+    };
+  }
   async listRecords(user: AuthPrincipal, projectId: string) {
     if (user.via !== 'jwt')
       throw new ForbiddenException('Sync preview requires a signed-in session');
@@ -301,6 +313,14 @@ export class LocalSyncPreviewController {
     @Body() input: ResolveSyncPreviewDto,
   ) {
     return this.previews.resolve(user, projectId, input);
+  }
+  @Get('deletion-audits')
+  @Header('Cache-Control', 'no-store')
+  listDeletionAudits(
+    @CurrentUser() user: AuthPrincipal,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+  ) {
+    return this.previews.listDeletionAudits(user, projectId);
   }
   @Get('preview-records')
   @Header('Cache-Control', 'no-store')

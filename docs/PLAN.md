@@ -139,7 +139,8 @@ add languages, manage keys and translations, export a file.
   and original per-process cadence/drain. Manual summary adds aggregate independent/both channel checkpoint counts,
   explicitly not receiver receipts. Shutdown during in-flight effect prevents newly due retention afterward;
   actual held-socket/terminal-row lifecycle verified. Removal effects now bind durable audit-UUID generation,blocking recreate/remove
-  absence ABA;legacy unbound removals fail closed. See reviews0134-0189.
+  absence ABA;legacy unbound removals fail closed. Session-admin latest50 deletion audit metadata API excludes snapshots/values,
+  read-only and project-scoped;no restoration or web list. See reviews0134-0190.
 
 ## Phase 3 - advanced
 

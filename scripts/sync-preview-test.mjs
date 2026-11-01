@@ -535,11 +535,30 @@ try {
   const deletedRow=await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}});
   const deletedHistory=await prisma.translationHistory.findMany({where:{keyId:localKey.id,localeCode:'en'},orderBy:[{createdAt:'asc'},{id:'asc'}]});
   const removal={key:'local',action:'remove-locale-value',expectedValue:'writer draft',nextValue:null};
+  const deletionAuditsPath=`${P}/sync/deletion-audits`;
+  check('deletion audit metadata empty project returns empty list',(await call(`/projects/${summaryOtherProject.id}/sync/deletion-audits`,{jwt})).json.audits.length===0);
+  check('deletion audit metadata requires session',(await call(deletionAuditsPath)).status===401);
+  check('deletion audit metadata denies contributor',(await call(deletionAuditsPath,{jwt:member.accessToken})).status===403);
+  check('deletion audit metadata denies outsider',(await call(deletionAuditsPath,{jwt:outsider.accessToken})).status===404);
+  check('deletion audit metadata denies API token',(await call(deletionAuditsPath,{apiKey:token.token})).status===403);
+  check('deletion audit metadata accepts project admin',(await call(deletionAuditsPath,{jwt:admin.accessToken})).status===200);
   const auditBefore=await prisma.translationDeletionAudit.count();
   try{await prisma.$transaction(async tx=>{await writeExistingLocalValues(tx,deletionSnapshot,[removal],owner.user.id);throw new Error('rollback removal');},{isolationLevel:'Serializable'});}catch{}
   check('removal rollback restores row history and leaves no audit',await prisma.translationDeletionAudit.count()===auditBefore&&await prisma.translationHistory.count({where:{keyId:localKey.id,localeCode:'en'}})===deletedHistory.length&&!!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}}));
   const removed=await prisma.$transaction(tx=>writeExistingLocalValues(tx,deletionSnapshot,[removal],owner.user.id),{isolationLevel:'Serializable'});
   const audit=await prisma.translationDeletionAudit.findFirst({where:{keyId:localKey.id},orderBy:{createdAt:'desc'}});
+  const auditMetadata=await call(deletionAuditsPath,{jwt});
+  const listedAudit=auditMetadata.json.audits.find(a=>a.id===audit.id);
+  check('actual removed locale audit metadata appears without snapshot or restoration claim',auditMetadata.status===200&&listedAudit?.keyId===localKey.id&&listedAudit.keyName==='local'&&listedAudit.localeCode==='en'&&listedAudit.actorId===owner.user.id&&Object.keys(listedAudit).sort().join(',')==='actorId,createdAt,id,keyId,keyName,localeCode'&&auditMetadata.json.snapshotIncluded===false&&auditMetadata.json.canRestore===false&&!JSON.stringify(auditMetadata.json).includes('writer draft'));
+  const auditHeaders=await fetch(API+deletionAuditsPath,{headers:{Authorization:'Bearer '+jwt}});check('deletion audit metadata is no-store',auditHeaders.headers.get('cache-control')==='no-store');await auditHeaders.arrayBuffer();
+  const foreignAudit=await prisma.translationDeletionAudit.create({data:{projectId:summaryOtherProject.id,keyId:localKey.id,keyName:'foreign-private',localeCode:'en',snapshot:{value:'foreign-private'}}});
+  check('deletion audit metadata cannot cross project boundary',!(await call(deletionAuditsPath,{jwt})).json.audits.some(a=>a.id===foreignAudit.id));
+  const auditFixture=await Promise.all(Array.from({length:55},(_,i)=>prisma.translationDeletionAudit.create({data:{projectId:project.id,keyId:localKey.id,keyName:'bounded-'+i,localeCode:'en',snapshot:{value:'never-list-private'},createdAt:new Date('2099-01-01')}})));
+  const boundedAudits=(await call(deletionAuditsPath,{jwt})).json.audits;
+  check('deletion audit metadata bounded50 with stable newest tie order',boundedAudits.length===50&&boundedAudits.every((a,i)=>a.createdAt==='2099-01-01T00:00:00.000Z'&&(!i||boundedAudits[i-1].id>a.id))&&!JSON.stringify(boundedAudits).includes('never-list-private'));
+  check('deletion audit metadata reads never mutate retained snapshots',await prisma.translationDeletionAudit.count({where:{id:{in:auditFixture.map(a=>a.id)}}})===55&&(await prisma.translationDeletionAudit.findUnique({where:{id:auditFixture[0].id}})).snapshot.value==='never-list-private');
+  await prisma.translationDeletionAudit.deleteMany({where:{id:{in:[foreignAudit.id,...auditFixture.map(a=>a.id)]}}});
+
   const canonicalAudit=v=>JSON.stringify(v,(_,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.entries(x).sort(([a],[b])=>a.localeCompare(b))):x);
   check('locale removal archives exact row and full ordered history atomically',removed.removedValues===1&&canonicalAudit(audit.snapshot.row)===canonicalAudit(JSON.parse(JSON.stringify(deletedRow)))&&canonicalAudit(audit.snapshot.history)===canonicalAudit(JSON.parse(JSON.stringify(deletedHistory)))&&audit.actorId===owner.user.id&&audit.keyName==='local');
   check('locale removal deletes only selected translation not key or another locale',!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})&&!!await prisma.key.findUnique({where:{id:localKey.id}})&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'he'}}})).value==='other locale preserved');
@@ -559,6 +578,7 @@ try {
   await prisma.$transaction(tx=>writeExistingLocalValues(tx,boundSnapshot,[boundedRemove],owner.user.id),{isolationLevel:'Serializable'});
   await prisma.key.delete({where:{id:boundedKey.id}});
   check('durable deletion audit survives deletion of original key',await prisma.translationDeletionAudit.count({where:{keyId:boundedKey.id}})===1);
+  check('deleted key audit remains discoverable by metadata API',(await call(deletionAuditsPath,{jwt})).json.audits.some(a=>a.keyId===boundedKey.id&&a.keyName==='audit-bound'));
   await prisma.key.delete({where:{id:emptyKey.id}});
   await prisma.translation.update({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}},data:{value:'edited',version:{increment:1}}});
   resolvedRepositoryPlan.json=(await repositoryPreview()).json;
