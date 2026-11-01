@@ -41,7 +41,7 @@ export class RepositoryEffectWorker implements OnModuleInit, BeforeApplicationSh
     } finally {
     // Independent opt-in cleanup still gets its due attempt after effect failure.
     // A long-running effect can still defer this; no real-time guarantee.
-    if (this.retentionEnabled && Date.now() >= this.nextRetentionAt) {
+    if (!this.stopped && this.retentionEnabled && Date.now() >= this.nextRetentionAt) {
       // At most one bounded cleanup/minute per process, shared non-overlap/drain.
       // Set before attempt so a failure cannot cause aggressive5sec retries.
       this.nextRetentionAt = Date.now() + 60000;

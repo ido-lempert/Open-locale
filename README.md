@@ -536,3 +536,7 @@ Manual effect summary also shows aggregate webhook/automation/both channel
 checkpoint counts across every queue state. A pending retry can already have a
 handled webhook channel. These timestamps mean handler bookkeeping, not receiver
 receipts or successful sync. Retention can remove these counts with terminal rows.
+
+If shutdown starts while an effect is in flight, the worker drains that effect
+but does not start a new due cleanup afterward. Cleanup already in flight is
+still awaited. This does not add a hard shutdown deadline or cancel a transport.

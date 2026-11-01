@@ -137,7 +137,8 @@ add languages, manage keys and translations, export a file.
   denial/recovery tests;effect-before-checkpoint crash gap remains. Settlement locks intent before clock/token with per-lock2sec timeout;actual
   stale-token/expiry/timeout contention rejects success. Due retention still attempts after effect-step failure,with independent flags
   and original per-process cadence/drain. Manual summary adds aggregate independent/both channel checkpoint counts,
-  explicitly not receiver receipts. See reviews0134-0187.
+  explicitly not receiver receipts. Shutdown during in-flight effect prevents newly due retention afterward;
+  actual held-socket/terminal-row lifecycle verified. See reviews0134-0188.
 
 ## Phase 3 - advanced
 

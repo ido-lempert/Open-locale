@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const PG_PORT = 55466, API_PORT = 3028;
+const PG_PORT = Number(process.env.REPORTS_TEST_PG_PORT ?? 55466), API_PORT = 3028;
 const API = `http://127.0.0.1:${API_PORT}/api`;
 const root = process.cwd();
 let failures = 0;

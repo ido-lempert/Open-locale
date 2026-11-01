@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 
-const PG_PORT = 55464, API_PORT = 3026;
+const PG_PORT = Number(process.env.MERGE_CONCURRENCY_TEST_PG_PORT ?? 55464), API_PORT = 3026;
 const API = `http://127.0.0.1:${API_PORT}/api`;
 const root = process.cwd();
 let failures = 0;

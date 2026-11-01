@@ -551,11 +551,18 @@ try {
   check('worker shutdown prevents later claims despite pending queue',(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}})).state==='pending');
   let releaseReceiver,receiptStarted;const receiptGate=new Promise(r=>releaseReceiver=r),receiptReady=new Promise(r=>receiptStarted=r);let heldReceipts=0;
   repositoryReceipt=async()=>{heldReceipts++;receiptStarted();await receiptGate;};
+  const priorDrainRetention=process.env.REPOSITORY_EFFECT_RETENTION_ENABLED;process.env.REPOSITORY_EFFECT_RETENTION_ENABLED='true';
   const drainingWorker=new RepositoryEffectWorker(prisma,liveWebhooks,summaryService);drainingWorker.onModuleInit();await receiptReady;
   await new Promise(r=>setTimeout(r,5200));let drained=false;const drain=drainingWorker.beforeApplicationShutdown().then(()=>{drained=true;});await new Promise(r=>setTimeout(r,100));
   check('worker does not overlap tick during actual held socket and shutdown awaits it',!drained&&heldReceipts===1&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}})).attempts===1);
+  const drainTemplate=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}});
+  const {id:drainOriginal,createdAt:drainCreated,...drainData}=drainTemplate;
+  const drainTerminal=await prisma.repositoryLocalEffectIntent.create({data:{...drainData,state:'dead',leaseToken:null,leaseUntil:null,finishedAt:new Date('2020-01-01')}});
   repositoryReceipt=undefined;releaseReceiver();await drain;
   check('worker shutdown resolves after actual in-flight socket settles',drained);
+  check('shutdown during actual held effect does not start new due retention',!!await prisma.repositoryLocalEffectIntent.findUnique({where:{id:drainTerminal.id}}));
+  await prisma.repositoryLocalEffectIntent.delete({where:{id:drainTerminal.id}});
+  if(priorDrainRetention===undefined)delete process.env.REPOSITORY_EFFECT_RETENTION_ENABLED;else process.env.REPOSITORY_EFFECT_RETENTION_ENABLED=priorDrainRetention;
   // Actual Nest signal path, not a manually invoked lifecycle hook. Keep the
   // receiver alive past its idle timeout so shutdown must wait for real work.
   await resetCombined();await prisma.automationRule.update({where:{id:summaryRule.id},data:{config:{title:'Signal drain actual task'}}});
