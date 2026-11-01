@@ -472,3 +472,7 @@ Local apply reports expected denials without a generic server error: unsupported
 operations or local limits return 400; changed locked scope, a full effect backlog
 or a serialization conflict return 409 and require a fresh review. Unexpected
 storage faults remain 500 and roll back the transaction. No automatic retry.
+
+The local apply conflict path is tested against an actual PostgreSQL concurrent
+update after the Serializable snapshot. Raw locking SQL can report Prisma P2010
+with SQLSTATE 40001; that exact case returns 409 without retry, like P2034.

@@ -771,6 +771,24 @@ export {runRepositoryEffectStep} from './apps/api/src/app/github/repository-effe
   repoText=JSON.stringify({existing:'third'});repoStatus=503;
   check('HTTP remote read failure cannot change values or enqueue effects',(await applyHttp(httpRequest)).status===502&&(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}})).value==='after'&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}})===1);
   repoStatus=200;
+  let actualConflict,conflictTransactions=0,conflictBoundaryReached=false;
+  const conflictDb=new Proxy(prisma,{get(db,key){if(key==='$transaction')return async(fn,options)=>{
+    if(options?.isolationLevel!=='Serializable')return db.$transaction(fn,options);
+    conflictTransactions++;
+    return db.$transaction(async tx=>{
+      // Establish actual Serializable snapshot, then commit a conflicting write
+      // on another connection before production SELECT FOR UPDATE sees it.
+      await tx.project.findUniqueOrThrow({where:{id:freshProject.id}});
+      await prisma.project.update({where:{id:freshProject.id},data:{name:'Concurrent project update'}});
+      conflictBoundaryReached=true;
+      try{return await fn(tx);}catch(e){actualConflict={code:e.code,meta:e.meta};throw e;}
+    },options);
+  };const value=Reflect.get(db,key);return typeof value==='function'?value.bind(db):value;}});
+  const conflictedService=new RepositoryTargetsService(conflictDb,realProjects,realBranches,realPreviews);
+  const conflictBefore={value:await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}}),history:await prisma.translationHistory.count({where:{keyId:httpBefore.keyId}}),activity:await prisma.activityEvent.count({where:{projectId:freshProject.id}}),intents:await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}}),tm:await prisma.tmEntry.count({where:{projectId:freshProject.id}})};
+  let conflictStatus;try{await conflictedService.executeReviewedLocal(actor,freshProject.id,freshTarget.id,httpRequest);}catch(e){conflictStatus=e.getStatus?.();}
+  check('actual PG serialization failure maps409 with no automatic apply retry',conflictBoundaryReached&&conflictTransactions===1&&conflictStatus===409,JSON.stringify({conflictStatus,actualConflict,conflictTransactions}));
+  check('actual serialization failure leaves value history TM activity and effects unchanged',JSON.stringify(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}}))===JSON.stringify(conflictBefore.value)&&await prisma.translationHistory.count({where:{keyId:httpBefore.keyId}})===conflictBefore.history&&await prisma.activityEvent.count({where:{projectId:freshProject.id}})===conflictBefore.activity&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}})===conflictBefore.intents&&await prisma.tmEntry.count({where:{projectId:freshProject.id}})===conflictBefore.tm);
   const httpExistingKey=await prisma.key.findFirst({where:{projectId:freshProject.id,name:'existing'}});
   await prisma.key.update({where:{id:httpExistingKey.id},data:{maxLength:2}});
   const lengthPlan=await freshService.preview(actor,freshProject.id,freshTarget.id,1),lengthInput={expectedRevision:1,expectedFingerprint:lengthPlan.fingerprint,choices:{existing:'remote'}};

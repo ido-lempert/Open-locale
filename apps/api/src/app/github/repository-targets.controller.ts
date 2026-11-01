@@ -418,7 +418,8 @@ export class RepositoryTargetsService {
           ? 'Local effect backlog is full; try after queued work is handled'
           : 'Repository local scope changed; compare and review again');
       }
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2034')
+      if (e instanceof Prisma.PrismaClientKnownRequestError &&
+          (e.code === 'P2034' || (e.code === 'P2010' && e.meta?.['code'] === '40001')))
         throw new ConflictException('Concurrent local change; compare and review again');
       throw e;
     }

@@ -125,7 +125,8 @@ add languages, manage keys and translations, export a file.
   commits local-only set/removal/history/TM/intents atomically. Web UI adds separate
   reviewed local apply confirmation, cancel, counts/digest and stale-review clearing;
   no baseline advance, remote write or accepted sync. Typed local apply denials400/409;unexpected storage faults remain500/rollback.
-  See reviews0134-0176.
+  Actual PG raw-lock SQLSTATE40001 conflict mapped409 without retry.
+  See reviews0134-0177.
 
 ## Phase 3 - advanced
 
