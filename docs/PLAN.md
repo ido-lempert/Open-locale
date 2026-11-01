@@ -114,7 +114,8 @@ add languages, manage keys and translations, export a file.
   partial retry ledger. Explicit internal combined step added under one lease,
   independent channel checkpoints; no production timer. Intent-scoped successful-rule checkpoints skip completed rules on partial retries;
   crash gap remains. Rule checkpoint writers lock intent before evaluating deadline/token under
-  contention. See reviews0134-0168.
+  contention. Both channel checkpoints also lock before deadline/token evaluation under
+  contention. See reviews0134-0169.
 
 ## Phase 3 - advanced
 

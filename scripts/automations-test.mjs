@@ -473,6 +473,27 @@ try {
   const liveCheckpoint=await prisma.$transaction(tx=>checkpointRepositoryRule(tx,repoIntent.id,owner.user.id,{id:summaryRule.id,revision:7}));
   check('live fenced rule checkpoint stores exact revision',liveCheckpoint&&(await prisma.$queryRaw`SELECT "ruleRevision" FROM repository_automation_rule_checkpoints WHERE "intentId"=${repoIntent.id}::uuid`)[0]?.ruleRevision===7);
   rmSync(fenceBundle,{force:true});
+  const channelBundle=join(root,'.tmp-repository-channel-fence.cjs');execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-channel-checkpoint.ts','--bundle','--platform=node','--format=cjs','--packages=external','--outfile='+channelBundle]);const {checkpointRepositoryChannel}=require(channelBundle);
+  const channelWaiter=new PrismaClient({datasources:{db:{url:url+'?application_name=repository-channel-waiter'}}});
+  for(const channel of ['webhook','automation'])for(const mutation of ['token','deadline']) {
+    await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{state:'leased',finishedAt:null,leaseToken:owner.user.id,leaseUntil:new Date('2099-01-01'),webhookHandledAt:null,automationHandledAt:null}});
+    let release,locked;const lockReady=new Promise(r=>locked=r),releaseLock=new Promise(r=>release=r);
+    const blocker=prisma.$transaction(async tx=>{await tx.$queryRaw`SELECT id FROM repository_local_effect_intents WHERE id=${repoIntent.id}::uuid FOR UPDATE`;locked();await releaseLock;
+      if(mutation==='token')await tx.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{leaseToken:member.user.id}});
+      else await tx.$executeRaw`UPDATE repository_local_effect_intents SET "leaseUntil"=clock_timestamp()-interval '1 second' WHERE id=${repoIntent.id}::uuid`;
+    },{timeout:15000});await lockReady;
+    const attempt=channelWaiter.$transaction(tx=>checkpointRepositoryChannel(tx,repoIntent.id,owner.user.id,channel),{timeout:15000});let waiting=false;
+    try{waiting=!!await pollFor(async()=>{const rows=await prisma.$queryRaw`SELECT pid FROM pg_stat_activity WHERE application_name='repository-channel-waiter' AND wait_event_type='Lock'`;return rows.length?true:null;},10);}finally{release();}
+    await blocker;const inserted=await attempt;const row=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}});
+    check('blocked '+channel+' checkpoint '+mutation+' observes actual PG lock and denies stale write',waiting&&!inserted&&row.webhookHandledAt===null&&row.automationHandledAt===null);
+  }
+  await channelWaiter.$disconnect();await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{leaseToken:owner.user.id,leaseUntil:new Date('2099-01-01')}});
+  const liveWebhook=await prisma.$transaction(tx=>checkpointRepositoryChannel(tx,repoIntent.id,owner.user.id,'webhook')),liveAutomation=await prisma.$transaction(tx=>checkpointRepositoryChannel(tx,repoIntent.id,owner.user.id,'automation'));
+  const checkpointed=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}});
+  check('live channel checkpoints write independently after contention',liveWebhook&&liveAutomation&&!!checkpointed.webhookHandledAt&&!!checkpointed.automationHandledAt);
+  const repeated=await prisma.$transaction(tx=>checkpointRepositoryChannel(tx,repoIntent.id,owner.user.id,'webhook'));
+  check('existing channel checkpoint cannot be overwritten',!repeated&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}})).webhookHandledAt.getTime()===checkpointed.webhookHandledAt.getTime());
+  rmSync(channelBundle,{force:true});
   // Fresh leased row for remaining direct-adapter scope checks.
   await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{state:'leased',finishedAt:null,leaseToken:owner.user.id,leaseUntil:new Date('2099-01-01')}});
   rmSync(stepBundle,{force:true});

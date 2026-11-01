@@ -426,3 +426,7 @@ still duplicate effects; this is not atomic exactly-once execution.
 Rule checkpoint writers lock the intent before checking the live token/deadline,
 so a blocked writer cannot record success after reclaim or expiry. Ledger rows
 cascade with their intent. Effects before checkpoints still have a crash gap.
+
+Both channel checkpoints share a lock-before-clock helper. Blocked writers recheck
+current token/deadline after contention; existing timestamps cannot be overwritten.
+This does not change the effect-before-checkpoint crash gap.
