@@ -142,7 +142,7 @@ export class AutomationsService {
           try {
             results[locale] = await this.mt.pretranslate(rule.creatorId, projectId, {
               providerId: config.providerId as string, locale, keyIds: [ctx.keyId], branch: 'main',
-            });
+            }, { beforeWrite: beforeEffect });
           } catch (e) {
             succeeded = false;
             results[locale] = { error: e instanceof Error ? e.message : String(e) };

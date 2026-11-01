@@ -71,7 +71,7 @@ export class MtService {
   // non-empty value. The write itself is conditional (INSERT .. ON CONFLICT
   // .. DO UPDATE .. WHERE value=''), so a value written by anyone between
   // our read and our write is kept, not clobbered.
-  async pretranslate(userId: string, projectId: string, dto: PretranslateDto) {
+  async pretranslate(userId: string, projectId: string, dto: PretranslateDto, options?: { beforeWrite?: () => Promise<void> }) {
     await this.projects.assertLocaleWrite(userId, projectId, [dto.locale]);
     const project = await this.projects.getFor(userId, projectId);
     const codes = project.locales.map((l) => l.code);
@@ -119,6 +119,9 @@ export class MtService {
     // Provider confidence per pair; null when the driver does not score.
     const scores: (number | null)[] = work.map((w, i) => (driver.score ? driver.score(w.source, translated[i]) : null));
 
+    // Optional internal source/rule guard after provider work, before opening
+    // the write transaction. Never hold eligibility locks across a provider.
+    await options?.beforeWrite?.();
     let written = 0;
     const writtenScores: number[] = [];
     await this.prisma.$transaction(async (tx) => {

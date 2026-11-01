@@ -109,7 +109,8 @@ add languages, manage keys and translations, export a file.
   after context change/lease expiry. Captured rule freshness/revision guard rejects
   disabled/deleted/edited/restore-ABA rules. Automation notify carries current-intent/
   rule guard per socket/retry and before each pretranslate target locale.
-  See reviews0134-0163.
+  MT revalidates after provider computation before write transaction.
+  See reviews0134-0164.
 
 ## Phase 3 - advanced
 

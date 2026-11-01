@@ -403,3 +403,7 @@ Automation pretranslate rechecks current repository intent/captured rule before
 each target locale. Revocation stops remaining locales, preserving prior committed
 fills. This is not a check inside the MT write transaction or a rollback of earlier
 locales, and does not provide per-rule retry deduplication.
+
+Repository automation also supplies an optional MT pre-write guard after provider
+computation and before opening its write transaction. Stale context discards computed
+results without translation/history/MT activity writes. A post-check race remains.

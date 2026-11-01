@@ -370,6 +370,26 @@ try {
   }
   await prisma.translation.deleteMany({where:{keyId:summaryKey.id,localeCode:{in:['he','ar']}}});
   await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:1}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{leaseUntil:new Date('2099-01-01')}});
+  for(const mutation of ['target','lease','rule-restore']) {
+    await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:1}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{leaseUntil:new Date('2099-01-01')}});
+    await prisma.automationRule.update({where:{id:summaryRule.id},data:{action:'pretranslate',config:{providerId:actualProvider.id,locales:['he']}}});
+    const beforeHistory=await prisma.translationHistory.count({where:{keyId:summaryKey.id,localeCode:'he'}}),beforeActivity=await prisma.activityEvent.count({where:{projectId:summaryProject.id,action:'mt.pretranslate'}});let mutated=false,guardSupplied=false;
+    const realMt=new MtService(prisma,projectsService,activityService,{deliver:async()=>({matched:0,succeeded:0,failed:0})},tasksService);
+    // Real service/driver compute normally. The explicit beforeWrite seam then
+    // changes context before delegating the production guard supplied by caller.
+    const computationSeam={pretranslate:async(user,project,dto,options)=>realMt.pretranslate(user,project,dto,{beforeWrite:async()=>{
+      guardSupplied=typeof options?.beforeWrite==='function';mutated=true;
+      if(mutation==='target')await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:{increment:1}}});
+      else if(mutation==='lease')await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "leaseUntil"=clock_timestamp()-interval '1 second' WHERE id=${repoIntent.id}::uuid`;
+      else {const path=`/projects/${summaryProject.id}/automations/${summaryRule.id}`;for(const enabled of [false,true]){const r=await call(path,{jwt,method:'PATCH',body:{enabled}});if(r.status>=300)throw new Error('prewrite fixture update failed');}}
+      await options?.beforeWrite?.();
+    }})};
+    const computedService=new AutomationsService(prisma,projectsService,activityService,computationSeam,tasksService,{deliver:async()=>({matched:0,succeeded:0,failed:0})});
+    let failed=false;try{await fireRepositoryAutomation(prisma,computedService,repoIntent);}catch{failed=true;}
+    check('repository MT prewrite '+mutation+' rejects after real provider computation',mutated&&guardSupplied&&failed);
+    check('repository MT prewrite '+mutation+' leaves no translation history or MT activity',await prisma.translation.count({where:{keyId:summaryKey.id,localeCode:'he'}})===0&&await prisma.translationHistory.count({where:{keyId:summaryKey.id,localeCode:'he'}})===beforeHistory&&await prisma.activityEvent.count({where:{projectId:summaryProject.id,action:'mt.pretranslate'}})===beforeActivity);
+  }
+  await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:1}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{leaseUntil:new Date('2099-01-01')}});
   rmSync(mtBundle,{force:true});
   const heRepoRow=await prisma.translation.create({data:{projectId:summaryProject.id,keyId:summaryKey.id,localeCode:'he',value:'Target'}});await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{locale:'he'}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{locale:'he',value:heRepoRow.value,translationRowId:heRepoRow.rowId,translationVersion:heRepoRow.version}});
   const nonbaseRepo=await fireRepositoryAutomation(prisma,summaryService,repoIntent);
