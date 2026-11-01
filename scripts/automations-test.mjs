@@ -271,13 +271,13 @@ try {
   await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:{increment:1}}});let deniedRepo=false;const runsBefore=await prisma.activityEvent.count({where:{projectId:summaryProject.id,action:'automation.run'}});try{await fireRepositoryAutomation(prisma,summaryService,repoIntent);}catch{deniedRepo=true;}
   check('changed repository context rejects before automation runs',deniedRepo&&await prisma.activityEvent.count({where:{projectId:summaryProject.id,action:'automation.run'}})===runsBefore);
   await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:1}});
-  await prisma.$executeRaw`DELETE FROM repository_automation_rule_checkpoints WHERE "intentId"=${repoIntent.id}::uuid`;
+  await prisma.$executeRaw`DELETE FROM repository_automation_rule_checkpoints WHERE "intentId"=${repoIntent.id}::uuid`;await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "automationRuleIds"=NULL WHERE id=${repoIntent.id}::uuid`;
   await prisma.automationRule.update({where:{id:summaryRule.id},data:{action:'notify',config:{message:'Failed repository notification'}}});let failedRepo=false;try{await fireRepositoryAutomation(prisma,summaryService,repoIntent);}catch{failedRepo=true;}
   check('repository automation adapter propagates failed rule summary',failedRepo);
   await prisma.translation.delete({where:{keyId_localeCode:{keyId:summaryKey.id,localeCode:'en'}}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{operation:'remove-locale-value',value:null,translationRowId:null,translationVersion:null}});
   const removalSummary=await fireRepositoryAutomation(prisma,summaryService,repoIntent);
   check('repository locale removal does not invent value automation trigger',removalSummary.skipped&&removalSummary.matched===0);
-  await prisma.$executeRaw`DELETE FROM repository_automation_rule_checkpoints WHERE "intentId"=${repoIntent.id}::uuid`;
+  await prisma.$executeRaw`DELETE FROM repository_automation_rule_checkpoints WHERE "intentId"=${repoIntent.id}::uuid`;await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "automationRuleIds"=NULL WHERE id=${repoIntent.id}::uuid`;
   const emptyRepoRow=await prisma.translation.create({data:{projectId:summaryProject.id,keyId:summaryKey.id,localeCode:'en',value:''}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{operation:'set-value',value:'',translationRowId:emptyRepoRow.rowId,translationVersion:emptyRepoRow.version}});await prisma.automationRule.update({where:{id:summaryRule.id},data:{action:'task.create',config:{title:'Empty repository task'}}});
   const emptyRepoSummary=await fireRepositoryAutomation(prisma,summaryService,repoIntent);
   check('empty repository set follows normal value automation semantics',emptyRepoSummary.succeeded===1&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Empty repository task'}})===1);
@@ -285,7 +285,7 @@ try {
   // Next rule must be stopped before its task or activity, not just summarized.
   const secondRepoRule=await prisma.automationRule.create({data:{projectId:summaryProject.id,name:'Second repository rule',trigger:'translation.value',action:'task.create',config:{title:'Guarded second task'},creatorId:owner.user.id,createdAt:new Date('2098-01-01')}});
   for(const mutation of ['target','lease']) {
-    await prisma.$executeRaw`DELETE FROM repository_automation_rule_checkpoints WHERE "intentId"=${repoIntent.id}::uuid`;
+    await prisma.$executeRaw`DELETE FROM repository_automation_rule_checkpoints WHERE "intentId"=${repoIntent.id}::uuid`;await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "automationRuleIds"=NULL WHERE id=${repoIntent.id}::uuid`;
     await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:1}});
     await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{leaseUntil:new Date('2099-01-01')}});
     const firstTitle='Guarded first '+mutation,secondTitle='Guarded second '+mutation;
@@ -303,7 +303,7 @@ try {
   await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{leaseUntil:new Date('2099-01-01')}});
   await prisma.automationRule.delete({where:{id:secondRepoRule.id}});
   for(const mutation of ['disable','delete','config','disable-restore','config-restore']) {
-    await prisma.$executeRaw`DELETE FROM repository_automation_rule_checkpoints WHERE "intentId"=${repoIntent.id}::uuid`;
+    await prisma.$executeRaw`DELETE FROM repository_automation_rule_checkpoints WHERE "intentId"=${repoIntent.id}::uuid`;await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "automationRuleIds"=NULL WHERE id=${repoIntent.id}::uuid`;
     const firstTitle='Fresh first '+mutation,secondTitle='Fresh second '+mutation;
     await prisma.automationRule.update({where:{id:summaryRule.id},data:{config:{title:firstTitle}}});
     const captured=await prisma.automationRule.create({data:{projectId:summaryProject.id,name:'Freshness '+mutation,trigger:'translation.value',action:'task.create',config:{title:secondTitle},creatorId:owner.user.id,createdAt:new Date('2098-01-01')}});
@@ -326,7 +326,7 @@ try {
   const socketService=new AutomationsService(prisma,projectsService,activityService,{},tasksService,new WebhooksService(prisma,projectsService));
   const socketHook=await prisma.webhook.create({data:{projectId:summaryProject.id,url:`http://127.0.0.1:${HOOK_PORT}/repository-notify`,events:['automation.notify'],secret:'repository-notify-fixture'}});
   for(const mutation of ['target','lease','rule-restore']) {
-    await prisma.$executeRaw`DELETE FROM repository_automation_rule_checkpoints WHERE "intentId"=${repoIntent.id}::uuid`;
+    await prisma.$executeRaw`DELETE FROM repository_automation_rule_checkpoints WHERE "intentId"=${repoIntent.id}::uuid`;await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "automationRuleIds"=NULL WHERE id=${repoIntent.id}::uuid`;
     await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:1}});
     await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{leaseUntil:new Date('2099-01-01')}});
     await prisma.automationRule.update({where:{id:summaryRule.id},data:{action:'notify',config:{message:'Repository socket '+mutation}}});
@@ -350,7 +350,7 @@ try {
   await prisma.projectLocale.create({data:{projectId:summaryProject.id,code:'ar'}});
   const actualProvider=await prisma.mtProvider.create({data:{projectId:summaryProject.id,name:'Repository pseudo',type:'pseudo'}});
   for(const mutation of ['target','lease','rule-restore']) {
-    await prisma.$executeRaw`DELETE FROM repository_automation_rule_checkpoints WHERE "intentId"=${repoIntent.id}::uuid`;
+    await prisma.$executeRaw`DELETE FROM repository_automation_rule_checkpoints WHERE "intentId"=${repoIntent.id}::uuid`;await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "automationRuleIds"=NULL WHERE id=${repoIntent.id}::uuid`;
     await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:1}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{leaseUntil:new Date('2099-01-01')}});
     await prisma.translation.update({where:{keyId_localeCode:{keyId:summaryKey.id,localeCode:'en'}},data:{value:'Locale guard source'}});
     const currentSource=await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:summaryKey.id,localeCode:'en'}}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{value:currentSource.value,translationRowId:currentSource.rowId,translationVersion:currentSource.version}});
@@ -377,7 +377,7 @@ try {
   await prisma.translation.deleteMany({where:{keyId:summaryKey.id,localeCode:{in:['he','ar']}}});
   await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:1}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{leaseUntil:new Date('2099-01-01')}});
   for(const mutation of ['target','lease','rule-restore']) {
-    await prisma.$executeRaw`DELETE FROM repository_automation_rule_checkpoints WHERE "intentId"=${repoIntent.id}::uuid`;
+    await prisma.$executeRaw`DELETE FROM repository_automation_rule_checkpoints WHERE "intentId"=${repoIntent.id}::uuid`;await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "automationRuleIds"=NULL WHERE id=${repoIntent.id}::uuid`;
     await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:1}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{leaseUntil:new Date('2099-01-01')}});
     await prisma.automationRule.update({where:{id:summaryRule.id},data:{action:'pretranslate',config:{providerId:actualProvider.id,locales:['he']}}});
     const beforeHistory=await prisma.translationHistory.count({where:{keyId:summaryKey.id,localeCode:'he'}}),beforeActivity=await prisma.activityEvent.count({where:{projectId:summaryProject.id,action:'mt.pretranslate'}});let mutated=false,guardSupplied=false;
@@ -399,7 +399,7 @@ try {
   await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:1}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{leaseUntil:new Date('2099-01-01')}});
   rmSync(mtBundle,{force:true});
   const stepBundle=join(root,'.tmp-repository-automation-step.cjs');execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-automation-step.ts','--bundle','--platform=node','--format=cjs','--packages=external','--outfile='+stepBundle]);const {runRepositoryAutomationStep}=require(stepBundle);
-  const resetStep=async()=>{await prisma.$executeRaw`DELETE FROM repository_automation_rule_checkpoints WHERE "intentId"=${repoIntent.id}::uuid`;return prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{state:'pending',attempts:0,leaseToken:null,leaseUntil:null,finishedAt:null,automationHandledAt:null,availableAt:new Date('2020-01-01')}});};
+  const resetStep=async()=>{await prisma.$executeRaw`DELETE FROM repository_automation_rule_checkpoints WHERE "intentId"=${repoIntent.id}::uuid`;await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "automationRuleIds"=NULL WHERE id=${repoIntent.id}::uuid`;return prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{state:'pending',attempts:0,leaseToken:null,leaseUntil:null,finishedAt:null,automationHandledAt:null,availableAt:new Date('2020-01-01')}});};
   await prisma.automationRule.update({where:{id:summaryRule.id},data:{action:'task.create',config:{title:'Checkpointed automation task'}}});await resetStep();
   const stepResult=await runRepositoryAutomationStep(prisma,summaryService),handledRow=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}});
   check('automation step commits actual task activity and independent handled checkpoint',stepResult.status==='completed'&&!!handledRow.automationHandledAt&&handledRow.webhookHandledAt===null&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Checkpointed automation task'}})===1);
@@ -442,6 +442,7 @@ try {
   const partialLedger=await runRepositoryEffectStep(prisma,liveWebhooks,summaryService);
   const ledgerRows=await prisma.$queryRaw`SELECT "ruleId","ruleRevision" FROM repository_automation_rule_checkpoints WHERE "intentId"=${repoIntent.id}::uuid`;
   check('partial rule failure checkpoints only prior actual successful rule',partialLedger.status==='retry'&&ledgerRows.length===1&&ledgerRows[0].ruleId===summaryRule.id&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Rule ledger first'}})===1);
+  const lateRule=await prisma.automationRule.create({data:{projectId:summaryProject.id,name:'Late excluded rule',trigger:'translation.value',action:'task.create',config:{title:'Must not join old intent'},creatorId:owner.user.id}});
   await prisma.task.updateMany({where:{projectId:summaryProject.id,title:'Rule ledger first'},data:{status:'DONE'}});
   const editFirst=await call(`/projects/${summaryProject.id}/automations/${summaryRule.id}`,{jwt,method:'PATCH',body:{config:{title:'Ledger edited completed rule'}}});
   check('completed rule configuration edited through authenticated API',editFirst.status===200);
@@ -449,6 +450,9 @@ try {
   await prisma.automationRule.update({where:{id:failingLater.id},data:{action:'task.create',config:{title:'Rule ledger recovered'}}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{availableAt:new Date('2020-01-01')}});
   const ledgerRetry=await runRepositoryEffectStep(prisma,liveWebhooks,summaryService);
   check('due partial retry skips checkpointed task and activity after task closed',ledgerRetry.status==='completed'&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Ledger edited completed rule'}})===0&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Rule ledger first'}})===1&&await prisma.activityEvent.count({where:{projectId:summaryProject.id,action:'automation.run',detail:{path:['title'],equals:'Rule ledger first'}}})===firstRunsBefore&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Rule ledger recovered'}})===1);
+  const frozen=(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}})).automationRuleIds;
+  check('partial retry preserves frozen rule ids and excludes new actual task',Array.isArray(frozen)&&frozen.length===2&&frozen.includes(summaryRule.id)&&frozen.includes(failingLater.id)&&!frozen.includes(lateRule.id)&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Must not join old intent'}})===0);
+  await prisma.automationRule.delete({where:{id:lateRule.id}});
   await prisma.automationRule.delete({where:{id:failingLater.id}});
   const expiredRuleCheck=await prisma.$queryRaw`SELECT "ruleId" FROM repository_automation_rule_checkpoints WHERE "intentId"=${repoIntent.id}::uuid`;
   check('rule checkpoint ledger has only unique successful rule ids',expiredRuleCheck.length===2&&new Set(expiredRuleCheck.map(r=>r.ruleId)).size===2);
@@ -456,7 +460,7 @@ try {
   const waiter=new PrismaClient({datasources:{db:{url:url+'?application_name=repository-rule-waiter'}}});
   for(const mutation of ['token','deadline']) {
     await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{state:'leased',finishedAt:null,leaseToken:owner.user.id,leaseUntil:new Date('2099-01-01')}});
-    await prisma.$executeRaw`DELETE FROM repository_automation_rule_checkpoints WHERE "intentId"=${repoIntent.id}::uuid`;
+    await prisma.$executeRaw`DELETE FROM repository_automation_rule_checkpoints WHERE "intentId"=${repoIntent.id}::uuid`;await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "automationRuleIds"=NULL WHERE id=${repoIntent.id}::uuid`;
     let release,locked;const lockReady=new Promise(r=>locked=r),releaseLock=new Promise(r=>release=r);
     const blocker=prisma.$transaction(async tx=>{await tx.$queryRaw`SELECT id FROM repository_local_effect_intents WHERE id=${repoIntent.id}::uuid FOR UPDATE`;locked();await releaseLock;
       if(mutation==='token')await tx.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{leaseToken:member.user.id}});

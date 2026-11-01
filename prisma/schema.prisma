@@ -649,6 +649,7 @@ model RepositoryLocalEffectIntent {
   previewFingerprint String
   webhookHandledAt DateTime?
   automationHandledAt DateTime?
+  automationRuleIds Json?
   ruleCheckpoints RepositoryAutomationRuleCheckpoint[]
   targetRevision Int?
   translationRowId String? @db.Uuid

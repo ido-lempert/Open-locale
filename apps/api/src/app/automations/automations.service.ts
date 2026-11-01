@@ -98,14 +98,14 @@ export class AutomationsService {
   // Called fire-and-forget from the write paths. Trigger bounds are enforced
   // here, not by callers: main branch only; translation.value only for
   // base-locale writes. Never throws.
-  async fire(projectId: string, trigger: string, ctx: { keyId: string; keyName: string; branchName: string; localeCode?: string; actorId?: string }, options?: { beforeRule?: () => Promise<void>; ruleHandled?: (rule: { id: string; revision: number }) => Promise<boolean>; afterRule?: (rule: { id: string; revision: number }) => Promise<void> }) {
+  async fire(projectId: string, trigger: string, ctx: { keyId: string; keyName: string; branchName: string; localeCode?: string; actorId?: string }, options?: { ruleIds?: string[]; beforeRule?: () => Promise<void>; ruleHandled?: (rule: { id: string; revision: number }) => Promise<boolean>; afterRule?: (rule: { id: string; revision: number }) => Promise<void> }) {
     const summary = { matched: 0, succeeded: 0, failed: 0, skipped: false };
     try {
       if (ctx.branchName !== 'main') return { ...summary, skipped: true };
       const project = await this.prisma.project.findUnique({ where: { id: projectId }, include: { locales: true } });
       if (!project || (trigger === 'translation.value' && ctx.localeCode !== project.baseLocale))
         return { ...summary, skipped: true };
-      const rules = await this.prisma.automationRule.findMany({ where: { projectId, trigger, enabled: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
+      const rules = await this.prisma.automationRule.findMany({ where: { projectId, trigger, enabled: true, ...(options?.ruleIds ? { id: { in: options.ruleIds } } : {}) }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
       summary.matched = rules.length;
       for (const rule of rules) {
         // Optional current-scope guard. A rejection stops remaining rules;

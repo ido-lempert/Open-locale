@@ -430,3 +430,7 @@ cascade with their intent. Effects before checkpoints still have a crash gap.
 Both channel checkpoints share a lock-before-clock helper. Blocked writers recheck
 current token/deadline after contention; existing timestamps cannot be overwritten.
 This does not change the effect-before-checkpoint crash gap.
+
+First repository automation dispatch freezes eligible rule IDs under the intent
+lock. Later-created rules cannot join that intent on retry. Current enabled/revision
+checks remain; failed selected rules may use current configuration on a later retry.

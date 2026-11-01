@@ -115,7 +115,8 @@ add languages, manage keys and translations, export a file.
   independent channel checkpoints; no production timer. Intent-scoped successful-rule checkpoints skip completed rules on partial retries;
   crash gap remains. Rule checkpoint writers lock intent before evaluating deadline/token under
   contention. Both channel checkpoints also lock before deadline/token evaluation under
-  contention. See reviews0134-0169.
+  contention. First automation dispatch freezes eligible rule IDs; new rules excluded on
+  retry, configuration remains current. See reviews0134-0170.
 
 ## Phase 3 - advanced
 

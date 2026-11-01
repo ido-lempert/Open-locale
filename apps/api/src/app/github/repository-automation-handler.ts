@@ -17,13 +17,25 @@ export async function fireRepositoryAutomation(
     (tx) => validateRepositoryEffect(tx, intent.id, intent.leaseToken!),
     { isolationLevel: 'Serializable' },
   );
-  const current = await revalidate();
+  const current = await db.$transaction(async (tx) => {
+    const checked = await validateRepositoryEffect(tx, intent.id, intent.leaseToken!);
+    if (checked.operation !== 'set-value' || checked.automationRuleIds !== null) return checked;
+    const rules = await tx.automationRule.findMany({
+      where: { projectId: checked.projectId, trigger: 'translation.value', enabled: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { id: true },
+    });
+    return tx.repositoryLocalEffectIntent.update({ where: { id: checked.id },
+      data: { automationRuleIds: rules.map((rule) => rule.id) } });
+  }, { isolationLevel: 'Serializable' });
   if (current.operation !== 'set-value')
     return { matched: 0, succeeded: 0, failed: 0, skipped: true };
+  if (!Array.isArray(current.automationRuleIds) || !current.automationRuleIds.every((id) => typeof id === 'string'))
+    throw new Error('Repository automation rule selection unavailable');
   const result = await automations.fire(current.projectId, 'translation.value', {
     keyId: current.keyId, keyName: current.keyName, branchName: current.branch,
     localeCode: current.locale, actorId: current.actorId,
   }, {
+    ruleIds: current.automationRuleIds as string[],
     beforeRule: async () => { await revalidate(); },
     // Intent-scoped successful rule checkpoint. An edited rule does not replay
     // an already handled logical intent. Revision retained for audit only.
