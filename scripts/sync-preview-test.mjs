@@ -581,6 +581,30 @@ try {
   check('deletion audit metadata reads never mutate retained snapshots',await prisma.translationDeletionAudit.count({where:{id:{in:auditFixture.map(a=>a.id)}}})===55&&(await prisma.translationDeletionAudit.findUnique({where:{id:auditFixture[0].id}})).snapshot.value==='never-list-private');
   await prisma.translationDeletionAudit.deleteMany({where:{id:{in:[foreignAudit.id,...auditFixture.map(a=>a.id)]}}});
 
+  // Capture the real Prisma-emitted metadata page SQL,not a hand-written analogue.
+  const auditBundle=join(root,'.tmp-audit-page.cjs');
+  execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/sync-preview.controller.ts','--bundle','--platform=node','--format=cjs','--packages=external','--outfile='+auditBundle]);
+  const {LocalSyncPreviewService:AuditPageService}=require(auditBundle);
+  const auditPlanClient=new PrismaClient({datasources:{db:{url}},log:[{emit:'event',level:'query'}]});
+  const {default:auditPg}=await import('pg');
+  const auditExplainClient=new auditPg.Client({connectionString:url});await auditExplainClient.connect();
+  let actualPageQuery;
+  auditPlanClient.$on('query',e=>{if(e.query.includes('translation_deletion_audits')&&e.query.startsWith('SELECT'))actualPageQuery=e;});
+  const pageService=new AuditPageService(auditPlanClient,{requireAdmin:async()=>{}},{});
+  await prisma.$executeRaw`INSERT INTO translation_deletion_audits (id,"projectId","keyId","keyName","localeCode",snapshot,"createdAt") SELECT md5('audit-page-'||i)::uuid,CASE WHEN i%2=0 THEN ${project.id}::uuid ELSE ${summaryOtherProject.id}::uuid END,${localKey.id}::uuid,'plan fixture','en','{"value":"plan-private"}'::jsonb,'2098-01-01'::timestamp+(i%3)*interval '1 second' FROM generate_series(1,20000) i`;
+  await prisma.$executeRaw`ANALYZE translation_deletion_audits`;
+  const explainActualPage=async(cursor)=>{
+    await pageService.listDeletionAudits({via:'jwt',userId:owner.user.id},project.id,cursor);
+    const emitted=actualPageQuery;
+    return (await auditExplainClient.query('EXPLAIN (ANALYZE,FORMAT JSON) '+emitted.query,JSON.parse(emitted.params))).rows;
+  };
+  const firstPagePlan=await explainActualPage();
+  const deepCursor=Buffer.from(JSON.stringify(['2098-01-01T00:00:00.000Z','80000000-0000-0000-0000-000000000000'])).toString('base64url');
+  const olderPagePlan=await explainActualPage(deepCursor);
+  for(const [label,plan] of [['first',firstPagePlan],['older',olderPagePlan]])check('actual Prisma audit '+label+' page uses project timestamp UUID index without sort',JSON.stringify(plan).includes('translation_deletion_audits_projectId_createdAt_id_idx')&&!JSON.stringify(plan).includes('"Node Type":"Sort"'));
+  await auditExplainClient.end();await auditPlanClient.$disconnect();rmSync(auditBundle,{force:true});
+  await prisma.translationDeletionAudit.deleteMany({where:{keyName:'plan fixture'}});
+
   const canonicalAudit=v=>JSON.stringify(v,(_,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.entries(x).sort(([a],[b])=>a.localeCompare(b))):x);
   check('locale removal archives exact row and full ordered history atomically',removed.removedValues===1&&canonicalAudit(audit.snapshot.row)===canonicalAudit(JSON.parse(JSON.stringify(deletedRow)))&&canonicalAudit(audit.snapshot.history)===canonicalAudit(JSON.parse(JSON.stringify(deletedHistory)))&&audit.actorId===owner.user.id&&audit.keyName==='local');
   check('locale removal deletes only selected translation not key or another locale',!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})&&!!await prisma.key.findUnique({where:{id:localKey.id}})&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'he'}}})).value==='other locale preserved');

@@ -556,3 +556,9 @@ not frozen snapshots: concurrent older inserts/deletions can change later pages.
 It includes audit/key IDs, key name, locale, actor ID and timestamp only, never the
 stored translation/history snapshot. Metadata survives key deletion. This no-store
 read does not restore/delete anything or grant restore permission. No web list yet.
+
+Audit metadata pages use a project/timestamp/UUID ordered index. PostgreSQL chooses
+its query plan; the index does not impose a total runtime bound. The migration uses
+transactional CREATE INDEX then drops the redundant project/timestamp prefix index.
+Plan a maintenance window for a large existing audit table: writes can wait while
+the index builds. Existing audit metadata and stored snapshots are not rewritten.

@@ -638,7 +638,7 @@ model TranslationDeletionAudit {
   createdAt DateTime @default(now())
   project Project @relation(fields:[projectId],references:[id],onDelete:Cascade)
   actor User? @relation(fields:[actorId],references:[id],onDelete:SetNull)
-  @@index([projectId,createdAt])
+  @@index([projectId,createdAt,id])
   @@map("translation_deletion_audits")
 }
 
