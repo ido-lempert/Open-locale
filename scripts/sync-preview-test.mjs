@@ -12,6 +12,8 @@ const recoverySource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app
 const {inspectDeletionRecovery}=await import('data:text/javascript;base64,'+Buffer.from(recoverySource).toString('base64'));
 const recoveryLockSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/deletion-recovery-lock.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
 const {lockDeletionRecovery}=await import('data:text/javascript;base64,'+Buffer.from(recoveryLockSource).toString('base64'));
+const recoveryWriterSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/deletion-recovery-writer.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
+const {writeDeletionRecovery}=await import('data:text/javascript;base64,'+Buffer.from(recoveryWriterSource).toString('base64'));
 const transactionSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-local-transaction.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
 const {repositoryLocalTransaction}=await import('data:text/javascript;base64,'+Buffer.from(transactionSource).toString('base64'));
 const leaseSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-effect-lease.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
@@ -609,6 +611,35 @@ try {
   }
   check('locked recovery recovers after real locks released',(await prisma.$transaction(tx=>lockDeletionRecovery(tx,recoveryScope),{isolationLevel:'Serializable'})).eligible);
   check('locked recovery leaves actual audit and absent value unchanged',JSON.stringify(await prisma.translationDeletionAudit.findUnique({where:{id:audit.id}}))===recoveryBefore&&!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}}));
+  const recoveryCounts=async()=>({rows:await prisma.translation.count(),history:await prisma.translationHistory.count(),activity:await prisma.activityEvent.count(),tm:await prisma.tmEntry.count(),markers:await prisma.repositoryRemovalGeneration.count(),intents:await prisma.repositoryLocalEffectIntent.count()});
+  const recoveryCountsBefore=await recoveryCounts();
+  let rollbackWriterResult,rollbackRow,rollbackHistory,rollbackMarker;
+  try{await prisma.$transaction(async tx=>{
+    rollbackWriterResult=await writeDeletionRecovery(tx,recoveryScope);
+    rollbackRow=await tx.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}});
+    rollbackHistory=await tx.translationHistory.findMany({where:{keyId:localKey.id,localeCode:'en'}});
+    rollbackMarker=await tx.repositoryRemovalGeneration.count({where:{projectId:project.id,keyId:localKey.id,locale:'en'}});
+    throw new Error('rollback recovery writer fixture');
+  },{isolationLevel:'Serializable'});}catch(e){if(e?.message!=='rollback recovery writer fixture')throw e;}
+  check('isolated recovery writer creates fresh unverified row without stale provenance',rollbackRow.value==='writer draft'&&rollbackRow.rowId!==deletedRow.rowId&&rollbackRow.version===1&&rollbackRow.status==='UNVERIFIED'&&rollbackRow.mtScore===null&&rollbackRow.mtProvider===null&&rollbackRow.pluralForms===null);
+  check('isolated recovery writes one new history event without replaying archive',rollbackHistory.length===1&&rollbackHistory[0].value==='writer draft'&&rollbackHistory[0].previousValue===null&&rollbackHistory[0].changedById===owner.user.id&&rollbackMarker===0&&rollbackWriterResult.historyReplayed===false&&rollbackWriterResult.repositoryEffectsCreated===false);
+  check('recovery writer rollback restores absence marker counts and retained audit',JSON.stringify(await recoveryCounts())===JSON.stringify(recoveryCountsBefore)&&JSON.stringify(await prisma.translationDeletionAudit.findUnique({where:{id:audit.id}}))===recoveryBefore);
+  // Dedicated non-base locale fixture proves a committed TM/history/activity path.
+  const recoveryKey=await prisma.key.create({data:{projectId:project.id,branchId:localKey.branchId,name:'dedicated-recovery'}});
+  await prisma.translation.create({data:{projectId:project.id,keyId:recoveryKey.id,localeCode:'en',value:'Recovery source'}});
+  const recoveryArchive=await prisma.translationDeletionAudit.create({data:{projectId:project.id,keyId:recoveryKey.id,keyName:recoveryKey.name,localeCode:'he',snapshot:{row:{projectId:project.id,keyId:recoveryKey.id,localeCode:'he',value:'Recovered target',status:'REVIEWED',mtProvider:'old-provider',mtScore:99},history:[]}}});
+  await prisma.repositoryRemovalGeneration.create({data:{projectId:project.id,keyId:recoveryKey.id,locale:'he',auditId:recoveryArchive.id}});
+  const committedRecoveryScope={...recoveryScope,auditId:recoveryArchive.id,expectedValueDigest:createHash('sha256').update('Recovered target').digest('hex')};
+  const preFaultRecoveryCounts=await recoveryCounts();let recoveryFault=false;
+  try{await prisma.$transaction(tx=>writeDeletionRecovery({...tx,activityEvent:{...tx.activityEvent,create:async()=>{throw new Error('injected recovery activity failure');}}},committedRecoveryScope),{isolationLevel:'Serializable'});}catch(e){recoveryFault=e.message==='injected recovery activity failure';}
+  check('actual recovery storage fault rolls back row history TM and marker',recoveryFault&&JSON.stringify(await recoveryCounts())===JSON.stringify(preFaultRecoveryCounts)&&!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:recoveryKey.id,localeCode:'he'}}})&&await prisma.repositoryRemovalGeneration.count({where:{projectId:project.id,keyId:recoveryKey.id,locale:'he',auditId:recoveryArchive.id}})===1);
+  const committedRecovery=await prisma.$transaction(tx=>writeDeletionRecovery(tx,committedRecoveryScope),{isolationLevel:'Serializable'});
+  check('committed recovery populates actual translation memory pair',(await prisma.tmEntry.findFirst({where:{projectId:project.id,sourceText:'Recovery source',localeCode:'he'}}))?.targetText==='Recovered target');
+  const recoveredActivity=await prisma.activityEvent.findFirst({where:{projectId:project.id,keyName:recoveryKey.name},orderBy:{createdAt:'desc'}});
+  check('committed recovery retains archive and writes safe new activity',await prisma.translationDeletionAudit.count({where:{id:recoveryArchive.id}})===1&&recoveredActivity.detail.source==='internal-deletion-recovery'&&recoveredActivity.detail.auditId===recoveryArchive.id&&!JSON.stringify(recoveredActivity.detail).includes('Recovered target')&&committedRecovery.remoteWritten===false&&committedRecovery.baselineAdvanced===false);
+  let repeatedRecoveryDenied=false;try{await prisma.$transaction(tx=>writeDeletionRecovery(tx,committedRecoveryScope),{isolationLevel:'Serializable'});}catch(e){repeatedRecoveryDenied=e.name==='RepositoryLocalError';}
+  check('recovery repeated attempt never overwrites committed row',repeatedRecoveryDenied&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:recoveryKey.id,localeCode:'he'}}})).rowId===committedRecovery.rowId&&await prisma.translationHistory.count({where:{keyId:recoveryKey.id,localeCode:'he'}})===1);
+  await prisma.key.delete({where:{id:recoveryKey.id}});await prisma.translationDeletionAudit.delete({where:{id:recoveryArchive.id}});await prisma.activityEvent.deleteMany({where:{projectId:project.id,keyName:recoveryKey.name}});await prisma.tmEntry.deleteMany({where:{projectId:project.id,sourceText:'Recovery source'}});
   const auditMetadata=await call(deletionAuditsPath,{jwt});
   const listedAudit=auditMetadata.json.audits.find(a=>a.id===audit.id);
   check('actual removed locale audit metadata appears without snapshot or restoration claim',auditMetadata.status===200&&listedAudit?.keyId===localKey.id&&listedAudit.keyName==='local'&&listedAudit.localeCode==='en'&&listedAudit.actorId===owner.user.id&&Object.keys(listedAudit).sort().join(',')==='actorId,createdAt,id,keyId,keyName,localeCode'&&auditMetadata.json.snapshotIncluded===false&&auditMetadata.json.canRestore===false&&!JSON.stringify(auditMetadata.json).includes('writer draft'));

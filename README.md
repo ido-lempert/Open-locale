@@ -576,3 +576,9 @@ locked project/audit/key/locale/removal-generation/current-row revalidation agai
 the reviewed value digest. Per-lock timeout is two seconds,not a total request bound.
 No restore writer or HTTP endpoint. Future writes must stay in the same transaction;
 row locks cannot reserve an absent translation,so serialization handling is required.
+
+Isolated internal recovery writer now creates a fresh UNVERIFIED row,new history
+event,safe activity and normal TM pair inside that guarded Serializable transaction.
+It never upserts/overwrites,replays old history/status/MT provenance or deletes the
+audit. It clears the old removal marker. No public recovery endpoint/UI or repository
+effect composition exists;the building block is exercised only by local tests.
