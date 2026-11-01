@@ -640,6 +640,35 @@ try {
   let repeatedRecoveryDenied=false;try{await prisma.$transaction(tx=>writeDeletionRecovery(tx,committedRecoveryScope),{isolationLevel:'Serializable'});}catch(e){repeatedRecoveryDenied=e.name==='RepositoryLocalError';}
   check('recovery repeated attempt never overwrites committed row',repeatedRecoveryDenied&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:recoveryKey.id,localeCode:'he'}}})).rowId===committedRecovery.rowId&&await prisma.translationHistory.count({where:{keyId:recoveryKey.id,localeCode:'he'}})===1);
   await prisma.key.delete({where:{id:recoveryKey.id}});await prisma.translationDeletionAudit.delete({where:{id:recoveryArchive.id}});await prisma.activityEvent.deleteMany({where:{projectId:project.id,keyName:recoveryKey.name}});await prisma.tmEntry.deleteMany({where:{projectId:project.id,sourceText:'Recovery source'}});
+  const raceClient=new PrismaClient({datasources:{db:{url:url+'?application_name=recovery-race-waiter'}}});
+  for(const raceKind of ['two-recoveries','normal-create']){
+    const raceKey=await prisma.key.create({data:{projectId:project.id,branchId:localKey.branchId,name:'recovery-race-'+raceKind}});
+    const raceAudit=await prisma.translationDeletionAudit.create({data:{projectId:project.id,keyId:raceKey.id,keyName:raceKey.name,localeCode:'he',snapshot:{row:{projectId:project.id,keyId:raceKey.id,localeCode:'he',value:'Recovery race value'},history:[]}}});
+    await prisma.repositoryRemovalGeneration.create({data:{projectId:project.id,keyId:raceKey.id,locale:'he',auditId:raceAudit.id}});
+    const raceScope={...recoveryScope,auditId:raceAudit.id,expectedValueDigest:createHash('sha256').update('Recovery race value').digest('hex')};
+    let ready,release;const held=new Promise(r=>ready=r),gate=new Promise(r=>release=r);
+    const first=prisma.$transaction(async tx=>{
+      let result;
+      if(raceKind==='two-recoveries')result=await writeDeletionRecovery(tx,raceScope);
+      else result=await tx.translation.create({data:{projectId:project.id,keyId:raceKey.id,localeCode:'he',value:'Concurrent normal value'}});
+      ready();await gate;return result;
+    },{isolationLevel:'Serializable',timeout:10000});await held;
+    const second=raceClient.$transaction(tx=>writeDeletionRecovery(tx,raceScope),{isolationLevel:'Serializable',timeout:7000}).then(v=>({ok:true,value:v}),e=>({ok:false,error:e}));
+    let observedWait=false;for(let n=0;n<60;n++){
+      const wait=await prisma.$queryRaw`SELECT wait_event_type FROM pg_stat_activity WHERE application_name='recovery-race-waiter' AND state='active' AND wait_event_type='Lock'`;
+      if(wait.length){observedWait=true;break;}await new Promise(r=>setTimeout(r,20));
+    }
+    release();const firstResult=await first,secondResult=await second;
+    const raceRow=await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:raceKey.id,localeCode:'he'}}});
+    const raceHistory=await prisma.translationHistory.count({where:{keyId:raceKey.id,localeCode:'he'}});
+    const raceActivities=await prisma.activityEvent.count({where:{projectId:project.id,keyName:raceKey.name}});
+    check('actual '+raceKind+' contender waits on PostgreSQL lock',observedWait);
+    check('actual '+raceKind+' stale transaction cannot report recovery success',!secondResult.ok&&(raceKind==='two-recoveries'?(secondResult.error.code==='P2034'||(secondResult.error.code==='P2010'&&secondResult.error.meta?.code==='40001')):(secondResult.error.code==='P2002'&&JSON.stringify(secondResult.error.meta?.target)===JSON.stringify(['keyId','localeCode']))));
+    check('actual '+raceKind+' keeps winning value and one row identity',raceRow.value===(raceKind==='two-recoveries'?'Recovery race value':'Concurrent normal value')&&raceRow.rowId===firstResult.rowId&&raceHistory===(raceKind==='two-recoveries'?1:0)&&raceActivities===(raceKind==='two-recoveries'?1:0));
+    check('actual '+raceKind+' preserves archive and expected marker state',await prisma.translationDeletionAudit.count({where:{id:raceAudit.id}})===1&&await prisma.repositoryRemovalGeneration.count({where:{projectId:project.id,keyId:raceKey.id,locale:'he'}})===(raceKind==='two-recoveries'?0:1));
+    await prisma.key.delete({where:{id:raceKey.id}});await prisma.translationDeletionAudit.delete({where:{id:raceAudit.id}});await prisma.activityEvent.deleteMany({where:{projectId:project.id,keyName:raceKey.name}});
+  }
+  await raceClient.$disconnect();
   const auditMetadata=await call(deletionAuditsPath,{jwt});
   const listedAudit=auditMetadata.json.audits.find(a=>a.id===audit.id);
   check('actual removed locale audit metadata appears without snapshot or restoration claim',auditMetadata.status===200&&listedAudit?.keyId===localKey.id&&listedAudit.keyName==='local'&&listedAudit.localeCode==='en'&&listedAudit.actorId===owner.user.id&&Object.keys(listedAudit).sort().join(',')==='actorId,createdAt,id,keyId,keyName,localeCode'&&auditMetadata.json.snapshotIncluded===false&&auditMetadata.json.canRestore===false&&!JSON.stringify(auditMetadata.json).includes('writer draft'));

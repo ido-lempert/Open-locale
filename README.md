@@ -582,3 +582,9 @@ event,safe activity and normal TM pair inside that guarded Serializable transact
 It never upserts/overwrites,replays old history/status/MT provenance or deletes the
 audit. It clears the old removal marker. No public recovery endpoint/UI or repository
 effect composition exists;the building block is exercised only by local tests.
+
+Recovery concurrency tests observe actual PostgreSQL lock waits for competing
+Serializable recoveries and a normal locale creation. The losing stale transaction
+fails serialization (competing recovery) or the exact key/locale unique constraint
+(normal creation),without recovery success or duplicate history/activity. No
+automatic retry of the stale review is added.

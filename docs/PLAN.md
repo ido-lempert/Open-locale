@@ -146,7 +146,8 @@ add languages, manage keys and translations, export a file.
   plans and migration preservation verified. Audit page loading status and focus/viewport landing support keyboard navigation. Internal read-only deletion recovery diagnostic validates bounded flat snapshots,
   current absence/key/locale and exact removal generation;no restore execution/API. Internal Serializable recovery guard locks current admin/scope/generation with
   per-lock2sec timeout,binds digest;no restore execution/API. Isolated internal recovery writer adds fresh row/new history/activity/TM with
-  rollback proof;no public restore API/UI or repository effect composition. See reviews0134-0197.
+  rollback proof;no public restore API/UI or repository effect composition. Actual PostgreSQL competing recovery/normal-create races preserve winning row
+  and deny stale success without duplicate history/activity. See reviews0134-0198.
 
 ## Phase 3 - advanced
 
