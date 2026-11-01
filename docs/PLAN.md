@@ -127,7 +127,8 @@ add languages, manage keys and translations, export a file.
   no baseline advance, remote write or accepted sync. Typed local apply denials400/409;unexpected storage faults remain500/rollback.
   Actual PG raw-lock SQLSTATE40001 conflict mapped409 without retry.
   Local apply per-lock2sec timeout55P03 maps busy409;actual project/translation
-  contention tested without partial writes. See reviews0134-0178.
+  contention tested without partial writes. Separate defaultOFF terminal retention flag,100old terminal rows/min/process,
+  shared non-overlap/drain;retention-only does not dispatch. See reviews0134-0179.
 
 ## Phase 3 - advanced
 

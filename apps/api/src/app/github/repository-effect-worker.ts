@@ -3,8 +3,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { AutomationsService } from '../automations/automations.service';
 import { runRepositoryEffectStep } from './repository-effect-step';
+import { pruneRepositoryEffects } from './repository-effect-retention';
 
-// Explicit deployment opt-in. No public apply endpoint or automatic local writes.
+// Explicit deployment opt-ins. No automatic local value writes.
 // One bounded queue step per tick; leases coordinate multiple processes.
 @Injectable()
 export class RepositoryEffectWorker implements OnModuleInit, BeforeApplicationShutdown {
@@ -12,21 +13,36 @@ export class RepositoryEffectWorker implements OnModuleInit, BeforeApplicationSh
   private timer?: ReturnType<typeof setInterval>;
   private inFlight?: Promise<void>;
   private stopped = false;
+  private effectsEnabled = false;
+  private retentionEnabled = false;
+  private nextRetentionAt = 0;
   constructor(private readonly db: PrismaService,
     private readonly webhooks: WebhooksService,
     private readonly automations: AutomationsService) {}
 
   onModuleInit() {
-    if (process.env.REPOSITORY_EFFECT_WORKER_ENABLED !== 'true' || this.timer || this.stopped) return;
+    if (this.timer || this.stopped) return;
+    this.effectsEnabled = process.env.REPOSITORY_EFFECT_WORKER_ENABLED === 'true';
+    this.retentionEnabled = process.env.REPOSITORY_EFFECT_RETENTION_ENABLED === 'true';
+    if (!this.effectsEnabled && !this.retentionEnabled) return;
     this.timer = setInterval(() => this.tick(), 5000);
     this.timer.unref();
   }
   private tick() {
     if (this.stopped || this.inFlight) return;
-    this.inFlight = runRepositoryEffectStep(this.db, this.webhooks, this.automations)
+    this.inFlight = this.runTick()
       .then(() => undefined)
       .catch(() => { this.logger.warn('Repository effect step failed'); })
       .finally(() => { this.inFlight = undefined; });
+  }
+  private async runTick() {
+    if (this.effectsEnabled) await runRepositoryEffectStep(this.db, this.webhooks, this.automations);
+    if (this.retentionEnabled && Date.now() >= this.nextRetentionAt) {
+      // At most one bounded cleanup/minute per process, shared non-overlap/drain.
+      // Set before attempt so a failure cannot cause aggressive5sec retries.
+      this.nextRetentionAt = Date.now() + 60000;
+      await this.db.$transaction(pruneRepositoryEffects);
+    }
   }
   async beforeApplicationShutdown() {
     this.stopped = true;

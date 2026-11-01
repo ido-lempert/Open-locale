@@ -481,3 +481,9 @@ Local apply sets a transaction-local PostgreSQL lock timeout of two seconds per
 lock wait. Actual project-row and translation-row contention return a safe 409
 without retry or partial write. This bounds each lock wait, not the entire request
 or all cumulative waits; other unexpected transaction failures remain 500.
+
+Terminal repository-effect retention can be opted in separately with
+`REPOSITORY_EFFECT_RETENTION_ENABLED=true` (default OFF). It deletes at most 100
+completed/dead intents older than seven days per minute per process, including
+their rule checkpoints. It never age-prunes pending/leased work. Retention alone
+does not dispatch effects. It shares the worker's non-overlap and shutdown drain.
