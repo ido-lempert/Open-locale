@@ -392,6 +392,22 @@ try {
   check('handler failure requeues without reverting committed locale or duplicating audit',runFailed.status==='retry'&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:effectIntent.id}})).state==='pending'&&await prisma.translationHistory.count()===runnerHistory&&await prisma.activityEvent.count()===runnerActivity&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).value==='composed value'&&!JSON.stringify(runFailed).includes('private fixture'));
   await resetRunner();await prisma.repositoryLocalEffectIntent.update({where:{id:effectIntent.id},data:{targetRevision:writeScope.targetRevision+1}});
   check('ineligible runner never invokes handler',(await runRepositoryEffect(prisma,async()=>{handlerCalls++;})).status==='ineligible'&&handlerCalls===1);
+  for(const blockedScope of ['project','translation']) {
+  await resetRunner();
+  let effectLockReady,releaseEffectLock;
+  const effectLockHeld=new Promise(r=>effectLockReady=r),effectLockGate=new Promise(r=>releaseEffectLock=r);
+  const effectBlocker=prisma.$transaction(async tx=>{if(blockedScope==='project')await tx.$queryRaw`SELECT id FROM projects WHERE id=${project.id}::uuid FOR UPDATE`;else await tx.$queryRaw`SELECT "rowId" FROM translations WHERE "keyId"=${localKey.id}::uuid AND "localeCode"='en' FOR UPDATE`;effectLockReady();await effectLockGate;},{timeout:10000});
+  await effectLockHeld;
+  const guardedDb=new Proxy(prisma,{get(db,prop){if(prop==='$transaction')return async(fn,options)=>db.$transaction(async tx=>fn(new Proxy(tx,{get(inner,key){if(key==='$queryRaw')return async(...args)=>{try{return await inner.$queryRaw(...args);}catch(error){effectLockError=error;throw error;}};return inner[key];}})),options);return db[prop];}});
+  let effectLockError;const effectLockStart=Date.now(),effectLockCalls=handlerCalls;
+  const effectBlocked=await runRepositoryEffect(guardedDb,async()=>{handlerCalls++;});
+  const effectLockElapsed=Date.now()-effectLockStart;
+  const effectBlockedRow=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:effectIntent.id}});
+  check('actual eligibility '+blockedScope+' lock timeout requeues without invoking handler',effectBlocked.status==='ineligible'&&handlerCalls===effectLockCalls&&effectBlockedRow.state==='pending'&&effectBlockedRow.attempts===1&&effectLockError?.code==='P2010'&&effectLockError?.meta?.code==='55P03'&&effectLockElapsed>=1800&&effectLockElapsed<4500,JSON.stringify({effectLockElapsed,code:effectLockError?.code,meta:effectLockError?.meta}));
+  releaseEffectLock();await effectBlocker;
+  await prisma.repositoryLocalEffectIntent.update({where:{id:effectIntent.id},data:{availableAt:new Date('2020-01-01')}});
+  check('eligibility runner recovers after actual '+blockedScope+' lock release',(await runRepositoryEffect(prisma,async()=>{})).status==='completed');
+  }
   await resetRunner();const staleRun=await runRepositoryEffect(prisma,async()=>{await prisma.repositoryLocalEffectIntent.update({where:{id:effectIntent.id},data:{leaseUntil:new Date('2020-01-01')}});});
   check('runner reports stale instead of completing expired handler lease',staleRun.status==='stale'&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:effectIntent.id}})).state==='leased');
   await resetRunner();

@@ -506,3 +506,11 @@ handler bookkeeping, not delivery receipts or accepted synchronization; it does
 not infer worker enablement. The target screen offers a manual Load effect summary action. It does not poll,
 retry or dispatch work. Refresh clears prior counts while loading and on failure;
 project navigation drops late responses. The displayed snapshot is not live.
+
+Repository effect eligibility validation also sets a transaction-local two-second
+lock timeout before locking intent/project/member/target/key/translation scope.
+Contention aborts validation without invoking the handler; the runner uses its
+existing bounded retry bookkeeping. This applies to handler revalidation too,
+including checks before webhook socket attempts. It bounds each lock wait, not
+claim, settlement, transport, cumulative validation time or the full worker tick.
+No lease renewal or exactly-once delivery promise is added.

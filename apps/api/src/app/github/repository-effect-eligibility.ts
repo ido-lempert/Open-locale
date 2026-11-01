@@ -9,6 +9,9 @@ export async function validateRepositoryEffect(
 ) {
   const isolation = await tx.$queryRaw<{ transaction_isolation: string }[]>`SHOW transaction_isolation`;
   if (isolation[0]?.transaction_isolation !== 'serializable') throw new Error('Effect eligibility requires serializable transaction');
+  // Per lock wait, not a total guard/network/runner duration bound. Local to the
+  // short validation transaction; do not carry locks across transport calls.
+  await tx.$executeRaw`SET LOCAL lock_timeout = '2s'`;
   const intents = await tx.$queryRaw<{ id: string }[]>`
     SELECT id FROM repository_local_effect_intents WHERE id=${id}::uuid
     AND state='leased' AND "leaseToken"=${token}::uuid AND "leaseUntil">clock_timestamp() FOR UPDATE`;

@@ -132,7 +132,8 @@ add languages, manage keys and translations, export a file.
   Session-admin target-scoped effect summary API adds aggregate queue visibility,
   not delivery/sync acceptance;no retry mutation. Manual read-only web summary adds
   explicit snapshot/retention/worker-unknown notices and stale-response fencing.
-  See reviews0134-0182.
+  Eligibility guard per-lock2sec timeout;actual project/translation blockers
+  requeue without invoking handler and recover after release. See reviews0134-0183.
 
 ## Phase 3 - advanced
 
