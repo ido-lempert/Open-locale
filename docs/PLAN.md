@@ -149,7 +149,8 @@ add languages, manage keys and translations, export a file.
   rollback proof;no public restore API/UI or repository effect composition. Actual PostgreSQL competing recovery/normal-create races preserve winning row
   and deny stale success without duplicate history/activity. Internal recovery binds reviewed branch UUID and locks branch scope,denying
   key movement/deleted branch despite matching digest. Session-admin read-only recovery eligibility preview returns reason only without
-  archived bytes/digest or authority;consistent snapshot,no reservation/restore mutation. See reviews0134-0200.
+  archived bytes/digest or authority;consistent snapshot,no reservation/restore mutation. Manual per-audit eligibility UI shows fixed current-only reasons,no reservation
+  or restore action,with stale-response/error/page clearing. See reviews0134-0201.
 
 ## Phase 3 - advanced
 

@@ -1,3 +1,4 @@
+export interface DeletionRecoveryPreview {source:'deletion-recovery-eligibility-preview';eligibleNow:boolean;reason:string;canRestore:false;snapshotIncluded:false;historyReplay:false;reservationHeld:false;}
 export interface DeletionAuditPage {
  source:'local-deletion-audit-metadata';
  audits:{id:string;keyId:string;keyName:string;localeCode:string;actorId:string|null;createdAt:string}[];
@@ -255,6 +256,7 @@ export class ApiService {
       { method: 'POST', body: JSON.stringify({ expectedRevision }) },
     );
   }
+  previewDeletionRecovery(projectId:string,auditId:string){return this.request<DeletionRecoveryPreview>(`/projects/${projectId}/sync/deletion-audits/${encodeURIComponent(auditId)}/recovery-preview`);}
   listDeletionAudits(projectId:string,cursor?:string){return this.request<DeletionAuditPage>(`/projects/${projectId}/sync/deletion-audits${cursor?'?cursor='+encodeURIComponent(cursor):''}`);}
   repositoryEffectSummary(projectId: string, targetId: string) {
     return this.request<RepositoryEffectSummary>(`/projects/${projectId}/sync/repository-targets/${targetId}/effects-summary`);

@@ -7,6 +7,7 @@ import {
   RepositoryTargetInput,
   RepositoryEffectSummary,
   DeletionAuditPage,
+  DeletionRecoveryPreview,
   RepositoryTargetConfig,
   RepositoryFileSnapshot,
   RepositoryBaselineView,
@@ -182,7 +183,13 @@ const empty = (): RepositoryTargetInput => ({
                   <dt>Actor ID</dt><dd>{{ a.actorId ?? 'Unavailable' }}</dd>
                   <dt>Key ID</dt><dd>{{ a.keyId }}</dd>
                   <dt>Audit ID</dt><dd>{{ a.id }}</dd>
-                </dl></li>
+                </dl>
+                <button name="auditCheck" [attr.data-audit-id]="a.id" type="button" (click)="checkRecovery(a.id)" [disabled]="busy()">Check recovery eligibility</button>
+                @if (recoveryPreview()?.auditId === a.id) {
+                  <p class="notice" role="status">{{ recoveryReason(recoveryPreview()!.result) }}
+                    Checked just now, not live. No reservation is held. No restore action is available.</p>
+                }
+                </li>
               }
             </ul>
             @if (page.nextCursor) {
@@ -739,6 +746,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   snapshot = signal<RepositoryFileSnapshot | null>(null);
   readAt = signal('');
   @ViewChild('auditHeading') auditHeading?: ElementRef<HTMLElement>;
+  recoveryPreview = signal<{auditId:string;result:DeletionRecoveryPreview}|null>(null);
   auditLoading = signal(false);
   auditPage = signal<DeletionAuditPage | null>(null);
   effectSummary = signal<RepositoryEffectSummary | null>(null);
@@ -850,7 +858,8 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
       if (generation === this.generation) {
         this.previewResult.set(null); this.clearDraft(); this.previewPage.set(0);
         this.snapshot.set(null);
-    this.auditPage.set(null); this.effectSummary.set(null); this.baselineView.set(null); this.confirmBaseline.set(false);
+    this.auditPage.set(null);
+    this.recoveryPreview.set(null); this.effectSummary.set(null); this.baselineView.set(null); this.confirmBaseline.set(false);
         this.busy.set(false);
         window.scrollTo({top: 0, behavior: 'instant'});
       }
@@ -895,6 +904,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.generation++;
     this.auditPage.set(null);
+    this.recoveryPreview.set(null);
     this.auditLoading.set(false);
     this.snapshot.set(null);
     this.effectSummary.set(null);
@@ -905,12 +915,34 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     this.confirmBaseline.set(false);
     this.subscription?.unsubscribe();
   }
+  recoveryReason(result: DeletionRecoveryPreview) {
+    if (result.eligibleNow) return 'Current checks pass for this deleted flat value.';
+    const reasons: Record<string,string> = {
+      'audit-unavailable':'This audit is unavailable.', 'unsupported-snapshot':'This archived snapshot is unsupported.',
+      'key-changed':'The key was deleted or renamed.', 'unsupported-current-key':'The current key type or length limit blocks recovery.',
+      'locale-unavailable':'The project locale is unavailable.', 'value-exists':'A current locale value already exists. It will not be overwritten.',
+      'deletion-generation-changed':'This is no longer the current deletion generation.',
+    };
+    return reasons[result.reason] ?? 'Current recovery checks do not pass.';
+  }
+  async checkRecovery(auditId: string) {
+    if (this.busy() || !this.auditPage()?.audits.some(a=>a.id===auditId)) return;
+    const generation=++this.generation;
+    this.busy.set(true); this.recoveryPreview.set(null); this.error.set(''); this.message.set('');
+    try {
+      const result=await this.api.previewDeletionRecovery(this.projectId,auditId);
+      if(generation===this.generation)this.recoveryPreview.set({auditId,result});
+    } catch {
+      if(generation===this.generation)this.error.set('Could not check recovery eligibility. No value was restored. Check again to retry.');
+    } finally { if(generation===this.generation)this.busy.set(false); }
+  }
   async loadAudits(cursor?: string) {
     if (this.busy()) return;
     const generation = ++this.generation;
     this.busy.set(true);
     this.auditLoading.set(true);
     this.auditPage.set(null);
+    this.recoveryPreview.set(null);
     this.error.set(''); this.message.set('');
     try {
       const result = await this.api.listDeletionAudits(this.projectId, cursor);
@@ -947,6 +979,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     const generation = ++this.generation;
     this.projectId = id;
     this.auditPage.set(null);
+    this.recoveryPreview.set(null);
     this.auditLoading.set(false);
     this.auditLoading.set(false);
     this.snapshot.set(null);

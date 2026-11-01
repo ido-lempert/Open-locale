@@ -597,3 +597,7 @@ Session admins can inspect `GET /api/projects/{projectId}/sync/deletion-audits/{
 current eligibility/reason only,never value/digest/history or restore authority.
 It uses a consistent RepeatableRead snapshot,holds no reservation,and cannot promise
 that eligibility stays valid. canRestore=false;no public restore mutation/UI.
+
+Audit cards now offer an explicit read-only eligibility check with fixed plain-language
+reasons,current-only/no-reservation warning and no restore action. Page refresh or
+navigation clears previous eligibility;failed checks hide stale results and raw errors.
