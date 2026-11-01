@@ -236,7 +236,7 @@ export const OPENAPI = {
     },
     '/api/projects/{projectId}/activity': { get: p('Project activity feed', 'projects') },
     '/api/projects/{projectId}/sync/deletion-audits': {
-      get: {...p('List latest 50 local deletion audit metadata records (session admin only)', 'sync'),security:[{bearerAuth:[]}],description:'No-store. Project-scoped,createdAt descending then id descending. Returns id,keyId,keyName,localeCode,actorId,createdAt only;no stored snapshot,translation value or history. Metadata survives key deletion. Not a restore grant;canRestore=false,snapshotIncluded=false. No mutation.'},
+      get: {...p('List paginated local deletion audit metadata (session admin only)', 'sync'),security:[{bearerAuth:[]}],parameters:[{name:'cursor',in:'query',required:false,schema:{type:'string',maxLength:160},description:'Opaque nextCursor from previous page;null ends list. Invalid cursor400.'}],description:'No-store. Up to50 rows;nextCursor or null. Keyset not frozen snapshot;concurrent older inserts/deletes may change later pages. Project-scoped,createdAt descending then id descending. Returns id,keyId,keyName,localeCode,actorId,createdAt only;no stored snapshot,translation value or history. Metadata survives key deletion. Not a restore grant;canRestore=false,snapshotIncluded=false. No mutation.'},
     },
     '/api/projects/{projectId}/sync/preview-records': {
       get: { ...p('List latest 50 diagnostic preview records (session admin only)', 'sync'), security: [{ bearerAuth: [] }] },

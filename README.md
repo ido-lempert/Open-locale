@@ -549,7 +549,10 @@ intent roll back with the deletion audit; project deletion cascades markers. No
 new remote write or exactly-once delivery guarantee is added.
 
 Session project admins can read `GET /api/projects/{projectId}/sync/deletion-audits`
-for the latest 50 deletion audit metadata rows, ordered newest timestamp/ID first.
+for pages of up to 50 deletion audit metadata rows, ordered newest timestamp/ID first.
+Pass returned `nextCursor` as `?cursor=...` for older rows; null ends the list.
+Keyset cursors remain valid after boundary-row deletion and newer inserts, but are
+not frozen snapshots: concurrent older inserts/deletions can change later pages.
 It includes audit/key IDs, key name, locale, actor ID and timestamp only, never the
 stored translation/history snapshot. Metadata survives key deletion. This no-store
 read does not restore/delete anything or grant restore permission. No web list yet.

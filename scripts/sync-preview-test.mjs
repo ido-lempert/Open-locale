@@ -556,6 +556,28 @@ try {
   const auditFixture=await Promise.all(Array.from({length:55},(_,i)=>prisma.translationDeletionAudit.create({data:{projectId:project.id,keyId:localKey.id,keyName:'bounded-'+i,localeCode:'en',snapshot:{value:'never-list-private'},createdAt:new Date('2099-01-01')}})));
   const boundedAudits=(await call(deletionAuditsPath,{jwt})).json.audits;
   check('deletion audit metadata bounded50 with stable newest tie order',boundedAudits.length===50&&boundedAudits.every((a,i)=>a.createdAt==='2099-01-01T00:00:00.000Z'&&(!i||boundedAudits[i-1].id>a.id))&&!JSON.stringify(boundedAudits).includes('never-list-private'));
+  const firstAuditPage=(await call(deletionAuditsPath,{jwt})).json;
+  const secondAuditPage=(await call(deletionAuditsPath+'?cursor='+firstAuditPage.nextCursor,{jwt})).json;
+  const allAuditIds=[...firstAuditPage.audits,...secondAuditPage.audits].map(a=>a.id);
+  check('audit cursor covers tied timestamps and older rows without duplicates',firstAuditPage.nextCursor&&secondAuditPage.nextCursor===null&&secondAuditPage.audits.length>=6&&new Set(allAuditIds).size===allAuditIds.length&&auditFixture.every(a=>allAuditIds.includes(a.id))&&allAuditIds.includes(audit.id));
+  check('older audit page preserves exact metadata privacy flags',secondAuditPage.snapshotIncluded===false&&secondAuditPage.canRestore===false&&secondAuditPage.audits.every(a=>Object.keys(a).sort().join(',')==='actorId,createdAt,id,keyId,keyName,localeCode')&&!JSON.stringify(secondAuditPage).includes('never-list-private'));
+  const malformedAuditCursors=['','!!','A'.repeat(161),Buffer.from('{}').toString('base64url'),Buffer.from(JSON.stringify(['bad','00000000-0000-0000-0000-000000000000'])).toString('base64url'),Buffer.from(JSON.stringify(['2099-01-01T00:00:00.000Z','not-uuid'])).toString('base64url'),firstAuditPage.nextCursor+'=',Buffer.from(JSON.stringify(['2099-01-01T00:00:00.000Z','00000000-0000-0000-0000-000000000000','extra'])).toString('base64url')];
+  for(const [i,cursor] of malformedAuditCursors.entries())check('audit cursor malformed input denied '+i,(await call(deletionAuditsPath+'?cursor='+encodeURIComponent(cursor),{jwt})).status===400);
+  check('audit cursor repeated parameter denied',(await call(deletionAuditsPath+'?cursor='+firstAuditPage.nextCursor+'&cursor='+firstAuditPage.nextCursor,{jwt})).status===400);
+  check('audit cursor cannot grant another project membership',(await call(deletionAuditsPath+'?cursor='+firstAuditPage.nextCursor,{jwt:outsider.accessToken})).status===404);
+  const otherAuditPage=(await call(`/projects/${summaryOtherProject.id}/sync/deletion-audits?cursor=${firstAuditPage.nextCursor}`,{jwt})).json;
+  check('audit cursor remains scoped to requested project',otherAuditPage.audits.every(a=>a.id===foreignAudit.id)&&!otherAuditPage.audits.some(a=>auditFixture.some(f=>f.id===a.id)));
+  const boundaryPair=JSON.parse(Buffer.from(firstAuditPage.nextCursor,'base64url').toString());
+  await prisma.translationDeletionAudit.delete({where:{id:boundaryPair[1]}});
+  const afterBoundaryDelete=(await call(deletionAuditsPath+'?cursor='+firstAuditPage.nextCursor,{jwt})).json;
+  check('audit cursor continues when boundary row deleted',JSON.stringify(afterBoundaryDelete)===JSON.stringify(secondAuditPage));
+  await prisma.translationDeletionAudit.create({data:auditFixture.find(a=>a.id===boundaryPair[1])});
+  const newerAudit=await prisma.translationDeletionAudit.create({data:{projectId:project.id,keyId:localKey.id,keyName:'newer-page',localeCode:'en',snapshot:{value:'private-newer'},createdAt:new Date('2100-01-01')}});
+  check('newer concurrent audit does not shift older cursor page',JSON.stringify((await call(deletionAuditsPath+'?cursor='+firstAuditPage.nextCursor,{jwt})).json)===JSON.stringify(secondAuditPage));
+  await prisma.translationDeletionAudit.delete({where:{id:newerAudit.id}});
+  const terminalCursor=Buffer.from(JSON.stringify(['1900-01-01T00:00:00.000Z','00000000-0000-0000-0000-000000000000'])).toString('base64url');
+  const terminalPage=(await call(deletionAuditsPath+'?cursor='+terminalCursor,{jwt})).json;
+  check('audit cursor beyond oldest returns empty terminal page',terminalPage.audits.length===0&&terminalPage.nextCursor===null);
   check('deletion audit metadata reads never mutate retained snapshots',await prisma.translationDeletionAudit.count({where:{id:{in:auditFixture.map(a=>a.id)}}})===55&&(await prisma.translationDeletionAudit.findUnique({where:{id:auditFixture[0].id}})).snapshot.value==='never-list-private');
   await prisma.translationDeletionAudit.deleteMany({where:{id:{in:[foreignAudit.id,...auditFixture.map(a=>a.id)]}}});
 

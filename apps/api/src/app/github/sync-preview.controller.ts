@@ -11,6 +11,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -98,15 +99,34 @@ export class LocalSyncPreviewService {
     }
   }
 
-  async listDeletionAudits(user: AuthPrincipal, projectId: string) {
+  async listDeletionAudits(user: AuthPrincipal, projectId: string, cursor?: string) {
     if (user.via !== 'jwt') throw new ForbiddenException('Deletion audit metadata requires a signed-in session');
     await this.projects.requireAdmin(user.userId, projectId);
+    let boundary: { createdAt: Date; id: string } | undefined;
+    if (cursor !== undefined) {
+      try {
+        if (typeof cursor !== 'string' || cursor.length > 160 || !/^[A-Za-z0-9_-]+$/.test(cursor)) throw new Error();
+        const decoded = Buffer.from(cursor, 'base64url').toString('utf8');
+        const pair: unknown = JSON.parse(decoded);
+        if (!Array.isArray(pair) || pair.length !== 2 || typeof pair[0] !== 'string' || typeof pair[1] !== 'string' ||
+            !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(pair[1]) ||
+            new Date(pair[0]).toISOString() !== pair[0] || Buffer.from(JSON.stringify(pair)).toString('base64url') !== cursor) throw new Error();
+        boundary = { createdAt: new Date(pair[0]), id: pair[1] };
+      } catch { throw new BadRequestException('Invalid deletion audit cursor'); }
+    }
+    const rows = await this.prisma.translationDeletionAudit.findMany({
+      where: { projectId, ...(boundary ? { OR: [
+        { createdAt: { lt: boundary.createdAt } },
+        { createdAt: boundary.createdAt, id: { lt: boundary.id } },
+      ] } : {}) },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 51,
+      select: { id: true, keyId: true, keyName: true, localeCode: true, actorId: true, createdAt: true },
+    });
+    const audits = rows.slice(0, 50);
+    const last = audits.at(-1);
     return {
-      source: 'local-deletion-audit-metadata',
-      audits: await this.prisma.translationDeletionAudit.findMany({
-        where: { projectId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 50,
-        select: { id: true, keyId: true, keyName: true, localeCode: true, actorId: true, createdAt: true },
-      }),
+      source: 'local-deletion-audit-metadata', audits,
+      nextCursor: rows.length > 50 && last ? Buffer.from(JSON.stringify([last.createdAt.toISOString(), last.id])).toString('base64url') : null,
       snapshotIncluded: false, canRestore: false,
     };
   }
@@ -319,8 +339,9 @@ export class LocalSyncPreviewController {
   listDeletionAudits(
     @CurrentUser() user: AuthPrincipal,
     @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Query('cursor') cursor?: string,
   ) {
-    return this.previews.listDeletionAudits(user, projectId);
+    return this.previews.listDeletionAudits(user, projectId, cursor);
   }
   @Get('preview-records')
   @Header('Cache-Control', 'no-store')
