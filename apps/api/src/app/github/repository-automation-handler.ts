@@ -1,6 +1,7 @@
 import type { PrismaClient, RepositoryLocalEffectIntent } from '@prisma/client';
 import type { AutomationsService } from '../automations/automations.service';
 import { validateRepositoryEffect } from './repository-effect-eligibility';
+import { checkpointRepositoryRule } from './repository-rule-checkpoint';
 
 // Internal adapter only. No worker/public execution or channel checkpoint here.
 // Existing automation service owns main/base-locale trigger bounds and current
@@ -33,13 +34,10 @@ export async function fireRepositoryAutomation(
       return rows.length > 0;
     },
     afterRule: async (rule) => {
-      const rows = await db.$transaction((tx) => tx.$queryRaw<{ ruleId: string }[]>`
-        INSERT INTO repository_automation_rule_checkpoints ("intentId","ruleId","ruleRevision")
-        SELECT id,${rule.id}::uuid,${rule.revision} FROM repository_local_effect_intents
-        WHERE id=${current.id}::uuid AND state='leased'
-          AND "leaseToken"=${current.leaseToken}::uuid AND "leaseUntil">clock_timestamp()
-        ON CONFLICT ("intentId","ruleId") DO NOTHING RETURNING "ruleId"`);
-      if (!rows.length) throw new Error('Repository automation rule checkpoint lease lost');
+      const handled = await db.$transaction((tx) => checkpointRepositoryRule(
+        tx, current.id, current.leaseToken!, rule,
+      ));
+      if (!handled) throw new Error('Repository automation rule checkpoint lease lost');
     },
   });
   if (result.failed) throw new Error('Repository automation run incomplete');

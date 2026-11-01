@@ -422,3 +422,7 @@ Successful repository automation rules have intent-scoped, live-lease-fenced
 checkpoints. A partial retry skips previously checkpointed rule IDs even after
 a rule edit or task closure. Crash between effect/activity and checkpoint can
 still duplicate effects; this is not atomic exactly-once execution.
+
+Rule checkpoint writers lock the intent before checking the live token/deadline,
+so a blocked writer cannot record success after reclaim or expiry. Ledger rows
+cascade with their intent. Effects before checkpoints still have a crash gap.
