@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -28,7 +28,8 @@ const empty = (): RepositoryTargetInput => ({
   imports: [FormsModule, RouterLink],
   styles: [
     `
-      section[aria-label="Deletion audit metadata"] { scroll-margin-top: 72px; }
+      section[aria-label="Deletion audit metadata"], .audit-heading { scroll-margin-top: 72px; }
+      .audit-heading:focus { outline: 2px solid #285fbd; outline-offset: 4px; }
       .audit-list { padding: 0; list-style: none; }
       .audit-list li { border: 1px solid #dce2eb; border-radius: 8px; padding: 16px; margin: 12px 0; overflow-wrap: anywhere; }
       .audit-list dl { margin: 0; }
@@ -165,10 +166,11 @@ const empty = (): RepositoryTargetInput => ({
         >
           Refresh configurations
         </button>
-        <section aria-label="Deletion audit metadata">
-          <h2>Deletion audit metadata</h2>
+        <section aria-label="Deletion audit metadata" [attr.aria-busy]="auditLoading()">
+          <h2 #auditHeading class="audit-heading" tabindex="-1">Deletion audit metadata</h2>
           <p>Project-wide metadata only. No archived values or history. No restore action.</p>
           <button name="auditLoad" type="button" (click)="loadAudits()" [disabled]="busy()">Load newest audit page</button>
+          @if (auditLoading()) { <p role="status">Loading audit metadata...</p> }
           @if (auditPage(); as page) {
             <p>Up to 50 rows per page, newest first. Not live or a frozen snapshot.</p>
             @if (!page.audits.length) { <p>No deletion audits on this page.</p> }
@@ -736,6 +738,8 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   message = signal('');
   snapshot = signal<RepositoryFileSnapshot | null>(null);
   readAt = signal('');
+  @ViewChild('auditHeading') auditHeading?: ElementRef<HTMLElement>;
+  auditLoading = signal(false);
   auditPage = signal<DeletionAuditPage | null>(null);
   effectSummary = signal<RepositoryEffectSummary | null>(null);
   previewResult = signal<RepositorySyncPreview | null>(null);
@@ -891,6 +895,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.generation++;
     this.auditPage.set(null);
+    this.auditLoading.set(false);
     this.snapshot.set(null);
     this.effectSummary.set(null);
     this.previewResult.set(null);
@@ -904,15 +909,21 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     if (this.busy()) return;
     const generation = ++this.generation;
     this.busy.set(true);
+    this.auditLoading.set(true);
     this.auditPage.set(null);
     this.error.set(''); this.message.set('');
     try {
       const result = await this.api.listDeletionAudits(this.projectId, cursor);
-      if (generation === this.generation) this.auditPage.set(result);
+      if (generation === this.generation) {
+        this.auditPage.set(result);
+        const heading = this.auditHeading?.nativeElement;
+        heading?.focus({ preventScroll: true });
+        heading?.scrollIntoView({ block: 'start', behavior: 'instant' });
+      }
     } catch {
       if (generation === this.generation) this.error.set('Could not load audit metadata. Nothing was restored or deleted. Load newest audit page to retry.');
     } finally {
-      if (generation === this.generation) this.busy.set(false);
+      if (generation === this.generation) { this.busy.set(false); this.auditLoading.set(false); }
     }
   }
   async loadEffects(t: RepositoryTargetConfig) {
@@ -936,6 +947,8 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     const generation = ++this.generation;
     this.projectId = id;
     this.auditPage.set(null);
+    this.auditLoading.set(false);
+    this.auditLoading.set(false);
     this.snapshot.set(null);
     this.effectSummary.set(null);
     this.previewResult.set(null);

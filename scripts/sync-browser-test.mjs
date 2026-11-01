@@ -423,6 +423,7 @@ try {
   await page.setViewport({width:480,height:900});await page.$eval('section[aria-label="Deletion audit metadata"]',e=>e.scrollIntoView({block:'start'}));await page.screenshot({path:'/downloads/deletion-audits-narrow.png'});
   check('audit metadata fits480viewport',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await clickTarget('[name=auditOlder]');await page.waitForFunction(()=>document.querySelectorAll('.audit-list li').length===2);
+  check('older audit page moves keyboard focus and viewport to audit heading',await page.$eval('.audit-heading',e=>document.activeElement===e&&e.getBoundingClientRect().top>=50&&e.getBoundingClientRect().top<150));
   check('audit browser older page reaches terminal actual removal',!(await page.$('[name=auditOlder]'))&&(await page.$eval('.audit-list',e=>e.textContent)).includes('existing'));
   const originalAuditIds=JSON.parse(auditReadBefore).map(a=>a.id);
   check('audit page reads never modify actual archived snapshots',JSON.stringify(await prisma.translationDeletionAudit.findMany({where:{id:{in:originalAuditIds}},orderBy:{id:'asc'}}))===auditReadBefore);
@@ -435,8 +436,12 @@ try {
   let auditHeld=false,releaseAudit;const auditGate=new Promise(r=>releaseAudit=r);await page.setRequestInterception(true);
   const holdAudit=async request=>{if(!auditHeld&&request.url().includes('/deletion-audits')){auditHeld=true;await auditGate;}return request.continue();};page.on('request',holdAudit);
   await clickTarget('[name=auditLoad]');for(let n=0;n<50&&!auditHeld;n++)await new Promise(r=>setTimeout(r,50));if(!auditHeld)throw new Error('audit request not held');
+  await page.waitForFunction(()=>document.querySelector('section[aria-label="Deletion audit metadata"]')?.getAttribute('aria-busy')==='true'&&!document.querySelector('.audit-list'));
+  check('held audit read announces loading and clears old page',await page.$eval('section[aria-label="Deletion audit metadata"]',e=>e.getAttribute('aria-busy')==='true'&&e.textContent.includes('Loading audit metadata...'))&&!(await page.$('.audit-list')));
   await page.evaluate(id=>{history.pushState({},'',`/projects/${id}/sync/targets`);window.dispatchEvent(new PopStateEvent('popstate'));},applyProject.id);await page.waitForSelector('[name=targetOwner]');releaseAudit();await new Promise(r=>setTimeout(r,800));page.off('request',holdAudit);await page.setRequestInterception(false);
   check('late audit page cannot cross project navigation',!(await page.$('.audit-list')));
+  check('late audit response cannot retain loading or steal focus',await page.$eval('section[aria-label="Deletion audit metadata"]',e=>e.getAttribute('aria-busy')==='false')&&!(await page.$eval('.audit-heading',e=>document.activeElement===e)));
+  await clickTarget('[name=auditLoad]');await page.waitForSelector('.audit-list li');await page.setViewport({width:480,height:900});await page.screenshot({path:'/downloads/deletion-audit-focus-narrow.png'});
   await page.evaluate(t=>localStorage.setItem('ol_token',t),member.accessToken);
   await page.goto(`${WEB}/projects/${project.id}/sync`,{waitUntil:'networkidle0'});await page.waitForSelector('textarea[name=syncBaseline]');
   await set('syncSha','a'.repeat(40));await set('syncBaseline','{}');await set('syncRemote','{}');await page.click('button[name=syncPreview]');await page.waitForSelector('[role=alert]');

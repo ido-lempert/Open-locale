@@ -557,6 +557,8 @@ It includes audit/key IDs, key name, locale, actor ID and timestamp only, never 
 stored translation/history snapshot. Metadata survives key deletion. This no-store
 read does not restore/delete anything or grant restore permission. Repository targets screen manually loads project-wide metadata pages with explicit
 older-page navigation,empty/error states,and navigation stale-response clearing.
+Loading is announced;successful page replacement returns keyboard focus and viewport
+to the audit heading. Failed or obsolete requests never move focus.
 
 Audit metadata pages use a project/timestamp/UUID ordered index. PostgreSQL chooses
 its query plan; the index does not impose a total runtime bound. The migration uses
