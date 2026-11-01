@@ -8,6 +8,8 @@ const {RepositoryTargetsService}=require(freshBundle);
 
 const writerSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/local-value-writer.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
 const {writeExistingLocalValues}=await import('data:text/javascript;base64,'+Buffer.from(writerSource).toString('base64'));
+const recoverySource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/deletion-recovery-plan.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
+const {inspectDeletionRecovery}=await import('data:text/javascript;base64,'+Buffer.from(recoverySource).toString('base64'));
 const transactionSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-local-transaction.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
 const {repositoryLocalTransaction}=await import('data:text/javascript;base64,'+Buffer.from(transactionSource).toString('base64'));
 const leaseSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-effect-lease.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
@@ -547,6 +549,35 @@ try {
   check('removal rollback restores row history and leaves no audit',await prisma.translationDeletionAudit.count()===auditBefore&&await prisma.translationHistory.count({where:{keyId:localKey.id,localeCode:'en'}})===deletedHistory.length&&!!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}}));
   const removed=await prisma.$transaction(tx=>writeExistingLocalValues(tx,deletionSnapshot,[removal],owner.user.id),{isolationLevel:'Serializable'});
   const audit=await prisma.translationDeletionAudit.findFirst({where:{keyId:localKey.id},orderBy:{createdAt:'desc'}});
+  const recoveryBefore=JSON.stringify(await prisma.translationDeletionAudit.findUnique({where:{id:audit.id}}));
+  const recovery=await inspectDeletionRecovery(prisma,project.id,audit.id);
+  check('internal recovery diagnostic recognizes exact current removal without execution grant',recovery.eligible&&recovery.canRestore===false&&recovery.snapshotIncluded===false&&recovery.historyReplay===false&&recovery.valueDigest===createHash('sha256').update('writer draft').digest('hex')&&!JSON.stringify(recovery).includes('writer draft'));
+  check('internal recovery diagnostic cannot cross project boundary',(await inspectDeletionRecovery(prisma,summaryOtherProject.id,audit.id)).reason==='audit-unavailable');
+  const storedSnapshot=audit.snapshot;
+  for(const [label,snapshot] of [['null',null],['row-mismatch',{...storedSnapshot,row:{...storedSnapshot.row,keyId:owner.user.id}}],['plural',{...storedSnapshot,row:{...storedSnapshot.row,pluralForms:{one:'x'}}}],['history-mismatch',{...storedSnapshot,history:[{keyId:owner.user.id,localeCode:'en',value:'x'}]}],['oversized',{...storedSnapshot,row:{...storedSnapshot.row,value:'x'.repeat(512*1024)}}]]){
+    await prisma.translationDeletionAudit.update({where:{id:audit.id},data:{snapshot:snapshot===null?Prisma.JsonNull:snapshot}});
+    check('internal recovery denies unsupported snapshot '+label,(await inspectDeletionRecovery(prisma,project.id,audit.id)).reason==='unsupported-snapshot');
+  }
+  await prisma.translationDeletionAudit.update({where:{id:audit.id},data:{snapshot:storedSnapshot}});
+  await prisma.key.update({where:{id:localKey.id},data:{maxLength:1}});
+  check('internal recovery denies changed current length limit',(await inspectDeletionRecovery(prisma,project.id,audit.id)).reason==='unsupported-current-key');
+  await prisma.key.update({where:{id:localKey.id},data:{maxLength:null,name:'renamed local'}});
+  check('internal recovery denies renamed key',(await inspectDeletionRecovery(prisma,project.id,audit.id)).reason==='key-changed');
+  await prisma.key.update({where:{id:localKey.id},data:{name:'local'}});
+  const recoveryMarker=await prisma.repositoryRemovalGeneration.findUnique({where:{projectId_keyId_locale:{projectId:project.id,keyId:localKey.id,locale:'en'}}});
+  await prisma.repositoryRemovalGeneration.update({where:{projectId_keyId_locale:{projectId:project.id,keyId:localKey.id,locale:'en'}},data:{auditId:owner.user.id}});
+  check('internal recovery denies old deletion generation',(await inspectDeletionRecovery(prisma,project.id,audit.id)).reason==='deletion-generation-changed');
+  await prisma.repositoryRemovalGeneration.update({where:{projectId_keyId_locale:{projectId:project.id,keyId:localKey.id,locale:'en'}},data:{auditId:recoveryMarker.auditId}});
+  await prisma.repositoryRemovalGeneration.delete({where:{projectId_keyId_locale:{projectId:project.id,keyId:localKey.id,locale:'en'}}});
+  check('internal recovery denies missing legacy generation',(await inspectDeletionRecovery(prisma,project.id,audit.id)).reason==='deletion-generation-changed');
+  await prisma.repositoryRemovalGeneration.create({data:recoveryMarker});
+  await prisma.key.update({where:{id:localKey.id},data:{isPlural:true}});
+  check('internal recovery denies current plural key',(await inspectDeletionRecovery(prisma,project.id,audit.id)).reason==='unsupported-current-key');
+  await prisma.key.update({where:{id:localKey.id},data:{isPlural:false}});
+  // Real locale deletion in rollback-only transaction: no fixture translation loss.
+  let missingLocale;try{await prisma.$transaction(async tx=>{await tx.projectLocale.delete({where:{projectId_code:{projectId:project.id,code:'en'}}});missingLocale=await inspectDeletionRecovery(tx,project.id,audit.id);throw new Error('rollback locale fixture');});}catch(e){if(e?.message!=='rollback locale fixture')throw e;}
+  check('internal recovery denies removed project locale',missingLocale.reason==='locale-unavailable');
+  check('internal recovery diagnostic never alters archived snapshot',JSON.stringify(await prisma.translationDeletionAudit.findUnique({where:{id:audit.id}}))===recoveryBefore);
   const auditMetadata=await call(deletionAuditsPath,{jwt});
   const listedAudit=auditMetadata.json.audits.find(a=>a.id===audit.id);
   check('actual removed locale audit metadata appears without snapshot or restoration claim',auditMetadata.status===200&&listedAudit?.keyId===localKey.id&&listedAudit.keyName==='local'&&listedAudit.localeCode==='en'&&listedAudit.actorId===owner.user.id&&Object.keys(listedAudit).sort().join(',')==='actorId,createdAt,id,keyId,keyName,localeCode'&&auditMetadata.json.snapshotIncluded===false&&auditMetadata.json.canRestore===false&&!JSON.stringify(auditMetadata.json).includes('writer draft'));
@@ -609,6 +640,7 @@ try {
   check('locale removal archives exact row and full ordered history atomically',removed.removedValues===1&&canonicalAudit(audit.snapshot.row)===canonicalAudit(JSON.parse(JSON.stringify(deletedRow)))&&canonicalAudit(audit.snapshot.history)===canonicalAudit(JSON.parse(JSON.stringify(deletedHistory)))&&audit.actorId===owner.user.id&&audit.keyName==='local');
   check('locale removal deletes only selected translation not key or another locale',!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})&&!!await prisma.key.findUnique({where:{id:localKey.id}})&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'he'}}})).value==='other locale preserved');
   await prisma.translation.create({data:{keyId:localKey.id,projectId:project.id,localeCode:'en',value:'writer draft',version:deletedRow.version+1}});
+  check('internal recovery denies overwriting recreated locale value',(await inspectDeletionRecovery(prisma,project.id,audit.id)).reason==='value-exists');
   check('deletion audit survives recreation with new row identity',await prisma.translationDeletionAudit.count({where:{id:audit.id}})===1&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).rowId!==deletedRow.rowId);
   const boundedKey=await prisma.key.create({data:{projectId:project.id,branchId:storedLocalKey.branchId,name:'audit-bound'}});
   await prisma.translation.create({data:{keyId:boundedKey.id,projectId:project.id,localeCode:'en',value:'archive me'}});

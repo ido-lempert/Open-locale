@@ -565,3 +565,8 @@ its query plan; the index does not impose a total runtime bound. The migration u
 transactional CREATE INDEX then drops the redundant project/timestamp prefix index.
 Plan a maintenance window for a large existing audit table: writes can wait while
 the index builds. Existing audit metadata and stored snapshots are not rewritten.
+
+Internal deletion recovery diagnostic validates bounded flat snapshot scope,current
+key/name/length/locale,current absence and exact removal generation. It returns a
+value digest,never archived bytes or execution authority. No HTTP recovery endpoint,
+restore writer or history replay exists;future execution must re-authorize/revalidate.
