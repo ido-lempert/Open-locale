@@ -480,3 +480,10 @@ describe('repository target UI lifecycle', () => {
   });
 
 });
+
+describe('effect summary lifecycle', () => {
+  const summary={targetId:'t',counts:{pending:1,leased:0,completed:0,dead:0},expiredLeases:0,oldestPendingAt:null,asOf:'2026-01-01T00:00:00.000Z',source:'repository-effect-bookkeeping',deliveryConfirmed:false,syncAccepted:false} as const;
+  it('loads summary only on explicit action',async()=>{let calls=0;const c=setup({repositoryEffectSummary:async()=>{calls++;return summary;}});expect(c.effectSummary()).toBeNull();expect(calls).toBe(0);await c.loadEffects(target);expect(c.effectSummary()).toEqual(summary);expect(calls).toBe(1);expect(c.busy()).toBe(false);});
+  it('clears prior summary before refresh and on failure',async()=>{let fail=false;const c=setup({repositoryEffectSummary:async()=>{if(fail)throw new Error('private raw error');return summary;}});await c.loadEffects(target);fail=true;await c.loadEffects(target);expect(c.effectSummary()).toBeNull();expect(c.error()).toContain('No effects were run');expect(c.error()).not.toContain('private');});
+  it('ignores late response after route load or destruction',async()=>{for(const action of ['load','destroy']){let finish!:(v:unknown)=>void;const c=setup({repositoryEffectSummary:()=>new Promise(r=>finish=r),getProject:async()=>({locales:[],baseLocale:'en'}),listBranches:async()=>[],listRepositoryTargets:async()=>({targets:[]})});const pending=c.loadEffects(target);if(action==='load')await c.load('other');else c.ngOnDestroy();finish(summary);await pending;expect(c.effectSummary()).toBeNull();}});
+});

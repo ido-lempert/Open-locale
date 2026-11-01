@@ -130,7 +130,9 @@ add languages, manage keys and translations, export a file.
   contention tested without partial writes. Separate defaultOFF terminal retention flag,100old terminal rows/min/process,
   shared non-overlap/drain;retention-only does not dispatch. Terminal-only ordered partial retention index with preserved migration data.
   Session-admin target-scoped effect summary API adds aggregate queue visibility,
-  not delivery/sync acceptance;no retry mutation or UI yet. See reviews0134-0181.
+  not delivery/sync acceptance;no retry mutation. Manual read-only web summary adds
+  explicit snapshot/retention/worker-unknown notices and stale-response fencing.
+  See reviews0134-0182.
 
 ## Phase 3 - advanced
 

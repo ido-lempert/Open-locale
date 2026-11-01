@@ -5,6 +5,7 @@ import { Subscription } from 'rxjs';
 import {
   ApiService,
   RepositoryTargetInput,
+  RepositoryEffectSummary,
   RepositoryTargetConfig,
   RepositoryFileSnapshot,
   RepositoryBaselineView,
@@ -26,6 +27,8 @@ const empty = (): RepositoryTargetInput => ({
   imports: [FormsModule, RouterLink],
   styles: [
     `
+      .effect-summary dl { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 8px 16px; }
+      .effect-summary dd { margin: 0; overflow-wrap: anywhere; }
       .table-wrap {
         overflow-x: auto;
       }
@@ -259,6 +262,7 @@ const empty = (): RepositoryTargetInput => ({
               No sync connection. Sync cannot run. A comparison baseline is
               separate from synchronization.
             </p>
+            <div class="actions">
             <button
               name="targetLoadBaseline"
               type="button"
@@ -283,6 +287,27 @@ const empty = (): RepositoryTargetInput => ({
             >
               Compare repository with local translations
             </button>
+            <button name="targetEffects" type="button" (click)="loadEffects(t)" [disabled]="busy()">
+              Load effect summary
+            </button>
+            </div>
+            @if (effectSummary()?.targetId === t.id) {
+              <section aria-label="Effect bookkeeping summary" class="effect-summary">
+                <h3>Effect bookkeeping</h3>
+                <p>Snapshot: {{ effectSummary()!.asOf }} (UTC). Not live. Load again to refresh.</p>
+                <dl>
+                  <dt>Pending</dt><dd>{{ effectSummary()!.counts.pending }}</dd>
+                  <dt>Leased</dt><dd>{{ effectSummary()!.counts.leased }}</dd>
+                  <dt>Completed handlers</dt><dd>{{ effectSummary()!.counts.completed }}</dd>
+                  <dt>Dead</dt><dd>{{ effectSummary()!.counts.dead }}</dd>
+                  <dt>Expired leases</dt><dd>{{ effectSummary()!.expiredLeases }}</dd>
+                  <dt>Oldest pending (UTC)</dt><dd>{{ effectSummary()!.oldestPendingAt ?? 'None' }}</dd>
+                </dl>
+                <p class="notice">These are handler counts, not delivery receipts or completed sync.
+                  Includes earlier target revisions. Terminal counts may be removed after seven days.
+                  Worker enablement is unknown. Loading this summary does not run or retry effects.</p>
+              </section>
+            }
             @if (previewResult()?.targetId === t.id) {
               <section aria-label="Repository comparison">
                 <h3>Repository comparison - not applied</h3>
@@ -679,6 +704,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   message = signal('');
   snapshot = signal<RepositoryFileSnapshot | null>(null);
   readAt = signal('');
+  effectSummary = signal<RepositoryEffectSummary | null>(null);
   previewResult = signal<RepositorySyncPreview | null>(null);
   choices = signal(new Map<string, SyncResolutionChoice>());
   draft = signal<RepositoryResolutionDraft | null>(null);
@@ -786,7 +812,8 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     } finally {
       if (generation === this.generation) {
         this.previewResult.set(null); this.clearDraft(); this.previewPage.set(0);
-        this.snapshot.set(null); this.baselineView.set(null); this.confirmBaseline.set(false);
+        this.snapshot.set(null);
+    this.effectSummary.set(null); this.baselineView.set(null); this.confirmBaseline.set(false);
         this.busy.set(false);
         window.scrollTo({top: 0, behavior: 'instant'});
       }
@@ -831,6 +858,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.generation++;
     this.snapshot.set(null);
+    this.effectSummary.set(null);
     this.previewResult.set(null);
     this.clearDraft();
     this.previewPage.set(0);
@@ -838,10 +866,28 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     this.confirmBaseline.set(false);
     this.subscription?.unsubscribe();
   }
+  async loadEffects(t: RepositoryTargetConfig) {
+    if (this.busy()) return;
+    const generation = ++this.generation;
+    this.busy.set(true);
+    this.effectSummary.set(null);
+    this.error.set('');
+    this.message.set('');
+    try {
+      const result = await this.api.repositoryEffectSummary(this.projectId, t.id);
+      if (generation !== this.generation) return;
+      this.effectSummary.set(result);
+    } catch {
+      if (generation === this.generation) this.error.set('Could not load effect summary. No effects were run. Load again to refresh.');
+    } finally {
+      if (generation === this.generation) this.busy.set(false);
+    }
+  }
   async load(id: string) {
     const generation = ++this.generation;
     this.projectId = id;
     this.snapshot.set(null);
+    this.effectSummary.set(null);
     this.previewResult.set(null);
     this.clearDraft();
     this.previewPage.set(0);
@@ -878,6 +924,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   }
   edit(t: RepositoryTargetConfig) {
     this.snapshot.set(null);
+    this.effectSummary.set(null);
     this.previewResult.set(null);
     this.clearDraft();
     this.previewPage.set(0);
@@ -907,6 +954,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     const generation = ++this.generation;
     this.busy.set(true);
     this.snapshot.set(null);
+    this.effectSummary.set(null);
     this.previewResult.set(null);
     this.clearDraft();
     this.previewPage.set(0);
@@ -934,6 +982,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
       editing = this.editing();
     this.busy.set(true);
     this.snapshot.set(null);
+    this.effectSummary.set(null);
     this.previewResult.set(null);
     this.clearDraft();
     this.previewPage.set(0);
@@ -968,6 +1017,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     const generation = ++this.generation;
     this.busy.set(true);
     this.snapshot.set(null);
+    this.effectSummary.set(null);
     this.previewResult.set(null);
     this.clearDraft();
     this.previewPage.set(0);
@@ -1008,6 +1058,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     this.clearDraft();
     this.previewPage.set(0);
     this.snapshot.set(null);
+    this.effectSummary.set(null);
     this.baselineView.set(null);
     this.confirmBaseline.set(false);
     this.error.set('');
@@ -1093,6 +1144,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     } catch (e) {
       if (generation !== this.generation) return;
       this.snapshot.set(null);
+    this.effectSummary.set(null);
       this.previewResult.set(null);
       this.clearDraft();
       this.previewPage.set(0);
@@ -1110,6 +1162,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     const generation = ++this.generation;
     this.busy.set(true);
     this.snapshot.set(null);
+    this.effectSummary.set(null);
     this.previewResult.set(null);
     this.clearDraft();
     this.previewPage.set(0);

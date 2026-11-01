@@ -503,4 +503,6 @@ revisions of that target, not only its current coordinates. Seven-day terminal
 retention can remove older completed/dead counts. It returns no translation payload,
 actor, lease token or raw error and never dispatches or retries work. Counts are
 handler bookkeeping, not delivery receipts or accepted synchronization; it does
-not infer worker enablement. No web summary screen in this slice.
+not infer worker enablement. The target screen offers a manual Load effect summary action. It does not poll,
+retry or dispatch work. Refresh clears prior counts while loading and on failure;
+project navigation drops late responses. The displayed snapshot is not live.
