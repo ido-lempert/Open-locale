@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActivityService, truncate } from '../activity/activity.service';
@@ -134,14 +135,14 @@ export class ProjectsService {
   // the union of the winning grants' lists (an ADMIN/OWNER grant is always
   // unrestricted). Teamwide membership stays the outer boundary: a removed
   // team member gets no access from stale group rows.
-  private async memberFor(userId: string, projectId: string) {
-    const project = await this.prisma.project.findUnique({ where: { id: projectId }, select: { teamId: true } });
+  private async memberFor(userId: string, projectId: string, db: Prisma.TransactionClient = this.prisma) {
+    const project = await db.project.findUnique({ where: { id: projectId }, select: { teamId: true } });
     if (!project) throw new NotFoundException('Project not found');
-    const member = await this.prisma.teamMember.findUnique({
+    const member = await db.teamMember.findUnique({
       where: { teamId_userId: { teamId: project.teamId, userId } },
     });
     if (!member) throw new NotFoundException('Project not found'); // no existence leak
-    const groupGrants = await this.prisma.groupMember.findMany({
+    const groupGrants = await db.groupMember.findMany({
       where: { userId, group: { teamId: project.teamId } },
       include: { group: { select: { role: true, allowedLocales: true } } },
     });
@@ -310,6 +311,13 @@ export class ProjectsService {
   // snapshot restore. OWNER satisfies every check.
   async requireAdmin(userId: string, projectId: string) {
     const member = await this.memberFor(userId, projectId);
+    if (member.role === 'MEMBER') throw new ForbiddenException('Requires an admin role');
+    return member;
+  }
+
+  // Reuse direct and group grant semantics inside the caller's database snapshot.
+  async requireAdminInTransaction(tx: Prisma.TransactionClient, userId: string, projectId: string) {
+    const member = await this.memberFor(userId, projectId, tx);
     if (member.role === 'MEMBER') throw new ForbiddenException('Requires an admin role');
     return member;
   }

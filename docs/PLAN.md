@@ -152,7 +152,7 @@ add languages, manage keys and translations, export a file.
   archived bytes/digest or authority;consistent snapshot,no reservation/restore mutation. Manual per-audit eligibility UI shows fixed current-only reasons,no reservation
   or restore action,with stale-response/error/page clearing. Eligibility uses explicit DB transaction snapshot timestamp in API/UI,not
   an aging just-now claim. Internal recovery review also binds key metadata timestamp,denying restored
-  metadata changes when their stored timestamp differs,or stale review. Timestamp alone is not a monotonic generation;database-owned key revision now also binds review,including same-timestamp raw SQL edits/restore. Guard/writer capture primitive scope before awaits,preventing caller mutation during lock waits. See reviews0134-0205.
+  metadata changes when their stored timestamp differs,or stale review. Timestamp alone is not a monotonic generation;database-owned key revision now also binds review,including same-timestamp raw SQL edits/restore. Guard/writer capture primitive scope before awaits,preventing caller mutation during lock waits. Eligibility rechecks effective direct/group admin within its diagnostic snapshot,denying revocation after preflight but before snapshot. See reviews0134-0206.
 
 ## Phase 3 - advanced
 

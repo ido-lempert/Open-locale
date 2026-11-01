@@ -105,6 +105,7 @@ export class LocalSyncPreviewService {
     await this.projects.requireAdmin(user.userId, projectId);
     // One consistent diagnostic snapshot,not a lock/reservation/execution grant.
     const {plan,asOf} = await this.prisma.$transaction(async tx => {
+      await this.projects.requireAdminInTransaction(tx, user.userId, projectId);
       const stamp = await tx.$queryRaw<{asOf:Date}[]>`SELECT transaction_timestamp() AS "asOf"`;
       return {plan: await inspectDeletionRecovery(tx, projectId, auditId), asOf: stamp[0].asOf};
     }, { isolationLevel: 'RepeatableRead' });

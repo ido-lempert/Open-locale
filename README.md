@@ -622,3 +622,8 @@ maintenance window for a populated deployment. No public recovery token/restore 
 Internal recovery guard and writer copy primitive scope bindings before awaiting
 locks. Caller mutation cannot change the reviewed project/actor/audit/revision while
 the transaction waits. This is a binding guard,not authorization to execute recovery.
+
+Recovery eligibility rechecks project membership and effective direct/group admin
+role inside the same RepeatableRead diagnostic snapshot,not only before it starts.
+Revocations committed before that snapshot deny the result. Later revocations do
+not rewrite an already-started snapshot;this remains read-only,not a reservation.

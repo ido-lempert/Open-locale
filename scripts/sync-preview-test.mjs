@@ -776,6 +776,34 @@ try {
   const auditBundle=join(root,'.tmp-audit-page.cjs');
   execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/sync-preview.controller.ts','--bundle','--platform=node','--format=cjs','--packages=external','--outfile='+auditBundle]);
   const {LocalSyncPreviewService:AuditPageService}=require(auditBundle);
+  const authBundle=join(root,'.tmp-recovery-auth.cjs');
+  execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/projects/projects.service.ts','--bundle','--platform=node','--format=cjs','--packages=external','--outfile='+authBundle]);
+  const {ProjectsService:RecoveryProjectsService}=require(authBundle);
+  const recoveryProjects=new RecoveryProjectsService(prisma,{});
+  const recoveryAuthService=new AuditPageService(prisma,recoveryProjects,{});
+  const adminPrincipal={via:'jwt',userId:admin.user.id};
+  check('snapshot recovery auth accepts direct admin',(await recoveryAuthService.previewDeletionRecovery(adminPrincipal,project.id,audit.id)).eligibleNow===true);
+  for(const mode of ['demote','remove']){
+    const interleavedProjects={
+      requireAdmin:async(userId,projectId)=>{
+        await recoveryProjects.requireAdmin(userId,projectId);
+        if(mode==='demote')await prisma.teamMember.update({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},data:{role:'MEMBER'}});
+        else await prisma.teamMember.delete({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}}});
+      },
+      requireAdminInTransaction:(...args)=>recoveryProjects.requireAdminInTransaction(...args),
+    };
+    let denied=false;try{await new AuditPageService(prisma,interleavedProjects,{}).previewDeletionRecovery(adminPrincipal,project.id,audit.id);}catch(e){denied=e.getStatus?.()===(mode==='demote'?403:404);}
+    check('recovery snapshot denies committed admin '+mode+' after successful preflight',denied);
+    await prisma.teamMember.upsert({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},create:{teamId:project.teamId,userId:admin.user.id,role:'ADMIN'},update:{role:'ADMIN'}});
+  }
+  const groupGrant=await prisma.group.create({data:{teamId:project.teamId,name:'recovery-snapshot-admin',role:'ADMIN'}});
+  await prisma.groupMember.create({data:{groupId:groupGrant.id,userId:member.user.id}});
+  const groupPrincipal={via:'jwt',userId:member.user.id};
+  check('snapshot recovery auth preserves effective group admin',(await recoveryAuthService.previewDeletionRecovery(groupPrincipal,project.id,audit.id)).eligibleNow===true);
+  const revokedGroupProjects={requireAdmin:async(userId,projectId)=>{await recoveryProjects.requireAdmin(userId,projectId);await prisma.groupMember.delete({where:{groupId_userId:{groupId:groupGrant.id,userId:member.user.id}}});},requireAdminInTransaction:(...args)=>recoveryProjects.requireAdminInTransaction(...args)};
+  let groupDenied=false;try{await new AuditPageService(prisma,revokedGroupProjects,{}).previewDeletionRecovery(groupPrincipal,project.id,audit.id);}catch(e){groupDenied=e.getStatus?.()===403;}
+  check('recovery snapshot denies committed group grant removal after preflight',groupDenied);
+  await prisma.group.delete({where:{id:groupGrant.id}});rmSync(authBundle,{force:true});
   const auditPlanClient=new PrismaClient({datasources:{db:{url}},log:[{emit:'event',level:'query'}]});
   const {default:auditPg}=await import('pg');
   const auditExplainClient=new auditPg.Client({connectionString:url});await auditExplainClient.connect();
