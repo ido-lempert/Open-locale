@@ -663,6 +663,8 @@ model RepositoryLocalEffectIntent {
   createdAt DateTime @default(now())
   project Project @relation(fields:[projectId],references:[id],onDelete:Cascade)
   @@index([projectId,createdAt])
+  // SQL migration adds terminal-only partial finishedAt/id retention index.
+  // Prisma schema cannot express its predicate; preserve it in migration history.
   @@index([state,availableAt])
   @@map("repository_local_effect_intents")
 }

@@ -27,7 +27,7 @@ const {lockLocalPreconditions}=await import('data:text/javascript;base64,'+Buffe
 // Granular permissions: real PostgreSQL + real HTTP API.
 // Roles (OWNER/ADMIN/MEMBER) and per-locale contributor access.
 // Run: node scripts/permissions-test.mjs
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { execFileSync, spawn } from 'node:child_process';
 import EmbeddedPostgres from 'embedded-postgres';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -632,6 +632,14 @@ try {
   const protectedLeased=await prisma.repositoryLocalEffectIntent.create({data:{...leaseData,state:'leased',attempts:3,leaseToken:owner.user.id,leaseUntil:new Date('2020-01-01'),createdAt:new Date('2020-01-01')}});
   const recentTerminal=await prisma.repositoryLocalEffectIntent.create({data:{...oldTerminal,finishedAt:new Date()}});
   const lockedTerminal=await prisma.repositoryLocalEffectIntent.findFirst({where:{state:'completed',finishedAt:new Date('2020-01-01')}});
+  await prisma.repositoryLocalEffectIntent.createMany({data:Array.from({length:10000},()=>({...leaseData,availableAt:new Date('2099-01-01')}))});
+  await prisma.repositoryLocalEffectIntent.createMany({data:Array.from({length:10000},()=>({...oldTerminal,finishedAt:new Date()}))});
+  await prisma.$executeRaw`ANALYZE repository_local_effect_intents`;
+  let retentionPlan;
+  await pruneRepositoryEffects({$queryRaw:async(strings,...values)=>{retentionPlan=await prisma.$queryRaw(Prisma.sql`EXPLAIN (FORMAT JSON) ${Prisma.sql(strings,...values)}`);return [];}});
+  check('actual PG retention plan uses ordered terminal timestamp index without sort',JSON.stringify(retentionPlan).includes('repository_local_effect_intents_finishedAt_id_idx')&&!JSON.stringify(retentionPlan).includes('"Node Type":"Sort"'));
+  await prisma.repositoryLocalEffectIntent.deleteMany({where:{projectId:leaseProject.id,state:'pending',availableAt:new Date('2099-01-01')}});
+  await prisma.repositoryLocalEffectIntent.deleteMany({where:{projectId:leaseProject.id,state:'completed',finishedAt:{gte:new Date(Date.now()-60000)},NOT:{id:recentTerminal.id}}});
   let retentionReady,releaseRetention;const retentionGate=new Promise(r=>releaseRetention=r),retentionHeld=new Promise(r=>retentionReady=r);
   const holdingTerminal=prisma.$transaction(async tx=>{await tx.$queryRaw`SELECT id FROM repository_local_effect_intents WHERE id=${lockedTerminal.id}::uuid FOR UPDATE`;retentionReady();await retentionGate;},{timeout:10000});await retentionHeld;
   const firstPrune=await prisma.$transaction(pruneRepositoryEffects);

@@ -68,8 +68,22 @@ try {
   execFileSync(join(root, 'node_modules', '.bin', 'prisma'), ['migrate', 'deploy'], { cwd: revisionPrefix, env, stdio: 'pipe' });
   await db.query(`INSERT INTO automation_rules (id,"projectId",name,trigger,action,config,"creatorId") VALUES ('55555555-5555-5555-5555-555555555555','33333333-3333-3333-3333-333333333333','Existing rule','translation.value','task.create','{"title":"Keep me"}','11111111-1111-1111-1111-111111111111')`);
   rmSync(revisionPrefix, { recursive: true, force: true });
+  const retentionPrefix=mkdtempSync(join(tmpdir(),'ol-retention-prefix-'));
+  mkdirSync(join(retentionPrefix,'prisma','migrations'),{recursive:true});cpSync(join(root,'prisma','schema.prisma'),join(retentionPrefix,'prisma','schema.prisma'));
+  for(const m of readdirSync(migDir).filter(m=>m<'20261101113000_repository_retention_index'&&!m.endsWith('.toml')))cpSync(join(migDir,m),join(retentionPrefix,'prisma','migrations',m),{recursive:true});
+  execFileSync(join(root,'node_modules','.bin','prisma'),['migrate','deploy'],{cwd:retentionPrefix,env,stdio:'pipe'});
+  const retentionIntentId='66666666-6666-6666-6666-666666666666';
+  await db.query(`INSERT INTO repository_local_effect_intents (id,"projectId","targetId","actorId","keyId","keyName","branchId",branch,locale,operation,value,"draftContentDigest","previewFingerprint",state,"finishedAt") SELECT $1,'33333333-3333-3333-3333-333333333333','77777777-7777-7777-7777-777777777777','11111111-1111-1111-1111-111111111111','44444444-4444-4444-4444-444444444444','retention migration',id,'main','he','set-value','preserved','digest','fingerprint','completed','2020-01-01' FROM branches WHERE "projectId"='33333333-3333-3333-3333-333333333333' AND name='main'`,[retentionIntentId]);
+  await db.query(`INSERT INTO repository_automation_rule_checkpoints ("intentId","ruleId","ruleRevision") VALUES ($1,'55555555-5555-5555-5555-555555555555',1)`,[retentionIntentId]);
+  rmSync(retentionPrefix,{recursive:true,force:true});
   // Stage 2: the real migration set converts enum -> text on top of that data.
   execFileSync(join(root, 'node_modules', '.bin', 'prisma'), ['migrate', 'deploy'], { env, stdio: 'pipe' });
+  const retentionPreserved=(await db.query(`SELECT value,state,"finishedAt"::text AS "finishedAt" FROM repository_local_effect_intents WHERE id=$1`,[retentionIntentId])).rows[0];
+  check('existing terminal intent payload and state preserved through retention index migration',retentionPreserved?.value==='preserved'&&retentionPreserved?.state==='completed'&&retentionPreserved?.finishedAt==='2020-01-01 00:00:00');
+  const retainedCheckpoint=(await db.query(`SELECT "ruleRevision" FROM repository_automation_rule_checkpoints WHERE "intentId"=$1`,[retentionIntentId])).rows[0];
+  check('existing successful rule checkpoint preserved through retention index migration',retainedCheckpoint?.ruleRevision===1);
+  const retentionIndex=(await db.query(`SELECT indexdef FROM pg_indexes WHERE indexname='repository_local_effect_intents_finishedAt_id_idx'`)).rows[0]?.indexdef;
+  check('retention migration installs ordered finishedAt id index',retentionIndex?.includes('("finishedAt", id)')&&retentionIndex.includes('WHERE')&&retentionIndex.includes('completed')&&retentionIndex.includes('dead'));
   const migratedRule = (await db.query(`SELECT name,config,revision FROM automation_rules WHERE id='55555555-5555-5555-5555-555555555555'`)).rows[0];
   check('existing automation rule content preserved through revision migration', migratedRule?.name === 'Existing rule' && migratedRule?.config.title === 'Keep me');
   check('existing automation rule receives initial revision one', migratedRule?.revision === 1);

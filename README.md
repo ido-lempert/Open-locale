@@ -487,3 +487,10 @@ Terminal repository-effect retention can be opted in separately with
 completed/dead intents older than seven days per minute per process, including
 their rule checkpoints. It never age-prunes pending/leased work. Retention alone
 does not dispatch effects. It shares the worker's non-overlap and shutdown drain.
+
+Retention uses a terminal-only partial PostgreSQL index on `(finishedAt,id)` and
+one database wall-clock cutoff per sweep. The planner chooses its own path; this
+does not impose a total runtime bound. The index migration is a normal transactional
+CREATE INDEX, not concurrent: plan a maintenance window for a large existing table
+because writes can wait while it builds. Prisma schema cannot encode this partial
+predicate; preserve the SQL migration in deployment history.
