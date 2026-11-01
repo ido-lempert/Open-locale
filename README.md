@@ -446,3 +446,10 @@ stops new ticks and awaits in-flight work on SIGTERM/SIGINT before disconnecting
 the database. Container termination grace must allow the drain; forced kill may
 interrupt work. It does not expose public apply or write
 remote repositories. Crash gaps still permit duplicate effects.
+
+Internal fresh-source local execution now recomputes repository preview/resolution,
+checks the reviewed fingerprint and exact draft digest, and runs the existing
+Serializable local write plus history/TM/intents. It has no HTTP apply route. Only
+existing-key locale set/removal is supported; remote-only new keys fail closed.
+It does not advance the accepted baseline, write remote files, or accept a sync.
+Remote bytes are fresh at read time, not locked against later repository changes.

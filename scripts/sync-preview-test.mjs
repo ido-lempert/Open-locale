@@ -1,5 +1,11 @@
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
+const require=createRequire(import.meta.url);
+const freshBundle=join(process.cwd(),'.tmp-fresh-execution.cjs');
+execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-targets.controller.ts','--bundle','--platform=node','--format=cjs','--packages=external','--outfile='+freshBundle]);
+const {RepositoryTargetsService}=require(freshBundle);
+
 const writerSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/local-value-writer.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
 const {writeExistingLocalValues}=await import('data:text/javascript;base64,'+Buffer.from(writerSource).toString('base64'));
 const transactionSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-local-transaction.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
@@ -654,6 +660,95 @@ try {
   await prisma.translation.delete({where:{keyId_localeCode:{keyId:huge.id,localeCode:'en'}}});
   await prisma.key.createMany({data:Array.from({length:10000},(_,i)=>({projectId:bounded.id,branchId:boundedBranch.id,name:'key'+i}))});
   check('database key budget rejects oversized branch',(await boundedPreview()).status===400);
+  // Internal fresh-source boundary using real service authorization, repository
+  // HTTP reader and DB snapshot service, without adding an HTTP apply route.
+  const serviceBundle=join(root,'.tmp-fresh-services.cjs');
+  const serviceEntry=join(root,'.tmp-fresh-services.ts');
+  const {writeFileSync}=await import('node:fs');
+  writeFileSync(serviceEntry,`export {ProjectsService} from './apps/api/src/app/projects/projects.service';
+export {BranchesService} from './apps/api/src/app/branches/branches.service';
+export {LocalSyncPreviewService} from './apps/api/src/app/github/sync-preview.controller';`);
+  execFileSync('node_modules/.bin/esbuild',[serviceEntry,'--bundle','--platform=node','--format=cjs','--packages=external','--outfile='+serviceBundle]);
+  const {ProjectsService,BranchesService,LocalSyncPreviewService}=require(serviceBundle);
+  const realProjects=new ProjectsService(prisma,{}),realBranches=new BranchesService(prisma,realProjects,{},{},{},{});
+  const realPreviews=new LocalSyncPreviewService(prisma,realProjects,realBranches);
+  const freshService=new RepositoryTargetsService(prisma,realProjects,realBranches,realPreviews);
+  const freshProject=(await call('/projects',{jwt,method:'POST',body:{name:'Fresh execution',slug:'fresh-execution',locales:['en','he']}})).json;
+  const freshPath=`/projects/${freshProject.id}`;const actor={userId:owner.user.id,via:'jwt'};
+  await call(freshPath+'/import/en',{jwt,method:'POST',body:{entries:{existing:'before'}}});
+  await call(freshPath+'/import/he',{jwt,method:'POST',body:{entries:{existing:'before'}}});
+  const freshTarget=(await call(freshPath+'/sync/repository-targets',{jwt,method:'POST',body:{localBranch:'main',locale:'he',owner:'owner',repo:'repo',remoteBranch:'main',path:'updated/en.json'}})).json.target;
+  const priorEnv=Object.fromEntries(['GITHUB_READ_OWNER','GITHUB_READ_REPO','GITHUB_READ_TOKEN','GITHUB_READ_FIXTURE_ORIGIN','NODE_ENV'].map(k=>[k,process.env[k]]));
+  Object.assign(process.env,{GITHUB_READ_OWNER:'owner',GITHUB_READ_REPO:'repo',GITHUB_READ_TOKEN:'fixture-read-only-token',GITHUB_READ_FIXTURE_ORIGIN:repoOrigin,NODE_ENV:'test'});
+  repoText=JSON.stringify({existing:'after'});
+  const freshRead=await freshService.read(actor,freshProject.id,freshTarget.id,1);
+  await freshService.acceptBaseline(actor,freshProject.id,freshTarget.id,{expectedRevision:1,expectedRemoteSha:freshRead.remoteSha,expectedContentDigest:freshRead.contentDigest,expectedBaselineVersion:0});
+  const freshPlan=await freshService.preview(actor,freshProject.id,freshTarget.id,1);
+  const freshChoices={existing:'remote'};const freshInput={expectedRevision:1,expectedFingerprint:freshPlan.fingerprint,choices:freshChoices};
+  const freshDraft=await freshService.resolve(actor,freshProject.id,freshTarget.id,freshInput);
+  const freshRequest={...freshInput,expectedDraftDigest:freshDraft.contentDigest};
+  const freshReject=async(input=freshRequest,who=actor)=>{try{await freshService.executeReviewedLocal(who,freshProject.id,freshTarget.id,input);return false;}catch{return true;}};
+  const freshBefore=await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}});
+  check('fresh execution rejects changed choice exact digest and fingerprint before writes',await freshReject({...freshRequest,choices:{existing:'local'}})&&await freshReject({...freshRequest,expectedDraftDigest:'f'.repeat(64)})&&await freshReject({...freshRequest,expectedFingerprint:'f'.repeat(64)})&&(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}})).value==='before');
+  const beforeUnauthorizedCalls=repoCalls;
+  check('fresh execution rejects outsider and API token before remote request',await freshReject(freshRequest,{userId:outsider.user.id,via:'jwt'})&&await freshReject(freshRequest,{...actor,via:'api-token'})&&repoCalls===beforeUnauthorizedCalls);
+  repoText=JSON.stringify({existing:'changed again'});
+  check('fresh execution rereads actual repository and rejects changed remote bytes',await freshReject()&&(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}})).value==='before');
+  repoText=JSON.stringify({existing:'after'});
+  repoGate=new Promise(r=>releaseRepo=r);let seenFresh;const freshRemoteSeen=new Promise(r=>seenFresh=r);repoSeen=seenFresh;
+  const racedFresh=freshReject();await freshRemoteSeen;
+  await prisma.translation.update({where:{keyId_localeCode:{keyId:freshBefore.keyId,localeCode:'he'}},data:{version:{increment:1}}});releaseRepo();
+  check('fresh execution rejects actual local generation change during remote read',await racedFresh&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}})===0);
+  repoGate=undefined;repoSeen=undefined;
+  // Review again after legitimate generation change, then inject failure exactly
+  // at durable intent insertion to prove the fresh service owns atomic writes.
+  const revisedFresh=await freshService.preview(actor,freshProject.id,freshTarget.id,1);
+  freshRequest.expectedFingerprint=revisedFresh.fingerprint;
+  freshRequest.expectedDraftDigest=(await freshService.resolve(actor,freshProject.id,freshTarget.id,{...freshRequest})).contentDigest;
+  const freshActivityCount=await prisma.activityEvent.count({where:{projectId:freshProject.id,action:'translation.value',localeCode:'he'}});
+  const freshHistoryCount=await prisma.translationHistory.count({where:{keyId:freshBefore.keyId,localeCode:'he'}});
+  await prisma.$executeRawUnsafe(`CREATE FUNCTION fresh_fail_intent() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fresh intent fixture'; END $$`);
+  await prisma.$executeRawUnsafe(`CREATE TRIGGER fresh_fail_intent BEFORE INSERT ON repository_local_effect_intents FOR EACH ROW EXECUTE FUNCTION fresh_fail_intent()`);
+  let freshStorageError='';try{await freshService.executeReviewedLocal(actor,freshProject.id,freshTarget.id,freshRequest);}catch(e){freshStorageError=e.message;}
+  check('fresh execution intent storage failure rolls back value history TM and activity',freshStorageError.includes('fresh intent fixture')&&(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}})).value==='before'&&await prisma.translationHistory.count({where:{keyId:freshBefore.keyId,localeCode:'he'}})===freshHistoryCount&&await prisma.tmEntry.count({where:{projectId:freshProject.id,localeCode:'he',targetText:'after'}})===0&&await prisma.activityEvent.count({where:{projectId:freshProject.id,action:'translation.value',localeCode:'he'}})===freshActivityCount&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}})===0);
+  await prisma.$executeRawUnsafe(`DROP TRIGGER fresh_fail_intent ON repository_local_effect_intents`);await prisma.$executeRawUnsafe(`DROP FUNCTION fresh_fail_intent()`);
+  const originalFreshResolve=freshService.resolve.bind(freshService);
+  const freshSavedBaseline=await prisma.repositorySyncBaseline.findUnique({where:{targetId:freshTarget.id}});
+  let freshBaselineSeam=false,freshRoleSeam=false;
+  freshService.resolve=async(...args)=>{const result=await originalFreshResolve(...args);freshBaselineSeam=true;await prisma.repositorySyncBaseline.update({where:{targetId:freshTarget.id},data:{version:{increment:1}}});return result;};
+  check('fresh execution post-resolution baseline replacement fails locked commit without effects',await freshReject()&&freshBaselineSeam&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}})===0&&(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}})).value==='before');
+  await prisma.repositorySyncBaseline.update({where:{targetId:freshTarget.id},data:{version:freshSavedBaseline.version}});
+  const adminActor={userId:admin.user.id,via:'jwt'};
+  freshService.resolve=async(...args)=>{const result=await originalFreshResolve(...args);freshRoleSeam=true;await prisma.teamMember.update({where:{teamId_userId:{teamId:freshProject.teamId,userId:admin.user.id}},data:{role:'MEMBER'}});return result;};
+  check('fresh execution post-resolution admin revocation fails locked commit',await freshReject(freshRequest,adminActor)&&freshRoleSeam&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}})===0&&(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}})).value==='before');
+  await prisma.teamMember.update({where:{teamId_userId:{teamId:freshProject.teamId,userId:admin.user.id}},data:{role:'ADMIN'}});
+  freshService.resolve=originalFreshResolve;
+  const freshBaselineBefore=await prisma.repositorySyncBaseline.findUnique({where:{targetId:freshTarget.id}});
+  const freshApplied=await freshService.executeReviewedLocal(actor,freshProject.id,freshTarget.id,freshRequest);
+  const freshAfter=await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}});
+  check('fresh internal execution commits actual local value history activity TM and intent',freshApplied.pendingEffectIntents===1&&freshAfter.value==='after'&&freshAfter.version===freshBefore.version+2&&await prisma.translationHistory.count({where:{keyId:freshAfter.keyId,localeCode:'he'}})===freshHistoryCount+1&&await prisma.activityEvent.count({where:{projectId:freshProject.id,action:'translation.value',localeCode:'he'}})===freshActivityCount+1&&await prisma.tmEntry.count({where:{projectId:freshProject.id,localeCode:'he',sourceText:'before',targetText:'after'}})===1&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id,state:'pending'}})===1);
+  check('fresh execution does not advance baseline write remote or claim accepted sync',freshApplied.remoteWritten===false&&freshApplied.baselineAdvanced===false&&freshApplied.repositorySyncAccepted===false&&JSON.stringify(await prisma.repositorySyncBaseline.findUnique({where:{targetId:freshTarget.id}}))===JSON.stringify(freshBaselineBefore)&&repoMethod==='GET');
+  check('fresh execution replay rejects stale local generations without duplicate intent',await freshReject()&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}})===1);
+  check('fresh internal service has no exposed HTTP execute route',(await call(freshPath+'/sync/repository-targets/'+freshTarget.id+'/execute-reviewed-local',{jwt,method:'POST',body:freshRequest})).status===404);
+  const freshNoopPlan=await freshService.preview(actor,freshProject.id,freshTarget.id,1);
+  const freshNoopDraft=await freshService.resolve(actor,freshProject.id,freshTarget.id,{expectedRevision:1,expectedFingerprint:freshNoopPlan.fingerprint,choices:{}});
+  const freshNoop=await freshService.executeReviewedLocal(actor,freshProject.id,freshTarget.id,{expectedRevision:1,expectedFingerprint:freshNoopPlan.fingerprint,expectedDraftDigest:freshNoopDraft.contentDigest,choices:{}});
+  check('fresh no-op execution emits no additional value history TM activity or intents',freshNoop.pendingEffectIntents===0&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}})===1&&await prisma.translationHistory.count({where:{keyId:freshAfter.keyId,localeCode:'he'}})===freshHistoryCount+1&&await prisma.activityEvent.count({where:{projectId:freshProject.id,action:'translation.value',localeCode:'he'}})===freshActivityCount+1);
+  repoText=JSON.stringify({existing:'after',newRemote:'not supported'});
+  const newKeyPlan=await freshService.preview(actor,freshProject.id,freshTarget.id,1);
+  const newKeyInput={expectedRevision:1,expectedFingerprint:newKeyPlan.fingerprint,choices:{newRemote:'remote'}};
+  const newKeyDraft=await freshService.resolve(actor,freshProject.id,freshTarget.id,newKeyInput);
+  check('fresh execution unsupported remote-only new key fails before any writes',await freshReject({...newKeyInput,expectedDraftDigest:newKeyDraft.contentDigest})&&await prisma.key.count({where:{projectId:freshProject.id,name:'newRemote'}})===0&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}})===1);
+  repoText=JSON.stringify({existing:'third'});
+  const localRacePlan=await freshService.preview(actor,freshProject.id,freshTarget.id,1);
+  const localRaceInput={expectedRevision:1,expectedFingerprint:localRacePlan.fingerprint,choices:{existing:'remote'}};
+  const localRaceDraft=await freshService.resolve(actor,freshProject.id,freshTarget.id,localRaceInput);
+  let localRaceSeam=false;
+  freshService.resolve=async(...args)=>{const result=await originalFreshResolve(...args);localRaceSeam=true;await prisma.translation.update({where:{keyId_localeCode:{keyId:freshAfter.keyId,localeCode:'he'}},data:{version:{increment:1}}});return result;};
+  check('fresh post-resolution local generation change denies commit before new effect',await freshReject({...localRaceInput,expectedDraftDigest:localRaceDraft.contentDigest})&&localRaceSeam&&(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}})).value==='after'&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}})===1);
+  freshService.resolve=originalFreshResolve;
+  for(const [k,v] of Object.entries(priorEnv)){if(v===undefined)delete process.env[k];else process.env[k]=v;}
+  rmSync(serviceEntry,{force:true});rmSync(serviceBundle,{force:true});
   const key=(await call(`${P}/keys`,{jwt,method:'POST',body:{name:'plural',isPlural:true}})).json;
   check('plural setup succeeded',!!key.id && key.isPlural===true,JSON.stringify(key));
   check('flat-only preview rejects plural branch',(await preview()).status===400);
@@ -665,6 +760,7 @@ try {
 
 } catch (err) { console.error('SUITE INCOMPLETE:',err);process.exitCode=1;failures++; }
 finally {
+ for(const file of [freshBundle,join(root,'.tmp-fresh-services.cjs'),join(root,'.tmp-fresh-services.ts')])rmSync(file,{force:true});
  if(api) { const stopped=new Promise(resolve=>api.once('close',resolve));api.kill('SIGTERM');await stopped; }
  await new Promise(r=>repositoryFixture.close(r));await prisma?.$disconnect();await pg.stop();rmSync(dataDir,{recursive:true,force:true});
 }

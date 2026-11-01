@@ -46,6 +46,7 @@ import {
 import { parseSyncJson } from './sync-preview';
 import { resolvePlan, ResolutionChoice } from './resolve-preview';
 import { localDraftPlan } from './local-draft-plan';
+import { repositoryLocalTransaction } from './repository-local-transaction';
 import { createHash } from 'node:crypto';
 import {
   LocalSyncPreviewModule,
@@ -328,6 +329,7 @@ export class RepositoryTargetsService {
       targetRevision: target.revision,
       baselineVersion: baseline.version,
       baselineSha: baseline.remoteSha,
+      baselineDigest: baseline.contentDigest,
       source: 'accepted-baseline-repository-preview',
       remoteVerified: true,
       baselineVerified: true,
@@ -362,6 +364,7 @@ export class RepositoryTargetsService {
         locale: plan.locale,
         baselineVersion: plan.baselineVersion,
         baselineSha: plan.baselineSha,
+        baselineDigest: plan.baselineDigest,
         remoteSha: plan.remoteSha,
         baselineProvenanceVerified: true,
         baselineVerified: true,
@@ -375,6 +378,36 @@ export class RepositoryTargetsService {
         'Expected one valid explicit choice per differing key within flat JSON bounds',
       );
     }
+  }
+  // Internal service entry only. Deliberately NOT exposed by the controller.
+  // Recompute fresh authorized sources outside DB locks, bind exact reviewed
+  // bytes, then revalidate scope/local generations in one Serializable write.
+  // A remote repository may change after its read; this is a local-only import,
+  // not a remote compare-and-swap or a successful two-way sync.
+  async executeReviewedLocal(
+    user: AuthPrincipal, projectId: string, id: string,
+    input: ResolveRepositoryDto & { expectedDraftDigest: string },
+  ) {
+    input = JSON.parse(JSON.stringify(input));
+    user = { ...user };
+    if (!/^[a-f0-9]{64}$/.test(input.expectedDraftDigest))
+      throw new BadRequestException('Expected reviewed draft digest');
+    const draft = await this.resolve(user, projectId, id, input);
+    if (draft.contentDigest !== input.expectedDraftDigest)
+      throw new ConflictException('Repository draft changed; review exact bytes again');
+    const result = await this.prisma.$transaction(tx => repositoryLocalTransaction(tx, {
+      scope: {
+        actorId: user.userId, projectId, targetId: id, targetRevision: draft.targetRevision,
+        branchId: draft.localChangePlan.preconditions.branchId, branch: draft.branch,
+        locale: draft.locale, baselineVersion: draft.baselineVersion,
+        baselineSha: draft.baselineSha, baselineDigest: draft.baselineDigest,
+      },
+      local: draft.localChangePlan.preconditions, json: draft.json,
+      contentDigest: draft.contentDigest, previewFingerprint: draft.previewFingerprint,
+    }, input.expectedDraftDigest, input.expectedFingerprint), { isolationLevel: 'Serializable' });
+    return { ...result, source: 'internal-fresh-repository-local-execution' as const,
+      remoteWritten: false as const, baselineAdvanced: false as const,
+      repositorySyncAccepted: false as const };
   }
   async baseline(user: AuthPrincipal, projectId: string, id: string) {
     await this.authorize(user, projectId);

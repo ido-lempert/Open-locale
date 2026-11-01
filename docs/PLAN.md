@@ -118,7 +118,10 @@ add languages, manage keys and translations, export a file.
   contention. First automation dispatch freezes eligible rule IDs; new rules excluded on
   retry, configuration remains current. Rule manifest cap1000/UUID uniqueness enforced; empty selection stays empty.
   Opt-in Nest worker (defaultOFF),one intent/5sec,no local overlap,shutdown drain.
-  Public execution remains absent. See reviews0134-0172.
+  Internal fresh-source service recomputes authorized resolution and binds exact reviewed
+  fingerprint/digest before Serializable local write/history/TM/intents. Existing-key
+  sets/removals only; no HTTP apply route or baseline advance/remote write/accepted sync.
+  Public execution remains absent. See reviews0134-0173.
 
 ## Phase 3 - advanced
 
