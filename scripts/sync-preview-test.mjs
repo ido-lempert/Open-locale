@@ -651,6 +651,25 @@ try {
   check('active leases cannot be claimed again',await prisma.$transaction(claimRepositoryEffect)===null);
   const firstLease=leases[0],secondLease=leases[1];
   check('wrong worker token cannot settle a live lease',!await prisma.$transaction(tx=>settleRepositoryEffect(tx,firstLease.id,secondLease.leaseToken,'completed')));
+  const settlementWaiter=new PrismaClient({datasources:{db:{url:url+'?application_name=repository-settlement-waiter'}}});
+  for(const mutation of ['token','deadline','timeout']) {
+    await prisma.repositoryLocalEffectIntent.update({where:{id:firstLease.id},data:{leaseToken:firstLease.leaseToken,leaseUntil:new Date('2099-01-01')}});
+    let locked,release;const ready=new Promise(r=>locked=r),gate=new Promise(r=>release=r);
+    const blocker=prisma.$transaction(async tx=>{await tx.$queryRaw`SELECT id FROM repository_local_effect_intents WHERE id=${firstLease.id}::uuid FOR UPDATE`;locked();await gate;
+      if(mutation==='token')await tx.repositoryLocalEffectIntent.update({where:{id:firstLease.id},data:{leaseToken:secondLease.leaseToken}});
+      if(mutation==='deadline')await tx.repositoryLocalEffectIntent.update({where:{id:firstLease.id},data:{leaseUntil:new Date('2020-01-01')}});
+    },{timeout:10000});await ready;
+    let error;const start=Date.now();
+    const attempt=settlementWaiter.$transaction(tx=>settleRepositoryEffect(tx,firstLease.id,firstLease.leaseToken,'completed'),{timeout:10000}).catch(e=>{error=e;return false;});
+    let waiting=false;
+    for(let n=0;n<100&&!waiting;n++){waiting=(await prisma.$queryRaw`SELECT pid FROM pg_stat_activity WHERE application_name='repository-settlement-waiter' AND wait_event_type='Lock'`).length>0;if(!waiting)await new Promise(r=>setTimeout(r,10));}
+    let settled;
+    if(mutation==='timeout'){settled=await attempt;release();await blocker;}else{release();await blocker;settled=await attempt;}
+    const elapsed=Date.now()-start,row=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:firstLease.id}});
+    check('actual settlement '+mutation+' lock cannot record stale success',waiting&&!settled&&row.state==='leased'&&row.finishedAt===null&&(mutation!=='timeout'||(error?.code==='P2010'&&error?.meta?.code==='55P03'&&elapsed>=1800&&elapsed<4500)),JSON.stringify({elapsed,code:error?.code,meta:error?.meta}));
+  }
+  await settlementWaiter.$disconnect();
+  await prisma.repositoryLocalEffectIntent.update({where:{id:firstLease.id},data:{leaseToken:firstLease.leaseToken,leaseUntil:new Date('2099-01-01')}});
   check('successful queue settlement is token fenced',await prisma.$transaction(tx=>settleRepositoryEffect(tx,firstLease.id,firstLease.leaseToken,'completed'))&&!await prisma.$transaction(tx=>settleRepositoryEffect(tx,firstLease.id,firstLease.leaseToken,'retry'))&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:firstLease.id}})).state==='completed');
   await prisma.repositoryLocalEffectIntent.update({where:{id:secondLease.id},data:{leaseUntil:new Date('2020-01-01')}});
   check('expired worker cannot settle even before reclaim',!await prisma.$transaction(tx=>settleRepositoryEffect(tx,secondLease.id,secondLease.leaseToken,'completed')));

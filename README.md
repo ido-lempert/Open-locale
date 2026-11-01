@@ -520,3 +520,9 @@ wait timeout before locking the intent. A timeout never stores checkpoint succes
 Effects may already have happened before that checkpoint failed, so retries can
 still duplicate uncheckpointed work. This bounds each checkpoint lock wait, not
 all worker database work, delivery, settlement or shutdown drain.
+
+Effect settlement explicitly locks the intent before evaluating the current lease
+token and database deadline, with a transaction-local two-second per-lock timeout.
+A token change or expiry while waiting cannot record success; lock timeout leaves
+lease state untouched for later recovery. This does not bound the full runner or
+close the effect-before-settlement crash gap.

@@ -36,6 +36,10 @@ export async function settleRepositoryEffect(
   outcome: 'completed' | 'retry',
 ) {
   if (!['completed', 'retry'].includes(outcome)) throw new Error('Invalid effect outcome');
+  // Lock before evaluating clock/token, never carry pre-wait eligibility into
+  // settlement. Bound each lock wait, not overall runner/network duration.
+  await tx.$executeRaw`SET LOCAL lock_timeout = '2s'`;
+  await tx.$queryRaw`SELECT id FROM repository_local_effect_intents WHERE id=${id}::uuid FOR UPDATE`;
   const rows = await tx.$queryRaw<{ id: string }[]>`
     UPDATE repository_local_effect_intents SET
       state=CASE WHEN ${outcome}='completed' THEN 'completed' WHEN attempts>=3 THEN 'dead' ELSE 'pending' END,
