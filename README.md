@@ -610,3 +610,11 @@ Internal recovery binds reviewed key updatedAt as well as branch/value digest.
 A changed timestamp invalidates old review even when visible fields return to prior
 values. This timestamp is not a monotonic generation:edits sharing the same stored
 timestamp cannot be distinguished. Public eligibility exposes no key timestamp/token.
+
+Key revision is now database-owned: an UPDATE trigger advances it from the old
+value, including raw SQL and attempted resets. Internal recovery binds this revision
+as well as timestamp/branch/digest, closing the same-timestamp metadata-change gap
+for ordinary writes. Rollbacks roll back the revision too. No-op updates also
+invalidate review;integer overflow fails closed. Privileged schema/trigger tampering
+is outside this guard. Additive migration takes a keys-table lock: schedule a
+maintenance window for a populated deployment. No public recovery token/restore API.

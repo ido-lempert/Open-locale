@@ -79,6 +79,23 @@ try {
   await db.query(`INSERT INTO translation_deletion_audits (id,"projectId","keyId","keyName","localeCode","actorId",snapshot,"createdAt") VALUES ('88888888-8888-8888-8888-888888888888','33333333-3333-3333-3333-333333333333','44444444-4444-4444-4444-444444444444','preserved audit','he','11111111-1111-1111-1111-111111111111','{"value":"preserved","history":[{"value":"old"}]}','2020-01-01')`);
   // Stage 2: the real migration set converts enum -> text on top of that data.
   execFileSync(join(root, 'node_modules', '.bin', 'prisma'), ['migrate', 'deploy'], { env, stdio: 'pipe' });
+  const migratedKey=(await db.query(`SELECT name,description,"isPlural","maxLength",tags,revision,"updatedAt" FROM keys WHERE id='44444444-4444-4444-4444-444444444444'`)).rows[0];
+  check('key revision migration preserves existing key metadata with initial revision one',migratedKey?.name==='mig.key'&&migratedKey.description===''&&migratedKey.isPlural===false&&migratedKey.maxLength===null&&migratedKey.tags.length===0&&migratedKey.revision===1);
+  await db.query(`UPDATE keys SET description='edited',revision=1 WHERE id='44444444-4444-4444-4444-444444444444'`);
+  await db.query(`UPDATE keys SET description='',revision=1 WHERE id='44444444-4444-4444-4444-444444444444'`);
+  const revisedKey=(await db.query(`SELECT description,revision,"updatedAt" FROM keys WHERE id='44444444-4444-4444-4444-444444444444'`)).rows[0];
+  check('migrated key trigger increments raw updates ignoring revision reset with unchanged timestamp',revisedKey.revision===3&&revisedKey.description===''&&revisedKey.updatedAt.getTime()===migratedKey.updatedAt.getTime());
+  await db.query('BEGIN');await db.query(`UPDATE keys SET description='rolled back' WHERE id='44444444-4444-4444-4444-444444444444'`);await db.query('ROLLBACK');
+  check('key revision and metadata rollback together',(await db.query(`SELECT revision,description FROM keys WHERE id='44444444-4444-4444-4444-444444444444'`)).rows[0].revision===3&&(await db.query(`SELECT description FROM keys WHERE id='44444444-4444-4444-4444-444444444444'`)).rows[0].description==='');
+  await db.query('BEGIN');
+  await db.query(`UPDATE keys SET description=description WHERE id='44444444-4444-4444-4444-444444444444'`);
+  check('no-op key update also invalidates prior revision',(await db.query(`SELECT revision FROM keys WHERE id='44444444-4444-4444-4444-444444444444'`)).rows[0].revision===4);
+  await db.query('ROLLBACK');
+  await db.query('BEGIN');
+  await db.query(`INSERT INTO keys (id,"projectId","branchId",name,"updatedAt",revision) SELECT '99999999-9999-9999-9999-999999999999',"projectId","branchId",'overflow.key',"updatedAt",2147483647 FROM keys WHERE id='44444444-4444-4444-4444-444444444444'`);
+  let overflowDenied=false;try{await db.query(`UPDATE keys SET description='must not wrap' WHERE id='99999999-9999-9999-9999-999999999999'`);}catch(e){overflowDenied=e.code==='22003';}
+  await db.query('ROLLBACK');
+  check('key revision overflow fails closed with PostgreSQL numeric overflow',overflowDenied&&(await db.query(`SELECT id FROM keys WHERE id='99999999-9999-9999-9999-999999999999'`)).rows.length===0);
   const pageIndex=(await db.query(`SELECT indexdef FROM pg_indexes WHERE indexname='translation_deletion_audits_projectId_createdAt_id_idx'`)).rows[0]?.indexdef;
   check('audit page migration installs ordered project timestamp UUID index',pageIndex?.includes('("projectId", "createdAt", id)'));
   check('audit page migration removes redundant prefix index',(await db.query(`SELECT indexname FROM pg_indexes WHERE indexname='translation_deletion_audits_projectId_createdAt_idx'`)).rows.length===0);

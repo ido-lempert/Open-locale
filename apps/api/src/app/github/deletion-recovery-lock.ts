@@ -7,11 +7,12 @@ import { RepositoryLocalError } from './repository-local-error';
 // stale authorization. Row locks do not reserve absent translation rows.
 export async function lockDeletionRecovery(
   tx: Prisma.TransactionClient,
-  scope: { projectId: string; actorId: string; auditId: string; expectedBranchId: string; expectedKeyUpdatedAt: string; expectedValueDigest: string },
+  scope: { projectId: string; actorId: string; auditId: string; expectedBranchId: string; expectedKeyUpdatedAt: string; expectedKeyRevision: number; expectedValueDigest: string },
 ) {
   const isolation = await tx.$queryRaw<{ transaction_isolation: string }[]>`SHOW transaction_isolation`;
   if (isolation[0]?.transaction_isolation !== 'serializable') throw new Error('Deletion recovery requires serializable transaction');
   if (!/^[a-f0-9]{64}$/.test(scope.expectedValueDigest)) throw new RepositoryLocalError('unsupported', 'Invalid recovery digest');
+  if (!Number.isInteger(scope.expectedKeyRevision) || scope.expectedKeyRevision < 1 || scope.expectedKeyRevision > 2147483647) throw new RepositoryLocalError('unsupported', 'Invalid recovery key revision');
   await tx.$executeRaw`SET LOCAL lock_timeout = '2s'`;
   const projects = await tx.$queryRaw<{ teamId: string }[]>`SELECT "teamId" FROM projects WHERE id=${scope.projectId}::uuid FOR UPDATE`;
   if (!projects[0]) throw new RepositoryLocalError('conflict', 'Recovery project unavailable');
@@ -27,6 +28,6 @@ export async function lockDeletionRecovery(
   await tx.$queryRaw`SELECT "auditId" FROM repository_removal_generations WHERE "projectId"=${scope.projectId}::uuid AND "keyId"=${a.keyId}::uuid AND locale=${a.localeCode} FOR UPDATE`;
   await tx.$queryRaw`SELECT "keyId" FROM translations WHERE "keyId"=${a.keyId}::uuid AND "localeCode"=${a.localeCode} FOR UPDATE`;
   const plan = await inspectDeletionRecovery(tx, scope.projectId, scope.auditId);
-  if (!plan.eligible || !('valueDigest' in plan) || plan.valueDigest !== scope.expectedValueDigest || !('branchId' in plan) || plan.branchId !== scope.expectedBranchId || !('keyUpdatedAt' in plan) || plan.keyUpdatedAt !== scope.expectedKeyUpdatedAt) throw new RepositoryLocalError('conflict', 'Recovery candidate changed');
+  if (!plan.eligible || !('valueDigest' in plan) || plan.valueDigest !== scope.expectedValueDigest || !('branchId' in plan) || plan.branchId !== scope.expectedBranchId || !('keyUpdatedAt' in plan) || plan.keyUpdatedAt !== scope.expectedKeyUpdatedAt || !('keyRevision' in plan) || plan.keyRevision !== scope.expectedKeyRevision) throw new RepositoryLocalError('conflict', 'Recovery candidate changed');
   return { ...plan, adminValidated: true as const, canRestore: false as const };
 }

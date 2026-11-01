@@ -159,6 +159,7 @@ model Key {
   tags        String[] @default([])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  revision    Int      @default(1) // Database trigger increments every UPDATE.
 
   project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   branch       Branch        @relation(fields: [branchId], references: [id], onDelete: Cascade)
