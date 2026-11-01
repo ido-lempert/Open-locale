@@ -803,13 +803,31 @@ try {
   const revokedGroupProjects={requireAdmin:async(userId,projectId)=>{await recoveryProjects.requireAdmin(userId,projectId);await prisma.groupMember.delete({where:{groupId_userId:{groupId:groupGrant.id,userId:member.user.id}}});},requireAdminInTransaction:(...args)=>recoveryProjects.requireAdminInTransaction(...args)};
   let groupDenied=false;try{await new AuditPageService(prisma,revokedGroupProjects,{}).previewDeletionRecovery(groupPrincipal,project.id,audit.id);}catch(e){groupDenied=e.getStatus?.()===403;}
   check('recovery snapshot denies committed group grant removal after preflight',groupDenied);
-  await prisma.group.delete({where:{id:groupGrant.id}});rmSync(authBundle,{force:true});
+  await prisma.group.delete({where:{id:groupGrant.id}});
+  check('snapshot audit page auth accepts direct admin',(await recoveryAuthService.listDeletionAudits(adminPrincipal,project.id)).audits.some(a=>a.id===audit.id));
+  for(const mode of ['demote','remove']){
+    const interleavedProjects={requireAdmin:async(userId,projectId)=>{
+      await recoveryProjects.requireAdmin(userId,projectId);
+      if(mode==='demote')await prisma.teamMember.update({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},data:{role:'MEMBER'}});
+      else await prisma.teamMember.delete({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}}});
+    },requireAdminInTransaction:(...args)=>recoveryProjects.requireAdminInTransaction(...args)};
+    let denied=false;try{await new AuditPageService(prisma,interleavedProjects,{}).listDeletionAudits(adminPrincipal,project.id);}catch(e){denied=e.getStatus?.()===(mode==='demote'?403:404);}
+    check('audit page snapshot denies committed admin '+mode+' after successful preflight',denied);
+    await prisma.teamMember.upsert({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},create:{teamId:project.teamId,userId:admin.user.id,role:'ADMIN'},update:{role:'ADMIN'}});
+  }
+  const pageGroup=await prisma.group.create({data:{teamId:project.teamId,name:'audit-page-snapshot-admin',role:'ADMIN'}});
+  await prisma.groupMember.create({data:{groupId:pageGroup.id,userId:member.user.id}});
+  check('snapshot audit page auth preserves effective group admin',(await recoveryAuthService.listDeletionAudits(groupPrincipal,project.id)).audits.some(a=>a.id===audit.id));
+  const revokedPageGroupProjects={requireAdmin:async(userId,projectId)=>{await recoveryProjects.requireAdmin(userId,projectId);await prisma.groupMember.delete({where:{groupId_userId:{groupId:pageGroup.id,userId:member.user.id}}});},requireAdminInTransaction:(...args)=>recoveryProjects.requireAdminInTransaction(...args)};
+  let pageGroupDenied=false;try{await new AuditPageService(prisma,revokedPageGroupProjects,{}).listDeletionAudits(groupPrincipal,project.id);}catch(e){pageGroupDenied=e.getStatus?.()===403;}
+  check('audit page snapshot denies committed group grant removal after preflight',pageGroupDenied);
+  await prisma.group.delete({where:{id:pageGroup.id}});rmSync(authBundle,{force:true});
   const auditPlanClient=new PrismaClient({datasources:{db:{url}},log:[{emit:'event',level:'query'}]});
   const {default:auditPg}=await import('pg');
   const auditExplainClient=new auditPg.Client({connectionString:url});await auditExplainClient.connect();
   let actualPageQuery;
   auditPlanClient.$on('query',e=>{if(e.query.includes('translation_deletion_audits')&&e.query.startsWith('SELECT'))actualPageQuery=e;});
-  const pageService=new AuditPageService(auditPlanClient,{requireAdmin:async()=>{}},{});
+  const pageService=new AuditPageService(auditPlanClient,new RecoveryProjectsService(auditPlanClient,{}),{});
   await prisma.$executeRaw`INSERT INTO translation_deletion_audits (id,"projectId","keyId","keyName","localeCode",snapshot,"createdAt") SELECT md5('audit-page-'||i)::uuid,CASE WHEN i%2=0 THEN ${project.id}::uuid ELSE ${summaryOtherProject.id}::uuid END,${localKey.id}::uuid,'plan fixture','en','{"value":"plan-private"}'::jsonb,'2098-01-01'::timestamp+(i%3)*interval '1 second' FROM generate_series(1,20000) i`;
   await prisma.$executeRaw`ANALYZE translation_deletion_audits`;
   const explainActualPage=async(cursor)=>{

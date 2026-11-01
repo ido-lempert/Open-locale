@@ -627,3 +627,7 @@ Recovery eligibility rechecks project membership and effective direct/group admi
 role inside the same RepeatableRead diagnostic snapshot,not only before it starts.
 Revocations committed before that snapshot deny the result. Later revocations do
 not rewrite an already-started snapshot;this remains read-only,not a reservation.
+
+Deletion-audit metadata pages also recheck effective direct/group admin within the
+same RepeatableRead snapshot as their bounded page query. Committed pre-snapshot
+revocations deny metadata;separate page requests are not one frozen snapshot.

@@ -128,14 +128,17 @@ export class LocalSyncPreviewService {
         boundary = { createdAt: new Date(pair[0]), id: pair[1] };
       } catch { throw new BadRequestException('Invalid deletion audit cursor'); }
     }
-    const rows = await this.prisma.translationDeletionAudit.findMany({
+    const rows = await this.prisma.$transaction(async tx => {
+      await this.projects.requireAdminInTransaction(tx, user.userId, projectId);
+      return tx.translationDeletionAudit.findMany({
       where: { projectId, ...(boundary ? { OR: [
         { createdAt: { lt: boundary.createdAt } },
         { createdAt: boundary.createdAt, id: { lt: boundary.id } },
       ] } : {}) },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 51,
       select: { id: true, keyId: true, keyName: true, localeCode: true, actorId: true, createdAt: true },
-    });
+      });
+    }, { isolationLevel: 'RepeatableRead' });
     const audits = rows.slice(0, 50);
     const last = audits.at(-1);
     return {
