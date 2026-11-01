@@ -649,6 +649,7 @@ model RepositoryLocalEffectIntent {
   previewFingerprint String
   webhookHandledAt DateTime?
   automationHandledAt DateTime?
+  ruleCheckpoints RepositoryAutomationRuleCheckpoint[]
   targetRevision Int?
   translationRowId String? @db.Uuid
   translationVersion Int?
@@ -663,4 +664,14 @@ model RepositoryLocalEffectIntent {
   @@index([projectId,createdAt])
   @@index([state,availableAt])
   @@map("repository_local_effect_intents")
+}
+
+model RepositoryAutomationRuleCheckpoint {
+  intentId String @db.Uuid
+  ruleId String @db.Uuid
+  ruleRevision Int
+  handledAt DateTime @default(now())
+  intent RepositoryLocalEffectIntent @relation(fields:[intentId],references:[id],onDelete:Cascade)
+  @@id([intentId,ruleId])
+  @@map("repository_automation_rule_checkpoints")
 }

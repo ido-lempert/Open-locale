@@ -98,7 +98,7 @@ export class AutomationsService {
   // Called fire-and-forget from the write paths. Trigger bounds are enforced
   // here, not by callers: main branch only; translation.value only for
   // base-locale writes. Never throws.
-  async fire(projectId: string, trigger: string, ctx: { keyId: string; keyName: string; branchName: string; localeCode?: string; actorId?: string }, options?: { beforeRule?: () => Promise<void> }) {
+  async fire(projectId: string, trigger: string, ctx: { keyId: string; keyName: string; branchName: string; localeCode?: string; actorId?: string }, options?: { beforeRule?: () => Promise<void>; ruleHandled?: (rule: { id: string; revision: number }) => Promise<boolean>; afterRule?: (rule: { id: string; revision: number }) => Promise<void> }) {
     const summary = { matched: 0, succeeded: 0, failed: 0, skipped: false };
     try {
       if (ctx.branchName !== 'main') return { ...summary, skipped: true };
@@ -120,8 +120,9 @@ export class AutomationsService {
             throw new Error('Automation rule changed before execution');
         };
         await beforeEffect();
+        if (await options?.ruleHandled?.(rule)) { summary.succeeded++; continue; }
         const ok = await this.runRule(projectId, project.baseLocale, rule, ctx, beforeEffect).catch(() => false);
-        if (ok) summary.succeeded++; else summary.failed++;
+        if (ok) { await options?.afterRule?.(rule); summary.succeeded++; } else summary.failed++;
       }
       return summary;
     } catch { return { ...summary, failed: Math.max(1, summary.matched - summary.succeeded) }; }

@@ -22,7 +22,26 @@ export async function fireRepositoryAutomation(
   const result = await automations.fire(current.projectId, 'translation.value', {
     keyId: current.keyId, keyName: current.keyName, branchName: current.branch,
     localeCode: current.locale, actorId: current.actorId,
-  }, { beforeRule: async () => { await revalidate(); } });
+  }, {
+    beforeRule: async () => { await revalidate(); },
+    // Intent-scoped successful rule checkpoint. An edited rule does not replay
+    // an already handled logical intent. Revision retained for audit only.
+    ruleHandled: async (rule) => {
+      const rows = await db.$queryRaw<{ ruleId: string }[]>`
+        SELECT "ruleId" FROM repository_automation_rule_checkpoints
+        WHERE "intentId"=${current.id}::uuid AND "ruleId"=${rule.id}::uuid`;
+      return rows.length > 0;
+    },
+    afterRule: async (rule) => {
+      const rows = await db.$transaction((tx) => tx.$queryRaw<{ ruleId: string }[]>`
+        INSERT INTO repository_automation_rule_checkpoints ("intentId","ruleId","ruleRevision")
+        SELECT id,${rule.id}::uuid,${rule.revision} FROM repository_local_effect_intents
+        WHERE id=${current.id}::uuid AND state='leased'
+          AND "leaseToken"=${current.leaseToken}::uuid AND "leaseUntil">clock_timestamp()
+        ON CONFLICT ("intentId","ruleId") DO NOTHING RETURNING "ruleId"`);
+      if (!rows.length) throw new Error('Repository automation rule checkpoint lease lost');
+    },
+  });
   if (result.failed) throw new Error('Repository automation run incomplete');
   return result;
 }

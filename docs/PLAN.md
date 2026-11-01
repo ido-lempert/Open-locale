@@ -112,7 +112,8 @@ add languages, manage keys and translations, export a file.
   MT revalidates after provider computation before write transaction.
   Internal automation-only step/checkpoint added; no combined worker or per-rule
   partial retry ledger. Explicit internal combined step added under one lease,
-  independent channel checkpoints; no production timer. See reviews0134-0166.
+  independent channel checkpoints; no production timer. Intent-scoped successful-rule checkpoints skip completed rules on partial retries;
+  crash gap remains. See reviews0134-0167.
 
 ## Phase 3 - advanced
 

@@ -417,3 +417,8 @@ An explicit internal combined step runs webhook then automation under one lease,
 with independent channel checkpoints. If automation fails after webhook handling,
 a due retry skips that webhook channel. No timer/public apply is enabled; this
 bookkeeping does not make partial rules replay-safe or establish sync acceptance.
+
+Successful repository automation rules have intent-scoped, live-lease-fenced
+checkpoints. A partial retry skips previously checkpointed rule IDs even after
+a rule edit or task closure. Crash between effect/activity and checkpoint can
+still duplicate effects; this is not atomic exactly-once execution.
