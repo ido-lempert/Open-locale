@@ -6,6 +6,7 @@ import {
   ApiService,
   RepositoryTargetInput,
   RepositoryEffectSummary,
+  DeletionAuditPage,
   RepositoryTargetConfig,
   RepositoryFileSnapshot,
   RepositoryBaselineView,
@@ -27,6 +28,11 @@ const empty = (): RepositoryTargetInput => ({
   imports: [FormsModule, RouterLink],
   styles: [
     `
+      section[aria-label="Deletion audit metadata"] { scroll-margin-top: 72px; }
+      .audit-list { padding: 0; list-style: none; }
+      .audit-list li { border: 1px solid #dce2eb; border-radius: 8px; padding: 16px; margin: 12px 0; overflow-wrap: anywhere; }
+      .audit-list dl { margin: 0; }
+      .audit-list dd { margin: 0 0 8px; }
       .effect-summary dl { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 8px 16px; }
       .effect-summary dd { margin: 0; overflow-wrap: anywhere; }
       .table-wrap {
@@ -159,6 +165,29 @@ const empty = (): RepositoryTargetInput => ({
         >
           Refresh configurations
         </button>
+        <section aria-label="Deletion audit metadata">
+          <h2>Deletion audit metadata</h2>
+          <p>Project-wide metadata only. No archived values or history. No restore action.</p>
+          <button name="auditLoad" type="button" (click)="loadAudits()" [disabled]="busy()">Load newest audit page</button>
+          @if (auditPage(); as page) {
+            <p>Up to 50 rows per page, newest first. Not live or a frozen snapshot.</p>
+            @if (!page.audits.length) { <p>No deletion audits on this page.</p> }
+            <ul class="audit-list">
+              @for (a of page.audits; track a.id) {
+                <li><strong>{{ a.keyName }}</strong><dl>
+                  <dt>Locale</dt><dd>{{ a.localeCode }}</dd>
+                  <dt>Deleted at (UTC)</dt><dd>{{ a.createdAt }}</dd>
+                  <dt>Actor ID</dt><dd>{{ a.actorId ?? 'Unavailable' }}</dd>
+                  <dt>Key ID</dt><dd>{{ a.keyId }}</dd>
+                  <dt>Audit ID</dt><dd>{{ a.id }}</dd>
+                </dl></li>
+              }
+            </ul>
+            @if (page.nextCursor) {
+              <button name="auditOlder" type="button" (click)="loadAudits(page.nextCursor)" [disabled]="busy()">Load older audit page</button>
+            } @else { <p>End of audit pages.</p> }
+          }
+        </section>
         <h2>
           {{
             editing() ? 'Edit target configuration' : 'Add target configuration'
@@ -707,6 +736,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   message = signal('');
   snapshot = signal<RepositoryFileSnapshot | null>(null);
   readAt = signal('');
+  auditPage = signal<DeletionAuditPage | null>(null);
   effectSummary = signal<RepositoryEffectSummary | null>(null);
   previewResult = signal<RepositorySyncPreview | null>(null);
   choices = signal(new Map<string, SyncResolutionChoice>());
@@ -816,7 +846,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
       if (generation === this.generation) {
         this.previewResult.set(null); this.clearDraft(); this.previewPage.set(0);
         this.snapshot.set(null);
-    this.effectSummary.set(null); this.baselineView.set(null); this.confirmBaseline.set(false);
+    this.auditPage.set(null); this.effectSummary.set(null); this.baselineView.set(null); this.confirmBaseline.set(false);
         this.busy.set(false);
         window.scrollTo({top: 0, behavior: 'instant'});
       }
@@ -860,6 +890,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   }
   ngOnDestroy() {
     this.generation++;
+    this.auditPage.set(null);
     this.snapshot.set(null);
     this.effectSummary.set(null);
     this.previewResult.set(null);
@@ -868,6 +899,21 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     this.baselineView.set(null);
     this.confirmBaseline.set(false);
     this.subscription?.unsubscribe();
+  }
+  async loadAudits(cursor?: string) {
+    if (this.busy()) return;
+    const generation = ++this.generation;
+    this.busy.set(true);
+    this.auditPage.set(null);
+    this.error.set(''); this.message.set('');
+    try {
+      const result = await this.api.listDeletionAudits(this.projectId, cursor);
+      if (generation === this.generation) this.auditPage.set(result);
+    } catch {
+      if (generation === this.generation) this.error.set('Could not load audit metadata. Nothing was restored or deleted. Load newest audit page to retry.');
+    } finally {
+      if (generation === this.generation) this.busy.set(false);
+    }
   }
   async loadEffects(t: RepositoryTargetConfig) {
     if (this.busy()) return;
@@ -889,6 +935,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   async load(id: string) {
     const generation = ++this.generation;
     this.projectId = id;
+    this.auditPage.set(null);
     this.snapshot.set(null);
     this.effectSummary.set(null);
     this.previewResult.set(null);

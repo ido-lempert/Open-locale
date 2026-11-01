@@ -140,9 +140,10 @@ add languages, manage keys and translations, export a file.
   explicitly not receiver receipts. Shutdown during in-flight effect prevents newly due retention afterward;
   actual held-socket/terminal-row lifecycle verified. Removal effects now bind durable audit-UUID generation,blocking recreate/remove
   absence ABA;legacy unbound removals fail closed. Session-admin latest50 deletion audit metadata API excludes snapshots/values,
-  read-only and project-scoped;no restoration or web list. Stable timestamp/ID keyset
+  read-only and project-scoped;no restoration. Manual project-wide metadata web pages now support older-page
+  navigation,empty/error states and route freshness. Stable timestamp/ID keyset
   pagination exposes older metadata without requiring boundary rows to survive. Ordered project/timestamp/UUID index supports metadata pages;real Prisma SQL
-  plans and migration preservation verified. See reviews0134-0192.
+  plans and migration preservation verified. See reviews0134-0193.
 
 ## Phase 3 - advanced
 

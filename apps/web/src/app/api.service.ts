@@ -1,3 +1,8 @@
+export interface DeletionAuditPage {
+ source:'local-deletion-audit-metadata';
+ audits:{id:string;keyId:string;keyName:string;localeCode:string;actorId:string|null;createdAt:string}[];
+ nextCursor:string|null;snapshotIncluded:false;canRestore:false;
+}
 export interface LocalDraftChangePlan {source:'local-draft-change-plan';previewFingerprint:string;draftContentDigest:string;changes:{key:string;action:'set-value'|'remove-locale-value';expectedValue:string|null;nextValue:string|null}[];setValues:number;removeLocaleValues:number;unchangedValues:number;deletesKeys:false;touchesOtherLocales:false;canApply:false;}
 export interface RepositoryResolutionDraft extends Omit<SyncResolutionDraft, 'baselineVerified'|'remoteVerified'> {localChangePlan:LocalDraftChangePlan;targetId:string;targetRevision:number;baselineVersion:number;baselineSha:string;remoteSha:string;baselineVerified:true;remoteVerified:true;}
 export interface RepositorySyncPreview
@@ -250,6 +255,7 @@ export class ApiService {
       { method: 'POST', body: JSON.stringify({ expectedRevision }) },
     );
   }
+  listDeletionAudits(projectId:string,cursor?:string){return this.request<DeletionAuditPage>(`/projects/${projectId}/sync/deletion-audits${cursor?'?cursor='+encodeURIComponent(cursor):''}`);}
   repositoryEffectSummary(projectId: string, targetId: string) {
     return this.request<RepositoryEffectSummary>(`/projects/${projectId}/sync/repository-targets/${targetId}/effects-summary`);
   }
