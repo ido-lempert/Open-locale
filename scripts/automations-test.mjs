@@ -492,6 +492,21 @@ try {
     await blocker;const inserted=await attempt;const row=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}});
     check('blocked '+channel+' checkpoint '+mutation+' observes actual PG lock and denies stale write',waiting&&!inserted&&row.webhookHandledAt===null&&row.automationHandledAt===null);
   }
+  for(const kind of ['rule','webhook','automation']) {
+    await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{state:'leased',finishedAt:null,leaseToken:owner.user.id,leaseUntil:new Date('2099-01-01'),webhookHandledAt:null,automationHandledAt:null}});
+    await prisma.$executeRaw`DELETE FROM repository_automation_rule_checkpoints WHERE "intentId"=${repoIntent.id}::uuid`;
+    let locked,release;const ready=new Promise(r=>locked=r),gate=new Promise(r=>release=r);
+    const blocker=prisma.$transaction(async tx=>{await tx.$queryRaw`SELECT id FROM repository_local_effect_intents WHERE id=${repoIntent.id}::uuid FOR UPDATE`;locked();await gate;},{timeout:15000});await ready;
+    let timeoutError;const start=Date.now();
+    try {await channelWaiter.$transaction(tx=>kind==='rule'?checkpointRepositoryRule(tx,repoIntent.id,owner.user.id,{id:summaryRule.id,revision:9}):checkpointRepositoryChannel(tx,repoIntent.id,owner.user.id,kind),{timeout:10000});} catch(e){timeoutError=e;}
+    const elapsed=Date.now()-start;
+    const row=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}});
+    check('actual '+kind+' checkpoint lock timeout never writes success',timeoutError?.code==='P2010'&&timeoutError?.meta?.code==='55P03'&&elapsed>=1800&&elapsed<4500&&row.webhookHandledAt===null&&row.automationHandledAt===null&&await prisma.repositoryAutomationRuleCheckpoint.count({where:{intentId:repoIntent.id}})===0,JSON.stringify({elapsed,code:timeoutError?.code,meta:timeoutError?.meta}));
+    release();await blocker;
+    const recovered=await channelWaiter.$transaction(tx=>kind==='rule'?checkpointRepositoryRule(tx,repoIntent.id,owner.user.id,{id:summaryRule.id,revision:9}):checkpointRepositoryChannel(tx,repoIntent.id,owner.user.id,kind));
+    check(kind+' checkpoint recovers after actual timeout lock release',recovered);
+  }
+  await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{webhookHandledAt:null,automationHandledAt:null}});
   await channelWaiter.$disconnect();await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{leaseToken:owner.user.id,leaseUntil:new Date('2099-01-01')}});
   const liveWebhook=await prisma.$transaction(tx=>checkpointRepositoryChannel(tx,repoIntent.id,owner.user.id,'webhook')),liveAutomation=await prisma.$transaction(tx=>checkpointRepositoryChannel(tx,repoIntent.id,owner.user.id,'automation'));
   const checkpointed=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}});

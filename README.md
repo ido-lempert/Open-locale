@@ -514,3 +514,9 @@ existing bounded retry bookkeeping. This applies to handler revalidation too,
 including checks before webhook socket attempts. It bounds each lock wait, not
 claim, settlement, transport, cumulative validation time or the full worker tick.
 No lease renewal or exactly-once delivery promise is added.
+
+Rule and channel checkpoint writers also set a transaction-local two-second lock
+wait timeout before locking the intent. A timeout never stores checkpoint success.
+Effects may already have happened before that checkpoint failed, so retries can
+still duplicate uncheckpointed work. This bounds each checkpoint lock wait, not
+all worker database work, delivery, settlement or shutdown drain.

@@ -7,6 +7,8 @@ export async function checkpointRepositoryChannel(
   channel: 'webhook' | 'automation',
 ) {
   if (channel !== 'webhook' && channel !== 'automation') throw new Error('Invalid effect channel');
+  // Per-lock wait only. An effect before a failed checkpoint may still replay.
+  await tx.$executeRaw`SET LOCAL lock_timeout = '2s'`;
   await tx.$queryRaw`SELECT id FROM repository_local_effect_intents WHERE id=${id}::uuid FOR UPDATE`;
   // Literal statements keep identifiers out of dynamic SQL.
   const rows = channel === 'webhook'

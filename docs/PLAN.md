@@ -133,7 +133,8 @@ add languages, manage keys and translations, export a file.
   not delivery/sync acceptance;no retry mutation. Manual read-only web summary adds
   explicit snapshot/retention/worker-unknown notices and stale-response fencing.
   Eligibility guard per-lock2sec timeout;actual project/translation blockers
-  requeue without invoking handler and recover after release. See reviews0134-0183.
+  requeue without invoking handler and recover after release. Rule/channel checkpoints also use per-lock2sec timeout with actual intent-lock
+  denial/recovery tests;effect-before-checkpoint crash gap remains. See reviews0134-0184.
 
 ## Phase 3 - advanced
 

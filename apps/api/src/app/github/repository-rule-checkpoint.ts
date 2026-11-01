@@ -6,6 +6,8 @@ export async function checkpointRepositoryRule(
   tx: Prisma.TransactionClient, intentId: string, token: string,
   rule: { id: string; revision: number },
 ) {
+  // Per-lock wait only. An effect before a failed checkpoint may still replay.
+  await tx.$executeRaw`SET LOCAL lock_timeout = '2s'`;
   await tx.$queryRaw`SELECT id FROM repository_local_effect_intents
     WHERE id=${intentId}::uuid FOR UPDATE`;
   const rows = await tx.$queryRaw<{ ruleId: string }[]>`
