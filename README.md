@@ -476,3 +476,8 @@ storage faults remain 500 and roll back the transaction. No automatic retry.
 The local apply conflict path is tested against an actual PostgreSQL concurrent
 update after the Serializable snapshot. Raw locking SQL can report Prisma P2010
 with SQLSTATE 40001; that exact case returns 409 without retry, like P2034.
+
+Local apply sets a transaction-local PostgreSQL lock timeout of two seconds per
+lock wait. Actual project-row and translation-row contention return a safe 409
+without retry or partial write. This bounds each lock wait, not the entire request
+or all cumulative waits; other unexpected transaction failures remain 500.

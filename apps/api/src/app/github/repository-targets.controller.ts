@@ -401,7 +401,9 @@ export class RepositoryTargetsService {
       throw new ConflictException('Repository draft changed; review exact bytes again');
     let result;
     try {
-      result = await this.prisma.$transaction(tx => repositoryLocalTransaction(tx, {
+      result = await this.prisma.$transaction(async tx => {
+        await tx.$executeRaw`SET LOCAL lock_timeout='2s'`;
+        return repositoryLocalTransaction(tx, {
       scope: {
         actorId: user.userId, projectId, targetId: id, targetRevision: draft.targetRevision,
         branchId: draft.localChangePlan.preconditions.branchId, branch: draft.branch,
@@ -410,7 +412,8 @@ export class RepositoryTargetsService {
       },
       local: draft.localChangePlan.preconditions, json: draft.json,
       contentDigest: draft.contentDigest, previewFingerprint: draft.previewFingerprint,
-    }, input.expectedDraftDigest, input.expectedFingerprint), { isolationLevel: 'Serializable' });
+    }, input.expectedDraftDigest, input.expectedFingerprint);
+      }, { isolationLevel: 'Serializable' });
     } catch (e) {
       if (e instanceof RepositoryLocalError) {
         if (e.kind === 'unsupported') throw new BadRequestException('Reviewed local operation is unsupported or exceeds local limits');
@@ -418,6 +421,8 @@ export class RepositoryTargetsService {
           ? 'Local effect backlog is full; try after queued work is handled'
           : 'Repository local scope changed; compare and review again');
       }
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2010' && e.meta?.['code'] === '55P03')
+        throw new ConflictException('Local apply is busy; compare and review again');
       if (e instanceof Prisma.PrismaClientKnownRequestError &&
           (e.code === 'P2034' || (e.code === 'P2010' && e.meta?.['code'] === '40001')))
         throw new ConflictException('Concurrent local change; compare and review again');

@@ -126,7 +126,8 @@ add languages, manage keys and translations, export a file.
   reviewed local apply confirmation, cancel, counts/digest and stale-review clearing;
   no baseline advance, remote write or accepted sync. Typed local apply denials400/409;unexpected storage faults remain500/rollback.
   Actual PG raw-lock SQLSTATE40001 conflict mapped409 without retry.
-  See reviews0134-0177.
+  Local apply per-lock2sec timeout55P03 maps busy409;actual project/translation
+  contention tested without partial writes. See reviews0134-0178.
 
 ## Phase 3 - advanced
 
