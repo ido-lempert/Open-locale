@@ -1,3 +1,4 @@
+import { RepositoryLocalError } from './repository-local-error';
 import { createHash } from 'node:crypto';
 import { parseSyncJson } from './sync-preview';
 
@@ -23,7 +24,7 @@ export function localDraftPlan(
     keys.size !== decisions.length ||
     Object.keys(draft).some((k) => !keys.has(k))
   )
-    throw new Error('Draft keys must belong to the reviewed comparison');
+    throw new RepositoryLocalError('unsupported', 'Draft keys must belong to the reviewed comparison');
   const changes: LocalDraftChange[] = [];
   for (const d of [...decisions].sort((a, b) =>
     a.key < b.key ? -1 : a.key > b.key ? 1 : 0,

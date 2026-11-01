@@ -1,3 +1,4 @@
+import { RepositoryLocalError } from './repository-local-error';
 import type { Prisma } from '@prisma/client';
 
 // Internal composition-only admission check, after locked project scope and
@@ -21,5 +22,5 @@ export async function assertRepositoryEffectBudget(
   const addedBytes = changes.reduce((n, c) => n + Buffer.byteLength(c.key) + Buffer.byteLength(c.nextValue ?? ''), 0);
   if (BigInt(budget[0].count) + BigInt(changes.length) > 10000n ||
       BigInt(budget[0].bytes) + BigInt(addedBytes) > 8n * 1024n * 1024n)
-    throw new Error('Repository pending effects exceed project backlog budget');
+    throw new RepositoryLocalError('backlog', 'Repository pending effects exceed project backlog budget');
 }

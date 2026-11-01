@@ -1,3 +1,4 @@
+import { RepositoryLocalError } from './repository-local-error';
 import { rememberValueTx } from '../translations/remember-value';
 import type { Prisma } from '@prisma/client';
 import { lockLocalPreconditions } from './local-preconditions';
@@ -35,18 +36,18 @@ export async function writeExistingLocalValues(
         ? typeof c.nextValue !== 'string'
         : c.nextValue !== null || !key.translation)
     )
-      throw new Error('Invalid existing-key locale operation');
+      throw new RepositoryLocalError('unsupported', 'Invalid existing-key locale operation');
     if (
       (key.translation?.value ?? null) !== c.expectedValue ||
       c.nextValue === c.expectedValue
     )
-      throw new Error('Local value change does not match reviewed snapshot');
+      throw new RepositoryLocalError('conflict', 'Local value change does not match reviewed snapshot');
     if (
       c.nextValue !== null &&
       key.maxLength !== null &&
       [...c.nextValue].length > key.maxLength
     )
-      throw new Error('Draft locale value exceeds key length limit');
+      throw new RepositoryLocalError('unsupported', 'Draft locale value exceeds key length limit');
   }
   for (const c of changes) {
     const key = byName.get(c.key)!;
@@ -62,10 +63,10 @@ export async function writeExistingLocalValues(
         take: 1001,
       });
       if (history.length > 1000)
-        throw new Error('Deletion audit history exceeds bounds');
+        throw new RepositoryLocalError('unsupported', 'Deletion audit history exceeds bounds');
       const snapshot = JSON.parse(JSON.stringify({ row, history }));
       if (Buffer.byteLength(JSON.stringify(snapshot)) > 512 * 1024)
-        throw new Error('Deletion audit bytes exceed bounds');
+        throw new RepositoryLocalError('unsupported', 'Deletion audit bytes exceed bounds');
       await tx.translationDeletionAudit.create({
         data: {
           projectId: expected.projectId,

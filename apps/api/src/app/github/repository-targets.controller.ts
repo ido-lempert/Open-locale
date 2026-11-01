@@ -47,6 +47,7 @@ import { parseSyncJson } from './sync-preview';
 import { resolvePlan, ResolutionChoice } from './resolve-preview';
 import { localDraftPlan } from './local-draft-plan';
 import { repositoryLocalTransaction } from './repository-local-transaction';
+import { RepositoryLocalError } from './repository-local-error';
 import { createHash } from 'node:crypto';
 import {
   LocalSyncPreviewModule,
@@ -398,7 +399,9 @@ export class RepositoryTargetsService {
     const draft = await this.resolve(user, projectId, id, input);
     if (draft.contentDigest !== input.expectedDraftDigest)
       throw new ConflictException('Repository draft changed; review exact bytes again');
-    const result = await this.prisma.$transaction(tx => repositoryLocalTransaction(tx, {
+    let result;
+    try {
+      result = await this.prisma.$transaction(tx => repositoryLocalTransaction(tx, {
       scope: {
         actorId: user.userId, projectId, targetId: id, targetRevision: draft.targetRevision,
         branchId: draft.localChangePlan.preconditions.branchId, branch: draft.branch,
@@ -408,6 +411,17 @@ export class RepositoryTargetsService {
       local: draft.localChangePlan.preconditions, json: draft.json,
       contentDigest: draft.contentDigest, previewFingerprint: draft.previewFingerprint,
     }, input.expectedDraftDigest, input.expectedFingerprint), { isolationLevel: 'Serializable' });
+    } catch (e) {
+      if (e instanceof RepositoryLocalError) {
+        if (e.kind === 'unsupported') throw new BadRequestException('Reviewed local operation is unsupported or exceeds local limits');
+        throw new ConflictException(e.kind === 'backlog'
+          ? 'Local effect backlog is full; try after queued work is handled'
+          : 'Repository local scope changed; compare and review again');
+      }
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2034')
+        throw new ConflictException('Concurrent local change; compare and review again');
+      throw e;
+    }
     return { ...result, source: 'internal-fresh-repository-local-execution' as const,
       remoteWritten: false as const, baselineAdvanced: false as const,
       repositorySyncAccepted: false as const };

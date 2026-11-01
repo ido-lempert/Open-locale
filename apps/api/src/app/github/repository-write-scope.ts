@@ -1,3 +1,4 @@
+import { RepositoryLocalError } from './repository-local-error';
 import type { Prisma } from '@prisma/client';
 export interface RepositoryWriteScope {
   actorId: string;
@@ -25,12 +26,12 @@ export async function lockRepositoryWriteScope(
   const projects = await tx.$queryRaw<
     { teamId: string }[]
   >`SELECT "teamId" FROM projects WHERE id=${scope.projectId}::uuid FOR UPDATE`;
-  if (!projects[0]) throw new Error('Repository write project unavailable');
+  if (!projects[0]) throw new RepositoryLocalError('conflict', 'Repository write project unavailable');
   const members = await tx.$queryRaw<
     { role: string }[]
   >`SELECT role FROM team_members WHERE "teamId"=${projects[0].teamId}::uuid AND "userId"=${scope.actorId}::uuid FOR UPDATE`;
   if (!members[0] || !['OWNER', 'ADMIN'].includes(members[0].role))
-    throw new Error('Repository write requires current project admin');
+    throw new RepositoryLocalError('conflict', 'Repository write requires current project admin');
   const targets = await tx.$queryRaw<
     {
       revision: number;
@@ -47,7 +48,7 @@ export async function lockRepositoryWriteScope(
     t.localBranch !== scope.branch ||
     t.locale !== scope.locale
   )
-    throw new Error('Repository write target scope changed');
+    throw new RepositoryLocalError('conflict', 'Repository write target scope changed');
   const bases = await tx.$queryRaw<
     {
       version: number;
@@ -64,7 +65,7 @@ export async function lockRepositoryWriteScope(
     b.remoteSha !== scope.baselineSha ||
     b.contentDigest !== scope.baselineDigest
   )
-    throw new Error('Repository write baseline changed');
+    throw new RepositoryLocalError('conflict', 'Repository write baseline changed');
   return {
     actorId: scope.actorId,
     projectId: scope.projectId,

@@ -124,7 +124,8 @@ add languages, manage keys and translations, export a file.
   Explicit session-admin apply-local API now binds revision/fingerprint/choices/digest,
   commits local-only set/removal/history/TM/intents atomically. Web UI adds separate
   reviewed local apply confirmation, cancel, counts/digest and stale-review clearing;
-  no baseline advance, remote write or accepted sync. See reviews0134-0175.
+  no baseline advance, remote write or accepted sync. Typed local apply denials400/409;unexpected storage faults remain500/rollback.
+  See reviews0134-0176.
 
 ## Phase 3 - advanced
 

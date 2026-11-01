@@ -1,3 +1,4 @@
+import { RepositoryLocalError } from './repository-local-error';
 import { assertRepositoryEffectBudget } from './repository-effect-budget';
 import { createHash } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
@@ -33,7 +34,7 @@ export async function repositoryLocalTransaction(
     createHash('sha256').update(reviewed.json).digest('hex') !==
       expectedDraftDigest
   )
-    throw new Error('Reviewed repository draft binding changed');
+    throw new RepositoryLocalError('conflict', 'Reviewed repository draft binding changed');
   const { scope, local } = reviewed;
   if (
     scope.projectId !== local.projectId ||

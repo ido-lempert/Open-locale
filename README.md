@@ -467,3 +467,8 @@ branch, locale, set/removal counts and digest. Cancel leaves local values unchan
 Success or failure clears stale review and requires a fresh comparison. A lost
 response may hide an already committed write, so the UI never offers blind retry.
 Configured downstream effects may run later if the deployment worker is enabled.
+
+Local apply reports expected denials without a generic server error: unsupported
+operations or local limits return 400; changed locked scope, a full effect backlog
+or a serialization conflict return 409 and require a fresh review. Unexpected
+storage faults remain 500 and roll back the transaction. No automatic retry.

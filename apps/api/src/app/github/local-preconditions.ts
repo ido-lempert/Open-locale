@@ -1,3 +1,4 @@
+import { RepositoryLocalError } from './repository-local-error';
 import type { Prisma } from '@prisma/client';
 
 export interface LocalPreconditions {
@@ -47,7 +48,7 @@ export async function lockLocalPreconditions(
       projectId_code: { projectId: expected.projectId, code: expected.locale },
     },
   });
-  if (!branch || !locale) throw new Error('Local snapshot scope changed');
+  if (!branch || !locale) throw new RepositoryLocalError('conflict', 'Local snapshot scope changed');
   const keys = await tx.$queryRaw<
     {
       id: string;
@@ -60,7 +61,7 @@ export async function lockLocalPreconditions(
     SELECT id,name,"updatedAt","maxLength","isPlural" FROM keys
     WHERE "projectId"=${expected.projectId}::uuid AND "branchId"=${expected.branchId}::uuid ORDER BY name LIMIT 10001 FOR UPDATE`;
   if (keys.length !== expected.keys.length)
-    throw new Error('Local snapshot key set changed');
+    throw new RepositoryLocalError('conflict', 'Local snapshot key set changed');
   const translations = await tx.$queryRaw<
     {
       keyId: string;
@@ -87,7 +88,7 @@ export async function lockLocalPreconditions(
       e.maxLength !== key.maxLength ||
       key.isPlural
     )
-      throw new Error('Local snapshot key metadata changed');
+      throw new RepositoryLocalError('conflict', 'Local snapshot key metadata changed');
     if (
       t?.pluralForms != null ||
       (e.translation === null
@@ -97,7 +98,7 @@ export async function lockLocalPreconditions(
           e.translation.version !== t.version ||
           e.translation.value !== t.value)
     )
-      throw new Error('Local snapshot translation changed');
+      throw new RepositoryLocalError('conflict', 'Local snapshot translation changed');
   }
   return {
     validatedKeys: keys.length,

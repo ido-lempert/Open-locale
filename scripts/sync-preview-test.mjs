@@ -20,8 +20,10 @@ const budgetSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/g
 const {assertRepositoryEffectBudget}=await import('data:text/javascript;base64,'+Buffer.from(budgetSource).toString('base64'));
 const runnerSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-effect-runner.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
 const {runRepositoryEffect}=await import('data:text/javascript;base64,'+Buffer.from(runnerSource).toString('base64'));
-import { lockRepositoryWriteScope } from '../apps/api/src/app/github/repository-write-scope.ts';
-import { lockLocalPreconditions } from '../apps/api/src/app/github/local-preconditions.ts';
+const scopeSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-write-scope.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
+const {lockRepositoryWriteScope}=await import('data:text/javascript;base64,'+Buffer.from(scopeSource).toString('base64'));
+const preconditionSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/local-preconditions.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
+const {lockLocalPreconditions}=await import('data:text/javascript;base64,'+Buffer.from(preconditionSource).toString('base64'));
 // Granular permissions: real PostgreSQL + real HTTP API.
 // Roles (OWNER/ADMIN/MEMBER) and per-locale contributor access.
 // Run: node scripts/permissions-test.mjs
@@ -690,7 +692,8 @@ export {runRepositoryEffectStep} from './apps/api/src/app/github/repository-effe
   const freshChoices={existing:'remote'};const freshInput={expectedRevision:1,expectedFingerprint:freshPlan.fingerprint,choices:freshChoices};
   const freshDraft=await freshService.resolve(actor,freshProject.id,freshTarget.id,freshInput);
   const freshRequest={...freshInput,expectedDraftDigest:freshDraft.contentDigest};
-  const freshReject=async(input=freshRequest,who=actor)=>{try{await freshService.executeReviewedLocal(who,freshProject.id,freshTarget.id,input);return false;}catch{return true;}};
+  let freshLastStatus;
+  const freshReject=async(input=freshRequest,who=actor)=>{freshLastStatus=undefined;try{await freshService.executeReviewedLocal(who,freshProject.id,freshTarget.id,input);return false;}catch(e){freshLastStatus=e.getStatus?.();return true;}};
   const freshBefore=await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}});
   check('fresh execution rejects changed choice exact digest and fingerprint before writes',await freshReject({...freshRequest,choices:{existing:'local'}})&&await freshReject({...freshRequest,expectedDraftDigest:'f'.repeat(64)})&&await freshReject({...freshRequest,expectedFingerprint:'f'.repeat(64)})&&(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}})).value==='before');
   const beforeUnauthorizedCalls=repoCalls;
@@ -719,11 +722,11 @@ export {runRepositoryEffectStep} from './apps/api/src/app/github/repository-effe
   const freshSavedBaseline=await prisma.repositorySyncBaseline.findUnique({where:{targetId:freshTarget.id}});
   let freshBaselineSeam=false,freshRoleSeam=false;
   freshService.resolve=async(...args)=>{const result=await originalFreshResolve(...args);freshBaselineSeam=true;await prisma.repositorySyncBaseline.update({where:{targetId:freshTarget.id},data:{version:{increment:1}}});return result;};
-  check('fresh execution post-resolution baseline replacement fails locked commit without effects',await freshReject()&&freshBaselineSeam&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}})===0&&(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}})).value==='before');
+  check('fresh execution post-resolution baseline replacement fails locked commit without effects',await freshReject()&&freshLastStatus===409&&freshBaselineSeam&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}})===0&&(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}})).value==='before');
   await prisma.repositorySyncBaseline.update({where:{targetId:freshTarget.id},data:{version:freshSavedBaseline.version}});
   const adminActor={userId:admin.user.id,via:'jwt'};
   freshService.resolve=async(...args)=>{const result=await originalFreshResolve(...args);freshRoleSeam=true;await prisma.teamMember.update({where:{teamId_userId:{teamId:freshProject.teamId,userId:admin.user.id}},data:{role:'MEMBER'}});return result;};
-  check('fresh execution post-resolution admin revocation fails locked commit',await freshReject(freshRequest,adminActor)&&freshRoleSeam&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}})===0&&(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}})).value==='before');
+  check('fresh execution post-resolution admin revocation fails locked commit',await freshReject(freshRequest,adminActor)&&freshLastStatus===409&&freshRoleSeam&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}})===0&&(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}})).value==='before');
   await prisma.teamMember.update({where:{teamId_userId:{teamId:freshProject.teamId,userId:admin.user.id}},data:{role:'ADMIN'}});
   freshService.resolve=originalFreshResolve;
   const freshBaselineBefore=await prisma.repositorySyncBaseline.findUnique({where:{targetId:freshTarget.id}});
@@ -748,7 +751,7 @@ export {runRepositoryEffectStep} from './apps/api/src/app/github/repository-effe
   const localRaceDraft=await freshService.resolve(actor,freshProject.id,freshTarget.id,localRaceInput);
   let localRaceSeam=false;
   freshService.resolve=async(...args)=>{const result=await originalFreshResolve(...args);localRaceSeam=true;await prisma.translation.update({where:{keyId_localeCode:{keyId:freshAfter.keyId,localeCode:'he'}},data:{version:{increment:1}}});return result;};
-  check('fresh post-resolution local generation change denies commit before new effect',await freshReject({...localRaceInput,expectedDraftDigest:localRaceDraft.contentDigest})&&localRaceSeam&&(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}})).value==='after'&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}})===1);
+  check('fresh post-resolution local generation change denies commit before new effect',await freshReject({...localRaceInput,expectedDraftDigest:localRaceDraft.contentDigest})&&freshLastStatus===409&&localRaceSeam&&(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}})).value==='after'&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}})===1);
   freshService.resolve=originalFreshResolve;
   // Public local-only apply boundary: all reviewed bytes still recomputed.
   const localApplyPath=freshPath+'/sync/repository-targets/'+freshTarget.id+'/apply-local';
@@ -768,6 +771,28 @@ export {runRepositoryEffectStep} from './apps/api/src/app/github/repository-effe
   repoText=JSON.stringify({existing:'third'});repoStatus=503;
   check('HTTP remote read failure cannot change values or enqueue effects',(await applyHttp(httpRequest)).status===502&&(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}})).value==='after'&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}})===1);
   repoStatus=200;
+  const httpExistingKey=await prisma.key.findFirst({where:{projectId:freshProject.id,name:'existing'}});
+  await prisma.key.update({where:{id:httpExistingKey.id},data:{maxLength:2}});
+  const lengthPlan=await freshService.preview(actor,freshProject.id,freshTarget.id,1),lengthInput={expectedRevision:1,expectedFingerprint:lengthPlan.fingerprint,choices:{existing:'remote'}};
+  const lengthDraft=await freshService.resolve(actor,freshProject.id,freshTarget.id,lengthInput);
+  const lengthHttp=await applyHttp({...lengthInput,expectedDraftDigest:lengthDraft.contentDigest});
+  check('HTTP typed length-limit denial returns safe400 without value or intent writes',lengthHttp.status===400&&lengthHttp.json.message==='Reviewed local operation is unsupported or exceeds local limits'&&(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}})).value==='after'&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}})===1);
+  await prisma.key.update({where:{id:httpExistingKey.id},data:{maxLength:null}});
+  // Metadata update changes reviewed fingerprint even when length restored.
+  const reReviewedHttp=await freshService.preview(actor,freshProject.id,freshTarget.id,1);httpRequest.expectedFingerprint=reReviewedHttp.fingerprint;
+  httpRequest.expectedDraftDigest=(await freshService.resolve(actor,freshProject.id,freshTarget.id,httpRequest)).contentDigest;
+  repoText=JSON.stringify({existing:'third',unsupportedNew:'new'});
+  const unsupportedPlan=await freshService.preview(actor,freshProject.id,freshTarget.id,1),unsupportedInput={expectedRevision:1,expectedFingerprint:unsupportedPlan.fingerprint,choices:{existing:'remote',unsupportedNew:'remote'}};
+  const unsupportedDraft=await freshService.resolve(actor,freshProject.id,freshTarget.id,unsupportedInput);
+  const unsupportedHttp=await applyHttp({...unsupportedInput,expectedDraftDigest:unsupportedDraft.contentDigest});
+  check('HTTP remote-only key denial returns safe400 without partial existing-key write',unsupportedHttp.status===400&&unsupportedHttp.json.message==='Reviewed local operation is unsupported or exceeds local limits'&&(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}})).value==='after'&&await prisma.key.count({where:{projectId:freshProject.id,name:'unsupportedNew'}})===0&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}})===1);
+  repoText=JSON.stringify({existing:'third'});
+  const queueShape=await prisma.repositoryLocalEffectIntent.findFirst({where:{projectId:freshProject.id}});
+  const {id:queueId,createdAt:queueCreated,...queueFields}=queueShape;
+  await prisma.repositoryLocalEffectIntent.createMany({data:Array.from({length:9999},()=>({...queueFields,automationRuleIds:undefined}))});
+  const backlogHttp=await applyHttp(httpRequest);
+  check('HTTP typed backlog admission denial returns safe409 before local writes',backlogHttp.status===409&&backlogHttp.json.message==='Local effect backlog is full; try after queued work is handled'&&(await prisma.translation.findFirst({where:{projectId:freshProject.id,localeCode:'he'}})).value==='after'&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:freshProject.id}})===10000);
+  await prisma.repositoryLocalEffectIntent.deleteMany({where:{projectId:freshProject.id,id:{not:queueId}}});
   check('HTTP unauthenticated local apply is rejected before remote',(await applyHttp(httpRequest,null)).status===401);
   await prisma.$executeRawUnsafe(`CREATE FUNCTION http_fail_intent() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'http intent fixture'; END $$`);
   await prisma.$executeRawUnsafe(`CREATE TRIGGER http_fail_intent BEFORE INSERT ON repository_local_effect_intents FOR EACH ROW EXECUTE FUNCTION http_fail_intent()`);
