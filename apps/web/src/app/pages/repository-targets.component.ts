@@ -300,10 +300,13 @@ const empty = (): RepositoryTargetInput => ({
                   <dt>Leased</dt><dd>{{ effectSummary()!.counts.leased }}</dd>
                   <dt>Completed handlers</dt><dd>{{ effectSummary()!.counts.completed }}</dd>
                   <dt>Dead</dt><dd>{{ effectSummary()!.counts.dead }}</dd>
+                  <dt>Webhook checkpoints</dt><dd>{{ effectSummary()!.channelCheckpoints.webhook }}</dd>
+                  <dt>Automation checkpoints</dt><dd>{{ effectSummary()!.channelCheckpoints.automation }}</dd>
+                  <dt>Both checkpoints</dt><dd>{{ effectSummary()!.channelCheckpoints.both }}</dd>
                   <dt>Expired leases</dt><dd>{{ effectSummary()!.expiredLeases }}</dd>
                   <dt>Oldest pending (UTC)</dt><dd>{{ effectSummary()!.oldestPendingAt ?? 'None' }}</dd>
                 </dl>
-                <p class="notice">These are handler counts, not delivery receipts or completed sync.
+                <p class="notice">These are handler counts and channel checkpoints, not delivery receipts or completed sync.
                   Includes earlier target revisions. Terminal counts may be removed after seven days.
                   Worker enablement is unknown. Loading this summary does not run or retry effects.</p>
               </section>

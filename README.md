@@ -531,3 +531,8 @@ Due retention is attempted even if that tick's effect step throws. Both opt-ins
 remain independent,share non-overlap/drain,and keep the one-minute per-process
 cleanup attempt cadence. A long-running effect still defers cleanup; this is not
 a real-time deadline or a promise that a failed database can complete cleanup.
+
+Manual effect summary also shows aggregate webhook/automation/both channel
+checkpoint counts across every queue state. A pending retry can already have a
+handled webhook channel. These timestamps mean handler bookkeeping, not receiver
+receipts or successful sync. Retention can remove these counts with terminal rows.

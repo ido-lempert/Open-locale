@@ -163,7 +163,7 @@ try {
   check('target metadata ignores forged secret and connected claims',(await tc(T,'POST',{...coordinates,locale:'he',token:'secret-fixture-only',connected:true,revision:999})).json.target.revision===1&&!JSON.stringify(await prisma.repositorySyncTarget.findMany()).includes('secret-fixture-only'));
   const summaryPath=`${T}/${target.id}/effects-summary`;
   const emptySummary=await tc(summaryPath,'GET',undefined);
-  check('effect summary starts empty without delivery or sync claim',emptySummary.status===200&&JSON.stringify(emptySummary.json.counts)===JSON.stringify({pending:0,leased:0,completed:0,dead:0})&&emptySummary.json.expiredLeases===0&&emptySummary.json.oldestPendingAt===null&&emptySummary.json.deliveryConfirmed===false&&emptySummary.json.syncAccepted===false);
+  check('effect summary starts empty without delivery or sync claim',emptySummary.status===200&&JSON.stringify(emptySummary.json.counts)===JSON.stringify({pending:0,leased:0,completed:0,dead:0})&&JSON.stringify(emptySummary.json.channelCheckpoints)===JSON.stringify({webhook:0,automation:0,both:0})&&emptySummary.json.expiredLeases===0&&emptySummary.json.oldestPendingAt===null&&emptySummary.json.deliveryConfirmed===false&&emptySummary.json.syncAccepted===false);
   check('effect summary requires session',(await call(summaryPath)).status===401);
   check('effect summary denies contributor',(await tc(summaryPath,'GET',undefined,member.accessToken)).status===403);
   check('effect summary denies outsider',(await tc(summaryPath,'GET',undefined,outsider.accessToken)).status===404);
@@ -177,18 +177,19 @@ try {
   const summaryData={projectId:project.id,targetId:target.id,actorId:owner.user.id,keyId:owner.user.id,keyName:'secret-summary-key',branchId:summaryBranch.id,branch:'main',locale:'en',operation:'set-value',value:'private-summary-value',draftContentDigest:'digest',previewFingerprint:'fingerprint'};
   const summaryOtherProject=(await call('/projects',{jwt,method:'POST',body:{name:'SummaryOther',slug:'summary-other',locales:['en']}})).json;
   const summaryRows=await Promise.all([
-    prisma.repositoryLocalEffectIntent.create({data:{...summaryData,createdAt:new Date('2020-01-01')}}),
+    prisma.repositoryLocalEffectIntent.create({data:{...summaryData,createdAt:new Date('2020-01-01'),webhookHandledAt:new Date()}}),
     prisma.repositoryLocalEffectIntent.create({data:{...summaryData,state:'leased',leaseToken:owner.user.id,leaseUntil:new Date('2020-01-01'),attempts:1}}),
     prisma.repositoryLocalEffectIntent.create({data:{...summaryData,state:'leased',leaseToken:owner.user.id,leaseUntil:new Date('2099-01-01'),attempts:1}}),
-    prisma.repositoryLocalEffectIntent.create({data:{...summaryData,state:'completed',finishedAt:new Date()}}),
-    prisma.repositoryLocalEffectIntent.create({data:{...summaryData,state:'dead',finishedAt:new Date(),attempts:3}}),
+    prisma.repositoryLocalEffectIntent.create({data:{...summaryData,state:'completed',finishedAt:new Date(),webhookHandledAt:new Date(),automationHandledAt:new Date()}}),
+    prisma.repositoryLocalEffectIntent.create({data:{...summaryData,state:'dead',finishedAt:new Date(),attempts:3,automationHandledAt:new Date()}}),
     prisma.repositoryLocalEffectIntent.create({data:{...summaryData,targetId:owner.user.id}}),
     prisma.repositoryLocalEffectIntent.create({data:{...summaryData,projectId:summaryOtherProject.id}}),
   ]);
   const summaryBefore=JSON.stringify(await prisma.repositoryLocalEffectIntent.findMany({orderBy:{id:'asc'}}));
   const mixedSummary=(await tc(summaryPath,'GET',undefined)).json;
   check('effect summary reports exact states expired leases and oldest pending',JSON.stringify(mixedSummary.counts)===JSON.stringify({pending:1,leased:2,completed:1,dead:1})&&mixedSummary.expiredLeases===1&&mixedSummary.oldestPendingAt==='2020-01-01T00:00:00.000Z'&&Number.isFinite(Date.parse(mixedSummary.asOf)));
-  check('effect summary does not disclose payloads identities lease tokens or rows',Object.keys(mixedSummary).sort().join(',')==='asOf,counts,deliveryConfirmed,expiredLeases,oldestPendingAt,source,syncAccepted,targetId'&&!JSON.stringify(mixedSummary).includes('private-summary')&&!JSON.stringify(mixedSummary).includes(owner.user.id));
+  check('effect summary counts independent and combined channel checkpoints',JSON.stringify(mixedSummary.channelCheckpoints)===JSON.stringify({webhook:2,automation:2,both:1}));
+  check('effect summary does not disclose payloads identities lease tokens or rows',Object.keys(mixedSummary).sort().join(',')==='asOf,channelCheckpoints,counts,deliveryConfirmed,expiredLeases,oldestPendingAt,source,syncAccepted,targetId'&&!JSON.stringify(mixedSummary).includes('private-summary')&&!JSON.stringify(mixedSummary).includes(owner.user.id));
   check('effect summary does not mutate queue',summaryBefore===JSON.stringify(await prisma.repositoryLocalEffectIntent.findMany({orderBy:{id:'asc'}})));
   const updatedTarget=await tc(`${T}/${target.id}`,'PUT',{...coordinates,path:'updated/en.json',expectedRevision:1});
   check('target replacement increments revision',updatedTarget.status===200&&updatedTarget.json.target.path==='updated/en.json'&&updatedTarget.json.target.revision===2);

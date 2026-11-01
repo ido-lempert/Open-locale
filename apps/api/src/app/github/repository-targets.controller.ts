@@ -440,7 +440,8 @@ export class RepositoryTargetsService {
     // Terminal state is handler bookkeeping, not downstream receipt/sync acceptance.
     const [row] = await this.prisma.$queryRaw<{
       pending: bigint; leased: bigint; completed: bigint; dead: bigint;
-      expiredLeases: bigint; oldestPendingAt: Date | null; asOf: Date;
+      expiredLeases: bigint; webhookHandled: bigint; automationHandled: bigint; bothHandled: bigint;
+      oldestPendingAt: Date | null; asOf: Date;
     }[]>`
       WITH stamp AS (SELECT clock_timestamp() AS now)
       SELECT count(*) FILTER (WHERE state='pending') AS pending,
@@ -449,6 +450,9 @@ export class RepositoryTargetsService {
         count(*) FILTER (WHERE state='dead') AS dead,
         count(*) FILTER (WHERE state='leased' AND "leaseUntil" <= stamp.now) AS "expiredLeases",
         min("createdAt") FILTER (WHERE state='pending') AS "oldestPendingAt",
+        count(*) FILTER (WHERE "webhookHandledAt" IS NOT NULL) AS "webhookHandled",
+        count(*) FILTER (WHERE "automationHandledAt" IS NOT NULL) AS "automationHandled",
+        count(*) FILTER (WHERE "webhookHandledAt" IS NOT NULL AND "automationHandledAt" IS NOT NULL) AS "bothHandled",
         stamp.now AS "asOf"
       FROM stamp LEFT JOIN repository_local_effect_intents AS intent
         ON intent."projectId"=${projectId}::uuid AND intent."targetId"=${id}::uuid
@@ -463,6 +467,7 @@ export class RepositoryTargetsService {
       counts: { pending: count(row.pending), leased: count(row.leased),
         completed: count(row.completed), dead: count(row.dead) },
       expiredLeases: count(row.expiredLeases), oldestPendingAt: row.oldestPendingAt,
+      channelCheckpoints: { webhook: count(row.webhookHandled), automation: count(row.automationHandled), both: count(row.bothHandled) },
       deliveryConfirmed: false, syncAccepted: false,
     };
   }

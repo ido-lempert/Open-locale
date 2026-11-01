@@ -16,6 +16,7 @@ export interface RepositoryTargetInput { localBranch:string;locale:string;owner:
 export interface RepositoryEffectSummary {
   source: 'repository-effect-bookkeeping'; targetId: string; asOf: string;
   counts: { pending: number; leased: number; completed: number; dead: number };
+  channelCheckpoints: { webhook: number; automation: number; both: number };
   expiredLeases: number; oldestPendingAt: string | null;
   deliveryConfirmed: false; syncAccepted: false;
 }
