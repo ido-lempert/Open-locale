@@ -136,6 +136,9 @@ export class AutomationsService {
         const locales = (config.locales as string[]) ?? [];
         const results: Record<string, unknown> = {};
         for (const locale of locales) {
+          // Stop the locale sequence on revoked source/rule context. This is
+          // outside the per-locale failure catch so no later locale proceeds.
+          await beforeEffect?.();
           try {
             results[locale] = await this.mt.pretranslate(rule.creatorId, projectId, {
               providerId: config.providerId as string, locale, keyIds: [ctx.keyId], branch: 'main',

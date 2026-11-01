@@ -398,3 +398,8 @@ Automation notify carries current repository intent and captured rule guards to
 each actual webhook socket attempt, after DNS and retry backoff. A target/lease/
 rule change after a failed attempt suppresses another socket. Checks still have
 a post-check race and do not supply per-rule retry deduplication.
+
+Automation pretranslate rechecks current repository intent/captured rule before
+each target locale. Revocation stops remaining locales, preserving prior committed
+fills. This is not a check inside the MT write transaction or a rollback of earlier
+locales, and does not provide per-rule retry deduplication.

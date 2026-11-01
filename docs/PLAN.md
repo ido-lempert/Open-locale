@@ -108,7 +108,8 @@ add languages, manage keys and translations, export a file.
   or enabled combined worker. Per-rule current-intent guard stops remaining rules
   after context change/lease expiry. Captured rule freshness/revision guard rejects
   disabled/deleted/edited/restore-ABA rules. Automation notify carries current-intent/
-  rule guard per socket/retry. See reviews0134-0162.
+  rule guard per socket/retry and before each pretranslate target locale.
+  See reviews0134-0163.
 
 ## Phase 3 - advanced
 

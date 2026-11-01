@@ -341,6 +341,36 @@ try {
   }
   await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:1}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{leaseUntil:new Date('2099-01-01')}});
   rmSync(webhookBundle,{force:true});
+  const mtBundle=join(root,'.tmp-automation-mt.cjs');execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/mt/mt.service.ts','--bundle','--platform=node','--format=cjs','--packages=external','--outfile='+mtBundle]);const {MtService}=require(mtBundle);
+  await prisma.projectLocale.create({data:{projectId:summaryProject.id,code:'ar'}});
+  const actualProvider=await prisma.mtProvider.create({data:{projectId:summaryProject.id,name:'Repository pseudo',type:'pseudo'}});
+  for(const mutation of ['target','lease','rule-restore']) {
+    await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:1}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{leaseUntil:new Date('2099-01-01')}});
+    await prisma.translation.update({where:{keyId_localeCode:{keyId:summaryKey.id,localeCode:'en'}},data:{value:'Locale guard source'}});
+    const currentSource=await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:summaryKey.id,localeCode:'en'}}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{value:currentSource.value,translationRowId:currentSource.rowId,translationVersion:currentSource.version}});
+    await prisma.translation.deleteMany({where:{keyId:summaryKey.id,localeCode:{in:['he','ar']}}});
+    await prisma.automationRule.update({where:{id:summaryRule.id},data:{action:'pretranslate',config:{providerId:actualProvider.id,locales:['he','ar']}}});
+    const beforeHistory=await prisma.translationHistory.count({where:{keyId:summaryKey.id,localeCode:'ar'}}),beforeActivity=await prisma.activityEvent.count({where:{projectId:summaryProject.id,action:'mt.pretranslate'}});let mutated=false;
+    // MT emits after its locale transaction commits. Delegate real offline MT
+    // and activity services; use that event seam solely for fixture mutation.
+    const afterLocale={deliver:async()=>{if(mutated)return {matched:0,succeeded:0,failed:0};mutated=true;
+      if(mutation==='target')await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:{increment:1}}});
+      else if(mutation==='lease')await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "leaseUntil"=clock_timestamp()-interval '1 second' WHERE id=${repoIntent.id}::uuid`;
+      else {const path=`/projects/${summaryProject.id}/automations/${summaryRule.id}`;for(const enabled of [false,true]){const r=await call(path,{jwt,method:'PATCH',body:{enabled}});if(r.status>=300)throw new Error('locale fixture rule change failed');}}
+      return {matched:0,succeeded:0,failed:0};}};
+    // Await the seam to make the between-locale mutation deterministic even
+    // though production MT's notification is fire-and-forget.
+    const actualMt=new MtService(prisma,projectsService,activityService,afterLocale,tasksService);
+    const mtWithCommitSeam={pretranslate:async(...args)=>{const result=await actualMt.pretranslate(...args);await mutationDone;return result;}};
+    let mutationDone=Promise.resolve();const deliverMutation=afterLocale.deliver;afterLocale.deliver=()=>{mutationDone=deliverMutation();return mutationDone;};
+    const localeService=new AutomationsService(prisma,projectsService,activityService,mtWithCommitSeam,tasksService,{deliver:async()=>({matched:0,succeeded:0,failed:0})});
+    let failed=false;try{await fireRepositoryAutomation(prisma,localeService,repoIntent);}catch{failed=true;}
+    check('repository MT '+mutation+' preserves first actual offline locale fill',mutated&&failed&&!!(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:summaryKey.id,localeCode:'he'}}}))?.value);
+    check('repository MT '+mutation+' suppresses second locale translation history and activity',await prisma.translation.count({where:{keyId:summaryKey.id,localeCode:'ar'}})===0&&await prisma.translationHistory.count({where:{keyId:summaryKey.id,localeCode:'ar'}})===beforeHistory&&await prisma.activityEvent.count({where:{projectId:summaryProject.id,action:'mt.pretranslate'}})===beforeActivity+1);
+  }
+  await prisma.translation.deleteMany({where:{keyId:summaryKey.id,localeCode:{in:['he','ar']}}});
+  await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:1}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{leaseUntil:new Date('2099-01-01')}});
+  rmSync(mtBundle,{force:true});
   const heRepoRow=await prisma.translation.create({data:{projectId:summaryProject.id,keyId:summaryKey.id,localeCode:'he',value:'Target'}});await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{locale:'he'}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{locale:'he',value:heRepoRow.value,translationRowId:heRepoRow.rowId,translationVersion:heRepoRow.version}});
   const nonbaseRepo=await fireRepositoryAutomation(prisma,summaryService,repoIntent);
   check('repository target locale does not trigger base-value automations',nonbaseRepo.skipped&&nonbaseRepo.matched===0);
