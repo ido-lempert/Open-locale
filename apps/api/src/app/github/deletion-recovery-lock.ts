@@ -2,13 +2,25 @@ import type { Prisma } from '@prisma/client';
 import { inspectDeletionRecovery } from './deletion-recovery-plan';
 import { RepositoryLocalError } from './repository-local-error';
 
+export interface DeletionRecoveryScope {
+  projectId: string;
+  actorId: string;
+  auditId: string;
+  expectedBranchId: string;
+  expectedKeyUpdatedAt: string;
+  expectedKeyRevision: number;
+  expectedValueDigest: string;
+}
+
 // Internal guard only,no writer or HTTP grant. Any future write must remain in
 // this SAME Serializable transaction and handle serialization failure,not retry
 // stale authorization. Row locks do not reserve absent translation rows.
 export async function lockDeletionRecovery(
   tx: Prisma.TransactionClient,
-  scope: { projectId: string; actorId: string; auditId: string; expectedBranchId: string; expectedKeyUpdatedAt: string; expectedKeyRevision: number; expectedValueDigest: string },
+  scope: DeletionRecoveryScope,
 ) {
+  // Copy primitive bindings before the first await. Caller-owned objects are mutable.
+  scope = { ...scope };
   const isolation = await tx.$queryRaw<{ transaction_isolation: string }[]>`SHOW transaction_isolation`;
   if (isolation[0]?.transaction_isolation !== 'serializable') throw new Error('Deletion recovery requires serializable transaction');
   if (!/^[a-f0-9]{64}$/.test(scope.expectedValueDigest)) throw new RepositoryLocalError('unsupported', 'Invalid recovery digest');

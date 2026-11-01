@@ -672,6 +672,33 @@ try {
   const recoveryArchive=await prisma.translationDeletionAudit.create({data:{projectId:project.id,keyId:recoveryKey.id,keyName:recoveryKey.name,localeCode:'he',snapshot:{row:{projectId:project.id,keyId:recoveryKey.id,localeCode:'he',value:'Recovered target',status:'REVIEWED',mtProvider:'old-provider',mtScore:99},history:[]}}});
   await prisma.repositoryRemovalGeneration.create({data:{projectId:project.id,keyId:recoveryKey.id,locale:'he',auditId:recoveryArchive.id}});
   const committedRecoveryScope={...recoveryScope,auditId:recoveryArchive.id,expectedKeyUpdatedAt:recoveryKey.updatedAt.toISOString(),expectedKeyRevision:recoveryKey.revision,expectedValueDigest:createHash('sha256').update('Recovered target').digest('hex')};
+  // Actual lock waits let caller code mutate its scope after entry. Both guard and
+  // writer must preserve their entry bindings across asynchronous boundaries.
+  const mutableScopeClient=new PrismaClient({datasources:{db:{url:url+'?application_name=recovery-mutable-scope'}}});
+  for(const operation of ['guard','writer']){
+    let ready,release;const held=new Promise(r=>ready=r),gate=new Promise(r=>release=r);
+    const holding=prisma.$transaction(async tx=>{await tx.$queryRaw`SELECT id FROM projects WHERE id=${project.id}::uuid FOR UPDATE`;ready();await gate;},{timeout:10000});await held;
+    const mutableScope={...committedRecoveryScope};let capturedResult,capturedRow,capturedActivity;
+    const pending=mutableScopeClient.$transaction(async tx=>{
+      if(operation==='guard')capturedResult=await lockDeletionRecovery(tx,mutableScope);
+      else{
+        capturedResult=await writeDeletionRecovery(tx,mutableScope);
+        capturedRow=await tx.translation.findUnique({where:{keyId_localeCode:{keyId:recoveryKey.id,localeCode:'he'}}});
+        capturedActivity=await tx.activityEvent.findFirst({where:{projectId:project.id,keyName:recoveryKey.name},orderBy:{createdAt:'desc'}});
+      }
+      throw new Error('rollback immutable scope fixture');
+    },{isolationLevel:'Serializable',timeout:7000}).then(()=>({ok:false}),e=>({ok:e.message==='rollback immutable scope fixture',error:e}));
+    let observedWait=false;for(let n=0;n<60;n++){
+      const wait=await prisma.$queryRaw`SELECT wait_event_type FROM pg_stat_activity WHERE application_name='recovery-mutable-scope' AND state='active' AND wait_event_type='Lock'`;
+      if(wait.length){observedWait=true;break;}await new Promise(r=>setTimeout(r,20));
+    }
+    Object.assign(mutableScope,{projectId:summaryOtherProject.id,actorId:outsider.user.id,auditId:audit.id,expectedBranchId:owner.user.id,expectedKeyRevision:0,expectedKeyUpdatedAt:'2020-01-01T00:00:00.000Z',expectedValueDigest:'a'.repeat(64)});
+    release();await holding;const outcome=await pending;
+    check('actual recovery '+operation+' caller mutation waits on PostgreSQL lock',observedWait);
+    check('recovery '+operation+' preserves entry scope across caller mutation',outcome.ok&&(operation==='guard'?capturedResult.auditId===recoveryArchive.id&&capturedResult.keyId===recoveryKey.id:capturedRow.projectId===project.id&&capturedRow.value==='Recovered target'&&capturedActivity.actorId===owner.user.id&&capturedActivity.detail.auditId===recoveryArchive.id));
+    check('recovery '+operation+' scope-mutation rollback keeps absence and archive',!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:recoveryKey.id,localeCode:'he'}}})&&await prisma.repositoryRemovalGeneration.count({where:{projectId:project.id,keyId:recoveryKey.id,locale:'he',auditId:recoveryArchive.id}})===1&&await prisma.translationDeletionAudit.count({where:{id:recoveryArchive.id}})===1);
+  }
+  await mutableScopeClient.$disconnect();
   const preFaultRecoveryCounts=await recoveryCounts();let recoveryFault=false;
   try{await prisma.$transaction(tx=>writeDeletionRecovery({...tx,activityEvent:{...tx.activityEvent,create:async()=>{throw new Error('injected recovery activity failure');}}},committedRecoveryScope),{isolationLevel:'Serializable'});}catch(e){recoveryFault=e.message==='injected recovery activity failure';}
   check('actual recovery storage fault rolls back row history TM and marker',recoveryFault&&JSON.stringify(await recoveryCounts())===JSON.stringify(preFaultRecoveryCounts)&&!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:recoveryKey.id,localeCode:'he'}}})&&await prisma.repositoryRemovalGeneration.count({where:{projectId:project.id,keyId:recoveryKey.id,locale:'he',auditId:recoveryArchive.id}})===1);

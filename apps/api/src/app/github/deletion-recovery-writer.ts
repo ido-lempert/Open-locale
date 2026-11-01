@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client';
-import { lockDeletionRecovery } from './deletion-recovery-lock';
+import { lockDeletionRecovery, type DeletionRecoveryScope } from './deletion-recovery-lock';
 import { rememberValueTx } from '../translations/remember-value';
 
 // Isolated internal building block,no HTTP route. Caller owns explicit reviewed
@@ -7,8 +7,10 @@ import { rememberValueTx } from '../translations/remember-value';
 // repository effect dispatch,baseline advance or remote write is implemented.
 export async function writeDeletionRecovery(
   tx: Prisma.TransactionClient,
-  scope: { projectId: string; actorId: string; auditId: string; expectedBranchId: string; expectedKeyUpdatedAt: string; expectedKeyRevision: number; expectedValueDigest: string },
+  scope: DeletionRecoveryScope,
 ) {
+  // Keep the write bound to the same primitive scope that the guard validates.
+  scope = { ...scope };
   const plan = await lockDeletionRecovery(tx, scope);
   const audit = await tx.translationDeletionAudit.findUniqueOrThrow({ where: { id: scope.auditId } });
   const snapshot = audit.snapshot as { row: { value: string } };

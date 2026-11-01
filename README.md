@@ -618,3 +618,7 @@ for ordinary writes. Rollbacks roll back the revision too. No-op updates also
 invalidate review;integer overflow fails closed. Privileged schema/trigger tampering
 is outside this guard. Additive migration takes a keys-table lock: schedule a
 maintenance window for a populated deployment. No public recovery token/restore API.
+
+Internal recovery guard and writer copy primitive scope bindings before awaiting
+locks. Caller mutation cannot change the reviewed project/actor/audit/revision while
+the transaction waits. This is a binding guard,not authorization to execute recovery.
