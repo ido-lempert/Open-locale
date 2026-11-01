@@ -570,3 +570,9 @@ Internal deletion recovery diagnostic validates bounded flat snapshot scope,curr
 key/name/length/locale,current absence and exact removal generation. It returns a
 value digest,never archived bytes or execution authority. No HTTP recovery endpoint,
 restore writer or history replay exists;future execution must re-authorize/revalidate.
+
+Internal recovery lock guard requires Serializable isolation,current team admin and
+locked project/audit/key/locale/removal-generation/current-row revalidation against
+the reviewed value digest. Per-lock timeout is two seconds,not a total request bound.
+No restore writer or HTTP endpoint. Future writes must stay in the same transaction;
+row locks cannot reserve an absent translation,so serialization handling is required.

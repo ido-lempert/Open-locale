@@ -144,7 +144,8 @@ add languages, manage keys and translations, export a file.
   navigation,empty/error states and route freshness. Stable timestamp/ID keyset
   pagination exposes older metadata without requiring boundary rows to survive. Ordered project/timestamp/UUID index supports metadata pages;real Prisma SQL
   plans and migration preservation verified. Audit page loading status and focus/viewport landing support keyboard navigation. Internal read-only deletion recovery diagnostic validates bounded flat snapshots,
-  current absence/key/locale and exact removal generation;no restore execution/API. See reviews0134-0195.
+  current absence/key/locale and exact removal generation;no restore execution/API. Internal Serializable recovery guard locks current admin/scope/generation with
+  per-lock2sec timeout,binds digest;no restore execution/API. See reviews0134-0196.
 
 ## Phase 3 - advanced
 

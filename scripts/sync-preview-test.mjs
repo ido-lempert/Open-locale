@@ -10,6 +10,8 @@ const writerSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/g
 const {writeExistingLocalValues}=await import('data:text/javascript;base64,'+Buffer.from(writerSource).toString('base64'));
 const recoverySource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/deletion-recovery-plan.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
 const {inspectDeletionRecovery}=await import('data:text/javascript;base64,'+Buffer.from(recoverySource).toString('base64'));
+const recoveryLockSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/deletion-recovery-lock.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
+const {lockDeletionRecovery}=await import('data:text/javascript;base64,'+Buffer.from(recoveryLockSource).toString('base64'));
 const transactionSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-local-transaction.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
 const {repositoryLocalTransaction}=await import('data:text/javascript;base64,'+Buffer.from(transactionSource).toString('base64'));
 const leaseSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-effect-lease.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
@@ -578,6 +580,35 @@ try {
   let missingLocale;try{await prisma.$transaction(async tx=>{await tx.projectLocale.delete({where:{projectId_code:{projectId:project.id,code:'en'}}});missingLocale=await inspectDeletionRecovery(tx,project.id,audit.id);throw new Error('rollback locale fixture');});}catch(e){if(e?.message!=='rollback locale fixture')throw e;}
   check('internal recovery denies removed project locale',missingLocale.reason==='locale-unavailable');
   check('internal recovery diagnostic never alters archived snapshot',JSON.stringify(await prisma.translationDeletionAudit.findUnique({where:{id:audit.id}}))===recoveryBefore);
+  const recoveryScope={projectId:project.id,actorId:owner.user.id,auditId:audit.id,expectedValueDigest:recovery.valueDigest};
+  const guardedRecovery=await prisma.$transaction(tx=>lockDeletionRecovery(tx,recoveryScope),{isolationLevel:'Serializable'});
+  check('locked recovery revalidates current owner and candidate without write authority',guardedRecovery.eligible&&guardedRecovery.adminValidated&&guardedRecovery.canRestore===false);
+  check('locked recovery accepts current project admin',(await prisma.$transaction(tx=>lockDeletionRecovery(tx,{...recoveryScope,actorId:admin.user.id}),{isolationLevel:'Serializable'})).adminValidated);
+  let generationChanged=false;try{await prisma.$transaction(async tx=>{await tx.repositoryRemovalGeneration.update({where:{projectId_keyId_locale:{projectId:project.id,keyId:localKey.id,locale:'en'}},data:{auditId:owner.user.id}});await lockDeletionRecovery(tx,recoveryScope);},{isolationLevel:'Serializable'});}catch(e){generationChanged=e.name==='RepositoryLocalError';}
+  check('locked recovery rejects in-transaction generation replacement',generationChanged);
+  let nonserialDenied=false;try{await prisma.$transaction(tx=>lockDeletionRecovery(tx,recoveryScope));}catch(e){nonserialDenied=e.message==='Deletion recovery requires serializable transaction';}
+  check('locked recovery rejects default isolation',nonserialDenied);
+  for(const [label,overrides] of [['member',{actorId:member.user.id}],['outsider',{actorId:outsider.user.id}],['wrong-project',{projectId:summaryOtherProject.id}],['stale-digest',{expectedValueDigest:'a'.repeat(64)}],['bad-digest',{expectedValueDigest:'bad'}]]){
+    let denied=false;try{await prisma.$transaction(tx=>lockDeletionRecovery(tx,{...recoveryScope,...overrides}),{isolationLevel:'Serializable'});}catch(e){denied=e.name==='RepositoryLocalError';}
+    check('locked recovery denies '+label,denied);
+  }
+  let revoked=false;try{await prisma.$transaction(async tx=>{await tx.teamMember.update({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},data:{role:'MEMBER'}});await lockDeletionRecovery(tx,{...recoveryScope,actorId:admin.user.id});},{isolationLevel:'Serializable'});}catch(e){revoked=e.name==='RepositoryLocalError';}
+  check('locked recovery denies current in-transaction admin revocation',revoked);
+  for(const resource of ['project','audit','key','locale','generation']){
+    let acquired,release;const held=new Promise(r=>acquired=r),gate=new Promise(r=>release=r);
+    const holding=prisma.$transaction(async tx=>{
+      if(resource==='project')await tx.$queryRaw`SELECT id FROM projects WHERE id=${project.id}::uuid FOR UPDATE`;
+      if(resource==='audit')await tx.$queryRaw`SELECT id FROM translation_deletion_audits WHERE id=${audit.id}::uuid FOR UPDATE`;
+      if(resource==='key')await tx.$queryRaw`SELECT id FROM keys WHERE id=${localKey.id}::uuid FOR UPDATE`;
+      if(resource==='locale')await tx.$queryRaw`SELECT code FROM project_locales WHERE "projectId"=${project.id}::uuid AND code='en' FOR UPDATE`;
+      if(resource==='generation')await tx.$queryRaw`SELECT "auditId" FROM repository_removal_generations WHERE "projectId"=${project.id}::uuid AND "keyId"=${localKey.id}::uuid AND locale='en' FOR UPDATE`;
+      acquired();await gate;
+    },{timeout:10000});await held;
+    let timedOut=false;try{await prisma.$transaction(tx=>lockDeletionRecovery(tx,recoveryScope),{isolationLevel:'Serializable',timeout:5000});}catch(e){timedOut=e.code==='P2010'&&e.meta?.code==='55P03';}finally{release();await holding;}
+    check('locked recovery actual '+resource+' blocker times out without success',timedOut);
+  }
+  check('locked recovery recovers after real locks released',(await prisma.$transaction(tx=>lockDeletionRecovery(tx,recoveryScope),{isolationLevel:'Serializable'})).eligible);
+  check('locked recovery leaves actual audit and absent value unchanged',JSON.stringify(await prisma.translationDeletionAudit.findUnique({where:{id:audit.id}}))===recoveryBefore&&!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}}));
   const auditMetadata=await call(deletionAuditsPath,{jwt});
   const listedAudit=auditMetadata.json.audits.find(a=>a.id===audit.id);
   check('actual removed locale audit metadata appears without snapshot or restoration claim',auditMetadata.status===200&&listedAudit?.keyId===localKey.id&&listedAudit.keyName==='local'&&listedAudit.localeCode==='en'&&listedAudit.actorId===owner.user.id&&Object.keys(listedAudit).sort().join(',')==='actorId,createdAt,id,keyId,keyName,localeCode'&&auditMetadata.json.snapshotIncluded===false&&auditMetadata.json.canRestore===false&&!JSON.stringify(auditMetadata.json).includes('writer draft'));
