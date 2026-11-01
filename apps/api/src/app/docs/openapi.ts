@@ -235,6 +235,9 @@ export const OPENAPI = {
       post: p('Restore the project to a snapshot (atomic point-in-time recovery; fields added after a snapshot was taken - e.g. pluralForms in older snapshots - are left untouched, so a restore is not an exact historical reconstruction)', 'snapshots'),
     },
     '/api/projects/{projectId}/activity': { get: p('Project activity feed', 'projects') },
+    '/api/projects/{projectId}/sync/deletion-audits/{auditId}/recovery-preview': {
+      get:{...p('Inspect current deletion recovery eligibility without archived bytes (session admin only)','sync'),security:[{bearerAuth:[]}],description:'No-store,read-only RepeatableRead diagnostic snapshot. Returns eligibleNow/reason plus canRestore=false,snapshotIncluded=false,historyReplay=false,reservationHeld=false. No value,digest,history,write authorization or row reservation. Missing or cross-project audit returns audit-unavailable. No restore endpoint.'},
+    },
     '/api/projects/{projectId}/sync/deletion-audits': {
       get: {...p('List paginated local deletion audit metadata (session admin only)', 'sync'),security:[{bearerAuth:[]}],parameters:[{name:'cursor',in:'query',required:false,schema:{type:'string',maxLength:160},description:'Opaque nextCursor from previous page;null ends list. Invalid cursor400.'}],description:'No-store. Up to50 rows;nextCursor or null. Keyset not frozen snapshot;concurrent older inserts/deletes may change later pages. Project-scoped,createdAt descending then id descending. Returns id,keyId,keyName,localeCode,actorId,createdAt only;no stored snapshot,translation value or history. Metadata survives key deletion. Not a restore grant;canRestore=false,snapshotIncluded=false. No mutation.'},
     },

@@ -592,3 +592,8 @@ automatic retry of the stale review is added.
 Internal recovery also binds the reviewed branch UUID and locks that project branch.
 A key moved to another branch or a deleted/mismatched reviewed branch is rejected,
 even when archived value digest still matches. No public recovery surface is added.
+
+Session admins can inspect `GET /api/projects/{projectId}/sync/deletion-audits/{auditId}/recovery-preview`. The no-store read returns
+current eligibility/reason only,never value/digest/history or restore authority.
+It uses a consistent RepeatableRead snapshot,holds no reservation,and cannot promise
+that eligibility stays valid. canRestore=false;no public restore mutation/UI.

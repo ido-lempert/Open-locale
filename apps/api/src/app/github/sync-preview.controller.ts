@@ -31,6 +31,7 @@ import { AuthModule } from '../auth/auth.module';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthPrincipal } from '../auth/auth.service';
+import { inspectDeletionRecovery } from './deletion-recovery-plan';
 import { parseSyncJson, previewSync } from './sync-preview';
 import { resolvePlan, ResolutionChoice } from './resolve-preview';
 
@@ -99,6 +100,15 @@ export class LocalSyncPreviewService {
     }
   }
 
+  async previewDeletionRecovery(user: AuthPrincipal, projectId: string, auditId: string) {
+    if (user.via !== 'jwt') throw new ForbiddenException('Recovery preview requires a signed-in session');
+    await this.projects.requireAdmin(user.userId, projectId);
+    // One consistent diagnostic snapshot,not a lock/reservation/execution grant.
+    const plan = await this.prisma.$transaction(tx => inspectDeletionRecovery(tx, projectId, auditId), { isolationLevel: 'RepeatableRead' });
+    return { source: 'deletion-recovery-eligibility-preview', eligibleNow: plan.eligible,
+      reason: plan.reason, canRestore: false, snapshotIncluded: false,
+      historyReplay: false, reservationHeld: false };
+  }
   async listDeletionAudits(user: AuthPrincipal, projectId: string, cursor?: string) {
     if (user.via !== 'jwt') throw new ForbiddenException('Deletion audit metadata requires a signed-in session');
     await this.projects.requireAdmin(user.userId, projectId);
@@ -334,6 +344,13 @@ export class LocalSyncPreviewController {
   ) {
     return this.previews.resolve(user, projectId, input);
   }
+  @Get('deletion-audits/:auditId/recovery-preview')
+  @Header('Cache-Control', 'no-store')
+  previewDeletionRecovery(
+    @CurrentUser() user: AuthPrincipal,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Param('auditId', new ParseUUIDPipe()) auditId: string,
+  ) { return this.previews.previewDeletionRecovery(user, projectId, auditId); }
   @Get('deletion-audits')
   @Header('Cache-Control', 'no-store')
   listDeletionAudits(

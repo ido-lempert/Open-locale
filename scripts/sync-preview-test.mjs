@@ -553,6 +553,18 @@ try {
   check('removal rollback restores row history and leaves no audit',await prisma.translationDeletionAudit.count()===auditBefore&&await prisma.translationHistory.count({where:{keyId:localKey.id,localeCode:'en'}})===deletedHistory.length&&!!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}}));
   const removed=await prisma.$transaction(tx=>writeExistingLocalValues(tx,deletionSnapshot,[removal],owner.user.id),{isolationLevel:'Serializable'});
   const audit=await prisma.translationDeletionAudit.findFirst({where:{keyId:localKey.id},orderBy:{createdAt:'desc'}});
+  const recoveryPreviewPath=deletionAuditsPath+'/'+audit.id+'/recovery-preview';
+  check('recovery preview requires session',(await call(recoveryPreviewPath)).status===401);
+  check('recovery preview denies contributor',(await call(recoveryPreviewPath,{jwt:member.accessToken})).status===403);
+  check('recovery preview denies outsider',(await call(recoveryPreviewPath,{jwt:outsider.accessToken})).status===404);
+  check('recovery preview denies API token',(await call(recoveryPreviewPath,{apiKey:token.token})).status===403);
+  const publicRecoveryPreview=await call(recoveryPreviewPath,{jwt});
+  check('recovery preview exposes only eligibility no value digest scope or authority',publicRecoveryPreview.status===200&&publicRecoveryPreview.json.eligibleNow===true&&publicRecoveryPreview.json.reason==='current-flat-value-absence'&&Object.keys(publicRecoveryPreview.json).sort().join(',')==='canRestore,eligibleNow,historyReplay,reason,reservationHeld,snapshotIncluded,source'&&publicRecoveryPreview.json.canRestore===false&&publicRecoveryPreview.json.snapshotIncluded===false&&publicRecoveryPreview.json.historyReplay===false&&publicRecoveryPreview.json.reservationHeld===false&&!JSON.stringify(publicRecoveryPreview.json).includes('writer draft'));
+  check('recovery preview accepts current admin',(await call(recoveryPreviewPath,{jwt:admin.accessToken})).json.eligibleNow===true);
+  const recoveryHeaders=await fetch(API+recoveryPreviewPath,{headers:{Authorization:'Bearer '+jwt}});check('recovery preview no-store header',recoveryHeaders.headers.get('cache-control')==='no-store');await recoveryHeaders.arrayBuffer();
+  check('recovery preview unavailable audit has no cross project metadata',(await call(`/projects/${summaryOtherProject.id}/sync/deletion-audits/${audit.id}/recovery-preview`,{jwt})).json.reason==='audit-unavailable');
+  check('recovery preview missing audit is safe denial',(await call(deletionAuditsPath+'/'+owner.user.id+'/recovery-preview',{jwt})).json.reason==='audit-unavailable');
+  check('recovery preview rejects invalid audit UUID',(await call(deletionAuditsPath+'/not-uuid/recovery-preview',{jwt})).status===400);
   const recoveryBefore=JSON.stringify(await prisma.translationDeletionAudit.findUnique({where:{id:audit.id}}));
   const recovery=await inspectDeletionRecovery(prisma,project.id,audit.id);
   check('internal recovery diagnostic recognizes exact current removal without execution grant',recovery.eligible&&recovery.canRestore===false&&recovery.snapshotIncluded===false&&recovery.historyReplay===false&&recovery.valueDigest===createHash('sha256').update('writer draft').digest('hex')&&!JSON.stringify(recovery).includes('writer draft'));
@@ -581,6 +593,7 @@ try {
   // Real locale deletion in rollback-only transaction: no fixture translation loss.
   let missingLocale;try{await prisma.$transaction(async tx=>{await tx.projectLocale.delete({where:{projectId_code:{projectId:project.id,code:'en'}}});missingLocale=await inspectDeletionRecovery(tx,project.id,audit.id);throw new Error('rollback locale fixture');});}catch(e){if(e?.message!=='rollback locale fixture')throw e;}
   check('internal recovery denies removed project locale',missingLocale.reason==='locale-unavailable');
+  check('recovery preview repeated reads never change archived bytes',JSON.stringify(await prisma.translationDeletionAudit.findUnique({where:{id:audit.id}}))===recoveryBefore);
   check('internal recovery diagnostic never alters archived snapshot',JSON.stringify(await prisma.translationDeletionAudit.findUnique({where:{id:audit.id}}))===recoveryBefore);
   const recoveryScope={projectId:project.id,actorId:owner.user.id,auditId:audit.id,expectedBranchId:recovery.branchId,expectedValueDigest:recovery.valueDigest};
   const recoveryOtherBranch=await prisma.branch.create({data:{projectId:project.id,name:'recovery-other'}});
@@ -740,6 +753,7 @@ try {
   check('locale removal archives exact row and full ordered history atomically',removed.removedValues===1&&canonicalAudit(audit.snapshot.row)===canonicalAudit(JSON.parse(JSON.stringify(deletedRow)))&&canonicalAudit(audit.snapshot.history)===canonicalAudit(JSON.parse(JSON.stringify(deletedHistory)))&&audit.actorId===owner.user.id&&audit.keyName==='local');
   check('locale removal deletes only selected translation not key or another locale',!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})&&!!await prisma.key.findUnique({where:{id:localKey.id}})&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'he'}}})).value==='other locale preserved');
   await prisma.translation.create({data:{keyId:localKey.id,projectId:project.id,localeCode:'en',value:'writer draft',version:deletedRow.version+1}});
+  check('public recovery preview rejects recreated value without exposing it',(await call(recoveryPreviewPath,{jwt})).json.reason==='value-exists');
   check('internal recovery denies overwriting recreated locale value',(await inspectDeletionRecovery(prisma,project.id,audit.id)).reason==='value-exists');
   check('deletion audit survives recreation with new row identity',await prisma.translationDeletionAudit.count({where:{id:audit.id}})===1&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).rowId!==deletedRow.rowId);
   const boundedKey=await prisma.key.create({data:{projectId:project.id,branchId:storedLocalKey.branchId,name:'audit-bound'}});

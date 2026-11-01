@@ -148,7 +148,8 @@ add languages, manage keys and translations, export a file.
   per-lock2sec timeout,binds digest;no restore execution/API. Isolated internal recovery writer adds fresh row/new history/activity/TM with
   rollback proof;no public restore API/UI or repository effect composition. Actual PostgreSQL competing recovery/normal-create races preserve winning row
   and deny stale success without duplicate history/activity. Internal recovery binds reviewed branch UUID and locks branch scope,denying
-  key movement/deleted branch despite matching digest. See reviews0134-0199.
+  key movement/deleted branch despite matching digest. Session-admin read-only recovery eligibility preview returns reason only without
+  archived bytes/digest or authority;consistent snapshot,no reservation/restore mutation. See reviews0134-0200.
 
 ## Phase 3 - advanced
 
