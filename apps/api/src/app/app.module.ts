@@ -1,3 +1,4 @@
+import { RepositoryEffectsModule } from './github/repository-effects.module';
 import { RepositoryTargetsModule } from './github/repository-targets.controller';
 import { LocalSyncPreviewModule } from './github/sync-preview.controller';
 import { Module } from '@nestjs/common';
@@ -24,7 +25,7 @@ import { ReportsModule } from './reports/reports.module';
 import { EmbedModule } from './embed/embed.module';
 
 @Module({
-  imports: [RepositoryTargetsModule, LocalSyncPreviewModule, PrismaModule, AuthModule, ProjectsModule, KeysModule, TranslationsModule, ActivityModule, TasksModule, GlossaryModule, QaModule, WebhooksModule, SnapshotsModule, LocksModule, BranchesModule, OtaModule, MtModule, AutomationsModule, ReportsModule, EmbedModule],
+  imports: [RepositoryEffectsModule, RepositoryTargetsModule, LocalSyncPreviewModule, PrismaModule, AuthModule, ProjectsModule, KeysModule, TranslationsModule, ActivityModule, TasksModule, GlossaryModule, QaModule, WebhooksModule, SnapshotsModule, LocksModule, BranchesModule, OtaModule, MtModule, AutomationsModule, ReportsModule, EmbedModule],
   controllers: [AppController, DocsController],
   providers: [AppService],
 })

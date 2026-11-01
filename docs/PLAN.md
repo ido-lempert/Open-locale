@@ -112,12 +112,13 @@ add languages, manage keys and translations, export a file.
   MT revalidates after provider computation before write transaction.
   Internal automation-only step/checkpoint added; no combined worker or per-rule
   partial retry ledger. Explicit internal combined step added under one lease,
-  independent channel checkpoints; no production timer. Intent-scoped successful-rule checkpoints skip completed rules on partial retries;
+  independent channel checkpoints; worker defaultOFF. Intent-scoped successful-rule checkpoints skip completed rules on partial retries;
   crash gap remains. Rule checkpoint writers lock intent before evaluating deadline/token under
   contention. Both channel checkpoints also lock before deadline/token evaluation under
   contention. First automation dispatch freezes eligible rule IDs; new rules excluded on
   retry, configuration remains current. Rule manifest cap1000/UUID uniqueness enforced; empty selection stays empty.
-  See reviews0134-0171.
+  Opt-in Nest worker (defaultOFF),one intent/5sec,no local overlap,shutdown drain.
+  Public execution remains absent. See reviews0134-0172.
 
 ## Phase 3 - advanced
 

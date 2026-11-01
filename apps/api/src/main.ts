@@ -40,6 +40,7 @@ async function bootstrap() {
     );
   }
   const app = await NestFactory.create(AppModule);
+  app.enableShutdownHooks(['SIGTERM', 'SIGINT']);
   // Binary zip bodies for bundle import only; the JSON parser skips this
   // content type, and the 40 MiB cap bounds allocation (archive budget is 32 MiB).
   app.use(raw({ type: 'application/zip', limit: 40 * 1024 * 1024 }));

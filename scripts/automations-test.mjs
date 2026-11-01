@@ -40,18 +40,19 @@ const pollFor = async (fn, tries = 20) => {
 // Local webhook receiver for the notify action legs (fixture-only loopback).
 const received = [];
 let repositoryReceipt;
+let repositoryReceiptStatus = 500;
 const receiver = createServer((req, res) => {
   let b = '';
   req.on('data', (c) => (b += c));
   req.on('end', async () => { received.push({ event: req.headers['x-openlocale-event'], sig: req.headers['x-openlocale-signature'], body: b });
-    if(repositoryReceipt){try{await repositoryReceipt();res.writeHead(500).end('retry fixture');}catch{res.writeHead(500).end('fixture mutation failed');}return;}
+    if(repositoryReceipt){res.writeHead(repositoryReceiptStatus);const keepalive=setInterval(()=>res.write('.'),1000);try{await repositoryReceipt();res.end('retry fixture');}catch{res.end('fixture mutation failed');}finally{clearInterval(keepalive);}return;}
     res.writeHead(200).end(); });
 });
 await new Promise((r) => receiver.listen(HOOK_PORT, '127.0.0.1', r));
 
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-au-'));
 const pg = new EmbeddedPostgres({ databaseDir: dataDir, user: 'postgres', password: 'postgres', port: PG_PORT, persistent: false });
-let api,prisma;
+let api,prisma,signalApi;
 const require=createRequire(import.meta.url);
 const automationBundle=join(root,'.tmp-automation-outcome.cjs');
 execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/automations/automations.service.ts','--bundle','--platform=node','--format=cjs','--packages=external','--outfile='+automationBundle]);
@@ -520,6 +521,45 @@ try {
   try{await fireRepositoryAutomation(prisma,summaryService,repoIntent);}catch{overflowDenied=true;}
   check('actual1001 eligible rules reject selection without manifest or effects',overflowDenied&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}})).automationRuleIds===null&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Overflow must not run'}})===0);
   await prisma.automationRule.deleteMany({where:{projectId:summaryProject.id,name:{startsWith:'Overflow '}}});
+  const workerBundle=join(root,'.tmp-repository-worker.cjs');execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-effect-worker.ts','--bundle','--platform=node','--format=cjs','--packages=external','--outfile='+workerBundle]);const {RepositoryEffectWorker}=require(workerBundle);
+  await resetCombined();await prisma.automationRule.update({where:{id:summaryRule.id},data:{enabled:true,action:'task.create',config:{title:'Worker actual task'}}});
+  const priorWorkerEnv=process.env.REPOSITORY_EFFECT_WORKER_ENABLED;delete process.env.REPOSITORY_EFFECT_WORKER_ENABLED;
+  const disabledWorker=new RepositoryEffectWorker(prisma,liveWebhooks,summaryService);disabledWorker.onModuleInit();
+  await new Promise(r=>setTimeout(r,5200));
+  check('worker default disabled leaves actual pending intent untouched',(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}})).state==='pending'&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Worker actual task'}})===0);
+  await disabledWorker.beforeApplicationShutdown();
+  process.env.REPOSITORY_EFFECT_WORKER_ENABLED='true';
+  const enabledWorker=new RepositoryEffectWorker(prisma,liveWebhooks,summaryService);const workerSocketBefore=received.length;enabledWorker.onModuleInit();enabledWorker.onModuleInit();
+  const workerDone=await pollFor(async()=>{const row=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}});return row.state==='completed'?row:null;},30);
+  check('opt-in worker lifecycle executes actual signed receiver task and checkpoints',!!workerDone?.webhookHandledAt&&!!workerDone?.automationHandledAt&&received.length===workerSocketBefore+1&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Worker actual task'}})===1);
+  await enabledWorker.beforeApplicationShutdown();await resetCombined();await new Promise(r=>setTimeout(r,5200));
+  check('worker shutdown prevents later claims despite pending queue',(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}})).state==='pending');
+  let releaseReceiver,receiptStarted;const receiptGate=new Promise(r=>releaseReceiver=r),receiptReady=new Promise(r=>receiptStarted=r);let heldReceipts=0;
+  repositoryReceipt=async()=>{heldReceipts++;receiptStarted();await receiptGate;};
+  const drainingWorker=new RepositoryEffectWorker(prisma,liveWebhooks,summaryService);drainingWorker.onModuleInit();await receiptReady;
+  await new Promise(r=>setTimeout(r,5200));let drained=false;const drain=drainingWorker.beforeApplicationShutdown().then(()=>{drained=true;});await new Promise(r=>setTimeout(r,100));
+  check('worker does not overlap tick during actual held socket and shutdown awaits it',!drained&&heldReceipts===1&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}})).attempts===1);
+  repositoryReceipt=undefined;releaseReceiver();await drain;
+  check('worker shutdown resolves after actual in-flight socket settles',drained);
+  // Actual Nest signal path, not a manually invoked lifecycle hook. Keep the
+  // receiver alive past its idle timeout so shutdown must wait for real work.
+  await resetCombined();await prisma.automationRule.update({where:{id:summaryRule.id},data:{config:{title:'Signal drain actual task'}}});
+  let releaseSignal,signalStarted;const signalGate=new Promise(r=>releaseSignal=r),signalReady=new Promise(r=>signalStarted=r);
+  repositoryReceiptStatus=200;repositoryReceipt=async()=>{signalStarted();await signalGate;};
+  signalApi=spawn(process.execPath,[join(root,'dist','apps','api','main.js')],{env:{...process.env,DATABASE_URL:url,JWT_SECRET:'au-secret',PORT:'3001',REPOSITORY_EFFECT_WORKER_ENABLED:'true',WEBHOOK_ALLOW_PRIVATE_TARGETS:'true'},stdio:'pipe'});
+  let signalOutput='';signalApi.stdout.on('data',b=>signalOutput+=b);signalApi.stderr.on('data',b=>signalOutput+=b);
+  if(!(await waitFor('http://127.0.0.1:3001/api/projects')))throw new Error('signal fixture API did not start: '+signalOutput);
+  let signalDeadline;try{await Promise.race([signalReady,new Promise((_,reject)=>{signalDeadline=setTimeout(()=>reject(new Error('signal receiver not reached')),15000);})]);}finally{clearTimeout(signalDeadline);}
+  const signalExited=new Promise(r=>signalApi.once('exit',(code,signal)=>r({code,signal})));
+  signalApi.kill('SIGTERM');await new Promise(r=>setTimeout(r,5200));
+  check('actual Nest SIGTERM waits beyond socket timeout before drain',signalApi.exitCode===null&&signalApi.signalCode===null&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}})).state==='leased');
+  repositoryReceipt=undefined;releaseSignal();let exitDeadline;
+  let signalExit;try{signalExit=await Promise.race([signalExited,new Promise((_,reject)=>{exitDeadline=setTimeout(()=>reject(new Error('signal shutdown did not finish: '+signalOutput)),15000);})]);}finally{clearTimeout(exitDeadline);}
+  const signalRow=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}});
+  check('actual Nest signal drains task both checkpoints before Prisma disconnect and exits',signalExit.signal==='SIGTERM'&&signalRow.state==='completed'&&!!signalRow.webhookHandledAt&&!!signalRow.automationHandledAt&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Signal drain actual task'}})===1);
+  signalApi=undefined;repositoryReceiptStatus=500;
+  if(priorWorkerEnv===undefined)delete process.env.REPOSITORY_EFFECT_WORKER_ENABLED;else process.env.REPOSITORY_EFFECT_WORKER_ENABLED=priorWorkerEnv;
+  rmSync(workerBundle,{force:true});
   // Fresh leased row for remaining direct-adapter scope checks.
   await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{state:'leased',finishedAt:null,leaseToken:owner.user.id,leaseUntil:new Date('2099-01-01')}});
   rmSync(stepBundle,{force:true});
@@ -539,6 +579,7 @@ try {
 } finally {
   rmSync(automationBundle,{force:true});await prisma?.$disconnect();
   receiver.close();
+  if (signalApi) signalApi.kill('SIGKILL');
   if (api) api.kill('SIGTERM');
   await pg.stop();
   rmSync(dataDir, { recursive: true, force: true });

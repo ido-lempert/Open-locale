@@ -5,7 +5,7 @@ import { runRepositoryEffect } from './repository-effect-runner';
 import { handleRepositoryWebhookChannel } from './repository-webhook-step';
 import { handleRepositoryAutomationChannel } from './repository-automation-step';
 
-// Explicit internal invocation only. No production timer or public apply route.
+// Internal composition, also used by the default-off opt-in worker. No public apply route.
 // One lease, ordered independent checkpoints; completed is handler bookkeeping,
 // not sync acceptance. Crash gaps/partial-rule retries can still duplicate effects.
 export function runRepositoryEffectStep(

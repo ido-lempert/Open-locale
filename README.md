@@ -438,3 +438,11 @@ checks remain; failed selected rules may use current configuration on a later re
 Repository rule selections are bounded to1000 unique UUIDs. Malformed/oversized
 stored manifests fail closed; an empty frozen selection never widens to all rules.
 Selection reads stop at1001 rows and reject overflow before persisting a manifest.
+
+Repository effect processing can be opted in with
+`REPOSITORY_EFFECT_WORKER_ENABLED=true` (default OFF). It handles one intent per
+5-second tick without overlapping local ticks;leases coordinate processes. Shutdown
+stops new ticks and awaits in-flight work on SIGTERM/SIGINT before disconnecting
+the database. Container termination grace must allow the drain; forced kill may
+interrupt work. It does not expose public apply or write
+remote repositories. Crash gaps still permit duplicate effects.
