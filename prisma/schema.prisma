@@ -648,6 +648,7 @@ model RepositoryLocalEffectIntent {
   draftContentDigest String
   previewFingerprint String
   webhookHandledAt DateTime?
+  automationHandledAt DateTime?
   targetRevision Int?
   translationRowId String? @db.Uuid
   translationVersion Int?

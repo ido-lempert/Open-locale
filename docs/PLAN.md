@@ -110,7 +110,8 @@ add languages, manage keys and translations, export a file.
   disabled/deleted/edited/restore-ABA rules. Automation notify carries current-intent/
   rule guard per socket/retry and before each pretranslate target locale.
   MT revalidates after provider computation before write transaction.
-  See reviews0134-0164.
+  Internal automation-only step/checkpoint added; no combined worker or per-rule
+  partial retry ledger. See reviews0134-0165.
 
 ## Phase 3 - advanced
 

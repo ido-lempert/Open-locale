@@ -407,3 +407,8 @@ locales, and does not provide per-rule retry deduplication.
 Repository automation also supplies an optional MT pre-write guard after provider
 computation and before opening its write transaction. Stale context discards computed
 results without translation/history/MT activity writes. A post-check race remains.
+
+An explicitly invoked internal automation-channel step persists an independent
+lease-token/deadline-fenced handled timestamp. Checkpointed requeues skip automation
+replay; failed runs cannot checkpoint. Crash before checkpoint can still duplicate
+effects. This is not webhook/overall sync completion or an enabled combined worker.

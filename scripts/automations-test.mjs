@@ -391,6 +391,27 @@ try {
   }
   await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:1}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{leaseUntil:new Date('2099-01-01')}});
   rmSync(mtBundle,{force:true});
+  const stepBundle=join(root,'.tmp-repository-automation-step.cjs');execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-automation-step.ts','--bundle','--platform=node','--format=cjs','--packages=external','--outfile='+stepBundle]);const {runRepositoryAutomationStep}=require(stepBundle);
+  const resetStep=()=>prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{state:'pending',attempts:0,leaseToken:null,leaseUntil:null,finishedAt:null,automationHandledAt:null,availableAt:new Date('2020-01-01')}});
+  await prisma.automationRule.update({where:{id:summaryRule.id},data:{action:'task.create',config:{title:'Checkpointed automation task'}}});await resetStep();
+  const stepResult=await runRepositoryAutomationStep(prisma,summaryService),handledRow=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}});
+  check('automation step commits actual task activity and independent handled checkpoint',stepResult.status==='completed'&&!!handledRow.automationHandledAt&&handledRow.webhookHandledAt===null&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Checkpointed automation task'}})===1);
+  const beforeReplay=await prisma.activityEvent.count({where:{projectId:summaryProject.id,action:'automation.run'}});
+  await prisma.task.updateMany({where:{projectId:summaryProject.id,title:'Checkpointed automation task'},data:{status:'DONE'}});
+  await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{state:'pending',attempts:0,finishedAt:null,availableAt:new Date('2020-01-01')}});
+  const replayStep=await runRepositoryAutomationStep(prisma,summaryService);
+  check('checkpointed automation requeue skips actual task and activity replay',replayStep.status==='completed'&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Checkpointed automation task'}})===1&&await prisma.activityEvent.count({where:{projectId:summaryProject.id,action:'automation.run'}})===beforeReplay&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}})).automationHandledAt.getTime()===handledRow.automationHandledAt.getTime());
+  await resetStep();await prisma.automationRule.update({where:{id:summaryRule.id},data:{action:'notify',config:{message:'Checkpoint failure fixture'}}});
+  const failedStep=await runRepositoryAutomationStep(prisma,summaryService),failedRow=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}});
+  check('failed aggregate step requeues without automation handled checkpoint',failedStep.status==='retry'&&failedRow.state==='pending'&&failedRow.automationHandledAt===null);
+  await resetStep();await prisma.automationRule.update({where:{id:summaryRule.id},data:{action:'task.create',config:{title:'Expired checkpoint task'}}});
+  const expiringActivity={record:async(tx,event)=>{await activityService.record(tx,event);if(event.action==='automation.run')await tx.$executeRaw`UPDATE repository_local_effect_intents SET "leaseUntil"=clock_timestamp()-interval '1 second' WHERE id=${repoIntent.id}::uuid`;}};
+  const expiryService=new AutomationsService(prisma,projectsService,expiringActivity,{},tasksService,{deliver:async()=>({matched:0,succeeded:0,failed:0})});
+  const expiredStep=await runRepositoryAutomationStep(prisma,expiryService),expiredRow=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}});
+  check('post-effect expired lease cannot checkpoint or settle automation completion',expiredStep.status==='stale'&&expiredRow.automationHandledAt===null&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Expired checkpoint task'}})===1);
+  // Fresh leased row for remaining direct-adapter scope checks.
+  await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{state:'leased',leaseToken:owner.user.id,leaseUntil:new Date('2099-01-01')}});
+  rmSync(stepBundle,{force:true});
   const heRepoRow=await prisma.translation.create({data:{projectId:summaryProject.id,keyId:summaryKey.id,localeCode:'he',value:'Target'}});await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{locale:'he'}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{locale:'he',value:heRepoRow.value,translationRowId:heRepoRow.rowId,translationVersion:heRepoRow.version}});
   const nonbaseRepo=await fireRepositoryAutomation(prisma,summaryService,repoIntent);
   check('repository target locale does not trigger base-value automations',nonbaseRepo.skipped&&nonbaseRepo.matched===0);
