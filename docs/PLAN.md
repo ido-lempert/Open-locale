@@ -151,7 +151,8 @@ add languages, manage keys and translations, export a file.
   key movement/deleted branch despite matching digest. Session-admin read-only recovery eligibility preview returns reason only without
   archived bytes/digest or authority;consistent snapshot,no reservation/restore mutation. Manual per-audit eligibility UI shows fixed current-only reasons,no reservation
   or restore action,with stale-response/error/page clearing. Eligibility uses explicit DB transaction snapshot timestamp in API/UI,not
-  an aging just-now claim. See reviews0134-0202.
+  an aging just-now claim. Internal recovery review also binds key metadata timestamp,denying restored
+  metadata changes when their stored timestamp differs,or stale review. Timestamp is not a monotonic generation. See reviews0134-0203.
 
 ## Phase 3 - advanced
 

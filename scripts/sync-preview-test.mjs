@@ -600,7 +600,8 @@ try {
   check('internal recovery denies removed project locale',missingLocale.reason==='locale-unavailable');
   check('recovery preview repeated reads never change archived bytes',JSON.stringify(await prisma.translationDeletionAudit.findUnique({where:{id:audit.id}}))===recoveryBefore);
   check('internal recovery diagnostic never alters archived snapshot',JSON.stringify(await prisma.translationDeletionAudit.findUnique({where:{id:audit.id}}))===recoveryBefore);
-  const recoveryScope={projectId:project.id,actorId:owner.user.id,auditId:audit.id,expectedBranchId:recovery.branchId,expectedValueDigest:recovery.valueDigest};
+  const currentRecoveryReview=await inspectDeletionRecovery(prisma,project.id,audit.id);
+  const recoveryScope={projectId:project.id,actorId:owner.user.id,auditId:audit.id,expectedBranchId:recovery.branchId,expectedKeyUpdatedAt:currentRecoveryReview.keyUpdatedAt,expectedValueDigest:recovery.valueDigest};
   const recoveryOtherBranch=await prisma.branch.create({data:{projectId:project.id,name:'recovery-other'}});
   let movedRecoveryDenied=false;try{await prisma.$transaction(async tx=>{await tx.key.update({where:{id:localKey.id},data:{branchId:recoveryOtherBranch.id}});await lockDeletionRecovery(tx,recoveryScope);},{isolationLevel:'Serializable'});}catch(e){movedRecoveryDenied=e.name==='RepositoryLocalError';}
   check('locked recovery rejects actual key movement away from reviewed branch',movedRecoveryDenied&&(await prisma.key.findUnique({where:{id:localKey.id}})).branchId===recovery.branchId);
@@ -609,6 +610,10 @@ try {
   await prisma.branch.delete({where:{id:recoveryOtherBranch.id}});
   let deletedBranchDenied=false;try{await prisma.$transaction(tx=>lockDeletionRecovery(tx,{...recoveryScope,expectedBranchId:recoveryOtherBranch.id}),{isolationLevel:'Serializable'});}catch(e){deletedBranchDenied=e.name==='RepositoryLocalError';}
   check('locked recovery rejects deleted reviewed branch',deletedBranchDenied);
+  let metadataAbaDenied=false;try{await prisma.$transaction(async tx=>{await tx.key.update({where:{id:localKey.id},data:{maxLength:999}});await tx.key.update({where:{id:localKey.id},data:{maxLength:null}});await lockDeletionRecovery(tx,recoveryScope);},{isolationLevel:'Serializable'});}catch(e){metadataAbaDenied=e.name==='RepositoryLocalError';}
+  check('locked recovery rejects actual restored key metadata ABA',metadataAbaDenied);
+  let staleKeyStampDenied=false;try{await prisma.$transaction(tx=>lockDeletionRecovery(tx,{...recoveryScope,expectedKeyUpdatedAt:'2020-01-01T00:00:00.000Z'}),{isolationLevel:'Serializable'});}catch(e){staleKeyStampDenied=e.name==='RepositoryLocalError';}
+  check('locked recovery rejects stale reviewed key timestamp',staleKeyStampDenied);
   const guardedRecovery=await prisma.$transaction(tx=>lockDeletionRecovery(tx,recoveryScope),{isolationLevel:'Serializable'});
   check('locked recovery revalidates current owner and candidate without write authority',guardedRecovery.eligible&&guardedRecovery.adminValidated&&guardedRecovery.canRestore===false);
   check('locked recovery accepts current project admin',(await prisma.$transaction(tx=>lockDeletionRecovery(tx,{...recoveryScope,actorId:admin.user.id}),{isolationLevel:'Serializable'})).adminValidated);
@@ -656,7 +661,7 @@ try {
   await prisma.translation.create({data:{projectId:project.id,keyId:recoveryKey.id,localeCode:'en',value:'Recovery source'}});
   const recoveryArchive=await prisma.translationDeletionAudit.create({data:{projectId:project.id,keyId:recoveryKey.id,keyName:recoveryKey.name,localeCode:'he',snapshot:{row:{projectId:project.id,keyId:recoveryKey.id,localeCode:'he',value:'Recovered target',status:'REVIEWED',mtProvider:'old-provider',mtScore:99},history:[]}}});
   await prisma.repositoryRemovalGeneration.create({data:{projectId:project.id,keyId:recoveryKey.id,locale:'he',auditId:recoveryArchive.id}});
-  const committedRecoveryScope={...recoveryScope,auditId:recoveryArchive.id,expectedValueDigest:createHash('sha256').update('Recovered target').digest('hex')};
+  const committedRecoveryScope={...recoveryScope,auditId:recoveryArchive.id,expectedKeyUpdatedAt:recoveryKey.updatedAt.toISOString(),expectedValueDigest:createHash('sha256').update('Recovered target').digest('hex')};
   const preFaultRecoveryCounts=await recoveryCounts();let recoveryFault=false;
   try{await prisma.$transaction(tx=>writeDeletionRecovery({...tx,activityEvent:{...tx.activityEvent,create:async()=>{throw new Error('injected recovery activity failure');}}},committedRecoveryScope),{isolationLevel:'Serializable'});}catch(e){recoveryFault=e.message==='injected recovery activity failure';}
   check('actual recovery storage fault rolls back row history TM and marker',recoveryFault&&JSON.stringify(await recoveryCounts())===JSON.stringify(preFaultRecoveryCounts)&&!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:recoveryKey.id,localeCode:'he'}}})&&await prisma.repositoryRemovalGeneration.count({where:{projectId:project.id,keyId:recoveryKey.id,locale:'he',auditId:recoveryArchive.id}})===1);
@@ -672,7 +677,7 @@ try {
     const raceKey=await prisma.key.create({data:{projectId:project.id,branchId:localKey.branchId,name:'recovery-race-'+raceKind}});
     const raceAudit=await prisma.translationDeletionAudit.create({data:{projectId:project.id,keyId:raceKey.id,keyName:raceKey.name,localeCode:'he',snapshot:{row:{projectId:project.id,keyId:raceKey.id,localeCode:'he',value:'Recovery race value'},history:[]}}});
     await prisma.repositoryRemovalGeneration.create({data:{projectId:project.id,keyId:raceKey.id,locale:'he',auditId:raceAudit.id}});
-    const raceScope={...recoveryScope,auditId:raceAudit.id,expectedValueDigest:createHash('sha256').update('Recovery race value').digest('hex')};
+    const raceScope={...recoveryScope,auditId:raceAudit.id,expectedKeyUpdatedAt:raceKey.updatedAt.toISOString(),expectedValueDigest:createHash('sha256').update('Recovery race value').digest('hex')};
     let ready,release;const held=new Promise(r=>ready=r),gate=new Promise(r=>release=r);
     const first=prisma.$transaction(async tx=>{
       let result;

@@ -24,7 +24,7 @@ export async function inspectDeletionRecovery(
         !h || typeof h !== 'object' || Array.isArray(h) || h.keyId !== audit.keyId || h.localeCode !== audit.localeCode || typeof h.value !== 'string'))
     return deny('unsupported-snapshot');
   const key = await tx.key.findFirst({ where: { id: audit.keyId, projectId },
-    select: { name: true, isPlural: true, maxLength: true, branchId: true } });
+    select: { name: true, isPlural: true, maxLength: true, branchId: true, updatedAt: true } });
   if (!key || key.name !== audit.keyName) return deny('key-changed');
   if (key.isPlural || (key.maxLength !== null && [...row['value']].length > key.maxLength)) return deny('unsupported-current-key');
   const locale = await tx.projectLocale.findUnique({ where: { projectId_code: { projectId, code: audit.localeCode } } });
@@ -33,7 +33,7 @@ export async function inspectDeletionRecovery(
   const marker = await tx.repositoryRemovalGeneration.findUnique({ where: { projectId_keyId_locale: { projectId, keyId: audit.keyId, locale: audit.localeCode } } });
   if (marker?.auditId !== audit.id) return deny('deletion-generation-changed');
   return { source: 'internal-deletion-recovery-plan' as const, eligible: true, reason: 'current-flat-value-absence',
-    auditId: audit.id, keyId: audit.keyId, branchId: key.branchId, locale: audit.localeCode,
+    auditId: audit.id, keyId: audit.keyId, branchId: key.branchId, keyUpdatedAt: key.updatedAt.toISOString(), locale: audit.localeCode,
     valueDigest: createHash('sha256').update(row['value']).digest('hex'),
     historyReplay: false as const, canRestore: false as const, snapshotIncluded: false as const };
 }

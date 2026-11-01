@@ -605,3 +605,8 @@ navigation clears previous eligibility;failed checks hide stale results and raw 
 Eligibility preview includes the database transaction snapshot timestamp (`asOf`);
 the card shows that UTC timestamp instead of an aging "just now" claim. A new check
 gets a new snapshot,not a reservation or live status.
+
+Internal recovery binds reviewed key updatedAt as well as branch/value digest.
+A changed timestamp invalidates old review even when visible fields return to prior
+values. This timestamp is not a monotonic generation:edits sharing the same stored
+timestamp cannot be distinguished. Public eligibility exposes no key timestamp/token.

@@ -7,7 +7,7 @@ import { RepositoryLocalError } from './repository-local-error';
 // stale authorization. Row locks do not reserve absent translation rows.
 export async function lockDeletionRecovery(
   tx: Prisma.TransactionClient,
-  scope: { projectId: string; actorId: string; auditId: string; expectedBranchId: string; expectedValueDigest: string },
+  scope: { projectId: string; actorId: string; auditId: string; expectedBranchId: string; expectedKeyUpdatedAt: string; expectedValueDigest: string },
 ) {
   const isolation = await tx.$queryRaw<{ transaction_isolation: string }[]>`SHOW transaction_isolation`;
   if (isolation[0]?.transaction_isolation !== 'serializable') throw new Error('Deletion recovery requires serializable transaction');
@@ -27,6 +27,6 @@ export async function lockDeletionRecovery(
   await tx.$queryRaw`SELECT "auditId" FROM repository_removal_generations WHERE "projectId"=${scope.projectId}::uuid AND "keyId"=${a.keyId}::uuid AND locale=${a.localeCode} FOR UPDATE`;
   await tx.$queryRaw`SELECT "keyId" FROM translations WHERE "keyId"=${a.keyId}::uuid AND "localeCode"=${a.localeCode} FOR UPDATE`;
   const plan = await inspectDeletionRecovery(tx, scope.projectId, scope.auditId);
-  if (!plan.eligible || !('valueDigest' in plan) || plan.valueDigest !== scope.expectedValueDigest || !('branchId' in plan) || plan.branchId !== scope.expectedBranchId) throw new RepositoryLocalError('conflict', 'Recovery candidate changed');
+  if (!plan.eligible || !('valueDigest' in plan) || plan.valueDigest !== scope.expectedValueDigest || !('branchId' in plan) || plan.branchId !== scope.expectedBranchId || !('keyUpdatedAt' in plan) || plan.keyUpdatedAt !== scope.expectedKeyUpdatedAt) throw new RepositoryLocalError('conflict', 'Recovery candidate changed');
   return { ...plan, adminValidated: true as const, canRestore: false as const };
 }
