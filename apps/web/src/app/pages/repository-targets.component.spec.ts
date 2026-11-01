@@ -453,4 +453,30 @@ describe('repository target UI lifecycle', () => {
     expect(c.changeRows()).toEqual([]);
     expect(c.changePages()).toBe(1);
   });
+  function reviewed(c: RepositoryTargetsComponent) {
+    c.previewResult.set({targetId:'t',targetRevision:1,decisions:[]} as unknown as RepositorySyncPreview);
+    c.draft.set({targetId:'t',targetRevision:1,previewFingerprint:'a'.repeat(64),contentDigest:'b'.repeat(64),localChangePlan:{changes:[{key:'k',action:'set-value',nextValue:'v'}]}} as unknown as RepositoryResolutionDraft);
+    c.choices.set(new Map([['k','remote']]));
+  }
+  it('requires confirmation before apply and sends exact reviewed binding', async () => {
+    const send=jest.fn(async()=>({updatedValues:1,removedValues:0,pendingEffectIntents:1}));
+    const c=setup({applyRepositoryLocal:send});reviewed(c);
+    await c.apply(target);expect(send).not.toHaveBeenCalled();c.confirmApply.set(true);await c.apply(target);
+    expect(send).toHaveBeenCalledWith('p','t',{expectedRevision:1,expectedFingerprint:'a'.repeat(64),expectedDraftDigest:'b'.repeat(64),choices:{k:'remote'}});
+    expect(c.draft()).toBeNull();expect(c.confirmApply()).toBe(false);expect(c.message()).toContain('Sync not completed');
+  });
+  it('failed apply clears reviewed bytes and warns about uncertain response',async()=>{
+    const c=setup({applyRepositoryLocal:async()=>{throw new Error('Network lost');}});reviewed(c);c.confirmApply.set(true);await c.apply(target);
+    expect(c.draft()).toBeNull();expect(c.previewResult()).toBeNull();expect(c.confirmApply()).toBe(false);expect(c.error()).toContain('may already have changed');
+  });
+  it('changed choice clears apply confirmation',()=>{
+    const c=setup({});reviewed(c);c.previewResult.set({targetId:'t',decisions:[{key:'k',kind:'conflict'}]} as unknown as RepositorySyncPreview);c.confirmApply.set(true);c.choose('k','local');expect(c.confirmApply()).toBe(false);expect(c.draft()).toBeNull();
+  });
+  it('late apply response after navigation cannot show old scope feedback',async()=>{
+    let finish!:(v:unknown)=>void;
+    const c=setup({applyRepositoryLocal:()=>new Promise(r=>finish=r),getProject:async()=>({baseLocale:'en',locales:[]}),listBranches:async()=>[],listRepositoryTargets:async()=>({targets:[]})});
+    reviewed(c);c.confirmApply.set(true);const pending=c.apply(target);await c.load('other');finish({updatedValues:1,removedValues:0,pendingEffectIntents:1});await pending;
+    expect(c.projectId).toBe('other');expect(c.message()).toBe('');expect(c.error()).toBe('');expect(c.draft()).toBeNull();expect(c.confirmApply()).toBe(false);
+  });
+
 });

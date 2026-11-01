@@ -458,5 +458,12 @@ Remote bytes are fresh at read time, not locked against later repository changes
 now exposes that local-only write to signed-in project admins. Send the reviewed
 `expectedRevision`, `expectedFingerprint`, `choices`, and `expectedDraftDigest` from
 resolve-preview. The service rereads all sources and commits atomically or rejects.
-The web screen remains preview-only. This endpoint does not enable the default-off
+The web screen offers a separate reviewed local-apply confirmation. This endpoint does not enable the default-off
 effect worker, push repository files, advance the baseline or accept a sync.
+
+The repository target screen can now apply a reviewed existing-key local draft.
+Prepare the exact JSON first, then review a separate confirmation with project,
+branch, locale, set/removal counts and digest. Cancel leaves local values unchanged.
+Success or failure clears stale review and requires a fresh comparison. A lost
+response may hide an already committed write, so the UI never offers blind retry.
+Configured downstream effects may run later if the deployment worker is enabled.

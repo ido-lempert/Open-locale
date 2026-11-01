@@ -138,7 +138,7 @@ const empty = (): RepositoryTargetInput => ({
         Configuration only. These coordinates do not connect to GitHub, grant
         credentials, accept a baseline or run sync. Reading a file requires
         separately configured deployment read access. No repository files or
-        translations change. Session admins only. Do not paste tokens or
+        translations change unless you explicitly confirm a reviewed local apply below. Session admins only. Do not paste tokens or
         passwords here.
       </p>
       @if (error()) {
@@ -507,6 +507,23 @@ const empty = (): RepositoryTargetInput => ({
                       ></textarea>
                     </label>
                     <p class="digest">SHA256: {{ d.contentDigest }}</p>
+                    @if (d.localChangePlan.changes.length) {
+                      @if (confirmApply()) {
+                        <section class="notice" aria-label="Confirm local apply">
+                          <h4>Apply reviewed local values?</h4>
+                          <p>Project {{ projectId }}, branch {{ t.localBranch }}, locale {{ t.locale }}:
+                          set {{ d.localChangePlan.setValues }} values and remove {{ d.localChangePlan.removeLocaleValues }} locale values.
+                          A removal never deletes a project key or another locale.</p>
+                          <p>Repository files and accepted baseline stay unchanged. This does not complete sync.
+                          Configured webhooks and automations may run later if the deployment effect worker is enabled.</p>
+                          <p class="digest">Reviewed SHA256: {{ d.contentDigest }}</p>
+                          <div class="actions"><button name="targetConfirmApply" type="button" (click)="apply(t)" [disabled]="busy()">{{ busy() ? 'Applying local values...' : 'Apply local values' }}</button>
+                          <button name="targetCancelApply" type="button" (click)="confirmApply.set(false)" [disabled]="busy()">Keep local values</button></div>
+                        </section>
+                      } @else {
+                        <button name="targetPrepareApply" type="button" (click)="confirmApply.set(true)" [disabled]="busy()">Review local apply...</button>
+                      }
+                    }
                     <button
                       name="targetDownloadDraft"
                       type="button"
@@ -665,6 +682,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   previewResult = signal<RepositorySyncPreview | null>(null);
   choices = signal(new Map<string, SyncResolutionChoice>());
   draft = signal<RepositoryResolutionDraft | null>(null);
+  confirmApply = signal(false);
   changePage = signal(0);
   changePages = computed(() =>
     Math.max(
@@ -688,6 +706,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   clearDraft() {
     this.choices.set(new Map());
     this.draft.set(null);
+    this.confirmApply.set(false);
     this.changePage.set(0);
   }
   choose(key: string, value: string) {
@@ -706,6 +725,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     else next.delete(key);
     this.choices.set(next);
     this.draft.set(null);
+    this.confirmApply.set(false);
     this.changePage.set(0);
     this.error.set('');
   }
@@ -720,6 +740,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     const generation = ++this.generation;
     this.busy.set(true);
     this.draft.set(null);
+    this.confirmApply.set(false);
     this.changePage.set(0);
     this.error.set('');
     this.message.set('');
@@ -745,6 +766,30 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
       );
     } finally {
       if (generation === this.generation) this.busy.set(false);
+    }
+  }
+  async apply(t: RepositoryTargetConfig) {
+    const p = this.previewResult(), d = this.draft();
+    if (this.busy() || !this.confirmApply() || !d || p?.targetId !== t.id || d.targetId !== t.id || !d.localChangePlan.changes.length) return;
+    const generation = ++this.generation;
+    const projectId = this.projectId;
+    const input = { expectedRevision: d.targetRevision, expectedFingerprint: d.previewFingerprint,
+      expectedDraftDigest: d.contentDigest, choices: Object.fromEntries(this.choices()) };
+    this.busy.set(true); this.error.set(''); this.message.set('');
+    try {
+      const result = await this.api.applyRepositoryLocal(projectId, t.id, input);
+      if (generation !== this.generation) return;
+      this.message.set(`Local values applied: ${result.updatedValues} set, ${result.removedValues} removed; ${result.pendingEffectIntents} effects queued. Repository files and accepted baseline unchanged. Sync not completed. Compare again before another apply.`);
+    } catch (e) {
+      if (generation !== this.generation) return;
+      this.error.set((e instanceof Error ? e.message : 'Local apply result unavailable') + ' Compare again before another apply. If the response was lost, local values may already have changed.');
+    } finally {
+      if (generation === this.generation) {
+        this.previewResult.set(null); this.clearDraft(); this.previewPage.set(0);
+        this.snapshot.set(null); this.baselineView.set(null); this.confirmBaseline.set(false);
+        this.busy.set(false);
+        window.scrollTo({top: 0, behavior: 'instant'});
+      }
     }
   }
   downloadDraft() {

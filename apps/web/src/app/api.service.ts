@@ -231,6 +231,7 @@ export class ApiService {
   }
   getRepositoryBaseline(projectId:string,id:string){return this.request<RepositoryBaselineView>(`/projects/${projectId}/sync/repository-targets/${encodeURIComponent(id)}/baseline`);}
   acceptRepositoryBaseline(projectId:string,id:string,input:{expectedRevision:number;expectedRemoteSha:string;expectedContentDigest:string;expectedBaselineVersion:number}){return this.request<{baseline:RepositoryBaseline}>(`/projects/${projectId}/sync/repository-targets/${encodeURIComponent(id)}/baseline`,{method:'POST',body:JSON.stringify(input)});}
+  applyRepositoryLocal(projectId:string,id:string,input:{expectedRevision:number;expectedFingerprint:string;expectedDraftDigest:string;choices:Record<string,SyncResolutionChoice>}){return this.request<{updatedValues:number;removedValues:number;pendingEffectIntents:number;remoteWritten:false;baselineAdvanced:false;repositorySyncAccepted:false}>(`/projects/${projectId}/sync/repository-targets/${encodeURIComponent(id)}/apply-local`,{method:'POST',body:JSON.stringify(input)});}
   resolveRepositoryPreview(projectId:string,id:string,input:{expectedRevision:number;expectedFingerprint:string;choices:Record<string,SyncResolutionChoice>}){return this.request<RepositoryResolutionDraft>(`/projects/${projectId}/sync/repository-targets/${encodeURIComponent(id)}/resolve-preview`,{method:'POST',body:JSON.stringify(input)});}
   previewRepositoryTarget(
     projectId: string,
