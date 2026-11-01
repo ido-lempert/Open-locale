@@ -526,3 +526,8 @@ token and database deadline, with a transaction-local two-second per-lock timeou
 A token change or expiry while waiting cannot record success; lock timeout leaves
 lease state untouched for later recovery. This does not bound the full runner or
 close the effect-before-settlement crash gap.
+
+Due retention is attempted even if that tick's effect step throws. Both opt-ins
+remain independent,share non-overlap/drain,and keep the one-minute per-process
+cleanup attempt cadence. A long-running effect still defers cleanup; this is not
+a real-time deadline or a promise that a failed database can complete cleanup.

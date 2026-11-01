@@ -602,6 +602,21 @@ try {
   await prisma.repositoryLocalEffectIntent.deleteMany({where:retentionOldWhere});
   if(priorRetentionEnv===undefined)delete process.env.REPOSITORY_EFFECT_RETENTION_ENABLED;else process.env.REPOSITORY_EFFECT_RETENTION_ENABLED=priorRetentionEnv;
   if(priorWorkerEnv===undefined)delete process.env.REPOSITORY_EFFECT_WORKER_ENABLED;else process.env.REPOSITORY_EFFECT_WORKER_ENABLED=priorWorkerEnv;
+  // Fail only production claim transaction; retain actual database cleanup.
+  await resetCombined();
+  const failureTerminal=await prisma.repositoryLocalEffectIntent.create({data:{...retentionData,state:'dead',leaseToken:null,leaseUntil:null,finishedAt:new Date('2020-01-01'),automationRuleIds:[]}});
+  let failedClaimAttempts=0;
+  const claimFailureDb=new Proxy(prisma,{get(db,key){if(key==='$transaction')return async(fn,...args)=>{if(fn.name==='claimRepositoryEffect'){failedClaimAttempts++;throw new Error('private injected claim failure');}return db.$transaction(fn,...args);};const value=Reflect.get(db,key);return typeof value==='function'?value.bind(db):value;}});
+  process.env.REPOSITORY_EFFECT_WORKER_ENABLED='true';process.env.REPOSITORY_EFFECT_RETENTION_ENABLED='true';
+  const failureWorker=new RepositoryEffectWorker(claimFailureDb,liveWebhooks,summaryService);failureWorker.onModuleInit();
+  const failurePruned=await pollFor(async()=>!await prisma.repositoryLocalEffectIntent.findUnique({where:{id:failureTerminal.id}})?true:null,20);
+  check('due retention lifecycle still prunes actual terminal row after effect claim failure',!!failurePruned&&failedClaimAttempts===1&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}})).state==='pending'&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}})).attempts===0);
+  const failureNext=await prisma.repositoryLocalEffectIntent.create({data:{...retentionData,state:'dead',leaseToken:null,leaseUntil:null,finishedAt:new Date('2020-01-01'),automationRuleIds:[]}});
+  await new Promise(r=>setTimeout(r,5200));await failureWorker.beforeApplicationShutdown();
+  check('failed effects do not cause aggressive next tick retention attempts',failedClaimAttempts===2&&!!await prisma.repositoryLocalEffectIntent.findUnique({where:{id:failureNext.id}}));
+  await prisma.repositoryLocalEffectIntent.delete({where:{id:failureNext.id}});
+  if(priorRetentionEnv===undefined)delete process.env.REPOSITORY_EFFECT_RETENTION_ENABLED;else process.env.REPOSITORY_EFFECT_RETENTION_ENABLED=priorRetentionEnv;
+  if(priorWorkerEnv===undefined)delete process.env.REPOSITORY_EFFECT_WORKER_ENABLED;else process.env.REPOSITORY_EFFECT_WORKER_ENABLED=priorWorkerEnv;
   rmSync(workerBundle,{force:true});
   // Fresh leased row for remaining direct-adapter scope checks.
   await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{state:'leased',finishedAt:null,leaseToken:owner.user.id,leaseUntil:new Date('2099-01-01')}});

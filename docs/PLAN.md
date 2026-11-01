@@ -135,7 +135,8 @@ add languages, manage keys and translations, export a file.
   Eligibility guard per-lock2sec timeout;actual project/translation blockers
   requeue without invoking handler and recover after release. Rule/channel checkpoints also use per-lock2sec timeout with actual intent-lock
   denial/recovery tests;effect-before-checkpoint crash gap remains. Settlement locks intent before clock/token with per-lock2sec timeout;actual
-  stale-token/expiry/timeout contention rejects success. See reviews0134-0185.
+  stale-token/expiry/timeout contention rejects success. Due retention still attempts after effect-step failure,with independent flags
+  and original per-process cadence/drain. See reviews0134-0186.
 
 ## Phase 3 - advanced
 

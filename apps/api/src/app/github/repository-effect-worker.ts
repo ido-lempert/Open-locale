@@ -36,12 +36,17 @@ export class RepositoryEffectWorker implements OnModuleInit, BeforeApplicationSh
       .finally(() => { this.inFlight = undefined; });
   }
   private async runTick() {
-    if (this.effectsEnabled) await runRepositoryEffectStep(this.db, this.webhooks, this.automations);
+    try {
+      if (this.effectsEnabled) await runRepositoryEffectStep(this.db, this.webhooks, this.automations);
+    } finally {
+    // Independent opt-in cleanup still gets its due attempt after effect failure.
+    // A long-running effect can still defer this; no real-time guarantee.
     if (this.retentionEnabled && Date.now() >= this.nextRetentionAt) {
       // At most one bounded cleanup/minute per process, shared non-overlap/drain.
       // Set before attempt so a failure cannot cause aggressive5sec retries.
       this.nextRetentionAt = Date.now() + 60000;
       await this.db.$transaction(pruneRepositoryEffects);
+    }
     }
   }
   async beforeApplicationShutdown() {
