@@ -494,3 +494,13 @@ does not impose a total runtime bound. The index migration is a normal transacti
 CREATE INDEX, not concurrent: plan a maintenance window for a large existing table
 because writes can wait while it builds. Prisma schema cannot encode this partial
 predicate; preserve the SQL migration in deployment history.
+
+Session project admins can read
+`GET /api/projects/{projectId}/sync/repository-targets/{targetId}/effects-summary`.
+This no-store endpoint returns pending/leased/completed/dead counts, expired lease
+count, oldest pending timestamp and database as-of time. It includes all historical
+revisions of that target, not only its current coordinates. Seven-day terminal
+retention can remove older completed/dead counts. It returns no translation payload,
+actor, lease token or raw error and never dispatches or retries work. Counts are
+handler bookkeeping, not delivery receipts or accepted synchronization; it does
+not infer worker enablement. No web summary screen in this slice.

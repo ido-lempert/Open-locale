@@ -432,6 +432,40 @@ export class RepositoryTargetsService {
       remoteWritten: false as const, baselineAdvanced: false as const,
       repositorySyncAccepted: false as const };
   }
+  async effectSummary(user: AuthPrincipal, projectId: string, id: string) {
+    await this.authorize(user, projectId);
+    if (!await this.prisma.repositorySyncTarget.findFirst({ where: { id, projectId }, select: { id: true } }))
+      throw new NotFoundException('Repository target not found');
+    // Aggregate only. Never return payloads, actors, lease tokens or error text.
+    // Terminal state is handler bookkeeping, not downstream receipt/sync acceptance.
+    const [row] = await this.prisma.$queryRaw<{
+      pending: bigint; leased: bigint; completed: bigint; dead: bigint;
+      expiredLeases: bigint; oldestPendingAt: Date | null; asOf: Date;
+    }[]>`
+      WITH stamp AS (SELECT clock_timestamp() AS now)
+      SELECT count(*) FILTER (WHERE state='pending') AS pending,
+        count(*) FILTER (WHERE state='leased') AS leased,
+        count(*) FILTER (WHERE state='completed') AS completed,
+        count(*) FILTER (WHERE state='dead') AS dead,
+        count(*) FILTER (WHERE state='leased' AND "leaseUntil" <= stamp.now) AS "expiredLeases",
+        min("createdAt") FILTER (WHERE state='pending') AS "oldestPendingAt",
+        stamp.now AS "asOf"
+      FROM stamp LEFT JOIN repository_local_effect_intents AS intent
+        ON intent."projectId"=${projectId}::uuid AND intent."targetId"=${id}::uuid
+      GROUP BY stamp.now`;
+    const count = (value: bigint) => {
+      const n = Number(value);
+      if (!Number.isSafeInteger(n) || n < 0) throw new ServiceUnavailableException('Effect summary unavailable');
+      return n;
+    };
+    return {
+      source: 'repository-effect-bookkeeping', targetId: id, asOf: row.asOf,
+      counts: { pending: count(row.pending), leased: count(row.leased),
+        completed: count(row.completed), dead: count(row.dead) },
+      expiredLeases: count(row.expiredLeases), oldestPendingAt: row.oldestPendingAt,
+      deliveryConfirmed: false, syncAccepted: false,
+    };
+  }
   async baseline(user: AuthPrincipal, projectId: string, id: string) {
     await this.authorize(user, projectId);
     const target = await this.prisma.repositorySyncTarget.findFirst({
@@ -589,6 +623,15 @@ export class RepositoryTargetsController {
     @Body() input: ApplyRepositoryLocalDto,
   ) {
     return this.targets.executeReviewedLocal(user, projectId, id, input);
+  }
+  @Get(':targetId/effects-summary')
+  @Header('Cache-Control', 'no-store')
+  effectSummary(
+    @CurrentUser() user: AuthPrincipal,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Param('targetId', new ParseUUIDPipe()) id: string,
+  ) {
+    return this.targets.effectSummary(user, projectId, id);
   }
   @Get(':targetId/baseline')
   @Header('Cache-Control', 'no-store')
