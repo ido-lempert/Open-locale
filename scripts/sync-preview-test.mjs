@@ -443,7 +443,33 @@ try {
   try{await prisma.$transaction(async tx=>{const r=await repositoryLocalTransaction(tx,{...reviewedCompose,local:effectLocal,json:removeJson,contentDigest:removeDigest},removeDigest,composeFingerprint);removalIntent=await tx.repositoryLocalEffectIntent.findFirst({where:{operation:'remove-locale-value',keyId:localKey.id}});const removalLeaseToken=owner.user.id;await tx.$executeRaw`UPDATE repository_local_effect_intents SET state='leased',attempts=1,"leaseToken"=${removalLeaseToken}::uuid,"leaseUntil"=clock_timestamp()+INTERVAL '60 seconds' WHERE id=${removalIntent.id}::uuid`;const removalEligible=await validateRepositoryEffect(tx,removalIntent.id,removalLeaseToken);removalEligibilityReached=removalEligible.id===removalIntent.id;await tx.translation.create({data:{keyId:localKey.id,projectId:project.id,localeCode:'en',value:'restored'}});let superseded=false;try{await validateRepositoryEffect(tx,removalIntent.id,removalLeaseToken);}catch{superseded=true;}removalSuperseded=superseded;if(r.pendingEffectIntents!==1)throw new Error('wrong count');throw new Error('rollback intent removal fixture');},{isolationLevel:'Serializable'});}catch(e){removalEligibilityError=e.message;}
   check('removal effect eligible only while locale absent',removalEligibilityReached,removalEligibilityError);
   check('recreated locale supersedes removal effect',removalSuperseded,removalEligibilityError);
-  check('removal intent distinguishes absence from empty set',removalIntent?.operation==='remove-locale-value'&&removalIntent.value===null&&removalIntent.keyId===localKey.id&&removalIntent.draftContentDigest===removeDigest);
+  let abaDenied=false,legacyRemovalDenied=false,abaMarkerChanged=false,newRemovalEligible=false;
+  try {await prisma.$transaction(async tx=>{
+    await repositoryLocalTransaction(tx,{...reviewedCompose,local:effectLocal,json:removeJson,contentDigest:removeDigest},removeDigest,composeFingerprint);
+    const oldRemoval=await tx.repositoryLocalEffectIntent.findFirst({where:{operation:'remove-locale-value',keyId:localKey.id}});
+    await tx.repositoryLocalEffectIntent.update({where:{id:oldRemoval.id},data:{state:'leased',attempts:1,leaseToken:owner.user.id,leaseUntil:new Date('2099-01-01')}});
+    await tx.repositoryLocalEffectIntent.update({where:{id:oldRemoval.id},data:{removalAuditId:null}});
+    try{await validateRepositoryEffect(tx,oldRemoval.id,owner.user.id);}catch(e){legacyRemovalDenied=e.message==='Effect removal generation superseded';}
+    await tx.repositoryLocalEffectIntent.update({where:{id:oldRemoval.id},data:{removalAuditId:oldRemoval.removalAuditId}});
+    const recreated=await tx.translation.create({data:{keyId:localKey.id,projectId:project.id,localeCode:'en',value:'ABA restored'}});
+    const secondSnapshot={...effectLocal,keys:effectLocal.keys.map(k=>k.keyId===localKey.id?{...k,translation:{rowId:recreated.rowId,version:recreated.version,value:recreated.value}}:k)};
+    await writeExistingLocalValues(tx,secondSnapshot,[{key:'local',action:'remove-locale-value',expectedValue:'ABA restored',nextValue:null}],owner.user.id);
+    const marker=await tx.repositoryRemovalGeneration.findUnique({where:{projectId_keyId_locale:{projectId:project.id,keyId:localKey.id,locale:'en'}}});
+    abaMarkerChanged=marker.auditId!==oldRemoval.removalAuditId&&await tx.translation.count({where:{keyId:localKey.id,localeCode:'en'}})===0;
+    try{await validateRepositoryEffect(tx,oldRemoval.id,owner.user.id);}catch(e){abaDenied=e.message==='Effect removal generation superseded';}
+    const freshRemoval=await tx.repositoryLocalEffectIntent.create({data:{projectId:project.id,targetId:target.id,actorId:owner.user.id,keyId:localKey.id,keyName:'local',branchId:writeScope.branchId,branch:'main',locale:'en',operation:'remove-locale-value',value:null,draftContentDigest:removeDigest,previewFingerprint:composeFingerprint,targetRevision:writeScope.targetRevision,removalAuditId:marker.auditId,state:'leased',attempts:1,leaseToken:owner.user.id,leaseUntil:new Date('2099-01-01')}});
+    newRemovalEligible=(await validateRepositoryEffect(tx,freshRemoval.id,owner.user.id)).id===freshRemoval.id;
+    throw new Error('rollback removal ABA fixture');
+  },{isolationLevel:'Serializable'});}catch{}
+  check('legacy removal without deletion generation fails closed',legacyRemovalDenied);
+  check('actual recreate remove ABA replaces generation and denies older absent intent',abaMarkerChanged&&abaDenied);
+  check('removal generation and audit rollback together',await prisma.repositoryRemovalGeneration.count({where:{projectId:project.id,keyId:localKey.id}})===0&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).value==='composed value');
+  check('new removal generation remains eligible after older generation superseded',newRemovalEligible);
+  await prisma.repositoryRemovalGeneration.create({data:{projectId:project.id,keyId:localKey.id,locale:'en',auditId:owner.user.id}});
+  try{await prisma.$transaction(async tx=>{await repositoryLocalTransaction(tx,{...reviewedCompose,local:effectLocal,json:removeJson,contentDigest:removeDigest},removeDigest,composeFingerprint);throw new Error('rollback prior marker');},{isolationLevel:'Serializable'});}catch{}
+  check('failed removal restores previously committed generation marker',(await prisma.repositoryRemovalGeneration.findUnique({where:{projectId_keyId_locale:{projectId:project.id,keyId:localKey.id,locale:'en'}}})).auditId===owner.user.id);
+  await prisma.repositoryRemovalGeneration.deleteMany({where:{projectId:project.id,keyId:localKey.id}});
+  check('removal intent distinguishes absence from empty set',!!removalIntent?.removalAuditId&&removalIntent.operation==='remove-locale-value'&&removalIntent.value===null&&removalIntent.keyId===localKey.id&&removalIntent.draftContentDigest===removeDigest);
   check('removal intent rolls back with row and audit',await prisma.repositoryLocalEffectIntent.count()===composeBeforeIntents+1&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).value==='composed value');
   const emptyJson=JSON.stringify({...effectValues,local:''});const emptyDigest=createHash('sha256').update(emptyJson).digest('hex');let emptyIntent,lineageSurvived=false;
   try{await prisma.$transaction(async tx=>{await repositoryLocalTransaction(tx,{...reviewedCompose,local:effectLocal,json:emptyJson,contentDigest:emptyDigest},emptyDigest,composeFingerprint);emptyIntent=await tx.repositoryLocalEffectIntent.findFirst({where:{keyId:localKey.id,draftContentDigest:emptyDigest}});await tx.key.delete({where:{id:localKey.id}});await tx.repositorySyncTarget.delete({where:{id:target.id}});lineageSurvived=await tx.repositoryLocalEffectIntent.count({where:{id:emptyIntent.id}})===1;throw new Error('rollback empty fixture');},{isolationLevel:'Serializable'});}catch{}

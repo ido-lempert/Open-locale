@@ -35,6 +35,13 @@ export async function validateRepositoryEffect(
   if (intent.operation === 'set-value') {
     if (!row || !intent.translationRowId || row.rowId !== intent.translationRowId || row.version !== intent.translationVersion || row.value !== intent.value) throw new Error('Effect locale generation changed');
   } else if (intent.operation !== 'remove-locale-value' || row || intent.value !== null || intent.translationRowId !== null || intent.translationVersion !== null) throw new Error('Effect removal superseded');
+  if (intent.operation === 'remove-locale-value') {
+    const generation = await tx.repositoryRemovalGeneration.findUnique({
+      where: { projectId_keyId_locale: { projectId: intent.projectId, keyId: intent.keyId, locale: intent.locale } },
+    });
+    if (!intent.removalAuditId || generation?.auditId !== intent.removalAuditId)
+      throw new Error('Effect removal generation superseded');
+  }
   // Lock waits may consume the lease. Re-check database wall clock after ALL
   // scope checks so a worker cannot leave this guard with an expired token.
   const live = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM repository_local_effect_intents WHERE id=${id}::uuid AND "leaseUntil">clock_timestamp()`;

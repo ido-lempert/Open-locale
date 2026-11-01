@@ -138,7 +138,8 @@ add languages, manage keys and translations, export a file.
   stale-token/expiry/timeout contention rejects success. Due retention still attempts after effect-step failure,with independent flags
   and original per-process cadence/drain. Manual summary adds aggregate independent/both channel checkpoint counts,
   explicitly not receiver receipts. Shutdown during in-flight effect prevents newly due retention afterward;
-  actual held-socket/terminal-row lifecycle verified. See reviews0134-0188.
+  actual held-socket/terminal-row lifecycle verified. Removal effects now bind durable audit-UUID generation,blocking recreate/remove
+  absence ABA;legacy unbound removals fail closed. See reviews0134-0189.
 
 ## Phase 3 - advanced
 

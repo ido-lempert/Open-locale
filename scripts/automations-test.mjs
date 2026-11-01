@@ -275,7 +275,8 @@ try {
   await prisma.$executeRaw`DELETE FROM repository_automation_rule_checkpoints WHERE "intentId"=${repoIntent.id}::uuid`;await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "automationRuleIds"=NULL WHERE id=${repoIntent.id}::uuid`;
   await prisma.automationRule.update({where:{id:summaryRule.id},data:{action:'notify',config:{message:'Failed repository notification'}}});let failedRepo=false;try{await fireRepositoryAutomation(prisma,summaryService,repoIntent);}catch{failedRepo=true;}
   check('repository automation adapter propagates failed rule summary',failedRepo);
-  await prisma.translation.delete({where:{keyId_localeCode:{keyId:summaryKey.id,localeCode:'en'}}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{operation:'remove-locale-value',value:null,translationRowId:null,translationVersion:null}});
+  await prisma.repositoryRemovalGeneration.create({data:{projectId:summaryProject.id,keyId:summaryKey.id,locale:'en',auditId:summaryKey.id}});
+  await prisma.translation.delete({where:{keyId_localeCode:{keyId:summaryKey.id,localeCode:'en'}}});await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{operation:'remove-locale-value',value:null,translationRowId:null,translationVersion:null,removalAuditId:summaryKey.id}});
   const removalSummary=await fireRepositoryAutomation(prisma,summaryService,repoIntent);
   check('repository locale removal does not invent value automation trigger',removalSummary.skipped&&removalSummary.matched===0);
   await prisma.$executeRaw`DELETE FROM repository_automation_rule_checkpoints WHERE "intentId"=${repoIntent.id}::uuid`;await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "automationRuleIds"=NULL WHERE id=${repoIntent.id}::uuid`;

@@ -67,7 +67,7 @@ export async function writeExistingLocalValues(
       const snapshot = JSON.parse(JSON.stringify({ row, history }));
       if (Buffer.byteLength(JSON.stringify(snapshot)) > 512 * 1024)
         throw new RepositoryLocalError('unsupported', 'Deletion audit bytes exceed bounds');
-      await tx.translationDeletionAudit.create({
+      const deletionAudit = await tx.translationDeletionAudit.create({
         data: {
           projectId: expected.projectId,
           keyId: key.keyId,
@@ -76,6 +76,11 @@ export async function writeExistingLocalValues(
           actorId,
           snapshot,
         },
+      });
+      await tx.repositoryRemovalGeneration.upsert({
+        where: { projectId_keyId_locale: { projectId: expected.projectId, keyId: key.keyId, locale: expected.locale } },
+        create: { projectId: expected.projectId, keyId: key.keyId, locale: expected.locale, auditId: deletionAudit.id },
+        update: { auditId: deletionAudit.id },
       });
       await tx.translation.delete({
         where: {

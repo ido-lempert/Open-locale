@@ -540,3 +540,10 @@ receipts or successful sync. Retention can remove these counts with terminal row
 If shutdown starts while an effect is in flight, the worker drains that effect
 but does not start a new due cleanup afterward. Cleanup already in flight is
 still awaited. This does not add a hard shutdown deadline or cancel a transport.
+
+New local removal intents bind a durable project/key/locale deletion generation to
+that transaction's deletion audit UUID. A recreate-then-remove cycle replaces the
+marker, so an older intent cannot become eligible merely because the value is
+absent again. Legacy removal intents without this marker fail closed. Marker and
+intent roll back with the deletion audit; project deletion cascades markers. No
+new remote write or exactly-once delivery guarantee is added.

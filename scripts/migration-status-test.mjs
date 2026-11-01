@@ -80,6 +80,8 @@ try {
   execFileSync(join(root, 'node_modules', '.bin', 'prisma'), ['migrate', 'deploy'], { env, stdio: 'pipe' });
   const retentionPreserved=(await db.query(`SELECT value,state,"finishedAt"::text AS "finishedAt" FROM repository_local_effect_intents WHERE id=$1`,[retentionIntentId])).rows[0];
   check('existing terminal intent payload and state preserved through retention index migration',retentionPreserved?.value==='preserved'&&retentionPreserved?.state==='completed'&&retentionPreserved?.finishedAt==='2020-01-01 00:00:00');
+  const legacyRemovalGeneration=(await db.query(`SELECT "removalAuditId" FROM repository_local_effect_intents WHERE id=$1`,[retentionIntentId])).rows[0];
+  check('removal generation migration does not invent legacy deletion identity',legacyRemovalGeneration?.removalAuditId===null&&(await db.query('SELECT count(*) AS n FROM repository_removal_generations')).rows[0].n==='0');
   const retainedCheckpoint=(await db.query(`SELECT "ruleRevision" FROM repository_automation_rule_checkpoints WHERE "intentId"=$1`,[retentionIntentId])).rows[0];
   check('existing successful rule checkpoint preserved through retention index migration',retainedCheckpoint?.ruleRevision===1);
   const retentionIndex=(await db.query(`SELECT indexdef FROM pg_indexes WHERE indexname='repository_local_effect_intents_finishedAt_id_idx'`)).rows[0]?.indexdef;

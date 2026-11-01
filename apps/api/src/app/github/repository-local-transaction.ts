@@ -73,11 +73,19 @@ export async function repositoryLocalTransaction(
       select: { keyId: true, rowId: true, version: true },
     });
     const translations = new Map(rows.map((row) => [row.keyId, row]));
+    const removalGenerations = await tx.repositoryRemovalGeneration.findMany({
+      where: { projectId: scope.projectId, keyId: { in: [...keys.values()] }, locale: scope.locale },
+      select: { keyId: true, auditId: true },
+    });
+    const removals = new Map(removalGenerations.map((row) => [row.keyId, row.auditId]));
+    if (plan.changes.some(change => change.action === 'remove-locale-value' && !removals.has(keys.get(change.key)!)))
+      throw new Error('Removal generation unavailable');
     await tx.repositoryLocalEffectIntent.createMany({
       data: plan.changes.map((change) => ({
         projectId: scope.projectId, targetId: scope.targetId,
         actorId: scope.actorId, keyId: keys.get(change.key)!,
         targetRevision: scope.targetRevision,
+        removalAuditId: change.action === 'remove-locale-value' ? removals.get(keys.get(change.key)!)! : null,
         translationRowId: translations.get(keys.get(change.key)!)?.rowId ?? null,
         translationVersion: translations.get(keys.get(change.key)!)?.version ?? null,
         keyName: change.key, branchId: scope.branchId, branch: scope.branch,

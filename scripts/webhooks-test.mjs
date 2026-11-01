@@ -235,7 +235,9 @@ try {
   await prisma.repositoryLocalEffectIntent.update({where:{id:intent.id},data:{state:'completed',finishedAt:new Date(),leaseToken:null,leaseUntil:null}});
   await prisma.repositorySyncTarget.update({where:{id:target.id},data:{revision:target.revision}});
   await prisma.translation.delete({where:{keyId_localeCode:{keyId:key.id,localeCode:'en'}}});
-  const removalIntent=await prisma.repositoryLocalEffectIntent.create({data:{...intentData,operation:'remove-locale-value',value:null,translationRowId:null,translationVersion:null}});
+  const removalAuditId=key.id;
+  await prisma.repositoryRemovalGeneration.create({data:{projectId:intentData.projectId,keyId:key.id,locale:'en',auditId:removalAuditId}});
+  const removalIntent=await prisma.repositoryLocalEffectIntent.create({data:{...intentData,operation:'remove-locale-value',value:null,translationRowId:null,translationVersion:null,removalAuditId}});
   await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "leaseUntil"=clock_timestamp()+INTERVAL '60 seconds' WHERE id=${removalIntent.id}::uuid`;
   await deliverRepositoryWebhook(prisma,service,removalIntent);const removedPayload=JSON.parse(received.at(-1).body);
   check('repository removal emits distinct event and null value',received.at(-1).event==='translation.removed'&&removedPayload.effectId===removalIntent.id&&removedPayload.value===null&&removedPayload.operation==='remove-locale-value');
