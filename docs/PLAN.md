@@ -116,7 +116,8 @@ add languages, manage keys and translations, export a file.
   crash gap remains. Rule checkpoint writers lock intent before evaluating deadline/token under
   contention. Both channel checkpoints also lock before deadline/token evaluation under
   contention. First automation dispatch freezes eligible rule IDs; new rules excluded on
-  retry, configuration remains current. See reviews0134-0170.
+  retry, configuration remains current. Rule manifest cap1000/UUID uniqueness enforced; empty selection stays empty.
+  See reviews0134-0171.
 
 ## Phase 3 - advanced
 

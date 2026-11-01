@@ -2,6 +2,7 @@ import type { PrismaClient, RepositoryLocalEffectIntent } from '@prisma/client';
 import type { AutomationsService } from '../automations/automations.service';
 import { validateRepositoryEffect } from './repository-effect-eligibility';
 import { checkpointRepositoryRule } from './repository-rule-checkpoint';
+import { parseRepositoryRuleIds, REPOSITORY_RULE_CAP } from './repository-rule-manifest';
 
 // Internal adapter only. No worker/public execution or channel checkpoint here.
 // Existing automation service owns main/base-locale trigger bounds and current
@@ -22,20 +23,19 @@ export async function fireRepositoryAutomation(
     if (checked.operation !== 'set-value' || checked.automationRuleIds !== null) return checked;
     const rules = await tx.automationRule.findMany({
       where: { projectId: checked.projectId, trigger: 'translation.value', enabled: true },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { id: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { id: true }, take: REPOSITORY_RULE_CAP + 1,
     });
     return tx.repositoryLocalEffectIntent.update({ where: { id: checked.id },
-      data: { automationRuleIds: rules.map((rule) => rule.id) } });
+      data: { automationRuleIds: parseRepositoryRuleIds(rules.map((rule) => rule.id)) } });
   }, { isolationLevel: 'Serializable' });
   if (current.operation !== 'set-value')
     return { matched: 0, succeeded: 0, failed: 0, skipped: true };
-  if (!Array.isArray(current.automationRuleIds) || !current.automationRuleIds.every((id) => typeof id === 'string'))
-    throw new Error('Repository automation rule selection unavailable');
+  const ruleIds = parseRepositoryRuleIds(current.automationRuleIds);
   const result = await automations.fire(current.projectId, 'translation.value', {
     keyId: current.keyId, keyName: current.keyName, branchName: current.branch,
     localeCode: current.locale, actorId: current.actorId,
   }, {
-    ruleIds: current.automationRuleIds as string[],
+    ruleIds,
     beforeRule: async () => { await revalidate(); },
     // Intent-scoped successful rule checkpoint. An edited rule does not replay
     // an already handled logical intent. Revision retained for audit only.

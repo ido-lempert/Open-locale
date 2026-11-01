@@ -498,6 +498,28 @@ try {
   const repeated=await prisma.$transaction(tx=>checkpointRepositoryChannel(tx,repoIntent.id,owner.user.id,'webhook'));
   check('existing channel checkpoint cannot be overwritten',!repeated&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}})).webhookHandledAt.getTime()===checkpointed.webhookHandledAt.getTime());
   rmSync(channelBundle,{force:true});
+  await prisma.repositorySyncTarget.update({where:{id:repoTarget.id},data:{revision:1}});
+  await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{automationHandledAt:null,automationRuleIds:[]}});
+  const emptyBefore=await prisma.activityEvent.count({where:{projectId:summaryProject.id,action:'automation.run'}});
+  const emptyFrozen=await fireRepositoryAutomation(prisma,summaryService,repoIntent);
+  check('empty frozen manifest does not widen to existing rules',emptyFrozen.matched===0&&emptyFrozen.failed===0&&await prisma.activityEvent.count({where:{projectId:summaryProject.id,action:'automation.run'}})===emptyBefore);
+  for(const [name,manifest] of [['bad-shape',{ids:[summaryRule.id]}],['bad-id',['not-a-uuid']],['duplicate',[summaryRule.id,summaryRule.id.toUpperCase()]],['oversize',Array(1001).fill(summaryRule.id)]]) {
+    await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{automationRuleIds:manifest}});let denied=false;
+    try{await fireRepositoryAutomation(prisma,summaryService,repoIntent);}catch{denied=true;}
+    check('stored rule manifest '+name+' rejected before actual activity',denied&&await prisma.activityEvent.count({where:{projectId:summaryProject.id,action:'automation.run'}})===emptyBefore);
+  }
+  await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "automationRuleIds"=NULL WHERE id=${repoIntent.id}::uuid`;
+  await prisma.automationRule.updateMany({where:{projectId:summaryProject.id},data:{enabled:false}});
+  const frozenNone=await fireRepositoryAutomation(prisma,summaryService,repoIntent);
+  const lateEmpty=await prisma.automationRule.create({data:{projectId:summaryProject.id,name:'Late empty',trigger:'translation.value',action:'task.create',config:{title:'Late empty must not run'},creatorId:owner.user.id}});
+  const noneRetry=await fireRepositoryAutomation(prisma,summaryService,repoIntent);
+  check('first empty selection stays empty after actual new rule creation',frozenNone.matched===0&&noneRetry.matched===0&&JSON.stringify((await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}})).automationRuleIds)==='[]'&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Late empty must not run'}})===0);
+  await prisma.automationRule.delete({where:{id:lateEmpty.id}});
+  await prisma.automationRule.createMany({data:Array.from({length:1001},(_,i)=>({projectId:summaryProject.id,name:'Overflow '+i,trigger:'translation.value',action:'task.create',config:{title:'Overflow must not run'},creatorId:owner.user.id}))});
+  await prisma.$executeRaw`UPDATE repository_local_effect_intents SET "automationRuleIds"=NULL WHERE id=${repoIntent.id}::uuid`;let overflowDenied=false;
+  try{await fireRepositoryAutomation(prisma,summaryService,repoIntent);}catch{overflowDenied=true;}
+  check('actual1001 eligible rules reject selection without manifest or effects',overflowDenied&&(await prisma.repositoryLocalEffectIntent.findUnique({where:{id:repoIntent.id}})).automationRuleIds===null&&await prisma.task.count({where:{projectId:summaryProject.id,title:'Overflow must not run'}})===0);
+  await prisma.automationRule.deleteMany({where:{projectId:summaryProject.id,name:{startsWith:'Overflow '}}});
   // Fresh leased row for remaining direct-adapter scope checks.
   await prisma.repositoryLocalEffectIntent.update({where:{id:repoIntent.id},data:{state:'leased',finishedAt:null,leaseToken:owner.user.id,leaseUntil:new Date('2099-01-01')}});
   rmSync(stepBundle,{force:true});
