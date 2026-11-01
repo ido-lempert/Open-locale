@@ -104,8 +104,11 @@ export class LocalSyncPreviewService {
     if (user.via !== 'jwt') throw new ForbiddenException('Recovery preview requires a signed-in session');
     await this.projects.requireAdmin(user.userId, projectId);
     // One consistent diagnostic snapshot,not a lock/reservation/execution grant.
-    const plan = await this.prisma.$transaction(tx => inspectDeletionRecovery(tx, projectId, auditId), { isolationLevel: 'RepeatableRead' });
-    return { source: 'deletion-recovery-eligibility-preview', eligibleNow: plan.eligible,
+    const {plan,asOf} = await this.prisma.$transaction(async tx => {
+      const stamp = await tx.$queryRaw<{asOf:Date}[]>`SELECT transaction_timestamp() AS "asOf"`;
+      return {plan: await inspectDeletionRecovery(tx, projectId, auditId), asOf: stamp[0].asOf};
+    }, { isolationLevel: 'RepeatableRead' });
+    return { source: 'deletion-recovery-eligibility-preview', asOf, eligibleNow: plan.eligible,
       reason: plan.reason, canRestore: false, snapshotIncluded: false,
       historyReplay: false, reservationHeld: false };
   }

@@ -1,4 +1,4 @@
-export interface DeletionRecoveryPreview {source:'deletion-recovery-eligibility-preview';eligibleNow:boolean;reason:string;canRestore:false;snapshotIncluded:false;historyReplay:false;reservationHeld:false;}
+export interface DeletionRecoveryPreview {source:'deletion-recovery-eligibility-preview';asOf:string;eligibleNow:boolean;reason:string;canRestore:false;snapshotIncluded:false;historyReplay:false;reservationHeld:false;}
 export interface DeletionAuditPage {
  source:'local-deletion-audit-metadata';
  audits:{id:string;keyId:string;keyName:string;localeCode:string;actorId:string|null;createdAt:string}[];

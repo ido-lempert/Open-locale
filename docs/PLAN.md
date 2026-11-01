@@ -150,7 +150,8 @@ add languages, manage keys and translations, export a file.
   and deny stale success without duplicate history/activity. Internal recovery binds reviewed branch UUID and locks branch scope,denying
   key movement/deleted branch despite matching digest. Session-admin read-only recovery eligibility preview returns reason only without
   archived bytes/digest or authority;consistent snapshot,no reservation/restore mutation. Manual per-audit eligibility UI shows fixed current-only reasons,no reservation
-  or restore action,with stale-response/error/page clearing. See reviews0134-0201.
+  or restore action,with stale-response/error/page clearing. Eligibility uses explicit DB transaction snapshot timestamp in API/UI,not
+  an aging just-now claim. See reviews0134-0202.
 
 ## Phase 3 - advanced
 

@@ -559,7 +559,12 @@ try {
   check('recovery preview denies outsider',(await call(recoveryPreviewPath,{jwt:outsider.accessToken})).status===404);
   check('recovery preview denies API token',(await call(recoveryPreviewPath,{apiKey:token.token})).status===403);
   const publicRecoveryPreview=await call(recoveryPreviewPath,{jwt});
-  check('recovery preview exposes only eligibility no value digest scope or authority',publicRecoveryPreview.status===200&&publicRecoveryPreview.json.eligibleNow===true&&publicRecoveryPreview.json.reason==='current-flat-value-absence'&&Object.keys(publicRecoveryPreview.json).sort().join(',')==='canRestore,eligibleNow,historyReplay,reason,reservationHeld,snapshotIncluded,source'&&publicRecoveryPreview.json.canRestore===false&&publicRecoveryPreview.json.snapshotIncluded===false&&publicRecoveryPreview.json.historyReplay===false&&publicRecoveryPreview.json.reservationHeld===false&&!JSON.stringify(publicRecoveryPreview.json).includes('writer draft'));
+  check('recovery preview exposes only eligibility no value digest scope or authority',publicRecoveryPreview.status===200&&publicRecoveryPreview.json.eligibleNow===true&&publicRecoveryPreview.json.reason==='current-flat-value-absence'&&Object.keys(publicRecoveryPreview.json).sort().join(',')==='asOf,canRestore,eligibleNow,historyReplay,reason,reservationHeld,snapshotIncluded,source'&&publicRecoveryPreview.json.canRestore===false&&publicRecoveryPreview.json.snapshotIncluded===false&&publicRecoveryPreview.json.historyReplay===false&&publicRecoveryPreview.json.reservationHeld===false&&!JSON.stringify(publicRecoveryPreview.json).includes('writer draft'));
+  const previewStamp=new Date(publicRecoveryPreview.json.asOf).getTime();
+  const databaseClock=(await prisma.$queryRaw`SELECT clock_timestamp() AS now`)[0].now.getTime();
+  check('recovery preview includes current database snapshot timestamp',Number.isFinite(previewStamp)&&previewStamp<=databaseClock&&databaseClock-previewStamp<10000);
+  await new Promise(r=>setTimeout(r,20));
+  check('recovery preview refresh gets newer database snapshot timestamp',new Date((await call(recoveryPreviewPath,{jwt})).json.asOf).getTime()>previewStamp);
   check('recovery preview accepts current admin',(await call(recoveryPreviewPath,{jwt:admin.accessToken})).json.eligibleNow===true);
   const recoveryHeaders=await fetch(API+recoveryPreviewPath,{headers:{Authorization:'Bearer '+jwt}});check('recovery preview no-store header',recoveryHeaders.headers.get('cache-control')==='no-store');await recoveryHeaders.arrayBuffer();
   check('recovery preview unavailable audit has no cross project metadata',(await call(`/projects/${summaryOtherProject.id}/sync/deletion-audits/${audit.id}/recovery-preview`,{jwt})).json.reason==='audit-unavailable');

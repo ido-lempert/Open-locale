@@ -601,3 +601,7 @@ that eligibility stays valid. canRestore=false;no public restore mutation/UI.
 Audit cards now offer an explicit read-only eligibility check with fixed plain-language
 reasons,current-only/no-reservation warning and no restore action. Page refresh or
 navigation clears previous eligibility;failed checks hide stale results and raw errors.
+
+Eligibility preview includes the database transaction snapshot timestamp (`asOf`);
+the card shows that UTC timestamp instead of an aging "just now" claim. A new check
+gets a new snapshot,not a reservation or live status.
