@@ -717,3 +717,6 @@ Real PostgreSQL controls are recorded in review0226.
 
 The shared local writer captures its nested snapshot and changes at entry, keeping
 value/history/activity bound across async work; PostgreSQL controls in review0227.
+
+Internal recovery execution has typed400/409 denial handling,including actual
+PostgreSQL lock/serialization tests;unknown faults remain faults. See review0228.

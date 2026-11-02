@@ -1099,12 +1099,57 @@ try {
     ['unavailable',adminPrincipal,project.id,target.id,audit.id,{...internalReview,reviewAvailable:false}],
     ['stale-key',adminPrincipal,project.id,target.id,audit.id,{...internalReview,recovery:{...internalReview.recovery,expectedKeyRevision:internalReview.recovery.expectedKeyRevision+1}}],
   ]){
-    let denied=false;try{await recoveryAuthService.executeRepositoryRecovery(principal,pid,tid,aid,review);}catch(e){denied=label==='token'?e.getStatus?.()===403:label==='stale-key'?e.name==='RepositoryLocalError':e.getStatus?.()===409;}
+    let denied=false;try{await recoveryAuthService.executeRepositoryRecovery(principal,pid,tid,aid,review);}catch(e){denied=label==='token'?e.getStatus?.()===403:e.getStatus?.()===409;}
     check('internal recovery execution service denies '+label+' without persistent effects',denied&&JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(serviceExecutionCounts));
   }
   const revokedExecutionProjects={requireAdmin:async(...args)=>{await recoveryProjects.requireAdmin(...args);await prisma.teamMember.update({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},data:{role:'MEMBER'}});}};
-  let executionRevoked=false;try{await new AuditPageService(prisma,revokedExecutionProjects,{}).executeRepositoryRecovery(adminPrincipal,project.id,target.id,audit.id,internalReview);}catch(e){executionRevoked=e.name==='RepositoryLocalError';}
+  let executionRevoked=false;try{await new AuditPageService(prisma,revokedExecutionProjects,{}).executeRepositoryRecovery(adminPrincipal,project.id,target.id,audit.id,internalReview);}catch(e){executionRevoked=e.getStatus?.()===409;}
   check('internal recovery service rechecks committed admin revocation inside write transaction',executionRevoked&&JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(serviceExecutionCounts));await prisma.teamMember.update({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},data:{role:'ADMIN'}});
+  for(const kind of ['unsupported','backlog']){
+    const malformedServiceReview=structuredClone(internalReview);
+    let limitDenied=false;
+    const limitDb={$transaction:async(fn,options)=>prisma.$transaction(async tx=>{
+      if(kind==='backlog')await tx.repositoryLocalEffectIntent.create({data:{projectId:project.id,targetId:target.id,actorId:admin.user.id,keyId:localKey.id,keyName:'budget-fixture',branchId:writeScope.branchId,branch:'main',locale:'en',operation:'set-value',value:'x'.repeat(8*1024*1024),draftContentDigest:'a'.repeat(64),previewFingerprint:'b'.repeat(64)}});
+      return fn(tx);
+    },options)};
+    if(kind==='unsupported')malformedServiceReview.recovery.expectedKeyRevision=0;
+    try{await new AuditPageService(limitDb,recoveryProjects,{}).executeRepositoryRecovery(adminPrincipal,project.id,target.id,audit.id,malformedServiceReview);}catch(e){limitDenied=e.getStatus?.()===(kind==='unsupported'?400:409);}
+    check('recovery execution maps actual '+kind+' domain denial without persistent effects',limitDenied&&JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(serviceExecutionCounts));
+  }
+  for(const failure of ['lock-timeout','serialization']){
+    let serviceLockReady,serviceLockRelease;const serviceLockHeld=new Promise(r=>serviceLockReady=r),serviceLockGate=new Promise(r=>serviceLockRelease=r);
+    let serviceLockBlocker;
+    if(failure==='lock-timeout'){
+      serviceLockBlocker=prisma.$transaction(async tx=>{await tx.$queryRaw`SELECT id FROM projects WHERE id=${project.id}::uuid FOR UPDATE`;serviceLockReady();await serviceLockGate;},{timeout:10000});await serviceLockHeld;
+    }
+    let serviceDbError,serviceTxnCount=0,serviceSerialized=false;
+    const originalServiceProject=await prisma.project.findUnique({where:{id:project.id}});
+    const conflictDb={$transaction:async(fn,options)=>{serviceTxnCount++;return prisma.$transaction(tx=>fn(new Proxy(tx,{get(inner,key){
+      if(key==='$queryRaw')return async(...args)=>{
+        try{const rows=await inner.$queryRaw(...args);
+          if(failure==='serialization'&&!serviceSerialized&&args[0].join('?').includes('SHOW transaction_isolation')){
+            await inner.$queryRaw`SELECT id FROM projects WHERE id=${project.id}::uuid`;
+            await prisma.project.update({where:{id:project.id},data:{description:'actual serialization interleave'}});serviceSerialized=true;
+          }return rows;
+        }catch(e){serviceDbError=e;throw e;}
+      };
+      const value=Reflect.get(inner,key);return typeof value==='function'?value.bind(inner):value;
+    }})),options);}};
+    let serviceConflictStatus,serviceConflictBody;
+    try{await new AuditPageService(conflictDb,recoveryProjects,{}).executeRepositoryRecovery(adminPrincipal,project.id,target.id,audit.id,internalReview);}catch(e){serviceConflictStatus=e.getStatus?.();serviceConflictBody=e.message;}
+    finally{if(serviceLockBlocker){serviceLockRelease();await serviceLockBlocker;}if(serviceSerialized)await prisma.project.update({where:{id:project.id},data:{description:originalServiceProject.description}});}
+    check('recovery execution maps actual PostgreSQL '+failure+' once without partial recovery',serviceConflictStatus===409&&serviceConflictBody===(failure==='lock-timeout'?'Recovery is busy; review again':'Concurrent recovery change; review again')&&serviceDbError instanceof Prisma.PrismaClientKnownRequestError&&serviceDbError.code==='P2010'&&serviceDbError.meta?.code===(failure==='lock-timeout'?'55P03':'40001')&&serviceTxnCount===1&&JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(serviceExecutionCounts));
+  }
+  for(const [label,error,expectedStatus] of [
+    ['typed P2034',new Prisma.PrismaClientKnownRequestError('private serialization details',{code:'P2034',clientVersion:Prisma.prismaVersion.client}),409],
+    ['untyped code lookalike',Object.assign(new Error('private lookalike details'),{code:'P2010',meta:{code:'55P03'}}),undefined],
+    ['unrelated Prisma code',new Prisma.PrismaClientKnownRequestError('private other storage details',{code:'P2010',clientVersion:Prisma.prismaVersion.client,meta:{code:'23505'}}),undefined],
+  ]){
+    let mappedError,classificationTransactions=0;
+    const classificationDb={$transaction:async()=>{classificationTransactions++;throw error;}};
+    try{await new AuditPageService(classificationDb,recoveryProjects,{}).executeRepositoryRecovery(adminPrincipal,project.id,target.id,audit.id,internalReview);}catch(e){mappedError=e;}
+    check('recovery execution exact classification '+label,classificationTransactions===1&&(expectedStatus?mappedError.getStatus?.()===expectedStatus&&!mappedError.message.includes('private'):mappedError===error)&&JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(serviceExecutionCounts));
+  }
   const mutableServiceReview=structuredClone(internalReview);let capturedServiceIntent,capturedServiceResult;
   const serviceCaptureProjects={requireAdmin:async(...args)=>{await recoveryProjects.requireAdmin(...args);mutableServiceReview.recovery.expectedKeyRevision=0;mutableServiceReview.recovery.actorId=outsider.user.id;mutableServiceReview.repository.targetRevision=999;mutableServiceReview.repository.actorId=outsider.user.id;}};
   const serviceCaptureDb={$transaction:async(fn,options)=>prisma.$transaction(async tx=>{capturedServiceResult=await fn(tx);capturedServiceIntent=await tx.repositoryLocalEffectIntent.findFirst({where:{translationRowId:capturedServiceResult.rowId}});throw new Error('rollback service capture');},options)};
@@ -1123,7 +1168,7 @@ try {
   const serviceResult=await recoveryAuthService.executeRepositoryRecovery(adminPrincipal,project.id,target.id,serviceAudit.id,serviceReview);
   const serviceIntent=await prisma.repositoryLocalEffectIntent.findFirst({where:{keyId:serviceKey.id}});
   check('authenticated internal recovery service commits one value and intent with reviewed session actor',serviceResult.restoredValues===1&&serviceResult.pendingEffectIntents===1&&serviceIntent.actorId===admin.user.id&&serviceIntent.translationRowId===serviceResult.rowId&&serviceIntent.value==='Service recovered value'&&await prisma.translationHistory.count({where:{keyId:serviceKey.id,changedById:admin.user.id}})===1&&await prisma.translationDeletionAudit.count({where:{id:serviceAudit.id}})===1);
-  let serviceReplay=false;try{await recoveryAuthService.executeRepositoryRecovery(adminPrincipal,project.id,target.id,serviceAudit.id,serviceReview);}catch(e){serviceReplay=e.name==='RepositoryLocalError';}
+  let serviceReplay=false;try{await recoveryAuthService.executeRepositoryRecovery(adminPrincipal,project.id,target.id,serviceAudit.id,serviceReview);}catch(e){serviceReplay=e.getStatus?.()===409;}
   check('authenticated recovery service replay never duplicates committed effects',serviceReplay&&await prisma.repositoryLocalEffectIntent.count({where:{keyId:serviceKey.id}})===1&&await prisma.translationHistory.count({where:{keyId:serviceKey.id}})===1);
   await prisma.repositoryLocalEffectIntent.deleteMany({where:{keyId:serviceKey.id}});await prisma.key.delete({where:{id:serviceKey.id}});await prisma.translationDeletionAudit.delete({where:{id:serviceAudit.id}});await prisma.activityEvent.deleteMany({where:{projectId:project.id,keyName:serviceKey.name}});
   const projectionBaseline=await prisma.repositorySyncBaseline.findUnique({where:{targetId:target.id}});

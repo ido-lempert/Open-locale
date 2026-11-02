@@ -232,3 +232,8 @@ Shared local writer now owns nested reviewed snapshot and change inputs before
 any await. Actual PostgreSQL guard/upsert-boundary mutation tests preserve exact
 locale/value/history/activity and prove rollback invariants. No new API. See
 review0227.
+
+Internal recovery execution now maps typed domain limits/conflicts and exact
+Prisma serialization/lock-timeout errors to explicit400/409 without retry. Actual
+PostgreSQL55P03/40001 cases prove one attempt and unchanged recovery effects;
+unknown faults remain faults. No public restore route. See review0228.

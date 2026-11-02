@@ -22,6 +22,8 @@ import {
   MaxLength,
 } from 'class-validator';
 import { createHash } from 'node:crypto';
+import { Prisma } from '@prisma/client';
+import { RepositoryLocalError } from './repository-local-error';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
 import { ProjectsModule } from '../projects/projects.module';
@@ -162,10 +164,27 @@ export class LocalSyncPreviewService {
       throw new ConflictException('Recovery review scope changed; review again');
     const actorId = user.userId;
     await this.projects.requireAdmin(actorId, projectId);
-    return this.prisma.$transaction(
-      tx => deletionRecoveryTransaction(tx, { ...recovery, actorId }, { ...repository, actorId }),
-      { isolationLevel: 'Serializable' },
-    );
+    try {
+      return await this.prisma.$transaction(
+        tx => deletionRecoveryTransaction(tx, { ...recovery, actorId }, { ...repository, actorId }),
+        { isolationLevel: 'Serializable' },
+      );
+    } catch (error) {
+      if (error instanceof RepositoryLocalError) {
+        if (error.kind === 'unsupported') throw new BadRequestException('Reviewed recovery is unsupported or exceeds local limits');
+        throw new ConflictException(error.kind === 'backlog'
+          ? 'Recovery effect backlog is full; review again after queued work is handled'
+          : 'Recovery scope changed; review again');
+      }
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2010' && error.meta?.['code'] === '55P03')
+          throw new ConflictException('Recovery is busy; review again');
+        if (error.code === 'P2034' || (error.code === 'P2010' && error.meta?.['code'] === '40001'))
+          throw new ConflictException('Concurrent recovery change; review again');
+      }
+      // Unknown storage/programming failures remain faults. Never refresh/retry.
+      throw error;
+    }
   }
   async previewDeletionRecovery(user: AuthPrincipal, projectId: string, auditId: string) {
     if (user.via !== 'jwt') throw new ForbiddenException('Recovery preview requires a signed-in session');
