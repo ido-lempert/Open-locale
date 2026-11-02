@@ -306,3 +306,7 @@ fences. No automatic mutation. See review0242.
 Explicit visible focus outlines verified for recovery confirmation/outcome;actual
 keyboard-only Tab/Enter cancel/prepare path tested with unchanged value/queue on
 cancel. Addresses review0242 visual finding. See review0243.
+
+Private recovery cleanup extends to accepted baseline/local apply before await.
+Unit success/failure/guards and actual held-baseline acceptance prove no retained
+prepared review. Comparison baseline version+1 is not accepted sync. See review0244.

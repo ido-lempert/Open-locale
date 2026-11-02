@@ -598,3 +598,12 @@ describe('local recovery confirmation keyboard landing',()=>{
  it('rapid cancel fences obsolete prepare focus',async()=>{const {c,focus,querySelector}=reviewed();c.prepareLocalRecovery();c.cancelLocalRecovery();await new Promise(r=>setTimeout(r,5));expect(focus).toHaveBeenCalledTimes(1);expect(querySelector).toHaveBeenCalledWith('[name=auditRecoverPrepare]');});
  it('scope clearing or replacement audit prevents delayed focus',async()=>{for(const action of ['clear','replace']){const {c,focus}=reviewed();c.prepareLocalRecovery();if(action==='clear')c.changeReviewTarget('');else c.recoveryValue.set({...c.recoveryValue()!,auditId:'other'});await new Promise(r=>setTimeout(r,5));expect(focus).not.toHaveBeenCalled();}});
 });
+
+
+describe('local writes clear private recovery before awaiting',()=>{
+ function reviewed(mock:Record<string,unknown>){const c=setup(mock);c.reviewTargetId.set('t');c.recoveryValue.set({auditId:'a',targetId:'t',confirming:true,recoveryInput:{confirmation:'recover-local-value'},result:{value:'private'}} as never);c.recoveryPreview.set({auditId:'a'} as never);c.snapshot.set({targetId:'t',targetRevision:1,remoteSha:'sha',contentDigest:'digest'} as never);c.baselineView.set({targetId:'t',baseline:{version:1}} as never);c.confirmBaseline.set(true);c.previewResult.set({targetId:'t'} as never);c.draft.set({targetId:'t',localChangePlan:{changes:[{}]}} as never);c.confirmApply.set(true);return c;}
+ for(const action of ['baseline','apply']){
+  it(action+' clears private review before success or unknown failure',async()=>{for(const fail of [false,true]){let finish!:(v:unknown)=>void,reject!:(e:Error)=>void;const send=()=>new Promise((r,j)=>{finish=r;reject=j;});const c=reviewed({acceptRepositoryBaseline:send,applyRepositoryLocal:send});const request=action==='baseline'?c.acceptBaseline(target):c.apply(target);expect(c.recoveryValue()).toBeNull();expect(c.recoveryPreview()).toBeNull();expect(c.reviewTargetId()).toBe('');if(fail)reject(new Error('fixture'));else finish({baseline:{version:2},updatedValues:1,removedValues:0,pendingEffectIntents:1});await request;expect(c.recoveryValue()).toBeNull();}});
+ }
+ it('unconfirmed writes do not clear an unrelated review',async()=>{const send=jest.fn();const c=reviewed({acceptRepositoryBaseline:send,applyRepositoryLocal:send});c.confirmBaseline.set(false);c.confirmApply.set(false);await c.acceptBaseline(target);await c.apply(target);expect(send).not.toHaveBeenCalled();expect(c.recoveryValue()).not.toBeNull();});
+});

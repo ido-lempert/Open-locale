@@ -891,6 +891,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     const p = this.previewResult(), d = this.draft();
     if (this.busy() || !this.confirmApply() || !d || p?.targetId !== t.id || d.targetId !== t.id || !d.localChangePlan.changes.length) return;
     const generation = ++this.generation;
+    this.clearArchivedRecoveryReview();
     const projectId = this.projectId;
     const input = { expectedRevision: d.targetRevision, expectedFingerprint: d.previewFingerprint,
       expectedDraftDigest: d.contentDigest, choices: Object.fromEntries(this.choices()) };
@@ -1388,6 +1389,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     )
       return;
     const generation = ++this.generation;
+    this.clearArchivedRecoveryReview();
     this.busy.set(true);
     this.error.set('');
     this.message.set('');

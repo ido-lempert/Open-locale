@@ -808,3 +808,9 @@ confirmation state so old review callbacks cannot steal focus. See review0242.
 Recovery confirmation and outcome now show explicit visible keyboard-focus outlines.
 Actual browser Tab/Enter traversal verifies Confirm then Cancel,return to Prepare
 and no recovery effects from keyboard cancel. See review0243.
+
+Accepted comparison-baseline and local-apply requests now clear private archived
+review/prepared recovery before awaiting results,including unknown failures. Fresh
+review required after either local write. Actual held baseline POST verifies this
+alongside version+1 and no locale/history/queue mutation;local-apply cleanup is unit
+covered. Baseline acceptance remains comparison-only. See review0244.
