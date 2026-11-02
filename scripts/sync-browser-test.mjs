@@ -724,6 +724,15 @@ try {
   const lateReportResponse=page.waitForResponse(r=>r.url().includes('/reports/quality?branch=held-report-branch'));releaseReport();await lateReportResponse;await new Promise(r=>setTimeout(r,100));page.off('request',holdReport);await page.setRequestInterception(false);
   check('late held branch pair cannot overwrite newest actual report',await page.$eval('[name=reportBranch]',e=>e.value==='main')&&(await page.content()).includes('keys on main.')&&!(await page.content()).includes('keys on held-report-branch.')&&!(await page.content()).includes('on held-report-branch.'));
   await page.setViewport({width:480,height:900});await page.screenshot({path:'/downloads/reports-branch-fence-narrow.png'});
+  let usageHeld=false,releaseUsage;const usageGate=new Promise(r=>releaseUsage=r);await page.setRequestInterception(true);
+  const holdUsage=async request=>{if(request.url().includes(`/projects/${applyProject.id}/reports/usage`)){usageHeld=true;await usageGate;}return request.continue();};page.on('request',holdUsage);
+  await page.goto(`${WEB}/projects/${applyProject.id}/reports`,{waitUntil:'domcontentloaded'});await page.waitForSelector('.progress-table');for(let n=0;n<50&&!usageHeld;n++)await new Promise(r=>setTimeout(r,50));if(!usageHeld)throw new Error('project usage request not held');
+  await page.evaluate(id=>{history.pushState({},'',`/projects/${id}/reports`);window.dispatchEvent(new PopStateEvent('popstate'));},second.id);
+  await page.waitForFunction(()=>document.body.textContent.includes('0 keys on main.')&&document.querySelectorAll('.usage-table').length===2);
+  const newProjectUsage=await page.$eval('main',e=>e.textContent);check('reused report route loads new project and clears old progress',newProjectUsage.includes('0 keys on main.')&&!newProjectUsage.includes('1 keys on main.'));
+  const oldUsageResponse=page.waitForResponse(r=>r.url().includes(`/projects/${applyProject.id}/reports/usage`));releaseUsage();await oldUsageResponse;await new Promise(r=>setTimeout(r,100));page.off('request',holdUsage);await page.setRequestInterception(false);
+  check('late old project usage cannot overwrite new report dashboards',await page.$eval('main',(e,text)=>e.textContent===text,newProjectUsage)&&await page.$eval('a.back',(e,id)=>e.getAttribute('href')===`/projects/${id}`,second.id));
+  await page.screenshot({path:'/downloads/reports-project-fence-narrow.png'});
   await page.evaluate(t=>localStorage.setItem('ol_token',t),member.accessToken);
   await page.goto(`${WEB}/projects/${project.id}/sync`,{waitUntil:'networkidle0'});await page.waitForSelector('textarea[name=syncBaseline]');
   await set('syncSha','a'.repeat(40));await set('syncBaseline','{}');await set('syncRemote','{}');await page.click('button[name=syncPreview]');await page.waitForSelector('[role=alert]');

@@ -334,3 +334,7 @@ review. No automatic requests. See review0250.
 Report branch switching now clears old progress/quality and ignores superseded
 success/error. Both requests capture the same branch and publish a complete pair;
 not one database snapshot. Actual held-response browser switch verified. See0252.
+
+Reports now subscribe to reused project-route changes,clear all previous project
+figures and fence late branch-list/usage/tasks responses. Separate branch-request
+fence retained. Actual same-component navigation/held old usage verified. See0253.

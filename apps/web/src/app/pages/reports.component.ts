@@ -1,4 +1,5 @@
 import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, UsageReport } from '../api.service';
@@ -119,18 +120,27 @@ export class ReportsComponent implements OnInit, OnDestroy {
 
   constructor(private route: ActivatedRoute, private api: ApiService) {}
 
-  async ngOnInit() {
-    this.projectId = this.route.snapshot.paramMap.get('id') ?? '';
-    this.branches.set(await this.api.listBranches(this.projectId).catch(() => []));
-    await this.fetch();
-    await this.ngOnInitDashboards();
+  private projectGeneration=0;
+  private subscription?: Subscription;
+  ngOnInit() {
+    this.subscription=this.route.paramMap.subscribe(params=>{void this.loadProject(params.get('id')??'');});
+  }
+  async loadProject(projectId:string) {
+    if(this.destroyed)return;
+    const scope=++this.projectGeneration;++this.generation;this.projectId=projectId;
+    this.branch.set('main');this.branches.set([]);this.report.set(null);this.quality.set(null);
+    this.usage.set(null);this.taskReport.set(null);this.statusColumns.set([]);this.error.set('');
+    const branches=await this.api.listBranches(projectId).catch(()=>[]);
+    if(this.destroyed||scope!==this.projectGeneration)return;
+    this.branches.set(branches);
+    await Promise.all([this.fetch(),this.ngOnInitDashboards()]);
   }
 
   actionRows(u: UsageReport) {
     return Object.entries(u.byAction).sort((a, b) => b[1] - a[1]).map(([action, count]) => ({ action, count }));
   }
 
-  ngOnDestroy() { this.destroyed=true;++this.generation; }
+  ngOnDestroy() { this.destroyed=true;++this.generation;++this.projectGeneration;this.subscription?.unsubscribe(); }
 
   async fetch() {
     if(this.destroyed)return;
@@ -146,7 +156,10 @@ export class ReportsComponent implements OnInit, OnDestroy {
   }
 
   async ngOnInitDashboards() {
-    this.usage.set(await this.api.getUsage(this.projectId).catch(() => null));
-    this.taskReport.set(await this.api.getTaskReport(this.projectId).catch(() => null));
+    if(this.destroyed)return;
+    const scope=this.projectGeneration,projectId=this.projectId;
+    const [usage,tasks]=await Promise.all([this.api.getUsage(projectId).catch(()=>null),this.api.getTaskReport(projectId).catch(()=>null)]);
+    if(this.destroyed||scope!==this.projectGeneration)return;
+    this.usage.set(usage);this.taskReport.set(tasks);
   }
 }

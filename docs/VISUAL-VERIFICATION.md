@@ -68,3 +68,8 @@ then releases older branch. Final480x900image inspected:mainselected/progressand
 qualitymain,usage/tasks visible. Existing table horizontal scrolling retained.
 Browser205checks includes oldfigurescleared/newpairnot overwritten;image alone
 is not late-response proof.
+
+Slice187 same-component report navigation holds old project's actual usage request,
+loads empty secondproject,then releases old response. Final480x900image inspected:
+0keys/main/quality/usage/tasks,no oldfigures,Editorlink newproject. Browser207checks
+prove late response does not replace new figures. Layout/table scrolling unchanged.
