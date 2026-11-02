@@ -28,7 +28,7 @@ external delivery,exactly-once or memory-erasure claim.
 Browser192->196(+4empty marker/empty recovery/exactUTF8limit/narrow bounds),initial
 and finalRC0. Uncached web109/7,API248/30,both builds,reaper4,docs4/138routesRC0.
 43unique integration/config legs completed green;individual/completed-outerRC0.
-Sync644. Existing~555kBvs500kB web warning persists. Two120scombined-call timeouts:
+Sync644. Existing web budget warning persists:558.81kBtotal vs500kBbudget. Two120scombined-call timeouts:
 first c completed9green but outerRCunverified,d automation started/killed;second
 h sync644green,c8green then incontext-edit started/killed. Subsequent runs correctly
 rejected orphanPGsocket startup with zero checksRC1. Verified lockPIDs5009/8827
