@@ -38,3 +38,11 @@ cannot be reported green, even if a dependency leaves an unresolved stop promise
 The translation-memory HTTP fixture similarly accepts `TM_TEST_PG_PORT` when its
 default55442 is occupied. This changes only its isolated database port, not the
 application API or test assertions. Do not stop another process to free a port.
+
+Slice182 extends the repository recovery browser fixture with a real empty-string
+archive review/recovery (fresh UNVERIFIED empty value,one history and intent),then
+an independent32768UTF8byte Hebrew archive review. At480x900the exact-limit value
+stays in its bounded scroll box with Prepare/Hide visible and no horizontal
+page overflow. These are local fixtures,not external repository writes. The
+fixture resets local effects between cases so later escaped-markup recovery
+assertions still run independently. No app/server behavior changed.
