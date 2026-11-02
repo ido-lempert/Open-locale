@@ -1,3 +1,4 @@
+import { reviewedRecoveryInput } from './recovery-input';
 import { Component, ElementRef, OnDestroy, OnInit, ViewChild, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -1013,11 +1014,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
       // Keep only the exact fields needed for this explicit local recovery,not raw response scopes.
       const result:DeletionRecoveryValueReview={source:'deletion-recovery-value-review',asOf:raw.asOf,reviewAvailable:available,reason:raw.reviewAvailable===true&&!available?'invalid-review-response':raw.reason,value:available?raw.value:null,maxValueBytes:32768,canRestore:false,snapshotIncluded:false,historyReplay:false,reservationHeld:false};
       const targetLabel=target?`${target.localBranch} / ${target.locale} / ${target.owner}/${target.repo} / ${target.path}`:undefined;
-      let recoveryInput:LocalRecoveryInput|undefined;
-      if(target && available && 'recovery' in raw && 'repository' in raw && raw.recovery && raw.repository){
-        const r=raw.recovery, repo=raw.repository;
-        recoveryInput={confirmation:'recover-local-value',expectedBranchId:r.expectedBranchId,expectedKeyUpdatedAt:r.expectedKeyUpdatedAt,expectedKeyRevision:r.expectedKeyRevision,expectedValueDigest:r.expectedValueDigest,targetRevision:repo.targetRevision,branch:repo.branch,locale:repo.locale,baselineVersion:repo.baselineVersion,baselineSha:repo.baselineSha,baselineDigest:repo.baselineDigest};
-      }
+      const recoveryInput=target&&available?reviewedRecoveryInput(raw,target):undefined;
       if(generation===this.generation){this.recoveryValue.set({auditId,result,targetLabel,targetId:target?.id,recoveryInput});this.landValueFocus(auditId,generation,true);}
     } catch {
       if(generation===this.generation)this.error.set('Could not review archived value. No value was restored. Review again to retry.');

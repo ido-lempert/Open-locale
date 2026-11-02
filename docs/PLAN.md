@@ -322,3 +322,7 @@ and browser rendering/control denial tested. No server change. See review0246.
 Client value review now enforces literal availability,string type and32768UTF8byte
 bound before retaining private value/bindings. Exact multibyte/empty and malformed/
 oversize tests verified,server unchanged. See review0247.
+
+Recovery preparation now requires complete typed bindings matching selected target
+ID/revision/branch/locale. Malformed bindings leave a valid archived value read-only,
+without Prepare/Confirm. Server authority/freshness checks unchanged. See review0249.
