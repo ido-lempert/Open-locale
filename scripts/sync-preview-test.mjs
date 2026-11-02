@@ -1237,6 +1237,17 @@ try {
     check('local recovery HTTP denies stale '+field,(await call(httpRecoverPath,{jwt:admin.accessToken,method:'POST',body:{...httpRecoverInput,[field]:value}})).status===409);
   }
   check('local recovery HTTP all denials leave actual recovery counts unchanged',JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(httpRecoveryBefore));
+  let httpBusyReady,httpBusyRelease;const httpBusyHeld=new Promise(r=>httpBusyReady=r),httpBusyGate=new Promise(r=>httpBusyRelease=r);
+  const httpBusyBlocker=prisma.$transaction(async tx=>{await tx.$queryRaw`SELECT id FROM projects WHERE id=${project.id}::uuid FOR UPDATE`;httpBusyReady();await httpBusyGate;},{timeout:10000});await httpBusyHeld;
+  let httpBusyResult;
+  try{httpBusyResult=await call(httpRecoverPath,{jwt:admin.accessToken,method:'POST',body:httpRecoverInput});}finally{httpBusyRelease();await httpBusyBlocker;}
+  check('local recovery HTTP actual project lock returns busy409 without partial writes',httpBusyResult.status===409&&httpBusyResult.json.message==='Recovery is busy; review again'&&JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(httpRecoveryBefore)&&!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:httpRecoveryKey.id,localeCode:'en'}}}));
+  await prisma.$executeRawUnsafe(`CREATE FUNCTION test_recovery_intent_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW."keyId"='${httpRecoveryKey.id}'::uuid THEN RAISE EXCEPTION 'private recovery intent fixture failure'; END IF; RETURN NEW; END $$`);
+  await prisma.$executeRawUnsafe('CREATE TRIGGER test_recovery_intent_fault BEFORE INSERT ON repository_local_effect_intents FOR EACH ROW EXECUTE FUNCTION test_recovery_intent_fault()');
+  let httpFaultResult;
+  try{httpFaultResult=await call(httpRecoverPath,{jwt:admin.accessToken,method:'POST',body:httpRecoverInput});}
+  finally{await prisma.$executeRawUnsafe('DROP TRIGGER test_recovery_intent_fault ON repository_local_effect_intents');await prisma.$executeRawUnsafe('DROP FUNCTION test_recovery_intent_fault()');}
+  check('local recovery HTTP actual intent fault500 hides storage details and rolls back all effects',httpFaultResult.status===500&&!JSON.stringify(httpFaultResult.json).includes('private recovery intent fixture')&&JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(httpRecoveryBefore)&&!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:httpRecoveryKey.id,localeCode:'en'}}})&&await prisma.repositoryRemovalGeneration.count({where:{keyId:httpRecoveryKey.id,auditId:httpRecoveryAudit.id}})===1);
   const httpRecovered=await call(httpRecoverPath,{jwt:admin.accessToken,method:'POST',body:{...httpRecoverInput,actorId:outsider.user.id,value:'forged caller value',projectId:summaryOtherProject.id}});
   const httpRecoveredRow=await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:httpRecoveryKey.id,localeCode:'en'}}});
   const httpRecoveredIntent=await prisma.repositoryLocalEffectIntent.findFirst({where:{keyId:httpRecoveryKey.id}});
@@ -1245,6 +1256,17 @@ try {
   const httpAfterRecovery=await recoveryCountsForComposition();
   check('local recovery HTTP replay409 never duplicates effects',(await call(httpRecoverPath,{jwt:admin.accessToken,method:'POST',body:httpRecoverInput})).status===409&&JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(httpAfterRecovery));
   await prisma.repositoryLocalEffectIntent.deleteMany({where:{keyId:httpRecoveryKey.id}});await prisma.key.delete({where:{id:httpRecoveryKey.id}});await prisma.translationDeletionAudit.delete({where:{id:httpRecoveryAudit.id}});await prisma.activityEvent.deleteMany({where:{projectId:project.id,keyName:httpRecoveryKey.name}});
+  const httpRaceKey=await prisma.key.create({data:{projectId:project.id,branchId:writeScope.branchId,name:'http-recovery-race'}});
+  const httpRaceAudit=await prisma.translationDeletionAudit.create({data:{projectId:project.id,keyId:httpRaceKey.id,keyName:httpRaceKey.name,localeCode:'en',snapshot:{row:{projectId:project.id,keyId:httpRaceKey.id,localeCode:'en',value:'HTTP race value'},history:[]}}});
+  await prisma.repositoryRemovalGeneration.create({data:{projectId:project.id,keyId:httpRaceKey.id,locale:'en',auditId:httpRaceAudit.id}});
+  const httpRacePath=httpRecoverPath.replace(httpRecoveryAudit.id,httpRaceAudit.id);
+  const httpRaceReview=(await call(httpRacePath.replace('/recover-local','/recovery-review'),{jwt:admin.accessToken})).json;
+  const httpRaceInput={...httpRecoverInput,expectedKeyUpdatedAt:httpRaceReview.recovery.expectedKeyUpdatedAt,expectedKeyRevision:httpRaceReview.recovery.expectedKeyRevision,expectedValueDigest:httpRaceReview.recovery.expectedValueDigest};
+  const httpRaceResults=await Promise.all([call(httpRacePath,{jwt:admin.accessToken,method:'POST',body:httpRaceInput}),call(httpRacePath,{jwt:admin.accessToken,method:'POST',body:httpRaceInput})]);
+  const httpRaceRow=await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:httpRaceKey.id,localeCode:'en'}}});
+  check('competing actual HTTP recoveries commit one winner and conflict one loser',httpRaceResults.filter(r=>r.status===201).length===1&&httpRaceResults.filter(r=>r.status===409).length===1&&httpRaceRow.value==='HTTP race value'&&await prisma.repositoryLocalEffectIntent.count({where:{keyId:httpRaceKey.id}})===1&&await prisma.translationHistory.count({where:{keyId:httpRaceKey.id}})===1&&await prisma.activityEvent.count({where:{projectId:project.id,keyName:httpRaceKey.name,action:'translation.value'}})===1);
+  check('HTTP recovery race retains archive removes absence marker and preserves baseline',(await prisma.translationDeletionAudit.findUnique({where:{id:httpRaceAudit.id}})).snapshot.row.value==='HTTP race value'&&await prisma.repositoryRemovalGeneration.count({where:{keyId:httpRaceKey.id}})===0&&(await prisma.repositorySyncBaseline.findUnique({where:{targetId:target.id}})).version===httpRecoverInput.baselineVersion);
+  await prisma.repositoryLocalEffectIntent.deleteMany({where:{keyId:httpRaceKey.id}});await prisma.key.delete({where:{id:httpRaceKey.id}});await prisma.translationDeletionAudit.delete({where:{id:httpRaceAudit.id}});await prisma.activityEvent.deleteMany({where:{projectId:project.id,keyName:httpRaceKey.name}});
   const snapshotReviewProjects={requireAdmin:(...args)=>recoveryProjects.requireAdmin(...args),requireAdminInTransaction:async(tx,...args)=>{await recoveryProjects.requireAdminInTransaction(tx,...args);await prisma.repositorySyncTarget.update({where:{id:target.id},data:{revision:{increment:1}}});}};
   let sameSnapshotReview;
   try{

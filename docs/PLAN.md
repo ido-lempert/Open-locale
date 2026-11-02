@@ -244,3 +244,7 @@ Real HTTP auth/validation/stale/commit/replay/forged-body tests cover local-only
 value/history/intent outcomes. No restore UI action,remote read/write,baseline
 advance or worker enablement. Current138routes. See review0229;older notes are
 historical implementation milestones.
+
+Explicit recovery API now has actual HTTP project-lock busy,real database intent
+fault rollback/private-error and competing-request one-winner evidence. Tests
+only,no app behavior change. See review0230.

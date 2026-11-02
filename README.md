@@ -735,3 +735,8 @@ malformed/unsupported400,unexpected fault500 with rollback. No retry/fresh revie
 remote read/write,baseline advance or accepted sync. Worker remains defaultOFF.
 No restore UI action yet;review UI remains read-only. Earlier review notes describe
 the surface at their respective milestones,not the current API inventory.
+
+Recovery API HTTP failure/race evidence (review0230):actual project-lock busy409,
+real intent-insert database fault500 with complete rollback/private-error hiding,
+and competing HTTP requests with one committed value/history/activity/intent.
+No app change or remote-delivery claim.
