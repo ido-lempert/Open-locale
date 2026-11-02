@@ -784,3 +784,8 @@ Refreshing repository configurations immediately clears archived private review,
 prepared recovery bindings and eligibility preview,even if the refresh fails or
 returns unchanged target revisions. Select the target and review again before
 preparing recovery. Metadata remains available. See review0238.
+
+Configuration save/removal also clears private archived review/prepared recovery
+before its request,even if it fails. Refresh/save/remove share this cleanup;new
+explicit review required. Busy/unconfirmed actions do not cancel pending work.
+See review0239 for unit success/failure and actual browser removal evidence.

@@ -1183,13 +1183,16 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     this.editing.set(null);
     this.form = { ...empty(), locale: this.locales()[0] ?? '' };
   }
+  private clearArchivedRecoveryReview() {
+    this.reviewTargetId.set('');this.valueReviewLoading.set(null);
+    this.recoveryValue.set(null);this.recoveryPreview.set(null);
+  }
   async refresh() {
     if (this.busy()) return;
     const generation = ++this.generation;
     // A configuration refresh invalidates private archived review and prepared confirmation,
     // even if the refresh fails or returns the same target revision.
-    this.reviewTargetId.set('');this.valueReviewLoading.set(null);
-    this.recoveryValue.set(null);this.recoveryPreview.set(null);
+    this.clearArchivedRecoveryReview();
     this.busy.set(true);
     this.snapshot.set(null);
     this.effectSummary.set(null);
@@ -1216,6 +1219,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   async save() {
     if (this.busy()) return;
     const generation = ++this.generation;
+    this.clearArchivedRecoveryReview();
     const form = { ...this.form },
       editing = this.editing();
     this.busy.set(true);
@@ -1398,6 +1402,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   async remove(t: RepositoryTargetConfig) {
     if (this.busy() || this.removing()?.id !== t.id) return;
     const generation = ++this.generation;
+    this.clearArchivedRecoveryReview();
     this.busy.set(true);
     this.snapshot.set(null);
     this.effectSummary.set(null);

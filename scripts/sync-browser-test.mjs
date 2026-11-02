@@ -478,6 +478,18 @@ try {
   await page.screenshot({path:'/downloads/deletion-review-refresh-cleared-narrow.png'});page.off('request',failConfigRefresh);await page.setRequestInterception(false);
   await page.select('[name=auditReviewTarget]',archivedReviewTarget.id);await clickTarget(`[data-value-audit-id="${eligibleAudit.id}"]`);await page.waitForSelector('[name=auditRecoverPrepare]');await clickTarget('[name=auditRecoverPrepare]');
   await page.waitForSelector('[name=auditRecoverConfirm]');
+  await clickTarget('[name=targetEdit]');
+  await page.setRequestInterception(true);const failConfigSave=async request=>request.method()==='PUT'&&request.url().endsWith('/sync/repository-targets/'+archivedReviewTarget.id)?request.respond({status:503,contentType:'application/json',body:JSON.stringify({message:'fixture save unavailable'})}):request.continue();page.on('request',failConfigSave);
+  await clickTarget('[name=targetSave]');await page.waitForSelector('[role=alert]');
+  check('failed configuration save clears archived private value and prepared recovery',!(await page.$('.recovery-value'))&&!(await page.content()).includes('Archived review text')&&await page.$eval('[name=auditReviewTarget]',e=>e.value==='')&&await prisma.translation.count({where:{keyId:previewKey.id}})===0);
+  page.off('request',failConfigSave);await page.setRequestInterception(false);await clickTarget('[name=targetCancel]');
+  await page.select('[name=auditReviewTarget]',archivedReviewTarget.id);await clickTarget(`[data-value-audit-id="${eligibleAudit.id}"]`);await page.waitForSelector('[name=auditRecoverPrepare]');await clickTarget('[name=auditRecoverPrepare]');
+  await clickTarget('[name=targetRemove]');
+  await page.setRequestInterception(true);const failConfigRemove=async request=>request.method()==='DELETE'&&request.url().endsWith('/sync/repository-targets/'+archivedReviewTarget.id)?request.respond({status:503,contentType:'application/json',body:JSON.stringify({message:'fixture remove unavailable'})}):request.continue();page.on('request',failConfigRemove);
+  await clickTarget('[name=targetConfirmRemove]');await page.waitForSelector('[role=alert]');
+  check('failed configuration removal clears archived private value and prepared recovery',!(await page.$('.recovery-value'))&&!(await page.content()).includes('Archived review text')&&await page.$eval('[name=auditReviewTarget]',e=>e.value==='')&&await prisma.repositorySyncTarget.count({where:{id:archivedReviewTarget.id}})===1);
+  await page.$eval('[role=alert]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/deletion-review-mutation-cleared-narrow.png'});page.off('request',failConfigRemove);await page.setRequestInterception(false);await clickTarget('[name=targetCancelRemove]');
+  await page.select('[name=auditReviewTarget]',archivedReviewTarget.id);await clickTarget(`[data-value-audit-id="${eligibleAudit.id}"]`);await page.waitForSelector('[name=auditRecoverPrepare]');await clickTarget('[name=auditRecoverPrepare]');await page.waitForSelector('[name=auditRecoverConfirm]');
   check('local recovery browser separate confirmation explains local queue limits',await page.$eval('[aria-label="Confirm local recovery"]',e=>e.textContent.includes('unverified')&&e.textContent.includes('Queued effects may run')&&e.textContent.includes('Sync is not completed'))&&await prisma.translation.count({where:{keyId:previewKey.id}})===0);
   await page.$eval('[aria-label="Confirm local recovery"]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/deletion-recovery-confirm-narrow.png'});
   check('local recovery confirmation fits480viewport',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
@@ -547,6 +559,9 @@ try {
   await page.screenshot({path:'/downloads/deletion-recovery-success-narrow.png'});
   await prisma.repositoryLocalEffectIntent.deleteMany({where:{keyId:previewKey.id}});await prisma.translation.deleteMany({where:{keyId:previewKey.id}});await prisma.translationHistory.deleteMany({where:{keyId:previewKey.id}});await prisma.activityEvent.deleteMany({where:{projectId:applyProject.id,keyName:previewKey.name}});
   await prisma.repositoryRemovalGeneration.create({data:{projectId:applyProject.id,keyId:previewKey.id,locale:'en',auditId:eligibleAudit.id}});
+  await page.select('[name=auditReviewTarget]',archivedReviewTarget.id);await clickTarget(`[data-value-audit-id="${eligibleAudit.id}"]`);await page.waitForSelector('[name=auditRecoverPrepare]');await clickTarget('[name=auditRecoverPrepare]');await page.waitForSelector('[name=auditRecoverConfirm]');
+  await clickTarget('[name=targetRemove]');await clickTarget('[name=targetConfirmRemove]');await page.waitForFunction(()=>document.body.textContent.includes('Configuration removed.'));
+  check('actual configuration removal clears prepared private recovery and removes target',!(await page.$('.recovery-value'))&&!(await page.$('[name=auditRecoverConfirm]'))&&await page.$eval('[name=auditReviewTarget]',e=>e.value==='')&&await prisma.repositorySyncTarget.count({where:{id:archivedReviewTarget.id}})===0&&await prisma.translation.count({where:{keyId:previewKey.id}})===0);
   await page.select('[name=auditReviewTarget]','');
   await prisma.translationDeletionAudit.update({where:{id:eligibleAudit.id},data:{snapshot:{row:{projectId:applyProject.id,keyId:previewKey.id,localeCode:'en',value:'א'.repeat(16385)},history:[]}}});
   await clickTarget(`[data-value-audit-id="${eligibleAudit.id}"]`);await page.waitForSelector('.recovery-value');

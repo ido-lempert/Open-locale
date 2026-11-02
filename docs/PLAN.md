@@ -283,3 +283,8 @@ Configuration refresh now clears private archived value/prepared recovery bindin
 before awaiting config response,on unchanged config and on failure. New explicit
 review required;busy refresh does not interfere with pending recovery. Actual held
 GET and failure browser cases verified. See review0238.
+
+Configuration save/remove now share refresh's immediate private archived-review
+cleanup before network awaits,including failures. Successful removal cannot leave
+prepared bindings for a missing target. Unit success/failure/guards and browser
+failed save/remove plus actual removal verified. See review0239.
