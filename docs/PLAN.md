@@ -330,3 +330,7 @@ without Prepare/Confirm. Server authority/freshness checks unchanged. See review
 Read-only selected-target review with missing/malformed execution bindings now
 explains why Prepare is absent and points to explicit configuration refresh/fresh
 review. No automatic requests. See review0250.
+
+Report branch switching now clears old progress/quality and ignores superseded
+success/error. Both requests capture the same branch and publish a complete pair;
+not one database snapshot. Actual held-response browser switch verified. See0252.

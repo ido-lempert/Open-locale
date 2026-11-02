@@ -714,6 +714,16 @@ try {
   check('late audit page cannot cross project navigation',!(await page.$('.audit-list')));
   check('late audit response cannot retain loading or steal focus',await page.$eval('section[aria-label="Deletion audit metadata"]',e=>e.getAttribute('aria-busy')==='false')&&!(await page.$eval('.audit-heading',e=>document.activeElement===e)));
   await clickTarget('[name=auditLoad]');await page.waitForSelector('.audit-list li');await page.setViewport({width:480,height:900});await page.screenshot({path:'/downloads/deletion-audit-focus-narrow.png'});
+  const reportBranch=await prisma.branch.create({data:{projectId:applyProject.id,name:'held-report-branch'}});await prisma.key.create({data:{projectId:applyProject.id,branchId:reportBranch.id,name:'held-report-key'}});
+  await page.goto(`${WEB}/projects/${applyProject.id}/reports`,{waitUntil:'networkidle0'});await page.waitForSelector('.progress-table');
+  let reportHeld=false,releaseReport;const reportGate=new Promise(r=>releaseReport=r);await page.setRequestInterception(true);
+  const holdReport=async request=>{if(request.url().includes('/reports/quality?branch=held-report-branch')){reportHeld=true;await reportGate;}return request.continue();};page.on('request',holdReport);
+  await page.select('[name=reportBranch]','held-report-branch');for(let n=0;n<50&&!reportHeld;n++)await new Promise(r=>setTimeout(r,50));if(!reportHeld)throw new Error('quality report request not held');
+  check('held branch report clears previous progress and quality figures',!(await page.$('.progress-table'))&&!(await page.content()).includes('open findings across'));
+  await page.select('[name=reportBranch]','main');await page.waitForSelector('.progress-table');await page.waitForFunction(()=>document.body.textContent.includes('keys on main.'));
+  const lateReportResponse=page.waitForResponse(r=>r.url().includes('/reports/quality?branch=held-report-branch'));releaseReport();await lateReportResponse;await new Promise(r=>setTimeout(r,100));page.off('request',holdReport);await page.setRequestInterception(false);
+  check('late held branch pair cannot overwrite newest actual report',await page.$eval('[name=reportBranch]',e=>e.value==='main')&&(await page.content()).includes('keys on main.')&&!(await page.content()).includes('keys on held-report-branch.')&&!(await page.content()).includes('on held-report-branch.'));
+  await page.setViewport({width:480,height:900});await page.screenshot({path:'/downloads/reports-branch-fence-narrow.png'});
   await page.evaluate(t=>localStorage.setItem('ol_token',t),member.accessToken);
   await page.goto(`${WEB}/projects/${project.id}/sync`,{waitUntil:'networkidle0'});await page.waitForSelector('textarea[name=syncBaseline]');
   await set('syncSha','a'.repeat(40));await set('syncBaseline','{}');await set('syncRemote','{}');await page.click('button[name=syncPreview]');await page.waitForSelector('[role=alert]');

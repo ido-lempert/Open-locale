@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, UsageReport } from '../api.service';
@@ -104,7 +104,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
     </main>
   `,
 })
-export class ReportsComponent implements OnInit {
+export class ReportsComponent implements OnInit, OnDestroy {
   projectId = '';
   report = signal<ProgressReport | null>(null);
   quality = signal<QualityReport | null>(null);
@@ -114,6 +114,8 @@ export class ReportsComponent implements OnInit {
   branch = signal('main');
   statusColumns = signal<string[]>([]);
   error = signal('');
+  private generation=0;
+  private destroyed=false;
 
   constructor(private route: ActivatedRoute, private api: ApiService) {}
 
@@ -128,16 +130,19 @@ export class ReportsComponent implements OnInit {
     return Object.entries(u.byAction).sort((a, b) => b[1] - a[1]).map(([action, count]) => ({ action, count }));
   }
 
+  ngOnDestroy() { this.destroyed=true;++this.generation; }
+
   async fetch() {
-    this.error.set('');
+    if(this.destroyed)return;
+    const generation=++this.generation,projectId=this.projectId,branch=this.branch();
+    this.error.set('');this.report.set(null);this.quality.set(null);this.statusColumns.set([]);
     try {
-      const r = await this.api.getProgress(this.projectId, this.branch());
-      this.report.set(r);
+      const [r,q]=await Promise.all([this.api.getProgress(projectId,branch),this.api.getQuality(projectId,branch)]);
+      if(this.destroyed||generation!==this.generation)return;
       const cols: string[] = [];
       for (const l of r.locales) for (const s of Object.keys(l.byStatus)) if (!cols.includes(s)) cols.push(s);
-      this.statusColumns.set(cols);
-      this.quality.set(await this.api.getQuality(this.projectId, this.branch()));
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load'); }
+      this.report.set(r);this.statusColumns.set(cols);this.quality.set(q);
+    } catch (e) { if(!this.destroyed&&generation===this.generation)this.error.set(e instanceof Error ? e.message : 'Failed to load'); }
   }
 
   async ngOnInitDashboards() {

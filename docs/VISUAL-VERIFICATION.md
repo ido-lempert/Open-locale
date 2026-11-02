@@ -62,3 +62,9 @@ selected-target ID/revision/branch/locale mismatch per case. All stay read-only;
 matching control exposes Prepare only. Final480x900locale-mismatchimage inspected
 with notice/value/guidance/Hide/no Prepare/Confirm or horizontal overflow. These
 are injected local review responses,not authority or server execution proof.
+
+Slice186 report branch-switch fixture holds actual quality request,selects main,
+then releases older branch. Final480x900image inspected:mainselected/progressand
+qualitymain,usage/tasks visible. Existing table horizontal scrolling retained.
+Browser205checks includes oldfigurescleared/newpairnot overwritten;image alone
+is not late-response proof.
