@@ -733,7 +733,7 @@ creates a fresh unverified locale value,new history/activity/TM and one pending
 effect intent. Archive retained,no history replay. Stale/replay/busy/backlog409,
 malformed/unsupported400,unexpected fault500 with rollback. No retry/fresh review,
 remote read/write,baseline advance or accepted sync. Worker remains defaultOFF.
-No restore UI action yet;review UI remains read-only. Earlier review notes describe
+At review0229 no restore UI action existed;review0235 adds separate target-scoped prepare/confirm. Earlier review notes describe
 the surface at their respective milestones,not the current API inventory.
 
 Recovery API HTTP failure/race evidence (review0230):actual project-lock busy409,
@@ -757,3 +757,13 @@ also deny without recovery effects/private archive disclosure. See review0233.
 Recovery HTTP tests observe actual PostgreSQL project-lock waiters before admin
 revocation commits,then verify409/no partial recovery for demotion/removal using
 the original session/review. Tests only;see review0234.
+
+### Separate local recovery UI confirmation (review0235)
+
+Select a repository target for archived-value review,then Prepare local recovery.
+Review the local-only/queued-effect warning and explicitly confirm,or cancel.
+Value-only reviews cannot recover. Private review/bindings clear before sending;
+errors never retry automatically and warn that a lost response may hide a completed
+write. Check the current value and get a new review before another request. Success
+lands focus on outcome. No remote write/baseline advance/sync acceptance or enabled
+worker. Older no-UI notes describe their historical milestone.

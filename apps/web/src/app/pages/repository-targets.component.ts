@@ -9,6 +9,7 @@ import {
   DeletionAuditPage,
   DeletionRecoveryPreview,
   DeletionRecoveryValueReview,
+  LocalRecoveryInput,
   RepositoryTargetConfig,
   RepositoryFileSnapshot,
   RepositoryBaselineView,
@@ -153,14 +154,14 @@ const empty = (): RepositoryTargetInput => ({
         Configuration only. These coordinates do not connect to GitHub, grant
         credentials, accept a baseline or run sync. Reading a file requires
         separately configured deployment read access. No repository files or
-        translations change unless you explicitly confirm a reviewed local apply below. Session admins only. Do not paste tokens or
+        translations change unless you explicitly confirm a reviewed local apply or recovery below. Session admins only. Do not paste tokens or
         passwords here.
       </p>
       @if (error()) {
-        <p role="alert" class="error">{{ error() }}</p>
+        <p #outcome tabindex="-1" role="alert" class="error">{{ error() }}</p>
       }
       @if (message()) {
-        <p role="status" class="success">{{ message() }}</p>
+        <p #outcome tabindex="-1" role="status" class="success">{{ message() }}</p>
       }
       @if (ready()) {
         <button
@@ -173,7 +174,7 @@ const empty = (): RepositoryTargetInput => ({
         </button>
         <section #auditRegion aria-label="Deletion audit metadata" [attr.aria-busy]="auditLoading()">
           <h2 #auditHeading class="audit-heading" tabindex="-1">Deletion audit metadata</h2>
-          <p>Project-wide metadata only. No archived values or history. No restore action.</p>
+          <p>Project-wide metadata only. No archived values or history until explicit review.</p>
           <button name="auditLoad" type="button" (click)="loadAudits()" [disabled]="busy()">Load newest audit page</button>
           <label>Archived value review scope
             <select name="auditReviewTarget" [disabled]="busy() && !valueReviewLoading()" [ngModel]="reviewTargetId()" (ngModelChange)="changeReviewTarget($event)">
@@ -181,7 +182,7 @@ const empty = (): RepositoryTargetInput => ({
               @for (t of targets(); track t.id) { <option [value]="t.id">{{ t.localBranch }} / {{ t.locale }} / {{ t.owner }}/{{ t.repo }} / {{ t.path }}</option> }
             </select>
           </label>
-          <p>Choosing a target checks its current baseline and scope. Direct team admins only. Still read-only.</p>
+          <p>Choosing a target checks its current baseline and scope. Direct team admins only. Recovery requires a separate confirmation after review.</p>
           @if (auditLoading()) { <p role="status">Loading audit metadata...</p> }
           @if (auditPage(); as page) {
             <p>Up to 50 rows per page, newest first. Not live or a frozen snapshot.</p>
@@ -206,8 +207,19 @@ const empty = (): RepositoryTargetInput => ({
                   <div class="recovery-value" tabindex="-1" [attr.data-value-result-id]="a.id" role="region" aria-label="Archived value review">
                     <p class="notice" role="status">{{ recoveryValue()!.result.reviewAvailable ? 'Archived flat value for review only.' : recoveryValue()!.result.reason === 'review-value-too-large' ? 'Archived value exceeds the 32768-byte review limit.' : 'Current checks do not allow value review.' }}
                       @if (recoveryValue()!.targetLabel) { Target at review: {{ recoveryValue()!.targetLabel }}. }
-                      Snapshot: {{ recoveryValue()!.result.asOf }} (UTC). Not live. No reservation is held. No restore action is available.</p>
+                      Snapshot: {{ recoveryValue()!.result.asOf }} (UTC). Not live. No reservation is held. This review does not restore a value.</p>
                     @if (recoveryValue()!.result.reviewAvailable) { <pre>{{ recoveryValue()!.result.value === '' ? '(Empty value)' : recoveryValue()!.result.value }}</pre> }
+                    @if (recoveryValue()!.recoveryInput) {
+                      @if (recoveryValue()!.confirming) {
+                        <div class="notice" role="region" aria-label="Confirm local recovery">
+                          <p>Recover this archived value locally? A fresh unverified locale value, new history and one queued effect will be created. Archived history is not replayed. Repository files and accepted baseline stay unchanged. Sync is not completed. Queued effects may run if a worker is enabled.</p>
+                          <button name="auditRecoverConfirm" type="button" (click)="recoverLocalValue()" [disabled]="busy()">Confirm local recovery</button>
+                          <button name="auditRecoverCancel" type="button" (click)="cancelLocalRecovery()" [disabled]="busy()">Cancel recovery</button>
+                        </div>
+                      } @else {
+                        <button name="auditRecoverPrepare" type="button" (click)="prepareLocalRecovery()" [disabled]="busy()">Prepare local recovery</button>
+                      }
+                    }
                     <button name="auditValueHide" type="button" (click)="hideValueReview()">Hide archived value</button>
                   </div>
                 }
@@ -772,11 +784,12 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   message = signal('');
   snapshot = signal<RepositoryFileSnapshot | null>(null);
   readAt = signal('');
+  @ViewChild('outcome') outcome?: ElementRef<HTMLElement>;
   @ViewChild('auditRegion') auditRegion?: ElementRef<HTMLElement>;
   @ViewChild('auditHeading') auditHeading?: ElementRef<HTMLElement>;
   reviewTargetId = signal('');
   valueReviewLoading = signal<string|null>(null);
-  recoveryValue = signal<{auditId:string;result:DeletionRecoveryValueReview;targetLabel?:string}|null>(null);
+  recoveryValue = signal<{auditId:string;result:DeletionRecoveryValueReview;targetLabel?:string;targetId?:string;recoveryInput?:LocalRecoveryInput;confirming?:boolean}|null>(null);
   recoveryPreview = signal<{auditId:string;result:DeletionRecoveryPreview}|null>(null);
   auditLoading = signal(false);
   auditPage = signal<DeletionAuditPage | null>(null);
@@ -973,13 +986,45 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     this.busy.set(true); this.valueReviewLoading.set(null); this.recoveryValue.set(null); this.recoveryPreview.set(null); this.error.set(''); this.message.set(''); this.valueReviewLoading.set(auditId);
     try {
       const raw=target?await this.api.reviewRepositoryRecovery(this.projectId,target.id,auditId):await this.api.reviewDeletionRecoveryValue(this.projectId,auditId);
-      // Store only displayed value-review fields,not server recovery/baseline bindings.
+      // Keep only the exact fields needed for this explicit local recovery,not raw response scopes.
       const result:DeletionRecoveryValueReview={source:'deletion-recovery-value-review',asOf:raw.asOf,reviewAvailable:raw.reviewAvailable,reason:raw.reason,value:raw.value,maxValueBytes:raw.maxValueBytes,canRestore:false,snapshotIncluded:false,historyReplay:false,reservationHeld:false};
       const targetLabel=target?`${target.localBranch} / ${target.locale} / ${target.owner}/${target.repo} / ${target.path}`:undefined;
-      if(generation===this.generation){this.recoveryValue.set({auditId,result,targetLabel});this.landValueFocus(auditId,generation,true);}
+      let recoveryInput:LocalRecoveryInput|undefined;
+      if(target && raw.reviewAvailable && 'recovery' in raw && 'repository' in raw && raw.recovery && raw.repository){
+        const r=raw.recovery, repo=raw.repository;
+        recoveryInput={confirmation:'recover-local-value',expectedBranchId:r.expectedBranchId,expectedKeyUpdatedAt:r.expectedKeyUpdatedAt,expectedKeyRevision:r.expectedKeyRevision,expectedValueDigest:r.expectedValueDigest,targetRevision:repo.targetRevision,branch:repo.branch,locale:repo.locale,baselineVersion:repo.baselineVersion,baselineSha:repo.baselineSha,baselineDigest:repo.baselineDigest};
+      }
+      if(generation===this.generation){this.recoveryValue.set({auditId,result,targetLabel,targetId:target?.id,recoveryInput});this.landValueFocus(auditId,generation,true);}
     } catch {
       if(generation===this.generation)this.error.set('Could not review archived value. No value was restored. Review again to retry.');
     } finally { if(generation===this.generation){this.busy.set(false);this.valueReviewLoading.set(null);} }
+  }
+  prepareLocalRecovery() {
+    const review=this.recoveryValue();
+    if(this.busy()||!review?.recoveryInput||review.targetId!==this.reviewTargetId())return;
+    this.recoveryValue.set({...review,confirming:true});
+  }
+  cancelLocalRecovery() {
+    const review=this.recoveryValue();
+    if(this.busy()||!review)return;
+    this.recoveryValue.set({...review,confirming:false});
+    this.message.set('Recovery canceled. No request was sent.');
+  }
+  async recoverLocalValue() {
+    const review=this.recoveryValue();
+    if(this.busy()||!review?.confirming||!review.recoveryInput||!review.targetId||review.targetId!==this.reviewTargetId())return;
+    const projectId=this.projectId,targetId=review.targetId,auditId=review.auditId,input={...review.recoveryInput};
+    const generation=++this.generation;
+    this.recoveryValue.set(null);this.recoveryPreview.set(null);this.busy.set(true);this.error.set('');this.message.set('');
+    try{
+      const result=await this.api.recoverRepositoryLocal(projectId,targetId,auditId,input);
+      if(generation!==this.generation)return;
+      this.message.set(`Local value recovered: ${result.restoredValues}; ${result.pendingEffectIntents} effect queued. Repository files and accepted baseline unchanged. Sync not completed. Review again before another recovery.`);
+    }catch{
+      if(generation===this.generation)this.error.set('Recovery result unavailable. If the response was lost, the local value may already have changed. Check the current value and review again before another request. No automatic retry was sent.');
+    }finally{
+      if(generation===this.generation){this.busy.set(false);setTimeout(()=>{if(generation!==this.generation)return;this.outcome?.nativeElement.focus({preventScroll:true});this.outcome?.nativeElement.scrollIntoView({block:'center',behavior:'instant'});},0);}
+    }
   }
   cancelValueReview() {
     const auditId=this.valueReviewLoading();

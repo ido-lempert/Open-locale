@@ -263,3 +263,8 @@ now have unchanged-effect/privacy tests. Tests only,no app change. See review023
 Public recovery now has actual project-lock wait plus committed admin revocation
 HTTP409/no-partial-effect evidence,not only revocation completed before request.
 Tests only,no app change. See review0234.
+
+Target-scoped review now supports separate prepare/cancel/confirm local recovery,
+with exact reviewed scalar bindings,private-state clearing,unknown-outcome warning,
+no retry and focused outcome. Actual browser cancel/stale/failure/commit cases and
+480px screenshots verified. Value-only review stays read-only. See review0235.

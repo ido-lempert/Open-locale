@@ -1,4 +1,6 @@
 export interface DeletionRecoveryValueReview {source:'deletion-recovery-value-review';asOf:string;reviewAvailable:boolean;reason:string;value:string|null;maxValueBytes:number;canRestore:false;snapshotIncluded:false;historyReplay:false;reservationHeld:false;}
+export interface LocalRecoveryInput {confirmation:'recover-local-value';expectedBranchId:string;expectedKeyUpdatedAt:string;expectedKeyRevision:number;expectedValueDigest:string;targetRevision:number;branch:string;locale:string;baselineVersion:number;baselineSha:string;baselineDigest:string;}
+export interface RepositoryRecoveryReview extends Omit<DeletionRecoveryValueReview,'source'> {source:'repository-target-recovery-review';recovery:{expectedBranchId:string;expectedKeyUpdatedAt:string;expectedKeyRevision:number;expectedValueDigest:string}|null;repository:{targetId:string;targetRevision:number;branch:string;locale:string;baselineVersion:number;baselineSha:string;baselineDigest:string}|null;}
 export interface DeletionRecoveryPreview {source:'deletion-recovery-eligibility-preview';asOf:string;eligibleNow:boolean;reason:string;canRestore:false;snapshotIncluded:false;historyReplay:false;reservationHeld:false;}
 export interface DeletionAuditPage {
  source:'local-deletion-audit-metadata';
@@ -257,7 +259,8 @@ export class ApiService {
       { method: 'POST', body: JSON.stringify({ expectedRevision }) },
     );
   }
-  reviewRepositoryRecovery(projectId:string,targetId:string,auditId:string){return this.request<Omit<DeletionRecoveryValueReview,'source'> & {source:'repository-target-recovery-review'}>(`/projects/${projectId}/sync/repository-targets/${encodeURIComponent(targetId)}/deletion-audits/${encodeURIComponent(auditId)}/recovery-review`);}
+  reviewRepositoryRecovery(projectId:string,targetId:string,auditId:string){return this.request<RepositoryRecoveryReview>(`/projects/${projectId}/sync/repository-targets/${encodeURIComponent(targetId)}/deletion-audits/${encodeURIComponent(auditId)}/recovery-review`);}
+  recoverRepositoryLocal(projectId:string,targetId:string,auditId:string,input:LocalRecoveryInput){return this.request<{restoredValues:number;pendingEffectIntents:number;remoteWritten:false;baselineAdvanced:false;repositorySyncAccepted:false}>(`/projects/${projectId}/sync/repository-targets/${encodeURIComponent(targetId)}/deletion-audits/${encodeURIComponent(auditId)}/recover-local`,{method:'POST',body:JSON.stringify(input)});}
   reviewDeletionRecoveryValue(projectId:string,auditId:string){return this.request<DeletionRecoveryValueReview>(`/projects/${projectId}/sync/deletion-audits/${encodeURIComponent(auditId)}/recovery-value-review`);}
   previewDeletionRecovery(projectId:string,auditId:string){return this.request<DeletionRecoveryPreview>(`/projects/${projectId}/sync/deletion-audits/${encodeURIComponent(auditId)}/recovery-preview`);}
   listDeletionAudits(projectId:string,cursor?:string){return this.request<DeletionAuditPage>(`/projects/${projectId}/sync/deletion-audits${cursor?'?cursor='+encodeURIComponent(cursor):''}`);}
