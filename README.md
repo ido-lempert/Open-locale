@@ -657,3 +657,7 @@ Audit cards now offer explicit Review archived value and Hide archived value
 controls. Text is escaped,scroll-bounded and manual-only;UTC snapshot/not-live/no-
 restore notice stays visible. Page refresh,navigation,eligibility check or failed
 review clears prior private text;late replies cannot cross projects. No restore UI.
+
+Pending archived-value review announces loading and offers Cancel value review.
+Cancel hides late responses and releases controls;it does not claim to abort the
+network request or erase its response from browser memory/history.

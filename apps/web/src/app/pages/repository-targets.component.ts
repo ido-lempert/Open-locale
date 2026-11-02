@@ -187,6 +187,12 @@ const empty = (): RepositoryTargetInput => ({
                   <dt>Audit ID</dt><dd>{{ a.id }}</dd>
                 </dl>
                 <button name="auditValueReview" [attr.data-value-audit-id]="a.id" type="button" (click)="reviewRecoveryValue(a.id)" [disabled]="busy()">Review archived value</button>
+                @if (valueReviewLoading() === a.id) {
+                  <div class="value-review-loading" aria-busy="true">
+                    <p role="status">Loading archived value for review...</p>
+                    <button name="auditValueCancel" type="button" (click)="cancelValueReview()">Cancel value review</button>
+                  </div>
+                }
                 @if (recoveryValue()?.auditId === a.id) {
                   <div class="recovery-value" aria-label="Archived value review">
                     <p class="notice" role="status">{{ recoveryValue()!.result.reviewAvailable ? 'Archived flat value for review only.' : recoveryValue()!.result.reason === 'review-value-too-large' ? 'Archived value exceeds the 32768-byte review limit.' : 'Current checks do not allow value review.' }}
@@ -757,6 +763,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   snapshot = signal<RepositoryFileSnapshot | null>(null);
   readAt = signal('');
   @ViewChild('auditHeading') auditHeading?: ElementRef<HTMLElement>;
+  valueReviewLoading = signal<string|null>(null);
   recoveryValue = signal<{auditId:string;result:DeletionRecoveryValueReview}|null>(null);
   recoveryPreview = signal<{auditId:string;result:DeletionRecoveryPreview}|null>(null);
   auditLoading = signal(false);
@@ -871,7 +878,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
         this.previewResult.set(null); this.clearDraft(); this.previewPage.set(0);
         this.snapshot.set(null);
     this.auditPage.set(null);
-    this.recoveryValue.set(null); this.recoveryPreview.set(null); this.effectSummary.set(null); this.baselineView.set(null); this.confirmBaseline.set(false);
+    this.valueReviewLoading.set(null); this.recoveryValue.set(null); this.recoveryPreview.set(null); this.effectSummary.set(null); this.baselineView.set(null); this.confirmBaseline.set(false);
         this.busy.set(false);
         window.scrollTo({top: 0, behavior: 'instant'});
       }
@@ -916,7 +923,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.generation++;
     this.auditPage.set(null);
-    this.recoveryValue.set(null); this.recoveryPreview.set(null);
+    this.valueReviewLoading.set(null); this.recoveryValue.set(null); this.recoveryPreview.set(null);
     this.auditLoading.set(false);
     this.snapshot.set(null);
     this.effectSummary.set(null);
@@ -940,18 +947,24 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   async reviewRecoveryValue(auditId: string) {
     if (this.busy() || !this.auditPage()?.audits.some(a=>a.id===auditId)) return;
     const generation=++this.generation;
-    this.busy.set(true); this.recoveryValue.set(null); this.recoveryPreview.set(null); this.error.set(''); this.message.set('');
+    this.busy.set(true); this.valueReviewLoading.set(null); this.recoveryValue.set(null); this.recoveryPreview.set(null); this.error.set(''); this.message.set(''); this.valueReviewLoading.set(auditId);
     try {
       const result=await this.api.reviewDeletionRecoveryValue(this.projectId,auditId);
       if(generation===this.generation)this.recoveryValue.set({auditId,result});
     } catch {
       if(generation===this.generation)this.error.set('Could not review archived value. No value was restored. Review again to retry.');
-    } finally { if(generation===this.generation)this.busy.set(false); }
+    } finally { if(generation===this.generation){this.busy.set(false);this.valueReviewLoading.set(null);} }
+  }
+  cancelValueReview() {
+    if (!this.valueReviewLoading()) return;
+    ++this.generation;
+    this.valueReviewLoading.set(null); this.recoveryValue.set(null); this.busy.set(false);
+    this.message.set('Value review canceled. Any late response will be hidden. No value was restored.');
   }
   async checkRecovery(auditId: string) {
     if (this.busy() || !this.auditPage()?.audits.some(a=>a.id===auditId)) return;
     const generation=++this.generation;
-    this.busy.set(true); this.recoveryValue.set(null); this.recoveryPreview.set(null); this.error.set(''); this.message.set('');
+    this.busy.set(true); this.valueReviewLoading.set(null); this.recoveryValue.set(null); this.recoveryPreview.set(null); this.error.set(''); this.message.set('');
     try {
       const result=await this.api.previewDeletionRecovery(this.projectId,auditId);
       if(generation===this.generation)this.recoveryPreview.set({auditId,result});
@@ -965,7 +978,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     this.busy.set(true);
     this.auditLoading.set(true);
     this.auditPage.set(null);
-    this.recoveryValue.set(null); this.recoveryPreview.set(null);
+    this.valueReviewLoading.set(null); this.recoveryValue.set(null); this.recoveryPreview.set(null);
     this.error.set(''); this.message.set('');
     try {
       const result = await this.api.listDeletionAudits(this.projectId, cursor);
@@ -1002,7 +1015,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     const generation = ++this.generation;
     this.projectId = id;
     this.auditPage.set(null);
-    this.recoveryValue.set(null); this.recoveryPreview.set(null);
+    this.valueReviewLoading.set(null); this.recoveryValue.set(null); this.recoveryPreview.set(null);
     this.auditLoading.set(false);
     this.auditLoading.set(false);
     this.snapshot.set(null);

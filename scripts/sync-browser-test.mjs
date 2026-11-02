@@ -424,6 +424,15 @@ try {
   await page.setViewport({width:480,height:900});await page.$eval('.audit-list [role=status]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/deletion-eligibility-narrow.png'});
   check('eligibility notice shows explicit UTC snapshot rather than persistent just-now claim',await page.$eval('.audit-list [role=status]',e=>/Snapshot: \d{4}-\d\d-\d\dT/.test(e.textContent)&&e.textContent.includes('(UTC). Not live. Check again to refresh.')&&!e.textContent.includes('Checked just now')));
   check('eligibility notice fits480viewport',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  let canceledHeld=false,releaseCanceled;const canceledGate=new Promise(r=>releaseCanceled=r);await page.setRequestInterception(true);
+  const holdCanceled=async request=>{if(!canceledHeld&&request.url().endsWith('/recovery-value-review')){canceledHeld=true;await canceledGate;}return request.continue();};page.on('request',holdCanceled);
+  await clickTarget(`[data-value-audit-id="${eligibleAudit.id}"]`);await page.waitForSelector('[name=auditValueCancel]');
+  check('pending value review announces loading with usable cancel',await page.$eval('.value-review-loading',e=>e.getAttribute('aria-busy')==='true'&&e.textContent.includes('Loading archived value')));
+  await page.setViewport({width:480,height:900});await page.$eval('.value-review-loading',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/deletion-value-loading-narrow.png'});
+  await clickTarget('[name=auditValueCancel]');await page.waitForFunction(()=>!document.querySelector('.value-review-loading'));
+  check('cancel value review releases controls without showing private text',!(await page.$('.recovery-value'))&&await page.$eval('[name=auditLoad]',e=>!e.disabled));
+  releaseCanceled();await new Promise(r=>setTimeout(r,800));page.off('request',holdCanceled);await page.setRequestInterception(false);
+  check('canceled actual value response stays hidden',!(await page.$('.recovery-value'))&&!(await page.content()).includes('hidden recovery value'));
   check('archived value review remains explicit before button click',!(await page.$('.recovery-value')));
   const markupValue='<img src=x onerror=alert(1)>\nArchived review text';
   await prisma.translationDeletionAudit.update({where:{id:eligibleAudit.id},data:{snapshot:{row:{projectId:applyProject.id,keyId:previewKey.id,localeCode:'en',value:markupValue},history:[]}}});
