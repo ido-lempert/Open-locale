@@ -15,6 +15,11 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  Equals,
+  IsInt,
+  IsUUID,
+  Min,
+  Max,
   IsNotEmpty,
   IsObject,
   IsString,
@@ -67,6 +72,21 @@ class ResolveSyncPreviewDto extends LocalSyncPreviewDto {
   expectedFingerprint!: string;
   @IsObject()
   choices!: Record<string, ResolutionChoice>;
+}
+
+// Explicit local recovery only. No caller value, actor or scope coordinates.
+class RecoverLocalDto {
+  @Equals('recover-local-value') confirmation!: string;
+  @IsUUID() expectedBranchId!: string;
+  @IsString() @Matches(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/) expectedKeyUpdatedAt!: string;
+  @IsInt() @Min(1) @Max(2147483647) expectedKeyRevision!: number;
+  @IsString() @Matches(/^[a-f0-9]{64}$/) expectedValueDigest!: string;
+  @IsInt() @Min(1) @Max(2147483647) targetRevision!: number;
+  @IsString() @Matches(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,39}$/) branch!: string;
+  @IsString() @IsNotEmpty() @MaxLength(64) locale!: string;
+  @IsInt() @Min(1) @Max(2147483647) baselineVersion!: number;
+  @IsString() @Matches(/^[a-f0-9]{40}$/) baselineSha!: string;
+  @IsString() @Matches(/^[a-f0-9]{64}$/) baselineDigest!: string;
 }
 
 @Injectable()
@@ -151,7 +171,7 @@ export class LocalSyncPreviewService {
   // explicit caller input,not a grant. Never refresh/retry stale reviewed scope.
   async executeRepositoryRecovery(
     user: AuthPrincipal, projectId: string, targetId: string, auditId: string,
-    review: Awaited<ReturnType<LocalSyncPreviewService['reviewRepositoryRecovery']>>,
+    review: Pick<Awaited<ReturnType<LocalSyncPreviewService['reviewRepositoryRecovery']>>, 'reviewAvailable' | 'recovery' | 'repository'>,
   ) {
     if (user.via !== 'jwt') throw new ForbiddenException('Recovery execution requires a signed-in session');
     // Capture caller-owned primitives before authorization can yield.
@@ -460,6 +480,27 @@ export class LocalSyncPreviewController {
     @Body() input: ResolveSyncPreviewDto,
   ) {
     return this.previews.resolve(user, projectId, input);
+  }
+  @Post('repository-targets/:targetId/deletion-audits/:auditId/recover-local')
+  @Header('Cache-Control', 'no-store')
+  async recoverLocal(
+    @CurrentUser() user: AuthPrincipal,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Param('targetId', new ParseUUIDPipe()) targetId: string,
+    @Param('auditId', new ParseUUIDPipe()) auditId: string,
+    @Body() input: RecoverLocalDto,
+  ) {
+    const actorId = user.userId;
+    const result = await this.previews.executeRepositoryRecovery(user, projectId, targetId, auditId, {
+      reviewAvailable: true,
+      recovery: { projectId, actorId, auditId, expectedBranchId: input.expectedBranchId,
+        expectedKeyUpdatedAt: input.expectedKeyUpdatedAt, expectedKeyRevision: input.expectedKeyRevision,
+        expectedValueDigest: input.expectedValueDigest },
+      repository: { projectId, actorId, targetId, targetRevision: input.targetRevision,
+        branchId: input.expectedBranchId, branch: input.branch, locale: input.locale,
+        baselineVersion: input.baselineVersion, baselineSha: input.baselineSha, baselineDigest: input.baselineDigest },
+    });
+    return { ...result, source: 'repository-target-local-recovery', repositorySyncAccepted: false };
   }
   @Get('repository-targets/:targetId/deletion-audits/:auditId/recovery-review')
   @Header('Cache-Control', 'no-store')

@@ -1215,7 +1215,36 @@ try {
   await prisma.groupMember.create({data:{groupId:internalReviewGroup.id,userId:member.user.id}});
   let internalReviewGroupDenied=false;try{await recoveryAuthService.reviewRepositoryRecovery({via:'jwt',userId:member.user.id},project.id,target.id,audit.id);}catch(e){internalReviewGroupDenied=e.getStatus?.()===403;}
   check('internal repository recovery review explicitly matches direct-admin-only composition',internalReviewGroupDenied);
+  check('local recovery HTTP denies group-only admin',(await call(targetRecoveryPath.replace('/recovery-review','/recover-local'),{jwt:member.accessToken,method:'POST',body:{confirmation:'recover-local-value',expectedBranchId:internalReview.recovery.expectedBranchId,expectedKeyUpdatedAt:internalReview.recovery.expectedKeyUpdatedAt,expectedKeyRevision:internalReview.recovery.expectedKeyRevision,expectedValueDigest:internalReview.recovery.expectedValueDigest,targetRevision:internalReview.repository.targetRevision,branch:internalReview.repository.branch,locale:internalReview.repository.locale,baselineVersion:internalReview.repository.baselineVersion,baselineSha:internalReview.repository.baselineSha,baselineDigest:internalReview.repository.baselineDigest}})).status===409);
   check('target recovery HTTP review explicitly denies group-only admin',(await call(targetRecoveryPath,{jwt:member.accessToken})).status===403);await prisma.group.delete({where:{id:internalReviewGroup.id}});
+  const httpRecoveryKey=await prisma.key.create({data:{projectId:project.id,branchId:writeScope.branchId,name:'http-local-recovery'}});
+  const httpRecoveryAudit=await prisma.translationDeletionAudit.create({data:{projectId:project.id,keyId:httpRecoveryKey.id,keyName:httpRecoveryKey.name,localeCode:'en',snapshot:{row:{projectId:project.id,keyId:httpRecoveryKey.id,localeCode:'en',value:'HTTP recovered value'},history:[]}}});
+  await prisma.repositoryRemovalGeneration.create({data:{projectId:project.id,keyId:httpRecoveryKey.id,locale:'en',auditId:httpRecoveryAudit.id}});
+  const httpRecoverPath=`${T}/${target.id}/deletion-audits/${httpRecoveryAudit.id}/recover-local`;
+  const httpReview=(await call(httpRecoverPath.replace('/recover-local','/recovery-review'),{jwt:admin.accessToken})).json;
+  const httpRecoverInput={confirmation:'recover-local-value',expectedBranchId:httpReview.recovery.expectedBranchId,expectedKeyUpdatedAt:httpReview.recovery.expectedKeyUpdatedAt,expectedKeyRevision:httpReview.recovery.expectedKeyRevision,expectedValueDigest:httpReview.recovery.expectedValueDigest,targetRevision:httpReview.repository.targetRevision,branch:httpReview.repository.branch,locale:httpReview.repository.locale,baselineVersion:httpReview.repository.baselineVersion,baselineSha:httpReview.repository.baselineSha,baselineDigest:httpReview.repository.baselineDigest};
+  check('local recovery HTTP validates UUID path',(await call(httpRecoverPath.replace(httpRecoveryAudit.id,'not-uuid'),{jwt:admin.accessToken,method:'POST',body:httpRecoverInput})).status===400);
+  const recoveryCacheResponse=await fetch(API+httpRecoverPath,{method:'POST',headers:{Authorization:`Bearer ${admin.accessToken}`,'Content-Type':'application/json'},body:JSON.stringify({...httpRecoverInput,expectedKeyRevision:httpRecoverInput.expectedKeyRevision+1})});
+  check('local recovery HTTP stale denial is no-store',recoveryCacheResponse.status===409&&recoveryCacheResponse.headers.get('cache-control')==='no-store');await recoveryCacheResponse.arrayBuffer();
+  const httpRecoveryBefore=await recoveryCountsForComposition();
+  for(const [label,options,status] of [['no session',{},401],['token',{apiKey:token.token},403],['member',{jwt:member.accessToken},403],['outsider',{jwt:outsider.accessToken},404]]){
+    check('local recovery HTTP denies '+label,(await call(httpRecoverPath,{...options,method:'POST',body:httpRecoverInput})).status===status);
+  }
+  for(const [field,value] of [['confirmation','yes'],['expectedKeyRevision',0],['baselineSha','bad'],['expectedValueDigest','BAD'],['expectedBranchId','bad'],['expectedKeyUpdatedAt','yesterday'],['targetRevision',1.1],['baselineVersion',0]]){
+    check('local recovery HTTP validates '+field,(await call(httpRecoverPath,{jwt:admin.accessToken,method:'POST',body:{...httpRecoverInput,[field]:value}})).status===400);
+  }
+  for(const [field,value] of [['expectedKeyRevision',httpRecoverInput.expectedKeyRevision+1],['targetRevision',httpRecoverInput.targetRevision+1],['baselineVersion',httpRecoverInput.baselineVersion+1],['expectedValueDigest','f'.repeat(64)]]){
+    check('local recovery HTTP denies stale '+field,(await call(httpRecoverPath,{jwt:admin.accessToken,method:'POST',body:{...httpRecoverInput,[field]:value}})).status===409);
+  }
+  check('local recovery HTTP all denials leave actual recovery counts unchanged',JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(httpRecoveryBefore));
+  const httpRecovered=await call(httpRecoverPath,{jwt:admin.accessToken,method:'POST',body:{...httpRecoverInput,actorId:outsider.user.id,value:'forged caller value',projectId:summaryOtherProject.id}});
+  const httpRecoveredRow=await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:httpRecoveryKey.id,localeCode:'en'}}});
+  const httpRecoveredIntent=await prisma.repositoryLocalEffectIntent.findFirst({where:{keyId:httpRecoveryKey.id}});
+  check('local recovery HTTP commits exact archived value and authenticated actor not forged body',httpRecovered.status===201&&httpRecovered.json.restoredValues===1&&httpRecovered.json.pendingEffectIntents===1&&httpRecoveredRow.value==='HTTP recovered value'&&httpRecoveredRow.status==='UNVERIFIED'&&httpRecoveredIntent.actorId===admin.user.id&&httpRecoveredIntent.translationRowId===httpRecoveredRow.rowId&&await prisma.translationHistory.count({where:{keyId:httpRecoveryKey.id,changedById:admin.user.id}})===1);
+  check('local recovery HTTP response states local-only scope without archive replay',httpRecovered.json.source==='repository-target-local-recovery'&&httpRecovered.json.remoteWritten===false&&httpRecovered.json.baselineAdvanced===false&&httpRecovered.json.repositorySyncAccepted===false&&httpRecovered.json.historyReplayed===false&&await prisma.translationDeletionAudit.count({where:{id:httpRecoveryAudit.id}})===1&&await prisma.repositoryRemovalGeneration.count({where:{keyId:httpRecoveryKey.id}})===0);
+  const httpAfterRecovery=await recoveryCountsForComposition();
+  check('local recovery HTTP replay409 never duplicates effects',(await call(httpRecoverPath,{jwt:admin.accessToken,method:'POST',body:httpRecoverInput})).status===409&&JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(httpAfterRecovery));
+  await prisma.repositoryLocalEffectIntent.deleteMany({where:{keyId:httpRecoveryKey.id}});await prisma.key.delete({where:{id:httpRecoveryKey.id}});await prisma.translationDeletionAudit.delete({where:{id:httpRecoveryAudit.id}});await prisma.activityEvent.deleteMany({where:{projectId:project.id,keyName:httpRecoveryKey.name}});
   const snapshotReviewProjects={requireAdmin:(...args)=>recoveryProjects.requireAdmin(...args),requireAdminInTransaction:async(tx,...args)=>{await recoveryProjects.requireAdminInTransaction(tx,...args);await prisma.repositorySyncTarget.update({where:{id:target.id},data:{revision:{increment:1}}});}};
   let sameSnapshotReview;
   try{

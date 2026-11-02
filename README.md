@@ -596,7 +596,7 @@ even when archived value digest still matches. No public recovery surface is add
 Session admins can inspect `GET /api/projects/{projectId}/sync/deletion-audits/{auditId}/recovery-preview`. The no-store read returns
 current eligibility/reason only,never value/digest/history or restore authority.
 It uses a consistent RepeatableRead snapshot,holds no reservation,and cannot promise
-that eligibility stays valid. canRestore=false;no public restore mutation/UI.
+that eligibility stays valid. canRestore=false;this preview does not mutate. Separate explicit recover-local API now exists;no restore UI action.
 
 Audit cards now offer an explicit read-only eligibility check with fixed plain-language
 reasons,current-only/no-reservation warning and no restore action. Page refresh or
@@ -634,7 +634,7 @@ revocations deny metadata;separate page requests are not one frozen snapshot.
 
 Internal recovery guard accepts effective group ADMIN as well as direct admin,
 while requiring current team membership. It locks matching group grant/role rows
-with the same per-lock timeout;revoked grants fail closed. No public restore action.
+with the same per-lock timeout;revoked grants fail closed. No restore UI action.
 
 Recovery direct-admin authorization depends only on its locked team grant,not
 unrelated group rows. Group-derived authorization locks matching ADMIN grants,
@@ -673,12 +673,12 @@ is not a substitute for authorization or proof that other routes are read-only.
 
 Internal recovery composition now commits a guarded fresh row and one generation-bound
 repository effect intent atomically under current target/baseline scope and pending queue
-budget. No public restore route/UI, fresh GitHub read, worker enablement, remote write
+budget. At review0216 there was no public restore route/UI, fresh GitHub read, worker enablement, remote write
 or baseline advance. Composition currently requires direct team admin. See review0216.
 
 Recovery composition now has actual PostgreSQL contention tests for both mutable
 caller scopes,project/target/baseline lock timeouts and competing recoveries with
-one committed effect intent. No public restore execution. See review0217.
+one committed effect intent. At review0217 there was no public restore execution.
 
 Recovery-created intents now pass actual signed HTTP receiver and task automation
 through the combined internal step,checkpointed requeue and superseded-generation
@@ -690,11 +690,11 @@ authorization and bounded value review. No public route or restore grant. See re
 
 Internal authenticated recovery execution now binds session/project/target/audit
 and captured reviewed scopes before one Serializable composition transaction,with
-no retry and actual rollback/replay tests. No public restore route/UI. See review0220.
+no retry and actual rollback/replay tests. At review0220 there was no public restore route/UI.
 
 Separate target-scoped read-only recovery review GET exposes bounded archived value
 and current review bindings to session direct admins,with UUID/no-store/denial
-privacy tests. No execution route or UI consumer yet. See review0221.
+privacy tests. At review0221 there was no execution route or UI consumer.
 
 Archived review UI now explicitly chooses value-only or selected repository target,
 shows target/snapshot limits,and clears/fences private text when scope changes.
@@ -720,3 +720,18 @@ value/history/activity bound across async work; PostgreSQL controls in review022
 
 Internal recovery execution has typed400/409 denial handling,including actual
 PostgreSQL lock/serialization tests;unknown faults remain faults. See review0228.
+
+### Explicit local archived-value recovery API (review0229)
+
+POST `/api/projects/{projectId}/sync/repository-targets/{targetId}/deletion-audits/{auditId}/recover-local`
+requires a signed-in direct team admin,`confirmation: recover-local-value` and
+reviewed `expectedBranchId,expectedKeyUpdatedAt,expectedKeyRevision,expectedValueDigest,
+targetRevision,branch,locale,baselineVersion,baselineSha,baselineDigest` from the
+separate target recovery review. Session/path supply actor/project/target/audit.
+One Serializable transaction revalidates all bindings and current absence,then
+creates a fresh unverified locale value,new history/activity/TM and one pending
+effect intent. Archive retained,no history replay. Stale/replay/busy/backlog409,
+malformed/unsupported400,unexpected fault500 with rollback. No retry/fresh review,
+remote read/write,baseline advance or accepted sync. Worker remains defaultOFF.
+No restore UI action yet;review UI remains read-only. Earlier review notes describe
+the surface at their respective milestones,not the current API inventory.

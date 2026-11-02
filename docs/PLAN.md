@@ -182,12 +182,12 @@ add languages, manage keys and translations, export a file.
 
 Internal recovery composition now commits a guarded fresh row and one generation-bound
 repository effect intent atomically under current target/baseline scope and pending queue
-budget. No public restore route/UI, fresh GitHub read, worker enablement, remote write
+budget. At review0216 there was no public restore route/UI, fresh GitHub read, worker enablement, remote write
 or baseline advance. Composition currently requires direct team admin. See review0216.
 
 Recovery composition now has actual PostgreSQL contention tests for both mutable
 caller scopes,project/target/baseline lock timeouts and competing recoveries with
-one committed effect intent. No public restore execution. See review0217.
+one committed effect intent. At review0217 there was no public restore execution.
 
 Recovery-created intents now pass actual signed HTTP receiver and task automation
 through the combined internal step,checkpointed requeue and superseded-generation
@@ -199,11 +199,11 @@ authorization and bounded value review. No public route or restore grant. See re
 
 Internal authenticated recovery execution now binds session/project/target/audit
 and captured reviewed scopes before one Serializable composition transaction,with
-no retry and actual rollback/replay tests. No public restore route/UI. See review0220.
+no retry and actual rollback/replay tests. At review0220 there was no public restore route/UI.
 
 Separate target-scoped read-only recovery review GET exposes bounded archived value
 and current review bindings to session direct admins,with UUID/no-store/denial
-privacy tests. No execution route or UI consumer yet. See review0221.
+privacy tests. At review0221 there was no execution route or UI consumer.
 
 Archived review UI now explicitly chooses value-only or selected repository target,
 shows target/snapshot limits,and clears/fences private text when scope changes.
@@ -236,4 +236,11 @@ review0227.
 Internal recovery execution now maps typed domain limits/conflicts and exact
 Prisma serialization/lock-timeout errors to explicit400/409 without retry. Actual
 PostgreSQL55P03/40001 cases prove one attempt and unchanged recovery effects;
-unknown faults remain faults. No public restore route. See review0228.
+unknown faults remain faults. At review0228 no public restore route existed.
+
+Explicit session direct-admin recover-local POST now validates exact confirmation
+and flat reviewed bindings,then uses one captured-scope Serializable execution.
+Real HTTP auth/validation/stale/commit/replay/forged-body tests cover local-only
+value/history/intent outcomes. No restore UI action,remote read/write,baseline
+advance or worker enablement. Current138routes. See review0229;older notes are
+historical implementation milestones.
