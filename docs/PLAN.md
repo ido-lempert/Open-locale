@@ -288,3 +288,8 @@ Configuration save/remove now share refresh's immediate private archived-review
 cleanup before network awaits,including failures. Successful removal cannot leave
 prepared bindings for a missing target. Unit success/failure/guards and browser
 failed save/remove plus actual removal verified. See review0239.
+
+Actual successful-save browser boundary now verified:held PUT clears prepared
+recovery,committed path/revision invalidates baseline with no local recovery writes,
+fresh no-baseline review denied/no prepare. Test-only fixture reset isolates later
+recovery cases,not UI baseline acceptance. See review0240.

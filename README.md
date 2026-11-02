@@ -789,3 +789,9 @@ Configuration save/removal also clears private archived review/prepared recovery
 before its request,even if it fails. Refresh/save/remove share this cleanup;new
 explicit review required. Busy/unconfirmed actions do not cancel pending work.
 See review0239 for unit success/failure and actual browser removal evidence.
+
+Successful configuration save also has real browser boundary coverage:prepared
+recovery clears before held PUT completes,committed coordinate revision invalidates
+baseline without locale/history/queue writes,and new review exposes no value or
+prepare control until a baseline is available. See review0240;fixture restoration
+for later tests is not a baseline-acceptance UI claim.
