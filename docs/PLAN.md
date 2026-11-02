@@ -196,3 +196,7 @@ denial. No worker enablement or public restore execution. See review0218.
 Internal target-scoped recovery review now derives current audit/key and repository
 target/baseline bindings in one DB-enforced read-only snapshot,with direct-admin
 authorization and bounded value review. No public route or restore grant. See review0219.
+
+Internal authenticated recovery execution now binds session/project/target/audit
+and captured reviewed scopes before one Serializable composition transaction,with
+no retry and actual rollback/replay tests. No public restore route/UI. See review0220.

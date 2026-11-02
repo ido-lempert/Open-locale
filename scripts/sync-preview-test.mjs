@@ -985,6 +985,43 @@ try {
   const reviewBeforeProject=await prisma.project.findUnique({where:{id:project.id}});let reviewReadOnly=false;
   try{await new AuditPageService(prisma,reviewReadOnlyProjects,{}).reviewRepositoryRecovery(adminPrincipal,project.id,target.id,audit.id);}catch(e){reviewReadOnly=e.code==='P2010'&&e.meta?.code==='25006';}
   check('internal repository recovery review database read-only denies actual write25006',reviewReadOnly&&JSON.stringify(await prisma.project.findUnique({where:{id:project.id}}))===JSON.stringify(reviewBeforeProject));
+  const serviceExecutionCounts=await recoveryCountsForComposition();
+  for(const [label,principal,pid,tid,aid,review] of [
+    ['token',{via:'api-token',userId:admin.user.id},project.id,target.id,audit.id,internalReview],
+    ['actor',{via:'jwt',userId:owner.user.id},project.id,target.id,audit.id,internalReview],
+    ['project',adminPrincipal,summaryOtherProject.id,target.id,audit.id,internalReview],
+    ['target',adminPrincipal,project.id,owner.user.id,audit.id,internalReview],
+    ['audit',adminPrincipal,project.id,target.id,owner.user.id,internalReview],
+    ['unavailable',adminPrincipal,project.id,target.id,audit.id,{...internalReview,reviewAvailable:false}],
+    ['stale-key',adminPrincipal,project.id,target.id,audit.id,{...internalReview,recovery:{...internalReview.recovery,expectedKeyRevision:internalReview.recovery.expectedKeyRevision+1}}],
+  ]){
+    let denied=false;try{await recoveryAuthService.executeRepositoryRecovery(principal,pid,tid,aid,review);}catch(e){denied=label==='token'?e.getStatus?.()===403:label==='stale-key'?e.name==='RepositoryLocalError':e.getStatus?.()===409;}
+    check('internal recovery execution service denies '+label+' without persistent effects',denied&&JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(serviceExecutionCounts));
+  }
+  const revokedExecutionProjects={requireAdmin:async(...args)=>{await recoveryProjects.requireAdmin(...args);await prisma.teamMember.update({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},data:{role:'MEMBER'}});}};
+  let executionRevoked=false;try{await new AuditPageService(prisma,revokedExecutionProjects,{}).executeRepositoryRecovery(adminPrincipal,project.id,target.id,audit.id,internalReview);}catch(e){executionRevoked=e.name==='RepositoryLocalError';}
+  check('internal recovery service rechecks committed admin revocation inside write transaction',executionRevoked&&JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(serviceExecutionCounts));await prisma.teamMember.update({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},data:{role:'ADMIN'}});
+  const mutableServiceReview=structuredClone(internalReview);let capturedServiceIntent,capturedServiceResult;
+  const serviceCaptureProjects={requireAdmin:async(...args)=>{await recoveryProjects.requireAdmin(...args);mutableServiceReview.recovery.expectedKeyRevision=0;mutableServiceReview.recovery.actorId=outsider.user.id;mutableServiceReview.repository.targetRevision=999;mutableServiceReview.repository.actorId=outsider.user.id;}};
+  const serviceCaptureDb={$transaction:async(fn,options)=>prisma.$transaction(async tx=>{capturedServiceResult=await fn(tx);capturedServiceIntent=await tx.repositoryLocalEffectIntent.findFirst({where:{translationRowId:capturedServiceResult.rowId}});throw new Error('rollback service capture');},options)};
+  let serviceCapture=false;try{await new AuditPageService(serviceCaptureDb,serviceCaptureProjects,{}).executeRepositoryRecovery(adminPrincipal,project.id,target.id,audit.id,mutableServiceReview);}catch(e){serviceCapture=e.message==='rollback service capture';}
+  check('internal execution preserves reviewed primitives across actual preflight mutation',serviceCapture&&capturedServiceResult.pendingEffectIntents===1&&capturedServiceIntent.actorId===admin.user.id&&capturedServiceIntent.targetRevision===writeScope.targetRevision);
+  check('service preflight mutation rollback leaves actual values and intents unchanged',JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(serviceExecutionCounts));
+  const serviceKey=await prisma.key.create({data:{projectId:project.id,branchId:writeScope.branchId,name:'recovery-service-commit'}});
+  const serviceAudit=await prisma.translationDeletionAudit.create({data:{projectId:project.id,keyId:serviceKey.id,keyName:serviceKey.name,localeCode:'en',snapshot:{row:{projectId:project.id,keyId:serviceKey.id,localeCode:'en',value:'Service recovered value'},history:[]}}});
+  await prisma.repositoryRemovalGeneration.create({data:{projectId:project.id,keyId:serviceKey.id,locale:'en',auditId:serviceAudit.id}});
+  const serviceReview=await recoveryAuthService.reviewRepositoryRecovery(adminPrincipal,project.id,target.id,serviceAudit.id);
+  let failingTransactions=0;
+  const serviceFaultDb={$transaction:async(fn,options)=>{failingTransactions++;return prisma.$transaction(tx=>fn({...tx,repositoryLocalEffectIntent:{...tx.repositoryLocalEffectIntent,create:async()=>{throw new Error('service intent fault');}}}),options);}};
+  const beforeServiceFault=await recoveryCountsForComposition();let serviceFault=false;
+  try{await new AuditPageService(serviceFaultDb,recoveryProjects,{}).executeRepositoryRecovery(adminPrincipal,project.id,target.id,serviceAudit.id,serviceReview);}catch(e){serviceFault=e.message==='service intent fault';}
+  check('recovery execution service storage fault rolls back once without retry',serviceFault&&failingTransactions===1&&JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(beforeServiceFault)&&!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:serviceKey.id,localeCode:'en'}}}));
+  const serviceResult=await recoveryAuthService.executeRepositoryRecovery(adminPrincipal,project.id,target.id,serviceAudit.id,serviceReview);
+  const serviceIntent=await prisma.repositoryLocalEffectIntent.findFirst({where:{keyId:serviceKey.id}});
+  check('authenticated internal recovery service commits one value and intent with reviewed session actor',serviceResult.restoredValues===1&&serviceResult.pendingEffectIntents===1&&serviceIntent.actorId===admin.user.id&&serviceIntent.translationRowId===serviceResult.rowId&&serviceIntent.value==='Service recovered value'&&await prisma.translationHistory.count({where:{keyId:serviceKey.id,changedById:admin.user.id}})===1&&await prisma.translationDeletionAudit.count({where:{id:serviceAudit.id}})===1);
+  let serviceReplay=false;try{await recoveryAuthService.executeRepositoryRecovery(adminPrincipal,project.id,target.id,serviceAudit.id,serviceReview);}catch(e){serviceReplay=e.name==='RepositoryLocalError';}
+  check('authenticated recovery service replay never duplicates committed effects',serviceReplay&&await prisma.repositoryLocalEffectIntent.count({where:{keyId:serviceKey.id}})===1&&await prisma.translationHistory.count({where:{keyId:serviceKey.id}})===1);
+  await prisma.repositoryLocalEffectIntent.deleteMany({where:{keyId:serviceKey.id}});await prisma.key.delete({where:{id:serviceKey.id}});await prisma.translationDeletionAudit.delete({where:{id:serviceAudit.id}});await prisma.activityEvent.deleteMany({where:{projectId:project.id,keyName:serviceKey.name}});
   const reviewBaseline=await prisma.repositorySyncBaseline.findUnique({where:{targetId:target.id}});
   for(const mode of ['baseline-missing','baseline-stale','target-locale','value-too-large','value-exists']){
     let reviewDenied;

@@ -31,6 +31,7 @@ import { AuthModule } from '../auth/auth.module';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthPrincipal } from '../auth/auth.service';
+import { deletionRecoveryTransaction } from './deletion-recovery-transaction';
 import { inspectDeletionRecovery } from './deletion-recovery-plan';
 import { parseSyncJson, previewSync } from './sync-preview';
 import { resolvePlan, ResolutionChoice } from './resolve-preview';
@@ -138,6 +139,28 @@ export class LocalSyncPreviewService {
           baselineVersion: base.version, baselineSha: base.remoteSha, baselineDigest: base.contentDigest },
         canRestore: false as const, reservationHeld: false as const };
     }, { isolationLevel: 'RepeatableRead' });
+  }
+  // Internal authenticated execution boundary only,no HTTP route. Review is
+  // explicit caller input,not a grant. Never refresh/retry stale reviewed scope.
+  async executeRepositoryRecovery(
+    user: AuthPrincipal, projectId: string, targetId: string, auditId: string,
+    review: Awaited<ReturnType<LocalSyncPreviewService['reviewRepositoryRecovery']>>,
+  ) {
+    if (user.via !== 'jwt') throw new ForbiddenException('Recovery execution requires a signed-in session');
+    // Capture caller-owned primitives before authorization can yield.
+    const recovery = review?.recovery ? { ...review.recovery } : null;
+    const repository = review?.repository ? { ...review.repository } : null;
+    if (!review?.reviewAvailable || !recovery || !repository ||
+        recovery.projectId !== projectId || repository.projectId !== projectId ||
+        repository.targetId !== targetId || recovery.auditId !== auditId ||
+        recovery.actorId !== user.userId || repository.actorId !== user.userId)
+      throw new ConflictException('Recovery review scope changed; review again');
+    const actorId = user.userId;
+    await this.projects.requireAdmin(actorId, projectId);
+    return this.prisma.$transaction(
+      tx => deletionRecoveryTransaction(tx, { ...recovery, actorId }, { ...repository, actorId }),
+      { isolationLevel: 'Serializable' },
+    );
   }
   async previewDeletionRecovery(user: AuthPrincipal, projectId: string, auditId: string) {
     if (user.via !== 'jwt') throw new ForbiddenException('Recovery preview requires a signed-in session');
