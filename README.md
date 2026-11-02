@@ -670,3 +670,8 @@ Eligibility,value-review and deletion-audit page transactions set PostgreSQL REA
 ONLY before snapshot authorization. Accidental SQL writes fail25006 instead of
 mutating data. This database guard complements,no-store/session/admin controls;it
 is not a substitute for authorization or proof that other routes are read-only.
+
+Internal recovery composition now commits a guarded fresh row and one generation-bound
+repository effect intent atomically under current target/baseline scope and pending queue
+budget. No public restore route/UI, fresh GitHub read, worker enablement, remote write
+or baseline advance. Composition currently requires direct team admin. See review0216.

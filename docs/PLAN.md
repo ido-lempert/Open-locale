@@ -179,3 +179,8 @@ add languages, manage keys and translations, export a file.
 - https://lokalise.com/pricing - the full feature matrix used for the capability map.
 - https://lokalise.com/integrations - the 60+ app directory.
 - https://github.com/ido-lempert/Open-locale - where all code lands.
+
+Internal recovery composition now commits a guarded fresh row and one generation-bound
+repository effect intent atomically under current target/baseline scope and pending queue
+budget. No public restore route/UI, fresh GitHub read, worker enablement, remote write
+or baseline advance. Composition currently requires direct team admin. See review0216.

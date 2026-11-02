@@ -14,6 +14,8 @@ const recoveryLockSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src
 const {lockDeletionRecovery}=await import('data:text/javascript;base64,'+Buffer.from(recoveryLockSource).toString('base64'));
 const recoveryWriterSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/deletion-recovery-writer.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
 const {writeDeletionRecovery}=await import('data:text/javascript;base64,'+Buffer.from(recoveryWriterSource).toString('base64'));
+const recoveryTransactionSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/deletion-recovery-transaction.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
+const {deletionRecoveryTransaction}=await import('data:text/javascript;base64,'+Buffer.from(recoveryTransactionSource).toString('base64'));
 const transactionSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-local-transaction.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
 const {repositoryLocalTransaction}=await import('data:text/javascript;base64,'+Buffer.from(transactionSource).toString('base64'));
 const leaseSource=execFileSync('node_modules/.bin/esbuild',['apps/api/src/app/github/repository-effect-lease.ts','--bundle','--platform=node','--format=esm'],{encoding:'utf8'});
@@ -631,6 +633,53 @@ try {
   check('internal recovery diagnostic never alters archived snapshot',JSON.stringify(await prisma.translationDeletionAudit.findUnique({where:{id:audit.id}}))===recoveryBefore);
   const currentRecoveryReview=await inspectDeletionRecovery(prisma,project.id,audit.id);
   const recoveryScope={projectId:project.id,actorId:owner.user.id,auditId:audit.id,expectedBranchId:recovery.branchId,expectedKeyUpdatedAt:currentRecoveryReview.keyUpdatedAt,expectedKeyRevision:currentRecoveryReview.keyRevision,expectedValueDigest:recovery.valueDigest};
+  // Recovery composition is rollback-only here: preserve the downstream absence fixtures.
+  const composedRecoveryCounts=await recoveryCountsForComposition();
+  async function recoveryCountsForComposition(){return {rows:await prisma.translation.count(),history:await prisma.translationHistory.count(),activity:await prisma.activityEvent.count(),tm:await prisma.tmEntry.count(),markers:await prisma.repositoryRemovalGeneration.count(),intents:await prisma.repositoryLocalEffectIntent.count()};}
+  let composedRecoveryResult,composedRecoveryIntent,composedRecoveryRow;
+  try{await prisma.$transaction(async tx=>{
+    composedRecoveryResult=await deletionRecoveryTransaction(tx,recoveryScope,writeScope);
+    composedRecoveryRow=await tx.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}});
+    composedRecoveryIntent=await tx.repositoryLocalEffectIntent.findFirst({where:{translationRowId:composedRecoveryResult.rowId}});
+    const leased=await tx.repositoryLocalEffectIntent.update({where:{id:composedRecoveryIntent.id},data:{state:'leased',leaseToken:owner.user.id,leaseUntil:new Date('2099-01-01')}});
+    check('recovery composition produces actually eligible generation-bound set intent',(await validateRepositoryEffect(tx,leased.id,owner.user.id)).id===leased.id);
+    throw new Error('rollback composed recovery');
+  },{isolationLevel:'Serializable'});}catch(e){if(e.message!=='rollback composed recovery')throw e;}
+  check('recovery composition binds exact row value actor target and fresh provenance',composedRecoveryIntent.projectId===project.id&&composedRecoveryIntent.actorId===owner.user.id&&composedRecoveryIntent.targetId===target.id&&composedRecoveryIntent.targetRevision===writeScope.targetRevision&&composedRecoveryIntent.keyId===localKey.id&&composedRecoveryIntent.locale==='en'&&composedRecoveryIntent.operation==='set-value'&&composedRecoveryIntent.value==='writer draft'&&composedRecoveryIntent.translationRowId===composedRecoveryRow.rowId&&composedRecoveryIntent.translationVersion===1&&composedRecoveryIntent.removalAuditId===null&&composedRecoveryIntent.draftContentDigest===recoveryScope.expectedValueDigest&&composedRecoveryIntent.previewFingerprint.length===64&&composedRecoveryResult.pendingEffectIntents===1&&composedRecoveryResult.repositoryEffectsCreated===true&&composedRecoveryResult.remoteWritten===false&&composedRecoveryResult.baselineAdvanced===false);
+  check('recovery composition rollback restores value history TM generation and intent counts',JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(composedRecoveryCounts)&&JSON.stringify(await prisma.translationDeletionAudit.findUnique({where:{id:audit.id}}))===recoveryBefore);
+  for(const [label,r,repo] of [
+    ['project',{}, {projectId:summaryOtherProject.id}],['actor',{}, {actorId:admin.user.id}],
+    ['branch',{}, {branchId:owner.user.id}],['locale',{}, {locale:'he'}],
+    ['target revision',{}, {targetRevision:999}],['baseline version',{}, {baselineVersion:999}],
+    ['stale recovery',{expectedKeyRevision:recoveryScope.expectedKeyRevision+1},{}],
+  ]){
+    let denied=false;try{await prisma.$transaction(tx=>deletionRecoveryTransaction(tx,{...recoveryScope,...r},{...writeScope,...repo}),{isolationLevel:'Serializable'});}catch(e){denied=e.name==='RepositoryLocalError';}
+    check('recovery composition denies mismatched '+label+' atomically',denied&&JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(composedRecoveryCounts));
+  }
+  let intentFault=false;
+  try{await prisma.$transaction(tx=>deletionRecoveryTransaction({...tx,repositoryLocalEffectIntent:{...tx.repositoryLocalEffectIntent,create:async()=>{throw new Error('injected recovery intent failure');}}},recoveryScope,writeScope),{isolationLevel:'Serializable'});}catch(e){intentFault=e.message==='injected recovery intent failure';}
+  check('actual intent insertion fault rolls back recovery value history TM and deletion generation',intentFault&&JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(composedRecoveryCounts)&&!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}}));
+  for(const [label,action] of [
+    ['byte budget',async tx=>{await tx.repositoryLocalEffectIntent.create({data:{projectId:project.id,targetId:target.id,actorId:owner.user.id,keyId:localKey.id,keyName:'budget-fixture',branchId:writeScope.branchId,branch:'main',locale:'en',operation:'set-value',value:'x'.repeat(8*1024*1024),draftContentDigest:'a'.repeat(64),previewFingerprint:'b'.repeat(64)}});}],
+    ['count budget',async tx=>{await tx.$executeRaw`INSERT INTO repository_local_effect_intents (id,"projectId","targetId","actorId","keyId","keyName","branchId",branch,locale,operation,value,"draftContentDigest","previewFingerprint","createdAt","availableAt",state,attempts) SELECT gen_random_uuid(),${project.id}::uuid,${target.id}::uuid,${owner.user.id}::uuid,${localKey.id}::uuid,'budget-fixture',${writeScope.branchId}::uuid,'main','en','set-value','',repeat('a',64),repeat('b',64),now(),now(),'pending',0 FROM generate_series(1,10000)`;}],
+  ]){
+    let denied=false;try{await prisma.$transaction(async tx=>{await action(tx);await deletionRecoveryTransaction(tx,recoveryScope,writeScope);throw new Error('budget negative-control rollback');},{isolationLevel:'Serializable',timeout:10000});}catch(e){denied=e.name==='RepositoryLocalError'&&e.kind==='backlog';if(!denied)console.log('BUDGET_DIAG',label,e.message);}
+    check('actual recovery composition '+label+' denies atomically before writes',denied&&JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(composedRecoveryCounts));
+  }
+  let weakRecoveryComposition=false;try{await prisma.$transaction(tx=>deletionRecoveryTransaction(tx,recoveryScope,writeScope));}catch(e){weakRecoveryComposition=e.message==='Repository write scope requires serializable transaction';}
+  check('recovery composition requires Serializable isolation',weakRecoveryComposition);
+  const composeKey=await prisma.key.create({data:{projectId:project.id,branchId:writeScope.branchId,name:'composed-recovery-commit'}});
+  const composeAudit=await prisma.translationDeletionAudit.create({data:{projectId:project.id,keyId:composeKey.id,keyName:composeKey.name,localeCode:'en',snapshot:{row:{projectId:project.id,keyId:composeKey.id,localeCode:'en',value:'Committed composed recovery'},history:[]}}});
+  await prisma.repositoryRemovalGeneration.create({data:{projectId:project.id,keyId:composeKey.id,locale:'en',auditId:composeAudit.id}});
+  const composeRecoveryScope={...recoveryScope,auditId:composeAudit.id,expectedKeyUpdatedAt:composeKey.updatedAt.toISOString(),expectedKeyRevision:composeKey.revision,expectedValueDigest:createHash('sha256').update('Committed composed recovery').digest('hex')};
+  const composeBaselineBefore=JSON.stringify(await prisma.repositorySyncBaseline.findUnique({where:{targetId:target.id}}));const composeRepoCalls=repoCalls;
+  const committedComposeRecovery=await prisma.$transaction(tx=>deletionRecoveryTransaction(tx,composeRecoveryScope,writeScope),{isolationLevel:'Serializable'});
+  const committedComposeIntent=await prisma.repositoryLocalEffectIntent.findFirst({where:{keyId:composeKey.id}});
+  check('committed recovery composition persists one pending intent with fresh row generation',committedComposeIntent.state==='pending'&&committedComposeIntent.translationRowId===committedComposeRecovery.rowId&&await prisma.repositoryLocalEffectIntent.count({where:{keyId:composeKey.id}})===1&&await prisma.translationHistory.count({where:{keyId:composeKey.id}})===1&&await prisma.repositoryRemovalGeneration.count({where:{keyId:composeKey.id}})===0&&await prisma.translationDeletionAudit.count({where:{id:composeAudit.id}})===1);
+  let composeRepeat=false;try{await prisma.$transaction(tx=>deletionRecoveryTransaction(tx,composeRecoveryScope,writeScope),{isolationLevel:'Serializable'});}catch(e){composeRepeat=e.name==='RepositoryLocalError';}
+  check('committed composed recovery repeated attempt never duplicates value or effect',composeRepeat&&await prisma.repositoryLocalEffectIntent.count({where:{keyId:composeKey.id}})===1&&await prisma.translationHistory.count({where:{keyId:composeKey.id}})===1);
+  check('recovery composition never calls repository or advances accepted baseline',repoCalls===composeRepoCalls&&JSON.stringify(await prisma.repositorySyncBaseline.findUnique({where:{targetId:target.id}}))===composeBaselineBefore);
+  await prisma.repositoryLocalEffectIntent.deleteMany({where:{keyId:composeKey.id}});await prisma.key.delete({where:{id:composeKey.id}});await prisma.translationDeletionAudit.delete({where:{id:composeAudit.id}});await prisma.activityEvent.deleteMany({where:{projectId:project.id,keyName:composeKey.name}});
   const recoveryOtherBranch=await prisma.branch.create({data:{projectId:project.id,name:'recovery-other'}});
   let movedRecoveryDenied=false;try{await prisma.$transaction(async tx=>{await tx.key.update({where:{id:localKey.id},data:{branchId:recoveryOtherBranch.id}});await lockDeletionRecovery(tx,recoveryScope);},{isolationLevel:'Serializable'});}catch(e){movedRecoveryDenied=e.name==='RepositoryLocalError';}
   check('locked recovery rejects actual key movement away from reviewed branch',movedRecoveryDenied&&(await prisma.key.findUnique({where:{id:localKey.id}})).branchId===recovery.branchId);
