@@ -1271,6 +1271,8 @@ export {BranchesService} from './apps/api/src/app/branches/branches.service';
 export {LocalSyncPreviewService} from './apps/api/src/app/github/sync-preview.controller';
 export {WebhooksService} from './apps/api/src/app/webhooks/webhooks.service';
 export {AutomationsService} from './apps/api/src/app/automations/automations.service';
+export {TasksService} from './apps/api/src/app/tasks/tasks.service';
+export {ActivityService} from './apps/api/src/app/activity/activity.service';
 export {runRepositoryEffectStep} from './apps/api/src/app/github/repository-effect-step';`);
   execFileSync('node_modules/.bin/esbuild',[serviceEntry,'--bundle','--platform=node','--format=cjs','--packages=external','--outfile='+serviceBundle]);
   const {ProjectsService,BranchesService,LocalSyncPreviewService}=require(serviceBundle);
@@ -1457,6 +1459,47 @@ export {runRepositoryEffectStep} from './apps/api/src/app/github/repository-effe
     check('HTTP-generated superseded set intents never deliver older value',steps.filter(x=>x.status==='ineligible').length===2&&effectReceipts.every(r=>JSON.parse(r.body).operation==='remove-locale-value'));
   } finally {await new Promise(r=>effectReceiver.close(r));if(priorPrivate===undefined)delete process.env.WEBHOOK_ALLOW_PRIVATE_TARGETS;else process.env.WEBHOOK_ALLOW_PRIVATE_TARGETS=priorPrivate;}
 
+  // Dedicated recovered base-locale value drives the actual combined adapters,
+  // not hand-shaped intent fixtures. Worker remains off; call one explicit step.
+  {
+    const dispatchProject=(await call('/projects',{jwt,method:'POST',body:{name:'Recovery dispatch',slug:'recovery-dispatch',locales:['en','he']}})).json;
+    const dispatchBranch=await prisma.branch.findFirst({where:{projectId:dispatchProject.id,name:'main'}});
+    const dispatchTarget=await prisma.repositorySyncTarget.create({data:{projectId:dispatchProject.id,branchId:dispatchBranch.id,localBranch:'main',locale:'en',owner:'fixture',repo:'fixture',remoteBranch:'main',path:'en.json'}});
+    await prisma.repositorySyncBaseline.create({data:{targetId:dispatchTarget.id,version:1,targetRevision:1,remoteSha:'a'.repeat(40),contentDigest:createHash('sha256').update('{}').digest('hex'),text:'{}',actorId:owner.user.id}});
+    const dispatchKey=await prisma.key.create({data:{projectId:dispatchProject.id,branchId:dispatchBranch.id,name:'recovered-dispatch'}});
+    const dispatchAudit=await prisma.translationDeletionAudit.create({data:{projectId:dispatchProject.id,keyId:dispatchKey.id,keyName:dispatchKey.name,localeCode:'en',snapshot:{row:{projectId:dispatchProject.id,keyId:dispatchKey.id,localeCode:'en',value:'Recovered dispatch value'},history:[]}}});
+    await prisma.repositoryRemovalGeneration.create({data:{projectId:dispatchProject.id,keyId:dispatchKey.id,locale:'en',auditId:dispatchAudit.id}});
+    const dispatchRecovery={projectId:dispatchProject.id,actorId:owner.user.id,auditId:dispatchAudit.id,expectedBranchId:dispatchBranch.id,expectedKeyUpdatedAt:dispatchKey.updatedAt.toISOString(),expectedKeyRevision:dispatchKey.revision,expectedValueDigest:createHash('sha256').update('Recovered dispatch value').digest('hex')};
+    const dispatchRepository={actorId:owner.user.id,projectId:dispatchProject.id,targetId:dispatchTarget.id,targetRevision:1,branchId:dispatchBranch.id,branch:'main',locale:'en',baselineVersion:1,baselineSha:'a'.repeat(40),baselineDigest:createHash('sha256').update('{}').digest('hex')};
+    const dispatchBaselineBefore=JSON.stringify(await prisma.repositorySyncBaseline.findUnique({where:{targetId:dispatchTarget.id}})),dispatchRepoCalls=repoCalls;
+    const recoveredDispatch=await prisma.$transaction(tx=>deletionRecoveryTransaction(tx,dispatchRecovery,dispatchRepository),{isolationLevel:'Serializable'});
+    const dispatchIntent=await prisma.repositoryLocalEffectIntent.findFirst({where:{projectId:dispatchProject.id}});
+    // Explicit queue selection avoids unrelated earlier fixtures; production
+    // claim remains the real ordered SQL, with other pending work out of the way.
+    await prisma.repositoryLocalEffectIntent.updateMany({where:{projectId:{not:dispatchProject.id},state:{in:['pending','leased']}},data:{state:'dead',leaseToken:null,leaseUntil:null,finishedAt:new Date()}});
+    const dispatchHits=[];const dispatchReceiver=createServer((req,res)=>{let body='';req.on('data',b=>body+=b);req.on('end',()=>{dispatchHits.push({event:req.headers['x-openlocale-event'],signature:req.headers['x-openlocale-signature'],body});res.writeHead(200).end();});});
+    await new Promise(r=>dispatchReceiver.listen(0,'127.0.0.1',r));
+    const dispatchSecret='recovery-dispatch-fixture-secret';await prisma.webhook.create({data:{projectId:dispatchProject.id,url:`http://127.0.0.1:${dispatchReceiver.address().port}/recovery`,events:['translation.updated'],secret:dispatchSecret}});
+    const {TasksService,ActivityService}=require(serviceBundle),dispatchActivity=new ActivityService(prisma,realProjects),dispatchTasks=new TasksService(prisma,realProjects,dispatchActivity),dispatchHooks=new WebhooksService(prisma,realProjects),dispatchAutomation=new AutomationsService(prisma,realProjects,dispatchActivity,{},dispatchTasks,dispatchHooks);
+    await dispatchAutomation.create(owner.user.id,dispatchProject.id,{name:'Recovered value task',trigger:'translation.value',action:'task.create',config:{title:'Review recovered {key}'}});
+    const dispatchPriorPrivate=process.env.WEBHOOK_ALLOW_PRIVATE_TARGETS;process.env.WEBHOOK_ALLOW_PRIVATE_TARGETS='true';
+    try{
+      const dispatched=await runRepositoryEffectStep(prisma,dispatchHooks,dispatchAutomation),handled=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:dispatchIntent.id}}),hit=dispatchHits[0],payload=hit&&JSON.parse(hit.body);
+      check('recovery-created intent delivers actual signed updated value over HTTP',dispatched.status==='completed'&&dispatchHits.length===1&&hit.event==='translation.updated'&&hit.signature==='sha256='+createHmac('sha256',dispatchSecret).update(hit.body).digest('hex')&&payload.effectId===dispatchIntent.id&&payload.value==='Recovered dispatch value'&&payload.key===dispatchKey.name&&payload.locale==='en'&&payload.operation==='set-value');
+      check('recovery-created intent drives actual task and both channel checkpoints',handled.state==='completed'&&!!handled.webhookHandledAt&&!!handled.automationHandledAt&&await prisma.task.count({where:{projectId:dispatchProject.id,title:'Review recovered '+dispatchKey.name}})===1&&await prisma.repositoryAutomationRuleCheckpoint.count({where:{intentId:dispatchIntent.id}})===1);
+      check('recovery effect leaves restored generation archive and baseline intact',(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:dispatchKey.id,localeCode:'en'}}})).rowId===recoveredDispatch.rowId&&await prisma.translationDeletionAudit.count({where:{id:dispatchAudit.id}})===1&&JSON.stringify(await prisma.repositorySyncBaseline.findUnique({where:{targetId:dispatchTarget.id}}))===dispatchBaselineBefore&&repoCalls===dispatchRepoCalls);
+      const dispatchActivities=await prisma.activityEvent.count({where:{projectId:dispatchProject.id,action:'automation.run'}});
+      await prisma.repositoryLocalEffectIntent.update({where:{id:dispatchIntent.id},data:{state:'pending',attempts:0,finishedAt:null,availableAt:new Date('2020-01-01')}});
+      const replayed=await runRepositoryEffectStep(prisma,dispatchHooks,dispatchAutomation),replayedRow=await prisma.repositoryLocalEffectIntent.findUnique({where:{id:dispatchIntent.id}});
+      check('recovery intent checkpointed requeue never repeats receiver task or automation activity',replayed.status==='completed'&&dispatchHits.length===1&&await prisma.task.count({where:{projectId:dispatchProject.id}})===1&&await prisma.activityEvent.count({where:{projectId:dispatchProject.id,action:'automation.run'}})===dispatchActivities&&replayedRow.webhookHandledAt.getTime()===handled.webhookHandledAt.getTime()&&replayedRow.automationHandledAt.getTime()===handled.automationHandledAt.getTime());
+      const hitsBeforeSuperseded=dispatchHits.length;
+      await prisma.translation.update({where:{keyId_localeCode:{keyId:dispatchKey.id,localeCode:'en'}},data:{value:'Newer user edit',version:{increment:1}}});
+      await prisma.repositoryLocalEffectIntent.update({where:{id:dispatchIntent.id},data:{state:'pending',attempts:0,finishedAt:null,webhookHandledAt:null,automationHandledAt:null,availableAt:new Date('2020-01-01')}});
+      const superseded=await runRepositoryEffectStep(prisma,dispatchHooks,dispatchAutomation);
+      check('superseded recovered generation cannot redeliver archived value or create task',superseded.status==='ineligible'&&dispatchHits.length===hitsBeforeSuperseded&&await prisma.task.count({where:{projectId:dispatchProject.id}})===1&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:dispatchKey.id,localeCode:'en'}}})).value==='Newer user edit');
+    }finally{await new Promise(r=>dispatchReceiver.close(r));if(dispatchPriorPrivate===undefined)delete process.env.WEBHOOK_ALLOW_PRIVATE_TARGETS;else process.env.WEBHOOK_ALLOW_PRIVATE_TARGETS=dispatchPriorPrivate;}
+    await prisma.project.delete({where:{id:dispatchProject.id}});
+  }
   for(const [k,v] of Object.entries(priorEnv)){if(v===undefined)delete process.env[k];else process.env[k]=v;}
   rmSync(serviceEntry,{force:true});rmSync(serviceBundle,{force:true});
   const key=(await call(`${P}/keys`,{jwt,method:'POST',body:{name:'plural',isPlural:true}})).json;

@@ -679,3 +679,7 @@ or baseline advance. Composition currently requires direct team admin. See revie
 Recovery composition now has actual PostgreSQL contention tests for both mutable
 caller scopes,project/target/baseline lock timeouts and competing recoveries with
 one committed effect intent. No public restore execution. See review0217.
+
+Recovery-created intents now pass actual signed HTTP receiver and task automation
+through the combined internal step,checkpointed requeue and superseded-generation
+denial. No worker enablement or public restore execution. See review0218.
