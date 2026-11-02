@@ -1237,6 +1237,24 @@ try {
     check('local recovery HTTP denies stale '+field,(await call(httpRecoverPath,{jwt:admin.accessToken,method:'POST',body:{...httpRecoverInput,[field]:value}})).status===409);
   }
   check('local recovery HTTP all denials leave actual recovery counts unchanged',JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(httpRecoveryBefore));
+  const httpAdminMembership=await prisma.teamMember.findUnique({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}}});
+  for(const revocation of ['demote','remove']){
+    try{
+      if(revocation==='demote')await prisma.teamMember.update({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},data:{role:'MEMBER'}});
+      else await prisma.teamMember.delete({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}}});
+      const beforeHttpRevocation=await recoveryCountsForComposition();
+      const revokedHttp=await call(httpRecoverPath,{jwt:admin.accessToken,method:'POST',body:httpRecoverInput});
+      check('local recovery HTTP denies actually revoked admin '+revocation+' using original session and review',revokedHttp.status===(revocation==='demote'?403:404)&&JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(beforeHttpRevocation)&&!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:httpRecoveryKey.id,localeCode:'en'}}})&&await prisma.repositoryRemovalGeneration.count({where:{keyId:httpRecoveryKey.id,auditId:httpRecoveryAudit.id}})===1);
+    }finally{await prisma.teamMember.upsert({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},create:httpAdminMembership,update:{role:httpAdminMembership.role,allowedLocales:httpAdminMembership.allowedLocales}});}
+  }
+  const wrongHttpTarget=await prisma.repositorySyncTarget.create({data:{projectId:summaryOtherProject.id,branchId:(await prisma.branch.findFirst({where:{projectId:summaryOtherProject.id}})).id,localBranch:'main',locale:'en',owner:'fixture',repo:'fixture',path:'en.json',remoteBranch:'main'}});
+  const wrongHttpAudit=await prisma.translationDeletionAudit.create({data:{projectId:summaryOtherProject.id,keyId:owner.user.id,keyName:'cross-project-http',localeCode:'en',snapshot:{row:{value:'private other project'},history:[]}}});
+  try{
+    for(const [label,path] of [['missing target',httpRecoverPath.replace(target.id,owner.user.id)],['cross-project target',httpRecoverPath.replace(target.id,wrongHttpTarget.id)],['missing audit',httpRecoverPath.replace(httpRecoveryAudit.id,owner.user.id)],['cross-project audit',httpRecoverPath.replace(httpRecoveryAudit.id,wrongHttpAudit.id)]]){
+      const beforeWrongHttpScope=await recoveryCountsForComposition();const wrongScopeHttp=await call(path,{jwt:admin.accessToken,method:'POST',body:httpRecoverInput});
+      check('local recovery HTTP denies '+label+' without value disclosure or partial effects',wrongScopeHttp.status===409&&!JSON.stringify(wrongScopeHttp.json).includes('private other project')&&JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(beforeWrongHttpScope)&&!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:httpRecoveryKey.id,localeCode:'en'}}}));
+    }
+  }finally{await prisma.repositorySyncTarget.delete({where:{id:wrongHttpTarget.id}});await prisma.translationDeletionAudit.delete({where:{id:wrongHttpAudit.id}});}
   const httpStaleTarget=await prisma.repositorySyncTarget.findUnique({where:{id:target.id}});
   const httpStaleBaseline=await prisma.repositorySyncBaseline.findUnique({where:{targetId:target.id}});
   for(const mutation of ['target-revision','baseline-version','key-revision','removal-generation','value-exists']){

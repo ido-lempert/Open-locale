@@ -256,3 +256,6 @@ cover the consistency fix. See review0231.
 Actual committed post-review target/baseline/key/generation/value changes now have
 public recovery HTTP409 and exact unchanged-state evidence. Tests only,no app
 behavior change. See review0232,including non-discriminating negative limitation.
+
+Recovery public HTTP current-role revocation and missing/cross-project route scope
+now have unchanged-effect/privacy tests. Tests only,no app change. See review0233.

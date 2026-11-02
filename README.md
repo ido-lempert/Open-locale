@@ -749,3 +749,7 @@ Recovery HTTP tests now commit actual target/baseline/key/deletion-generation/
 existing-value changes after review,then prove409 preserves exact pre-execution
 state without refreshing the stale request. Tests only;see review0232 and its
 negative-control limitation.
+
+Actual recovery HTTP revocation tests reuse the original session/review after
+committed admin demotion/removal;wrong-project and missing target/audit paths
+also deny without recovery effects/private archive disclosure. See review0233.
