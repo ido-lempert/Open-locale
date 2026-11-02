@@ -501,7 +501,7 @@ try {
   const afterSavedTarget=await prisma.repositorySyncTarget.findUnique({where:{id:archivedReviewTarget.id}});
   check('actual saved coordinates increment revision invalidate baseline without local recovery effects',heldSave&&afterSavedTarget.path==='review/updated-en.json'&&afterSavedTarget.revision===beforeSavedTarget.revision+1&&await prisma.repositorySyncBaseline.count({where:{targetId:archivedReviewTarget.id}})===0&&await prisma.translation.count({where:{keyId:previewKey.id}})===0&&await prisma.translationHistory.count({where:{keyId:previewKey.id}})===0&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:applyProject.id}})===beforeTargetQueue);
   await page.select('[name=auditReviewTarget]',archivedReviewTarget.id);await clickTarget(`[data-value-audit-id="${eligibleAudit.id}"]`);await page.waitForSelector('.recovery-value');
-  check('fresh review after coordinate save fails closed without accepted baseline',await page.$eval('.recovery-value',e=>!e.querySelector('pre'))&&!(await page.$('[name=auditRecoverPrepare]'))&&await prisma.translation.count({where:{keyId:previewKey.id}})===0);
+  check('fresh review after coordinate save fails closed without accepted baseline',await page.$eval('.recovery-value',e=>!e.querySelector('pre')&&e.textContent.includes('No current accepted comparison baseline')&&e.textContent.includes('baseline separately'))&&!(await page.$('[name=auditRecoverPrepare]'))&&await prisma.translation.count({where:{keyId:previewKey.id}})===0);
   await page.$eval('.recovery-value',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/deletion-review-saved-config-narrow.png'});
   // Direct test-fixture restoration only:do not claim UI accepted a new baseline.
   await prisma.repositorySyncTarget.update({where:{id:archivedReviewTarget.id},data:{path:beforeSavedTarget.path}});
@@ -542,7 +542,8 @@ try {
   await page.screenshot({path:'/downloads/deletion-recovery-lost-response-narrow.png'});
   page.off('request',loseCommittedRecovery);await page.setRequestInterception(false);
   await clickTarget(`[data-value-audit-id="${eligibleAudit.id}"]`);await page.waitForSelector('.recovery-value');
-  check('fresh review after lost committed response cannot prepare duplicate recovery',!(await page.$('[name=auditRecoverPrepare]'))&&await page.$eval('.recovery-value',e=>!e.querySelector('pre'))&&await prisma.repositoryLocalEffectIntent.count({where:{keyId:previewKey.id}})===1);
+  check('fresh review after lost committed response cannot prepare duplicate recovery',!(await page.$('[name=auditRecoverPrepare]'))&&await page.$eval('.recovery-value',e=>!e.querySelector('pre')&&e.textContent.includes('current locale value already exists')&&e.textContent.includes('will not be overwritten'))&&await prisma.repositoryLocalEffectIntent.count({where:{keyId:previewKey.id}})===1);
+  await page.$eval('.recovery-value',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/deletion-review-existing-value-narrow.png'});
   // Independently commit a recovery,hold its201 response,and change project route.
   await prisma.repositoryLocalEffectIntent.deleteMany({where:{keyId:previewKey.id}});await prisma.translation.deleteMany({where:{keyId:previewKey.id}});await prisma.translationHistory.deleteMany({where:{keyId:previewKey.id}});await prisma.activityEvent.deleteMany({where:{projectId:applyProject.id,keyName:previewKey.name}});
   await prisma.repositoryRemovalGeneration.create({data:{projectId:applyProject.id,keyId:previewKey.id,locale:'en',auditId:eligibleAudit.id}});

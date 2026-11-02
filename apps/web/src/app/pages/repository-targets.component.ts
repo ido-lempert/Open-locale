@@ -208,7 +208,7 @@ const empty = (): RepositoryTargetInput => ({
                 }
                 @if (recoveryValue()?.auditId === a.id) {
                   <div class="recovery-value" tabindex="-1" [attr.data-value-result-id]="a.id" role="region" aria-label="Archived value review">
-                    <p class="notice" role="status">{{ recoveryValue()!.result.reviewAvailable ? 'Archived flat value for review only.' : recoveryValue()!.result.reason === 'review-value-too-large' ? 'Archived value exceeds the 32768-byte review limit.' : 'Current checks do not allow value review.' }}
+                    <p class="notice" role="status">{{ valueReviewReason(recoveryValue()!.result) }}
                       @if (recoveryValue()!.targetLabel) { Target at review: {{ recoveryValue()!.targetLabel }}. }
                       Snapshot: {{ recoveryValue()!.result.asOf }} (UTC). Not live. No reservation is held. This review does not restore a value.</p>
                     @if (recoveryValue()!.result.reviewAvailable) { <pre>{{ recoveryValue()!.result.value === '' ? '(Empty value)' : recoveryValue()!.result.value }}</pre> }
@@ -975,6 +975,23 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
       'deletion-generation-changed':'This is no longer the current deletion generation.',
     };
     return reasons[result.reason] ?? 'Current recovery checks do not pass.';
+  }
+  valueReviewReason(result: DeletionRecoveryValueReview) {
+    if(result.reviewAvailable)return 'Archived flat value for review only.';
+    const reasons:Record<string,string>={
+      'baseline-unavailable':'No current accepted comparison baseline is available for this target. Review the repository file and baseline separately before another recovery review. No value was restored.',
+      'target-unavailable':'This repository target is unavailable. Refresh configurations and select a current target before reviewing again.',
+      'target-scope-mismatch':'This target does not match the deleted value branch and locale. Select a matching target before reviewing again.',
+      'review-value-too-large':'Archived value exceeds the 32768-byte review limit.',
+      'value-exists':'A current locale value already exists. It will not be overwritten. Check the current value before any further recovery.',
+      'deletion-generation-changed':'This is no longer the current deletion generation. Load the newest audit page and review again.',
+      'audit-unavailable':'This audit is unavailable. Load the newest audit page before reviewing again.',
+      'unsupported-snapshot':'This archived snapshot is unsupported for value review.',
+      'key-changed':'The key was deleted or renamed. This archived value cannot be reviewed for recovery.',
+      'unsupported-current-key':'The current key type or length limit blocks archived value review.',
+      'locale-unavailable':'The project locale is unavailable. This archived value cannot be reviewed for recovery.',
+    };
+    return reasons[result.reason]??'Current checks do not allow value review.';
   }
   changeReviewTarget(targetId:string) {
     if(targetId && !this.targets().some(t=>t.id===targetId))return;

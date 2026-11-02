@@ -293,3 +293,8 @@ Actual successful-save browser boundary now verified:held PUT clears prepared
 recovery,committed path/revision invalidates baseline with no local recovery writes,
 fresh no-baseline review denied/no prepare. Test-only fixture reset isolates later
 recovery cases,not UI baseline acceptance. See review0240.
+
+Denied archived-review guidance now uses fixed safe reason descriptions and next
+steps instead of one generic message. Actual no-baseline and already-recovered
+browser cases verify guidance with no value/prepare controls. Unknown reasons stay
+generic. See review0241.

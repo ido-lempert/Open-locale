@@ -795,3 +795,8 @@ recovery clears before held PUT completes,committed coordinate revision invalida
 baseline without locale/history/queue writes,and new review exposes no value or
 prepare control until a baseline is available. See review0240;fixture restoration
 for later tests is not a baseline-acceptance UI claim.
+
+Denied archived-value reviews now show fixed reason guidance for missing current
+baseline,target/scope mismatch,existing value and supported audit/key/locale/size
+limits. Unknown reasons remain generic,not raw server text. Existing value is never
+overwritten by recovery;missing baseline requires separate review. See review0241.

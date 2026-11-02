@@ -581,3 +581,12 @@ describe('configuration mutations clear archived recovery review',()=>{
  }
  it('unconfirmed remove and busy save do not mutate review or cancel pending work',async()=>{const send=jest.fn();const c=reviewed({saveRepositoryTarget:send,removeRepositoryTarget:send});await c.remove(target);expect(c.recoveryValue()).not.toBeNull();c.busy.set(true);c.recoverySending.set(true);await c.save();expect(send).not.toHaveBeenCalled();expect(c.recoverySending()).toBe(true);});
 });
+
+
+describe('safe archived review denial guidance',()=>{
+ it('available review never renders a raw reason',()=>{expect(setup({}).valueReviewReason({reviewAvailable:true,reason:'<private>'} as never)).toBe('Archived flat value for review only.');});
+ it('known baseline,target and scope denials have fixed next-step guidance',()=>{const c=setup({});expect(c.valueReviewReason({reason:'baseline-unavailable'} as never)).toContain('No current accepted comparison baseline');expect(c.valueReviewReason({reason:'target-unavailable'} as never)).toContain('Refresh configurations');expect(c.valueReviewReason({reason:'target-scope-mismatch'} as never)).toContain('matching target');});
+ it('existing value and generation denial never suggest overwrite or automatic recovery',()=>{const c=setup({});expect(c.valueReviewReason({reason:'value-exists'} as never)).toContain('will not be overwritten');expect(c.valueReviewReason({reason:'deletion-generation-changed'} as never)).toContain('newest audit page');});
+ it('unknown reason stays generic and never exposes provider text',()=>{const c=setup({});expect(c.valueReviewReason({reason:'<private> database detail'} as never)).toBe('Current checks do not allow value review.');});
+ it('bounded value and unsupported conditions have fixed safe descriptions',()=>{const c=setup({});expect(c.valueReviewReason({reason:'review-value-too-large'} as never)).toContain('32768-byte');for(const reason of ['audit-unavailable','unsupported-snapshot','key-changed','unsupported-current-key','locale-unavailable'])expect(c.valueReviewReason({reason} as never)).not.toContain(reason);});
+});
