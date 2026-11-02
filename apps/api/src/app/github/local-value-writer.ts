@@ -15,6 +15,10 @@ export async function writeExistingLocalValues(
   changes: LocalDraftChange[],
   actorId: string,
 ) {
+  // Guard validation and every later write must use the same entry snapshot.
+  // Include nested rows and change objects, not only their outer containers.
+  expected = structuredClone(expected);
+  changes = structuredClone(changes);
   await lockLocalPreconditions(tx, expected);
   if (
     !Array.isArray(changes) ||

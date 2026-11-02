@@ -227,3 +227,8 @@ Shared local precondition validator now owns nested key/translation generations
 before database awaits. Real PostgreSQL stale-to-current and valid-to-invalid
 caller mutations retain original entry semantics. No new execution/API. See
 review0226.
+
+Shared local writer now owns nested reviewed snapshot and change inputs before
+any await. Actual PostgreSQL guard/upsert-boundary mutation tests preserve exact
+locale/value/history/activity and prove rollback invariants. No new API. See
+review0227.

@@ -714,3 +714,6 @@ any database await; real PostgreSQL mutation cases are recorded in review0225.
 Local precondition validation captures nested key/translation generations before
 async database work; stale review cannot be repaired by mid-call caller mutation.
 Real PostgreSQL controls are recorded in review0226.
+
+The shared local writer captures its nested snapshot and changes at entry, keeping
+value/history/activity bound across async work; PostgreSQL controls in review0227.

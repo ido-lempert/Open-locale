@@ -564,6 +564,32 @@ try {
   const otherLocale=await call(`${P}/import/he`,{jwt,method:'POST',body:{entries:{local:'other locale preserved'}}});if(otherLocale.status!==201)throw new Error('Other locale fixture failed');
   const writeChange={key:'local',action:'set-value',expectedValue:'edited',nextValue:'writer draft'};
   const beforeHistory=await prisma.translationHistory.count({where:{keyId:localKey.id,localeCode:'en'}}),beforeActivity=await prisma.activityEvent.count({where:{projectId:project.id}});
+  const mutableWriterCounts=async()=>({rows:await prisma.translation.findMany({where:{projectId:project.id},orderBy:{rowId:'asc'}}),history:await prisma.translationHistory.count(),activity:await prisma.activityEvent.count(),tm:await prisma.tmEntry.count(),audits:await prisma.translationDeletionAudit.count(),intents:await prisma.repositoryLocalEffectIntent.count()});
+  const beforeMutableWriter=await mutableWriterCounts();
+  for(const phase of ['guard','upsert']){
+    const mutableWriterSnapshot=structuredClone(writerSnapshot),mutableWriterChange={...writeChange};
+    let writerMutated=false,writerCapturedResult,writerCapturedRow,writerCapturedHistory,writerCapturedActivity,writerOtherLocale;
+    const mutateWriter=()=>{mutableWriterSnapshot.locale='he';mutableWriterSnapshot.keys.find(k=>k.key==='local').translation.value='caller changed review';mutableWriterChange.nextValue='caller changed value';writerMutated=true;};
+    let writerRollback=false;
+    try{await prisma.$transaction(async tx=>{
+      const observedTx=new Proxy(tx,{get(inner,key){
+        if(key==='$queryRaw')return async(...args)=>{const rows=await inner.$queryRaw(...args);if(phase==='guard'&&!writerMutated)mutateWriter();return rows;};
+        if(key==='translation')return new Proxy(inner.translation,{get(delegate,method){
+          if(method==='upsert')return async(...args)=>{const row=await delegate.upsert(...args);if(phase==='upsert'&&!writerMutated)mutateWriter();return row;};
+          const value=Reflect.get(delegate,method);return typeof value==='function'?value.bind(delegate):value;
+        }});
+        const value=Reflect.get(inner,key);return typeof value==='function'?value.bind(inner):value;
+      }});
+      writerCapturedResult=await writeExistingLocalValues(observedTx,mutableWriterSnapshot,[mutableWriterChange],owner.user.id);
+      writerCapturedRow=await tx.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}});
+      writerOtherLocale=await tx.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'he'}}});
+      writerCapturedHistory=await tx.translationHistory.findMany({where:{keyId:localKey.id,value:'writer draft',changedById:owner.user.id}});
+      writerCapturedActivity=await tx.activityEvent.findMany({where:{projectId:project.id,keyName:'local',action:'translation.value'}});
+      throw new Error('rollback mutable local writer');
+    },{isolationLevel:'Serializable'});}catch(e){writerRollback=e.message==='rollback mutable local writer';}
+    check('local writer captures original locale and change across actual '+phase+' boundary',writerRollback&&writerMutated&&writerCapturedResult.updatedValues===1&&writerCapturedRow.value==='writer draft'&&writerOtherLocale.value==='other locale preserved'&&writerCapturedHistory.length===1&&writerCapturedHistory[0].localeCode==='en'&&writerCapturedHistory[0].previousValue==='edited'&&writerCapturedActivity.some(a=>a.localeCode==='en'&&a.detail?.value==='writer draft')&&!writerCapturedActivity.some(a=>a.detail?.value==='caller changed value'));
+    check('mutable local writer '+phase+' rollback preserves actual rows and side effects',JSON.stringify(await mutableWriterCounts())===JSON.stringify(beforeMutableWriter));
+  }
   const writeResult=await prisma.$transaction(tx=>writeExistingLocalValues(tx,writerSnapshot,[writeChange],owner.user.id),{isolationLevel:'Serializable'});
   const written=await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}});
   check('internal writer commits exact locale value version and row identity',writeResult.updatedValues===1&&written.value==='writer draft'&&written.version===beforeWriterRow.version+1&&written.rowId===beforeWriterRow.rowId);
