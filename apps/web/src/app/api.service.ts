@@ -257,6 +257,7 @@ export class ApiService {
       { method: 'POST', body: JSON.stringify({ expectedRevision }) },
     );
   }
+  reviewRepositoryRecovery(projectId:string,targetId:string,auditId:string){return this.request<Omit<DeletionRecoveryValueReview,'source'> & {source:'repository-target-recovery-review'}>(`/projects/${projectId}/sync/repository-targets/${encodeURIComponent(targetId)}/deletion-audits/${encodeURIComponent(auditId)}/recovery-review`);}
   reviewDeletionRecoveryValue(projectId:string,auditId:string){return this.request<DeletionRecoveryValueReview>(`/projects/${projectId}/sync/deletion-audits/${encodeURIComponent(auditId)}/recovery-value-review`);}
   previewDeletionRecovery(projectId:string,auditId:string){return this.request<DeletionRecoveryPreview>(`/projects/${projectId}/sync/deletion-audits/${encodeURIComponent(auditId)}/recovery-preview`);}
   listDeletionAudits(projectId:string,cursor?:string){return this.request<DeletionAuditPage>(`/projects/${projectId}/sync/deletion-audits${cursor?'?cursor='+encodeURIComponent(cursor):''}`);}

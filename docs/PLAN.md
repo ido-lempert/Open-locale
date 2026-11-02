@@ -204,3 +204,7 @@ no retry and actual rollback/replay tests. No public restore route/UI. See revie
 Separate target-scoped read-only recovery review GET exposes bounded archived value
 and current review bindings to session direct admins,with UUID/no-store/denial
 privacy tests. No execution route or UI consumer yet. See review0221.
+
+Archived review UI now explicitly chooses value-only or selected repository target,
+shows target/snapshot limits,and clears/fences private text when scope changes.
+Read-only,no restore action. See review0222.

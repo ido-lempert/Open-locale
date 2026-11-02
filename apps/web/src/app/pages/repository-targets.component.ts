@@ -175,6 +175,13 @@ const empty = (): RepositoryTargetInput => ({
           <h2 #auditHeading class="audit-heading" tabindex="-1">Deletion audit metadata</h2>
           <p>Project-wide metadata only. No archived values or history. No restore action.</p>
           <button name="auditLoad" type="button" (click)="loadAudits()" [disabled]="busy()">Load newest audit page</button>
+          <label>Archived value review scope
+            <select name="auditReviewTarget" [disabled]="busy() && !valueReviewLoading()" [ngModel]="reviewTargetId()" (ngModelChange)="changeReviewTarget($event)">
+              <option value="">Value only (no repository target)</option>
+              @for (t of targets(); track t.id) { <option [value]="t.id">{{ t.localBranch }} / {{ t.locale }} / {{ t.owner }}/{{ t.repo }} / {{ t.path }}</option> }
+            </select>
+          </label>
+          <p>Choosing a target checks its current baseline and scope. Direct team admins only. Still read-only.</p>
           @if (auditLoading()) { <p role="status">Loading audit metadata...</p> }
           @if (auditPage(); as page) {
             <p>Up to 50 rows per page, newest first. Not live or a frozen snapshot.</p>
@@ -198,6 +205,7 @@ const empty = (): RepositoryTargetInput => ({
                 @if (recoveryValue()?.auditId === a.id) {
                   <div class="recovery-value" tabindex="-1" [attr.data-value-result-id]="a.id" role="region" aria-label="Archived value review">
                     <p class="notice" role="status">{{ recoveryValue()!.result.reviewAvailable ? 'Archived flat value for review only.' : recoveryValue()!.result.reason === 'review-value-too-large' ? 'Archived value exceeds the 32768-byte review limit.' : 'Current checks do not allow value review.' }}
+                      @if (recoveryValue()!.targetLabel) { Target at review: {{ recoveryValue()!.targetLabel }}. }
                       Snapshot: {{ recoveryValue()!.result.asOf }} (UTC). Not live. No reservation is held. No restore action is available.</p>
                     @if (recoveryValue()!.result.reviewAvailable) { <pre>{{ recoveryValue()!.result.value === '' ? '(Empty value)' : recoveryValue()!.result.value }}</pre> }
                     <button name="auditValueHide" type="button" (click)="hideValueReview()">Hide archived value</button>
@@ -766,8 +774,9 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   readAt = signal('');
   @ViewChild('auditRegion') auditRegion?: ElementRef<HTMLElement>;
   @ViewChild('auditHeading') auditHeading?: ElementRef<HTMLElement>;
+  reviewTargetId = signal('');
   valueReviewLoading = signal<string|null>(null);
-  recoveryValue = signal<{auditId:string;result:DeletionRecoveryValueReview}|null>(null);
+  recoveryValue = signal<{auditId:string;result:DeletionRecoveryValueReview;targetLabel?:string}|null>(null);
   recoveryPreview = signal<{auditId:string;result:DeletionRecoveryPreview}|null>(null);
   auditLoading = signal(false);
   auditPage = signal<DeletionAuditPage | null>(null);
@@ -880,6 +889,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
       if (generation === this.generation) {
         this.previewResult.set(null); this.clearDraft(); this.previewPage.set(0);
         this.snapshot.set(null);
+    this.reviewTargetId.set('');
     this.auditPage.set(null);
     this.valueReviewLoading.set(null); this.recoveryValue.set(null); this.recoveryPreview.set(null); this.effectSummary.set(null); this.baselineView.set(null); this.confirmBaseline.set(false);
         this.busy.set(false);
@@ -925,6 +935,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   }
   ngOnDestroy() {
     this.generation++;
+    this.reviewTargetId.set('');
     this.auditPage.set(null);
     this.valueReviewLoading.set(null); this.recoveryValue.set(null); this.recoveryPreview.set(null);
     this.auditLoading.set(false);
@@ -947,13 +958,25 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     };
     return reasons[result.reason] ?? 'Current recovery checks do not pass.';
   }
+  changeReviewTarget(targetId:string) {
+    if(targetId && !this.targets().some(t=>t.id===targetId))return;
+    if(this.busy() && !this.valueReviewLoading())return;
+    ++this.generation;this.reviewTargetId.set(targetId);
+    this.valueReviewLoading.set(null);this.recoveryValue.set(null);this.recoveryPreview.set(null);this.busy.set(false);
+    this.message.set('Review scope changed. Any late value response will be hidden. Review again.');
+  }
   async reviewRecoveryValue(auditId: string) {
     if (this.busy() || !this.auditPage()?.audits.some(a=>a.id===auditId)) return;
+    const target=this.targets().find(t=>t.id===this.reviewTargetId());
+    if(this.reviewTargetId()&&!target)return;
     const generation=++this.generation;
     this.busy.set(true); this.valueReviewLoading.set(null); this.recoveryValue.set(null); this.recoveryPreview.set(null); this.error.set(''); this.message.set(''); this.valueReviewLoading.set(auditId);
     try {
-      const result=await this.api.reviewDeletionRecoveryValue(this.projectId,auditId);
-      if(generation===this.generation){this.recoveryValue.set({auditId,result});this.landValueFocus(auditId,generation,true);}
+      const raw=target?await this.api.reviewRepositoryRecovery(this.projectId,target.id,auditId):await this.api.reviewDeletionRecoveryValue(this.projectId,auditId);
+      // Store only displayed value-review fields,not server recovery/baseline bindings.
+      const result:DeletionRecoveryValueReview={source:'deletion-recovery-value-review',asOf:raw.asOf,reviewAvailable:raw.reviewAvailable,reason:raw.reason,value:raw.value,maxValueBytes:raw.maxValueBytes,canRestore:false,snapshotIncluded:false,historyReplay:false,reservationHeld:false};
+      const targetLabel=target?`${target.localBranch} / ${target.locale} / ${target.owner}/${target.repo} / ${target.path}`:undefined;
+      if(generation===this.generation){this.recoveryValue.set({auditId,result,targetLabel});this.landValueFocus(auditId,generation,true);}
     } catch {
       if(generation===this.generation)this.error.set('Could not review archived value. No value was restored. Review again to retry.');
     } finally { if(generation===this.generation){this.busy.set(false);this.valueReviewLoading.set(null);} }
@@ -1000,6 +1023,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     const generation = ++this.generation;
     this.busy.set(true);
     this.auditLoading.set(true);
+    this.reviewTargetId.set('');
     this.auditPage.set(null);
     this.valueReviewLoading.set(null); this.recoveryValue.set(null); this.recoveryPreview.set(null);
     this.error.set(''); this.message.set('');
@@ -1037,6 +1061,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   async load(id: string) {
     const generation = ++this.generation;
     this.projectId = id;
+    this.reviewTargetId.set('');
     this.auditPage.set(null);
     this.valueReviewLoading.set(null); this.recoveryValue.set(null); this.recoveryPreview.set(null);
     this.auditLoading.set(false);
