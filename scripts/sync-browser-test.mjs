@@ -733,6 +733,10 @@ try {
   const oldUsageResponse=page.waitForResponse(r=>r.url().includes(`/projects/${applyProject.id}/reports/usage`));releaseUsage();await oldUsageResponse;await new Promise(r=>setTimeout(r,100));page.off('request',holdUsage);await page.setRequestInterception(false);
   check('late old project usage cannot overwrite new report dashboards',await page.$eval('main',(e,text)=>e.textContent===text,newProjectUsage)&&await page.$eval('a.back',(e,id)=>e.getAttribute('href')===`/projects/${id}`,second.id));
   await page.screenshot({path:'/downloads/reports-project-fence-narrow.png'});
+  await page.setRequestInterception(true);const failUsage=async request=>request.url().includes('/reports/usage')?request.respond({status:503,contentType:'application/json',body:JSON.stringify({message:'private-report-detail'})}):request.continue();page.on('request',failUsage);
+  await page.reload({waitUntil:'networkidle0'});await page.waitForSelector('[name=usageReportError]');await page.waitForFunction(()=>document.body.textContent.includes('0 tasks:'));
+  check('failed usage report has fixed guidance with successful task sibling',await page.$eval('[name=usageReportError]',e=>e.textContent.includes('No usage figures are shown')&&e.textContent.includes('Reload this page'))&&!(await page.content()).includes('private-report-detail')&&!(await page.$('.usage-table'))&&!(await page.$('[name=taskReportError]')));
+  await page.screenshot({path:'/downloads/reports-usage-unavailable-narrow.png'});page.off('request',failUsage);await page.setRequestInterception(false);
   await page.evaluate(t=>localStorage.setItem('ol_token',t),member.accessToken);
   await page.goto(`${WEB}/projects/${project.id}/sync`,{waitUntil:'networkidle0'});await page.waitForSelector('textarea[name=syncBaseline]');
   await set('syncSha','a'.repeat(40));await set('syncBaseline','{}');await set('syncRemote','{}');await page.click('button[name=syncPreview]');await page.waitForSelector('[role=alert]');

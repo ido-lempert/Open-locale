@@ -73,3 +73,7 @@ Slice187 same-component report navigation holds old project's actual usage reque
 loads empty secondproject,then releases old response. Final480x900image inspected:
 0keys/main/quality/usage/tasks,no oldfigures,Editorlink newproject. Browser207checks
 prove late response does not replace new figures. Layout/table scrolling unchanged.
+
+Slice188 local usage503fixture displays fixed unavailable/nofigures/reloadnotice,
+retains successful tasks/progress/quality,and excludes rawdetail/usagetables.
+Final480x900image inspected;existing table scrolling retained. Browser208checks.

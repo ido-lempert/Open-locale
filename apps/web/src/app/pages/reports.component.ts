@@ -75,6 +75,8 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
       }
 
       <h2>Usage <span class="muted">last {{ usage()?.days ?? 30 }} days</span></h2>
+      @if (dashboardsLoading()) { <p role="status">Loading usage and task reports...</p> }
+      @if (usageError()) { <p class="error" role="alert" name="usageReportError">Usage report unavailable. No usage figures are shown. Reload this page to try again.</p> }
       @if (usage(); as u) {
         <p class="muted">{{ u.totalEvents }} events touching {{ u.activeKeys }} keys.</p>
         <div class="table-scroll">
@@ -90,6 +92,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
       }
 
       <h2>Tasks</h2>
+      @if (taskReportError()) { <p class="error" role="alert" name="taskReportError">Task report unavailable. No task figures are shown. Reload this page to try again.</p> }
       @if (taskReport(); as t) {
         <p class="muted">{{ t.total }} tasks: {{ t.byStatus['OPEN'] ?? 0 }} open, {{ t.byStatus['IN_PROGRESS'] ?? 0 }} in progress, {{ t.byStatus['DONE'] ?? 0 }} done.
           <span [class.error]="t.overdue > 0">{{ t.overdue }} overdue</span>, {{ t.dueSoon }} due within 7 days.</p>
@@ -115,6 +118,9 @@ export class ReportsComponent implements OnInit, OnDestroy {
   branch = signal('main');
   statusColumns = signal<string[]>([]);
   error = signal('');
+  usageError=signal(false);
+  taskReportError=signal(false);
+  dashboardsLoading=signal(false);
   private generation=0;
   private destroyed=false;
 
@@ -129,7 +135,7 @@ export class ReportsComponent implements OnInit, OnDestroy {
     if(this.destroyed)return;
     const scope=++this.projectGeneration;++this.generation;this.projectId=projectId;
     this.branch.set('main');this.branches.set([]);this.report.set(null);this.quality.set(null);
-    this.usage.set(null);this.taskReport.set(null);this.statusColumns.set([]);this.error.set('');
+    this.usage.set(null);this.taskReport.set(null);this.statusColumns.set([]);this.error.set('');this.usageError.set(false);this.taskReportError.set(false);this.dashboardsLoading.set(true);
     const branches=await this.api.listBranches(projectId).catch(()=>[]);
     if(this.destroyed||scope!==this.projectGeneration)return;
     this.branches.set(branches);
@@ -158,8 +164,11 @@ export class ReportsComponent implements OnInit, OnDestroy {
   async ngOnInitDashboards() {
     if(this.destroyed)return;
     const scope=this.projectGeneration,projectId=this.projectId;
-    const [usage,tasks]=await Promise.all([this.api.getUsage(projectId).catch(()=>null),this.api.getTaskReport(projectId).catch(()=>null)]);
+    this.usage.set(null);this.taskReport.set(null);this.usageError.set(false);this.taskReportError.set(false);this.dashboardsLoading.set(true);
+    const [usage,tasks]=await Promise.allSettled([this.api.getUsage(projectId),this.api.getTaskReport(projectId)]);
     if(this.destroyed||scope!==this.projectGeneration)return;
-    this.usage.set(usage);this.taskReport.set(tasks);
+    this.usage.set(usage.status==='fulfilled'?usage.value:null);this.usageError.set(usage.status==='rejected');
+    this.taskReport.set(tasks.status==='fulfilled'?tasks.value:null);this.taskReportError.set(tasks.status==='rejected');
+    this.dashboardsLoading.set(false);
   }
 }
