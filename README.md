@@ -814,3 +814,8 @@ review/prepared recovery before awaiting results,including unknown failures. Fre
 review required after either local write. Actual held baseline POST verifies this
 alongside version+1 and no locale/history/queue mutation;local-apply cleanup is unit
 covered. Baseline acceptance remains comparison-only. See review0244.
+
+Actual browser local apply now covers a coexisting prepared archived recovery:
+private review clears before held apply response,and only reviewed existing value/
+new history/one intent commits. Deleted archived value remains absent. This closes
+the unit-only boundary noted in review0244. See review0245.

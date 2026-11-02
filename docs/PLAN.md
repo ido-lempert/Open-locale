@@ -310,3 +310,7 @@ cancel. Addresses review0242 visual finding. See review0243.
 Private recovery cleanup extends to accepted baseline/local apply before await.
 Unit success/failure/guards and actual held-baseline acceptance prove no retained
 prepared review. Comparison baseline version+1 is not accepted sync. See review0244.
+
+Actual held local-apply/private-recovery browser boundary now verified:private
+review clears before response,exact intended value/history/intent commits,archived
+deleted value stays absent. Tests only,no app change. See review0245.
