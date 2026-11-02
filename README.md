@@ -819,3 +819,8 @@ Actual browser local apply now covers a coexisting prepared archived recovery:
 private review clears before held apply response,and only reviewed existing value/
 new history/one intent commits. Deleted archived value remains absent. This closes
 the unit-only boundary noted in review0244. See review0245.
+
+Denied archived-review responses discard value bytes before component state storage,
+even if an inconsistent response includes them;no recovery bindings are extracted.
+Target and value-only state tests plus browser denied-payload handling cover this.
+This is not network/runtime memory erasure. See review0246.

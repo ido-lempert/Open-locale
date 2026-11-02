@@ -314,3 +314,7 @@ prepared review. Comparison baseline version+1 is not accepted sync. See review0
 Actual held local-apply/private-recovery browser boundary now verified:private
 review clears before response,exact intended value/history/intent commits,archived
 deleted value stays absent. Tests only,no app change. See review0245.
+
+Denied archived review now projects null value before state storage,defending
+against inconsistent denied responses carrying private bytes. Both review modes
+and browser rendering/control denial tested. No server change. See review0246.

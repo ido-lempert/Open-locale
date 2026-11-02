@@ -529,6 +529,10 @@ try {
   await page.select('[name=auditReviewTarget]',archivedReviewTarget.id);await clickTarget(`[data-value-audit-id="${eligibleAudit.id}"]`);await page.waitForSelector('.recovery-value');
   check('fresh review after coordinate save fails closed without accepted baseline',await page.$eval('.recovery-value',e=>!e.querySelector('pre')&&e.textContent.includes('No current accepted comparison baseline')&&e.textContent.includes('baseline separately'))&&!(await page.$('[name=auditRecoverPrepare]'))&&await prisma.translation.count({where:{keyId:previewKey.id}})===0);
   await page.$eval('.recovery-value',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/deletion-review-saved-config-narrow.png'});
+  await page.setRequestInterception(true);const inconsistentDeny=async request=>request.url().endsWith('/recovery-review')?request.respond({status:200,contentType:'application/json',body:JSON.stringify({reviewAvailable:false,reason:'value-exists',asOf:new Date().toISOString(),maxValueBytes:32768,value:'private-denied-sentinel',recovery:{expectedValueDigest:'private-denied-binding'},repository:{baselineSha:'private-denied-sha'}})}):request.continue();page.on('request',inconsistentDeny);
+  await clickTarget(`[data-value-audit-id="${eligibleAudit.id}"]`);await page.waitForFunction(()=>document.querySelector('.recovery-value')?.textContent.includes('will not be overwritten'));
+  check('inconsistent denied browser response never renders private bytes or recovery control',!(await page.content()).includes('private-denied-sentinel')&&!(await page.$('.recovery-value pre'))&&!(await page.$('[name=auditRecoverPrepare]'))&&!(await page.$('[name=auditRecoverConfirm]')));
+  page.off('request',inconsistentDeny);await page.setRequestInterception(false);
   // Direct test-fixture restoration only:do not claim UI accepted a new baseline.
   await prisma.repositorySyncTarget.update({where:{id:archivedReviewTarget.id},data:{path:beforeSavedTarget.path}});
   await prisma.repositorySyncBaseline.create({data:{...beforeSavedBaseline,targetRevision:afterSavedTarget.revision}});

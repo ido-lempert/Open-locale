@@ -607,3 +607,8 @@ describe('local writes clear private recovery before awaiting',()=>{
  }
  it('unconfirmed writes do not clear an unrelated review',async()=>{const send=jest.fn();const c=reviewed({acceptRepositoryBaseline:send,applyRepositoryLocal:send});c.confirmBaseline.set(false);c.confirmApply.set(false);await c.acceptBaseline(target);await c.apply(target);expect(send).not.toHaveBeenCalled();expect(c.recoveryValue()).not.toBeNull();});
 });
+
+
+describe('denied archived review discards private payload',()=>{
+ for(const scoped of [false,true])it((scoped?'target':'value-only')+' denied response cannot retain value or recovery bindings',async()=>{const response={reviewAvailable:false,reason:'value-exists',value:'private-denied-sentinel',maxValueBytes:32768,recovery:{expectedValueDigest:'private-binding'},repository:{baselineSha:'private-sha'}};const c=setup({reviewRepositoryRecovery:async()=>response,reviewDeletionRecoveryValue:async()=>response});c.auditPage.set({audits:[{id:'a'}],nextCursor:null} as never);if(scoped)c.changeReviewTarget('t');await c.reviewRecoveryValue('a');expect(c.recoveryValue()?.result.value).toBeNull();expect(c.recoveryValue()?.recoveryInput).toBeUndefined();expect(JSON.stringify(c.recoveryValue())).not.toContain('private-denied-sentinel');expect(JSON.stringify(c.recoveryValue())).not.toContain('private-binding');expect(JSON.stringify(c.recoveryValue())).not.toContain('private-sha');});
+});
