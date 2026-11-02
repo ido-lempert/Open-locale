@@ -259,3 +259,7 @@ behavior change. See review0232,including non-discriminating negative limitation
 
 Recovery public HTTP current-role revocation and missing/cross-project route scope
 now have unchanged-effect/privacy tests. Tests only,no app change. See review0233.
+
+Public recovery now has actual project-lock wait plus committed admin revocation
+HTTP409/no-partial-effect evidence,not only revocation completed before request.
+Tests only,no app change. See review0234.

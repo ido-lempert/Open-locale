@@ -1247,6 +1247,27 @@ try {
       check('local recovery HTTP denies actually revoked admin '+revocation+' using original session and review',revokedHttp.status===(revocation==='demote'?403:404)&&JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(beforeHttpRevocation)&&!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:httpRecoveryKey.id,localeCode:'en'}}})&&await prisma.repositoryRemovalGeneration.count({where:{keyId:httpRecoveryKey.id,auditId:httpRecoveryAudit.id}})===1);
     }finally{await prisma.teamMember.upsert({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},create:httpAdminMembership,update:{role:httpAdminMembership.role,allowedLocales:httpAdminMembership.allowedLocales}});}
   }
+  for(const pendingRevocation of ['demote','remove']){
+    let pendingAdminReady,pendingAdminRelease;const pendingAdminHeld=new Promise(r=>pendingAdminReady=r),pendingAdminGate=new Promise(r=>pendingAdminRelease=r);
+    const pendingAdminBlocker=prisma.$transaction(async tx=>{
+      await tx.$queryRaw`SELECT id FROM projects WHERE id=${project.id}::uuid FOR UPDATE`;
+      pendingAdminReady();await pendingAdminGate;
+      if(pendingRevocation==='demote')await tx.teamMember.update({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},data:{role:'MEMBER'}});
+      else await tx.teamMember.delete({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}}});
+    },{timeout:10000});await pendingAdminHeld;
+    let pendingAdminResponse,pendingAdminWaitObserved=false;
+    const beforePendingAdmin=await recoveryCountsForComposition();
+    const pendingAdminHttp=call(httpRecoverPath,{jwt:admin.accessToken,method:'POST',body:httpRecoverInput});
+    try{
+      for(let attempt=0;attempt<60&&!pendingAdminWaitObserved;attempt++){
+        const waiting=await prisma.$queryRaw`SELECT pid FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%FROM projects%' AND query LIKE '%FOR UPDATE%'`;
+        pendingAdminWaitObserved=waiting.length>0;if(!pendingAdminWaitObserved)await new Promise(r=>setTimeout(r,15));
+      }
+    }finally{pendingAdminRelease();await pendingAdminBlocker;pendingAdminResponse=await pendingAdminHttp;}
+    try{
+      check('actual HTTP waiting recovery observes committed admin '+pendingRevocation+' before write',pendingAdminWaitObserved&&pendingAdminResponse.status===409&&JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(beforePendingAdmin)&&!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:httpRecoveryKey.id,localeCode:'en'}}})&&await prisma.repositoryRemovalGeneration.count({where:{keyId:httpRecoveryKey.id,auditId:httpRecoveryAudit.id}})===1);
+    }finally{await prisma.teamMember.upsert({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},create:httpAdminMembership,update:{role:httpAdminMembership.role,allowedLocales:httpAdminMembership.allowedLocales}});}
+  }
   const wrongHttpTarget=await prisma.repositorySyncTarget.create({data:{projectId:summaryOtherProject.id,branchId:(await prisma.branch.findFirst({where:{projectId:summaryOtherProject.id}})).id,localBranch:'main',locale:'en',owner:'fixture',repo:'fixture',path:'en.json',remoteBranch:'main'}});
   const wrongHttpAudit=await prisma.translationDeletionAudit.create({data:{projectId:summaryOtherProject.id,keyId:owner.user.id,keyName:'cross-project-http',localeCode:'en',snapshot:{row:{value:'private other project'},history:[]}}});
   try{

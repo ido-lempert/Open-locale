@@ -753,3 +753,7 @@ negative-control limitation.
 Actual recovery HTTP revocation tests reuse the original session/review after
 committed admin demotion/removal;wrong-project and missing target/audit paths
 also deny without recovery effects/private archive disclosure. See review0233.
+
+Recovery HTTP tests observe actual PostgreSQL project-lock waiters before admin
+revocation commits,then verify409/no partial recovery for demotion/removal using
+the original session/review. Tests only;see review0234.
