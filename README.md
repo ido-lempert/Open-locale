@@ -779,3 +779,8 @@ and focus. A browser test holds a real committed201 response across same-compone
 project navigation and verifies one persisted value/history/intent with no old
 project status or focus crossing the route. Check current value after returning;
 this is not a durable background outcome notification. See review0237.
+
+Refreshing repository configurations immediately clears archived private review,
+prepared recovery bindings and eligibility preview,even if the refresh fails or
+returns unchanged target revisions. Select the target and review again before
+preparing recovery. Metadata remains available. See review0238.

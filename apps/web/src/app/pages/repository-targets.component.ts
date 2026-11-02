@@ -1186,6 +1186,10 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   async refresh() {
     if (this.busy()) return;
     const generation = ++this.generation;
+    // A configuration refresh invalidates private archived review and prepared confirmation,
+    // even if the refresh fails or returns the same target revision.
+    this.reviewTargetId.set('');this.valueReviewLoading.set(null);
+    this.recoveryValue.set(null);this.recoveryPreview.set(null);
     this.busy.set(true);
     this.snapshot.set(null);
     this.effectSummary.set(null);

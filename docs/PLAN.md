@@ -278,3 +278,8 @@ Pending recovery now has focused non-cancellation guidance and route/destroy cle
 Actual committed201 response held across reused-component project navigation proves
 old outcome/private review/focus do not cross scope;original value/history/intent
 still persist once. See review0237. No durable outcome notification or remote sync.
+
+Configuration refresh now clears private archived value/prepared recovery bindings
+before awaiting config response,on unchanged config and on failure. New explicit
+review required;busy refresh does not interfere with pending recovery. Actual held
+GET and failure browser cases verified. See review0238.
