@@ -298,3 +298,7 @@ Denied archived-review guidance now uses fixed safe reason descriptions and next
 steps instead of one generic message. Actual no-baseline and already-recovered
 browser cases verify guidance with no value/prepare controls. Unknown reasons stay
 generic. See review0241.
+
+Recovery prepare/cancel keyboard landing now explicitly verified:confirmation
+region focus then Prepare return,with rapid cancel/scope/replaced-audit callback
+fences. No automatic mutation. See review0242.

@@ -800,3 +800,7 @@ Denied archived-value reviews now show fixed reason guidance for missing current
 baseline,target/scope mismatch,existing value and supported audit/key/locale/size
 limits. Unknown reasons remain generic,not raw server text. Existing value is never
 overwritten by recovery;missing baseline requires separate review. See review0241.
+
+Prepare local recovery now lands keyboard focus on its confirmation region;Cancel
+returns focus to Prepare. Delayed focus is fenced by generation,audit and current
+confirmation state so old review callbacks cannot steal focus. See review0242.

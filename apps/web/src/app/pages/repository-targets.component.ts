@@ -214,7 +214,7 @@ const empty = (): RepositoryTargetInput => ({
                     @if (recoveryValue()!.result.reviewAvailable) { <pre>{{ recoveryValue()!.result.value === '' ? '(Empty value)' : recoveryValue()!.result.value }}</pre> }
                     @if (recoveryValue()!.recoveryInput) {
                       @if (recoveryValue()!.confirming) {
-                        <div class="notice" role="region" aria-label="Confirm local recovery">
+                        <div class="notice" tabindex="-1" role="region" aria-label="Confirm local recovery">
                           <p>Recover this archived value locally? A fresh unverified locale value, new history and one queued effect will be created. Archived history is not replayed. Repository files and accepted baseline stay unchanged. Sync is not completed. Queued effects may run if a worker is enabled.</p>
                           <button name="auditRecoverConfirm" type="button" (click)="recoverLocalValue()" [disabled]="busy()">Confirm local recovery</button>
                           <button name="auditRecoverCancel" type="button" (click)="cancelLocalRecovery()" [disabled]="busy()">Cancel recovery</button>
@@ -1025,12 +1025,24 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     const review=this.recoveryValue();
     if(this.busy()||!review?.recoveryInput||review.targetId!==this.reviewTargetId())return;
     this.recoveryValue.set({...review,confirming:true});
+    this.landRecoveryConfirmation(review.auditId,this.generation,true);
   }
   cancelLocalRecovery() {
     const review=this.recoveryValue();
     if(this.busy()||!review)return;
     this.recoveryValue.set({...review,confirming:false});
     this.message.set('Recovery canceled. No request was sent.');
+    this.landRecoveryConfirmation(review.auditId,this.generation,false);
+  }
+  private landRecoveryConfirmation(auditId:string,generation:number,confirming:boolean) {
+    setTimeout(()=>{
+      const review=this.recoveryValue();
+      if(generation!==this.generation||review?.auditId!==auditId||!!review.confirming!==confirming)return;
+      const regions=this.auditRegion?.nativeElement.querySelectorAll<HTMLElement>('[data-value-result-id]');
+      const region=Array.from(regions??[]).find(n=>n.getAttribute('data-value-result-id')===auditId);
+      const node=region?.querySelector<HTMLElement>(confirming?'[aria-label="Confirm local recovery"]':'[name=auditRecoverPrepare]');
+      node?.focus({preventScroll:true});node?.scrollIntoView({block:'center',behavior:'instant'});
+    },0);
   }
   async recoverLocalValue() {
     const review=this.recoveryValue();

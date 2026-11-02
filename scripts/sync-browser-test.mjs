@@ -508,10 +508,14 @@ try {
   await prisma.repositorySyncBaseline.create({data:{...beforeSavedBaseline,targetRevision:afterSavedTarget.revision}});
   const restoredConfigResponse=page.waitForResponse(r=>r.request().method()==='GET'&&r.url().endsWith('/sync/repository-targets'));await clickTarget('[name=targetRefresh]');await restoredConfigResponse;await page.waitForFunction(()=>!document.querySelector('fieldset').disabled);
   await page.select('[name=auditReviewTarget]',archivedReviewTarget.id);await clickTarget(`[data-value-audit-id="${eligibleAudit.id}"]`);await page.waitForSelector('[name=auditRecoverPrepare]');await clickTarget('[name=auditRecoverPrepare]');await page.waitForSelector('[name=auditRecoverConfirm]');
+  await page.waitForFunction(()=>document.activeElement?.getAttribute('aria-label')==='Confirm local recovery');
+  check('prepare recovery lands keyboard focus in explicit confirmation',await page.evaluate(()=>document.activeElement?.getAttribute('role')==='region'&&document.activeElement?.getBoundingClientRect().top>=50));
   check('local recovery browser separate confirmation explains local queue limits',await page.$eval('[aria-label="Confirm local recovery"]',e=>e.textContent.includes('unverified')&&e.textContent.includes('Queued effects may run')&&e.textContent.includes('Sync is not completed'))&&await prisma.translation.count({where:{keyId:previewKey.id}})===0);
   await page.$eval('[aria-label="Confirm local recovery"]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/deletion-recovery-confirm-narrow.png'});
   check('local recovery confirmation fits480viewport',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await clickTarget('[name=auditRecoverCancel]');await page.waitForSelector('[name=auditRecoverPrepare]');
+  await page.waitForFunction(()=>document.activeElement?.getAttribute('name')==='auditRecoverPrepare');
+  check('cancel recovery returns keyboard focus to prepare control',await page.evaluate(()=>document.activeElement?.getAttribute('name')==='auditRecoverPrepare'));
   check('cancel local recovery leaves actual value and queue unchanged',await prisma.translation.count({where:{keyId:previewKey.id}})===0&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:applyProject.id}})===beforeTargetQueue);
   await prisma.key.update({where:{id:previewKey.id},data:{description:'changed after UI review'}});
   await clickTarget('[name=auditRecoverPrepare]');await clickTarget('[name=auditRecoverConfirm]');await page.waitForSelector('[role=alert]');
