@@ -415,7 +415,8 @@ try {
   check('actual removal audit appears without values or restore action',await page.$eval('section[aria-label="Deletion audit metadata"]',e=>e.textContent.includes('existing')&&!e.querySelector('[name=auditRecoverPrepare]')&&!e.textContent.includes('before')&&!e.textContent.includes('later')));
   const actualAudit=(await prisma.translationDeletionAudit.findFirst({where:{projectId:applyProject.id}}));
   await clickTarget(`[data-audit-id="${actualAudit.id}"]`);await page.waitForSelector('.audit-list [role=status]');
-  check('audit eligibility browser reports existing value without restore authority',(await page.$eval('.audit-list [role=status]',e=>e.textContent)).includes('already exists')&&(await page.$eval('.audit-list [role=status]',e=>e.textContent)).includes('No restore action is available'));
+  check('audit eligibility browser reports existing value without restore authority',(await page.$eval('.audit-list [role=status]',e=>e.textContent)).includes('already exists')&&(await page.$eval('.audit-list [role=status]',e=>e.textContent)).includes('This eligibility check cannot restore a value'));
+  const eligibilityViewport=page.viewport();await page.setViewport({width:480,height:900});await page.$eval('.audit-list [role=status]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/deletion-eligibility-current-narrow.png'});await page.setViewport(eligibilityViewport);
   const previewKey=await prisma.key.create({data:{projectId:applyProject.id,branchId:(await prisma.key.findFirst({where:{projectId:applyProject.id}})).branchId,name:'preview-eligible'}});
   const eligibleAudit=await prisma.translationDeletionAudit.create({data:{projectId:applyProject.id,keyId:previewKey.id,keyName:previewKey.name,localeCode:'en',snapshot:{row:{projectId:applyProject.id,keyId:previewKey.id,localeCode:'en',value:'hidden recovery value'},history:[]}}});
   await prisma.repositoryRemovalGeneration.create({data:{projectId:applyProject.id,keyId:previewKey.id,locale:'en',auditId:eligibleAudit.id}});
@@ -477,6 +478,31 @@ try {
   await clickTarget('[name=auditRecoverConfirm]');await page.waitForSelector('[role=alert]');
   check('browser unknown recovery response clears review hides raw error sends once',recoveryPostCount===1&&!(await page.$('.recovery-value'))&&!(await page.content()).includes('private recovery error')&&(await page.$eval('[role=alert]',e=>e.textContent)).includes('may already have changed'));
   page.off('request',failRecovery);await page.setRequestInterception(false);
+  // Send the real POST once,but replace its successful response at the browser boundary.
+  // A transport failure is not evidence of rollback.
+  await clickTarget(`[data-value-audit-id="${eligibleAudit.id}"]`);await page.waitForSelector('[name=auditRecoverPrepare]');await clickTarget('[name=auditRecoverPrepare]');
+  let lostRecoveryPosts=0,lostUpstreamStatus=0;await page.setRequestInterception(true);
+  const loseCommittedRecovery=async request=>{
+    if(request.url().endsWith('/recover-local')){
+      lostRecoveryPosts++;
+      const upstream=await fetch(request.url(),{method:request.method(),headers:request.headers(),body:request.postData()});
+      lostUpstreamStatus=upstream.status;await upstream.arrayBuffer();
+      return request.respond({status:503,contentType:'application/json',body:JSON.stringify({message:'fixture discarded upstream response'})});
+    }
+    return request.continue();
+  };
+  page.on('request',loseCommittedRecovery);await clickTarget('[name=auditRecoverConfirm]');await page.waitForSelector('[role=alert]');
+  const lostCommittedRow=await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:previewKey.id,localeCode:'en'}}});
+  check('lost successful recovery response still committed exact local value history and one intent',lostUpstreamStatus===201&&lostCommittedRow?.value===markupValue&&lostCommittedRow.status==='UNVERIFIED'&&await prisma.repositoryLocalEffectIntent.count({where:{keyId:previewKey.id}})===1&&await prisma.translationHistory.count({where:{keyId:previewKey.id}})===1);
+  check('lost committed response warns uncertainty hides private review and never claims success',!(await page.$('.recovery-value'))&&(await page.$eval('[role=alert]',e=>e.textContent)).includes('may already have changed')&&!(await page.content()).includes('Local value recovered: 1')&&!(await page.content()).includes('fixture discarded upstream response'));
+  await new Promise(r=>setTimeout(r,800));check('lost committed response sends no automatic retry',lostRecoveryPosts===1);
+  await page.screenshot({path:'/downloads/deletion-recovery-lost-response-narrow.png'});
+  page.off('request',loseCommittedRecovery);await page.setRequestInterception(false);
+  await clickTarget(`[data-value-audit-id="${eligibleAudit.id}"]`);await page.waitForSelector('.recovery-value');
+  check('fresh review after lost committed response cannot prepare duplicate recovery',!(await page.$('[name=auditRecoverPrepare]'))&&await page.$eval('.recovery-value',e=>!e.querySelector('pre'))&&await prisma.repositoryLocalEffectIntent.count({where:{keyId:previewKey.id}})===1);
+  // Restore absence for the independent visible-success scenario below.
+  await prisma.repositoryLocalEffectIntent.deleteMany({where:{keyId:previewKey.id}});await prisma.translation.deleteMany({where:{keyId:previewKey.id}});await prisma.translationHistory.deleteMany({where:{keyId:previewKey.id}});await prisma.activityEvent.deleteMany({where:{projectId:applyProject.id,keyName:previewKey.name}});
+  await prisma.repositoryRemovalGeneration.create({data:{projectId:applyProject.id,keyId:previewKey.id,locale:'en',auditId:eligibleAudit.id}});
   await clickTarget(`[data-value-audit-id="${eligibleAudit.id}"]`);await page.waitForSelector('[name=auditRecoverPrepare]');await clickTarget('[name=auditRecoverPrepare]');await clickTarget('[name=auditRecoverConfirm]');await page.waitForFunction(()=>document.body.textContent.includes('Local value recovered: 1'));
   const recoveredBrowserRow=await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:previewKey.id,localeCode:'en'}}});
   check('browser explicit recovery commits actual reviewed value and one queued intent',recoveredBrowserRow.value===markupValue&&recoveredBrowserRow.status==='UNVERIFIED'&&await prisma.repositoryLocalEffectIntent.count({where:{keyId:previewKey.id}})===1&&await prisma.translationHistory.count({where:{keyId:previewKey.id}})===1&&!(await page.$('.recovery-value')));

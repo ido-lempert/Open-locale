@@ -226,7 +226,7 @@ const empty = (): RepositoryTargetInput => ({
                 <button name="auditCheck" [attr.data-audit-id]="a.id" type="button" (click)="checkRecovery(a.id)" [disabled]="busy()">Check recovery eligibility</button>
                 @if (recoveryPreview()?.auditId === a.id) {
                   <p class="notice" role="status">{{ recoveryReason(recoveryPreview()!.result) }}
-                    Snapshot: {{ recoveryPreview()!.result.asOf }} (UTC). Not live. Check again to refresh. No reservation is held. No restore action is available.</p>
+                    Snapshot: {{ recoveryPreview()!.result.asOf }} (UTC). Not live. Check again to refresh. No reservation is held. This eligibility check cannot restore a value. Use archived value review with a repository target for separate recovery confirmation.</p>
                 }
                 </li>
               }

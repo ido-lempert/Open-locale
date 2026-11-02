@@ -268,3 +268,8 @@ Target-scoped review now supports separate prepare/cancel/confirm local recovery
 with exact reviewed scalar bindings,private-state clearing,unknown-outcome warning,
 no retry and focused outcome. Actual browser cancel/stale/failure/commit cases and
 480px screenshots verified. Value-only review stays read-only. See review0235.
+
+Committed recovery with unavailable browser response now has real local upstream201
+and exact persisted value/history/intent proof,uncertainty/no-retry/fresh-review
+checks. Eligibility-only wording points to the separate confirmation flow instead
+of claiming all recovery unavailable. See review0236. No remote-delivery promotion.

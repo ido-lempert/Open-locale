@@ -767,3 +767,8 @@ errors never retry automatically and warn that a lost response may hide a comple
 write. Check the current value and get a new review before another request. Success
 lands focus on outcome. No remote write/baseline advance/sync acceptance or enabled
 worker. Older no-UI notes describe their historical milestone.
+
+Recovery browser tests also cover a real successful local commit whose response is
+replaced by503 before reaching the browser. The UI warns that the value may have
+changed,sends no automatic retry,and a fresh review cannot recover an existing
+value. This does not promise exactly-once external effects. See review0236.
