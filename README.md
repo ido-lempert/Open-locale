@@ -804,3 +804,7 @@ overwritten by recovery;missing baseline requires separate review. See review024
 Prepare local recovery now lands keyboard focus on its confirmation region;Cancel
 returns focus to Prepare. Delayed focus is fenced by generation,audit and current
 confirmation state so old review callbacks cannot steal focus. See review0242.
+
+Recovery confirmation and outcome now show explicit visible keyboard-focus outlines.
+Actual browser Tab/Enter traversal verifies Confirm then Cancel,return to Prepare
+and no recovery effects from keyboard cancel. See review0243.

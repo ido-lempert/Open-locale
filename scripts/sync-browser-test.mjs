@@ -509,6 +509,12 @@ try {
   const restoredConfigResponse=page.waitForResponse(r=>r.request().method()==='GET'&&r.url().endsWith('/sync/repository-targets'));await clickTarget('[name=targetRefresh]');await restoredConfigResponse;await page.waitForFunction(()=>!document.querySelector('fieldset').disabled);
   await page.select('[name=auditReviewTarget]',archivedReviewTarget.id);await clickTarget(`[data-value-audit-id="${eligibleAudit.id}"]`);await page.waitForSelector('[name=auditRecoverPrepare]');await clickTarget('[name=auditRecoverPrepare]');await page.waitForSelector('[name=auditRecoverConfirm]');
   await page.waitForFunction(()=>document.activeElement?.getAttribute('aria-label')==='Confirm local recovery');
+  check('confirmation focused region has explicit visible outline',await page.evaluate(()=>{const s=getComputedStyle(document.activeElement);return s.outlineStyle==='solid'&&s.outlineWidth==='2px'&&s.outlineColor==='rgb(40, 95, 189)';}));
+  await page.keyboard.press('Tab');check('keyboard first confirmation tab reaches explicit confirm button',await page.evaluate(()=>document.activeElement?.getAttribute('name')==='auditRecoverConfirm'));
+  await page.keyboard.press('Tab');check('keyboard next confirmation tab reaches cancel button',await page.evaluate(()=>document.activeElement?.getAttribute('name')==='auditRecoverCancel'));
+  await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.getAttribute('name')==='auditRecoverPrepare');
+  check('keyboard cancel returns prepare without local recovery effects',await prisma.translation.count({where:{keyId:previewKey.id}})===0&&await prisma.repositoryLocalEffectIntent.count({where:{projectId:applyProject.id}})===beforeTargetQueue&&!(await page.$('[name=auditRecoverConfirm]')));
+  await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.getAttribute('aria-label')==='Confirm local recovery');
   check('prepare recovery lands keyboard focus in explicit confirmation',await page.evaluate(()=>document.activeElement?.getAttribute('role')==='region'&&document.activeElement?.getBoundingClientRect().top>=50));
   check('local recovery browser separate confirmation explains local queue limits',await page.$eval('[aria-label="Confirm local recovery"]',e=>e.textContent.includes('unverified')&&e.textContent.includes('Queued effects may run')&&e.textContent.includes('Sync is not completed'))&&await prisma.translation.count({where:{keyId:previewKey.id}})===0);
   await page.$eval('[aria-label="Confirm local recovery"]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/deletion-recovery-confirm-narrow.png'});
@@ -578,6 +584,7 @@ try {
   const recoveredBrowserRow=await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:previewKey.id,localeCode:'en'}}});
   check('browser explicit recovery commits actual reviewed value and one queued intent',recoveredBrowserRow.value===markupValue&&recoveredBrowserRow.status==='UNVERIFIED'&&await prisma.repositoryLocalEffectIntent.count({where:{keyId:previewKey.id}})===1&&await prisma.translationHistory.count({where:{keyId:previewKey.id}})===1&&!(await page.$('.recovery-value')));
   await page.waitForFunction(()=>document.activeElement?.textContent.includes('Local value recovered: 1'));
+  check('recovery outcome focus has explicit visible outline',await page.evaluate(()=>{const s=getComputedStyle(document.activeElement);return s.outlineStyle==='solid'&&s.outlineWidth==='2px';}));
   check('local recovery outcome lands keyboard focus on visible status',await page.evaluate(()=>document.activeElement?.getBoundingClientRect().top>=50&&document.activeElement?.getBoundingClientRect().bottom<=innerHeight));
   await page.screenshot({path:'/downloads/deletion-recovery-success-narrow.png'});
   await prisma.repositoryLocalEffectIntent.deleteMany({where:{keyId:previewKey.id}});await prisma.translation.deleteMany({where:{keyId:previewKey.id}});await prisma.translationHistory.deleteMany({where:{keyId:previewKey.id}});await prisma.activityEvent.deleteMany({where:{projectId:applyProject.id,keyName:previewKey.name}});

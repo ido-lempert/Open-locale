@@ -302,3 +302,7 @@ generic. See review0241.
 Recovery prepare/cancel keyboard landing now explicitly verified:confirmation
 region focus then Prepare return,with rapid cancel/scope/replaced-audit callback
 fences. No automatic mutation. See review0242.
+
+Explicit visible focus outlines verified for recovery confirmation/outcome;actual
+keyboard-only Tab/Enter cancel/prepare path tested with unchanged value/queue on
+cancel. Addresses review0242 visual finding. See review0243.

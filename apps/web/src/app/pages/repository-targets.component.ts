@@ -35,7 +35,7 @@ const empty = (): RepositoryTargetInput => ({
       .audit-heading:focus { outline: 2px solid #285fbd; outline-offset: 4px; }
       .audit-list { padding: 0; list-style: none; }
       .audit-list li { border: 1px solid #dce2eb; border-radius: 8px; padding: 16px; margin: 12px 0; overflow-wrap: anywhere; }
-      .recovery-value:focus { outline: 2px solid #285fbd; outline-offset: 4px; }
+      .recovery-value:focus, .recovery-confirmation:focus, .recovery-outcome:focus { outline: 2px solid #285fbd; outline-offset: 4px; }
       .recovery-value { scroll-margin-top: 72px; }
       .recovery-value pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow: auto; padding: 12px; background: #fff; border: 1px solid #dce2eb; }
       .audit-list dl { margin: 0; }
@@ -158,13 +158,13 @@ const empty = (): RepositoryTargetInput => ({
         passwords here.
       </p>
       @if (recoverySending()) {
-        <p #outcome tabindex="-1" role="status" class="notice">Local recovery request sent. Waiting for its result. Leaving this page does not cancel the request. Do not send another recovery until you check the current value.</p>
+        <p #outcome tabindex="-1" role="status" class="notice recovery-outcome">Local recovery request sent. Waiting for its result. Leaving this page does not cancel the request. Do not send another recovery until you check the current value.</p>
       }
       @if (error()) {
-        <p #outcome tabindex="-1" role="alert" class="error">{{ error() }}</p>
+        <p #outcome tabindex="-1" role="alert" class="error recovery-outcome">{{ error() }}</p>
       }
       @if (message()) {
-        <p #outcome tabindex="-1" role="status" class="success">{{ message() }}</p>
+        <p #outcome tabindex="-1" role="status" class="success recovery-outcome">{{ message() }}</p>
       }
       @if (ready()) {
         <button
@@ -214,7 +214,7 @@ const empty = (): RepositoryTargetInput => ({
                     @if (recoveryValue()!.result.reviewAvailable) { <pre>{{ recoveryValue()!.result.value === '' ? '(Empty value)' : recoveryValue()!.result.value }}</pre> }
                     @if (recoveryValue()!.recoveryInput) {
                       @if (recoveryValue()!.confirming) {
-                        <div class="notice" tabindex="-1" role="region" aria-label="Confirm local recovery">
+                        <div class="notice recovery-confirmation" tabindex="-1" role="region" aria-label="Confirm local recovery">
                           <p>Recover this archived value locally? A fresh unverified locale value, new history and one queued effect will be created. Archived history is not replayed. Repository files and accepted baseline stay unchanged. Sync is not completed. Queued effects may run if a worker is enabled.</p>
                           <button name="auditRecoverConfirm" type="button" (click)="recoverLocalValue()" [disabled]="busy()">Confirm local recovery</button>
                           <button name="auditRecoverCancel" type="button" (click)="cancelLocalRecovery()" [disabled]="busy()">Cancel recovery</button>
