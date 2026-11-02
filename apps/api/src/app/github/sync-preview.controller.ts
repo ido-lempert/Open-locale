@@ -105,6 +105,7 @@ export class LocalSyncPreviewService {
     await this.projects.requireAdmin(user.userId, projectId);
     // One consistent diagnostic snapshot,not a lock/reservation/execution grant.
     const {plan,asOf} = await this.prisma.$transaction(async tx => {
+      await tx.$executeRaw`SET TRANSACTION READ ONLY`;
       await this.projects.requireAdminInTransaction(tx, user.userId, projectId);
       const stamp = await tx.$queryRaw<{asOf:Date}[]>`SELECT transaction_timestamp() AS "asOf"`;
       return {plan: await inspectDeletionRecovery(tx, projectId, auditId), asOf: stamp[0].asOf};
@@ -117,6 +118,7 @@ export class LocalSyncPreviewService {
     if (user.via !== 'jwt') throw new ForbiddenException('Recovery value review requires a signed-in session');
     await this.projects.requireAdmin(user.userId, projectId);
     return this.prisma.$transaction(async tx => {
+      await tx.$executeRaw`SET TRANSACTION READ ONLY`;
       await this.projects.requireAdminInTransaction(tx, user.userId, projectId);
       const stamp = await tx.$queryRaw<{asOf:Date}[]>`SELECT transaction_timestamp() AS "asOf"`;
       const plan = await inspectDeletionRecovery(tx, projectId, auditId);
@@ -150,6 +152,7 @@ export class LocalSyncPreviewService {
       } catch { throw new BadRequestException('Invalid deletion audit cursor'); }
     }
     const rows = await this.prisma.$transaction(async tx => {
+      await tx.$executeRaw`SET TRANSACTION READ ONLY`;
       await this.projects.requireAdminInTransaction(tx, user.userId, projectId);
       return tx.translationDeletionAudit.findMany({
       where: { projectId, ...(boundary ? { OR: [

@@ -859,6 +859,16 @@ try {
   const recoveryProjects=new RecoveryProjectsService(prisma,{});
   const recoveryAuthService=new AuditPageService(prisma,recoveryProjects,{});
   const adminPrincipal={via:'jwt',userId:admin.user.id};
+  for(const operation of ['previewDeletionRecovery','reviewDeletionRecoveryValue','listDeletionAudits']){
+    const readOnlyProjects={requireAdmin:(...args)=>recoveryProjects.requireAdmin(...args),requireAdminInTransaction:async(tx,...args)=>{
+      await recoveryProjects.requireAdminInTransaction(tx,...args);
+      await tx.$executeRaw`UPDATE projects SET description=${'must not write from read-only recovery '+operation} WHERE id=${project.id}::uuid`;
+    }};
+    const beforeReadOnly=await prisma.project.findUnique({where:{id:project.id}});
+    let denied=false;try{await new AuditPageService(prisma,readOnlyProjects,{})[operation](adminPrincipal,project.id,...(operation==='listDeletionAudits'?[]:[audit.id]));}catch(e){denied=e.code==='P2010'&&e.meta?.code==='25006';}
+    check('actual recovery '+operation+' database read-only rejects accidental write25006',denied);
+    check('read-only '+operation+' leaves actual project unchanged',JSON.stringify(await prisma.project.findUnique({where:{id:project.id}}))===JSON.stringify(beforeReadOnly));
+  }
   check('snapshot recovery auth accepts direct admin',(await recoveryAuthService.previewDeletionRecovery(adminPrincipal,project.id,audit.id)).eligibleNow===true);
   for(const mode of ['demote','remove']){
     const interleavedProjects={

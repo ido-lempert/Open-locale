@@ -665,3 +665,8 @@ network request or erase its response from browser memory/history.
 Archived-value result lands keyboard focus on its labeled region. Hide/cancel
 returns focus to the originating review button after render;generation fencing
 prevents superseded navigation/actions from stealing focus.
+
+Eligibility,value-review and deletion-audit page transactions set PostgreSQL READ
+ONLY before snapshot authorization. Accidental SQL writes fail25006 instead of
+mutating data. This database guard complements,no-store/session/admin controls;it
+is not a substitute for authorization or proof that other routes are read-only.
