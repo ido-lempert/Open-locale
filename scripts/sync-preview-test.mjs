@@ -318,6 +318,26 @@ try {
   const validateWriteScope=scope=>prisma.$transaction(tx=>lockRepositoryWriteScope(tx,scope),{isolationLevel:'Serializable'});
   const deniedScope=async scope=>{try{await validateWriteScope(scope);return false;}catch{return true;}};
   check('repository transaction guard validates actual owner and accepted target scope',(await validateWriteScope(writeScope)).adminValidated===true&&(await validateWriteScope(writeScope)).canApply===false);
+  const beforeMutableGuard={target:await prisma.repositorySyncTarget.findUnique({where:{id:target.id}}),baseline:await prisma.repositorySyncBaseline.findUnique({where:{targetId:target.id}})};
+  for(const boundary of ['isolation','project']){
+    const mutableGuardScope={...writeScope};let mutatedGuard=false;
+    const capturedGuard=await prisma.$transaction(async tx=>{
+      const observedTx=new Proxy(tx,{get(inner,key){
+        if(key==='$queryRaw')return async(...args)=>{
+          const rows=await inner.$queryRaw(...args);const sql=args[0].join('?');
+          if(!mutatedGuard&&(boundary==='isolation'?sql.includes('SHOW transaction_isolation'):sql.includes('FROM projects'))){
+            mutableGuardScope.actorId=admin.user.id;mutatedGuard=true;
+          }
+          return rows;
+        };
+        const value=Reflect.get(inner,key);return typeof value==='function'?value.bind(inner):value;
+      }});
+      return lockRepositoryWriteScope(observedTx,mutableGuardScope);
+    },{isolationLevel:'Serializable'});
+    check('shared repository guard captures original actor after actual '+boundary+' query',mutatedGuard&&mutableGuardScope.actorId===admin.user.id&&capturedGuard.actorId===owner.user.id&&capturedGuard.projectId===project.id&&capturedGuard.targetId===target.id&&capturedGuard.adminValidated===true);
+  }
+  check('mutable shared guard reviews preserve actual target and baseline',JSON.stringify(beforeMutableGuard)===JSON.stringify({target:await prisma.repositorySyncTarget.findUnique({where:{id:target.id}}),baseline:await prisma.repositorySyncBaseline.findUnique({where:{targetId:target.id}})}));
+
   check('repository transaction guard denies member outsider and mismatched scope',await deniedScope({...writeScope,actorId:member.user.id})&&await deniedScope({...writeScope,actorId:outsider.user.id})&&await deniedScope({...writeScope,targetRevision:1})&&await deniedScope({...writeScope,branch:'other'})&&await deniedScope({...writeScope,locale:'he'})&&await deniedScope({...writeScope,projectId:crypto.randomUUID()}));
   check('repository guard rejects baseline version SHA and digest mismatches',await deniedScope({...writeScope,baselineVersion:999})&&await deniedScope({...writeScope,baselineSha:'f'.repeat(40)})&&await deniedScope({...writeScope,baselineDigest:'f'.repeat(64)}));
   await prisma.teamMember.update({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},data:{role:'MEMBER'}});

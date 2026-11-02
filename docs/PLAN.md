@@ -217,3 +217,8 @@ Target recovery review now captures its original authenticated actor before any
 await and retains it across preflight/snapshot caller-principal mutations. Real
 PostgreSQL cases and old-code negative control cover both boundaries. No new
 restore route/action or remote write. See review0224.
+
+Shared repository write-scope guard now captures its own scalar bindings before
+database awaits. Real PostgreSQL query-boundary mutation cases and old-code
+negative control cover actor consistency independently of caller copies. No new
+API or remote write. See review0225.

@@ -707,3 +707,6 @@ baseline fixture. No API/UI contract change. See review0223.
 Recovery-review actor binding: target-scoped read-only review captures the original
 session actor before authorization yields. Actual PostgreSQL preflight/snapshot
 mutation cases and an old-code negative control are recorded in review0224.
+
+The shared repository write-scope guard owns its reviewed scalar bindings before
+any database await; real PostgreSQL mutation cases are recorded in review0225.

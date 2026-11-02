@@ -18,6 +18,8 @@ export async function lockRepositoryWriteScope(
   tx: Prisma.TransactionClient,
   scope: RepositoryWriteScope,
 ) {
+  // Own the reviewed primitive bindings before any database await.
+  scope = { ...scope };
   const isolation = await tx.$queryRaw<
     { transaction_isolation: string }[]
   >`SHOW transaction_isolation`;
