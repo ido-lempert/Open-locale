@@ -101,7 +101,7 @@ export class LocalSyncPreviewService {
     }
   }
 
-  // Internal review only,no controller route or execution grant. Any future
+  // Target-scoped read-only review,not an execution grant. Any future
   // executor must revalidate every binding in its SAME write transaction.
   async reviewRepositoryRecovery(user: AuthPrincipal, projectId: string, targetId: string, auditId: string) {
     if (user.via !== 'jwt') throw new ForbiddenException('Recovery review requires a signed-in session');
@@ -436,6 +436,18 @@ export class LocalSyncPreviewController {
     @Body() input: ResolveSyncPreviewDto,
   ) {
     return this.previews.resolve(user, projectId, input);
+  }
+  @Get('repository-targets/:targetId/deletion-audits/:auditId/recovery-review')
+  @Header('Cache-Control', 'no-store')
+  async reviewRepositoryRecovery(
+    @CurrentUser() user: AuthPrincipal,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Param('targetId', new ParseUUIDPipe()) targetId: string,
+    @Param('auditId', new ParseUUIDPipe()) auditId: string,
+  ) {
+    const review = await this.previews.reviewRepositoryRecovery(user, projectId, targetId, auditId);
+    return { ...review, source: 'repository-target-recovery-review', maxValueBytes: 32768,
+      snapshotIncluded: false, historyReplay: false };
   }
   @Get('deletion-audits/:auditId/recovery-value-review')
   @Header('Cache-Control', 'no-store')

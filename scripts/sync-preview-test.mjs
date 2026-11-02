@@ -969,6 +969,22 @@ try {
     check('actual recovery '+operation+' database read-only rejects accidental write25006',denied);
     check('read-only '+operation+' leaves actual project unchanged',JSON.stringify(await prisma.project.findUnique({where:{id:project.id}}))===JSON.stringify(beforeReadOnly));
   }
+  const targetRecoveryPath=`${P}/sync/repository-targets/${target.id}/deletion-audits/${audit.id}/recovery-review`;
+  check('target recovery HTTP review requires session',(await call(targetRecoveryPath)).status===401);
+  check('target recovery HTTP review rejects API token',(await call(targetRecoveryPath,{apiKey:token.token})).status===403);
+  check('target recovery HTTP review denies contributor',(await call(targetRecoveryPath,{jwt:member.accessToken})).status===403);
+  check('target recovery HTTP review denies outsider',(await call(targetRecoveryPath,{jwt:outsider.accessToken})).status===404);
+  const targetReviewCounts=await recoveryCountsForComposition(),targetReviewArchive=JSON.stringify(await prisma.translationDeletionAudit.findUnique({where:{id:audit.id}}));
+  const httpTargetReview=await call(targetRecoveryPath,{jwt:admin.accessToken});
+  check('target recovery HTTP review returns bounded value exact review facts no execution grant',httpTargetReview.status===200&&httpTargetReview.json.source==='repository-target-recovery-review'&&httpTargetReview.json.reviewAvailable===true&&httpTargetReview.json.value==='writer draft'&&httpTargetReview.json.recovery.actorId===admin.user.id&&httpTargetReview.json.repository.actorId===admin.user.id&&httpTargetReview.json.recovery.auditId===audit.id&&httpTargetReview.json.repository.targetId===target.id&&httpTargetReview.json.maxValueBytes===32768&&httpTargetReview.json.canRestore===false&&httpTargetReview.json.reservationHeld===false&&httpTargetReview.json.historyReplay===false&&httpTargetReview.json.snapshotIncluded===false&&Object.keys(httpTargetReview.json).sort().join(',')==='asOf,canRestore,historyReplay,maxValueBytes,reason,recovery,repository,reservationHeld,reviewAvailable,snapshotIncluded,source,value');
+  check('target recovery HTTP review omits archived history full snapshot and baseline text',!JSON.stringify(httpTargetReview.json).includes('previousValue')&&!Object.hasOwn(httpTargetReview.json,'snapshot')&&!Object.hasOwn(httpTargetReview.json.repository,'text')&&Object.keys(httpTargetReview.json.recovery).sort().join(',')==='actorId,auditId,expectedBranchId,expectedKeyRevision,expectedKeyUpdatedAt,expectedValueDigest,projectId'&&Object.keys(httpTargetReview.json.repository).sort().join(',')==='actorId,baselineDigest,baselineSha,baselineVersion,branch,branchId,locale,projectId,targetId,targetRevision');
+  const targetReviewHeaders=await fetch(API+targetRecoveryPath,{headers:{Authorization:'Bearer '+jwt}});check('target recovery HTTP review explicitly no-store',targetReviewHeaders.headers.get('cache-control')==='no-store');await targetReviewHeaders.arrayBuffer();
+  for(const path of [targetRecoveryPath.replace(target.id,'bad-target'),targetRecoveryPath.replace(audit.id,'bad-audit'),targetRecoveryPath.replace(project.id,'bad-project')])check('target recovery HTTP review validates each UUID parameter '+path,(await call(path,{jwt})).status===400);
+  const noTargetHttp=await call(targetRecoveryPath.replace(target.id,owner.user.id),{jwt});
+  check('target recovery HTTP missing target denies without value or bindings',noTargetHttp.status===200&&noTargetHttp.json.reviewAvailable===false&&noTargetHttp.json.value===null&&noTargetHttp.json.recovery===null&&noTargetHttp.json.repository===null);
+  const noAuditHttp=await call(targetRecoveryPath.replace(audit.id,owner.user.id),{jwt});
+  check('target recovery HTTP missing audit denies without value or bindings',noAuditHttp.status===200&&noAuditHttp.json.reason==='audit-unavailable'&&noAuditHttp.json.value===null&&noAuditHttp.json.recovery===null&&noAuditHttp.json.repository===null);
+  check('target recovery HTTP repeated review leaves actual archive and all counts unchanged',JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(targetReviewCounts)&&JSON.stringify(await prisma.translationDeletionAudit.findUnique({where:{id:audit.id}}))===targetReviewArchive);
   const internalReview=await recoveryAuthService.reviewRepositoryRecovery(adminPrincipal,project.id,target.id,audit.id);
   check('internal repository recovery review derives exact current actor target baseline and key bindings',internalReview.reviewAvailable&&internalReview.value==='writer draft'&&internalReview.recovery.actorId===admin.user.id&&internalReview.recovery.auditId===audit.id&&internalReview.recovery.expectedValueDigest===recoveryScope.expectedValueDigest&&internalReview.recovery.expectedKeyRevision===recoveryScope.expectedKeyRevision&&internalReview.repository.targetId===target.id&&internalReview.repository.targetRevision===writeScope.targetRevision&&internalReview.repository.baselineVersion===writeScope.baselineVersion&&internalReview.canRestore===false&&internalReview.reservationHeld===false);
   const beforeDerivedReviewCounts=await recoveryCountsForComposition();
@@ -1032,6 +1048,8 @@ try {
       if(mode==='value-too-large')await prisma.translationDeletionAudit.update({where:{id:audit.id},data:{snapshot:{...storedSnapshot,row:{...storedSnapshot.row,value:'א'.repeat(16385)}}}});
       if(mode==='value-exists')await prisma.translation.create({data:{projectId:project.id,keyId:localKey.id,localeCode:'en',value:'new live value'}});
       reviewDenied=await recoveryAuthService.reviewRepositoryRecovery(adminPrincipal,project.id,target.id,audit.id);
+      const httpDenied=await call(targetRecoveryPath,{jwt:admin.accessToken});
+      check('target recovery HTTP '+mode+' denies without value or bindings',httpDenied.status===200&&httpDenied.json.reviewAvailable===false&&httpDenied.json.value===null&&httpDenied.json.recovery===null&&httpDenied.json.repository===null);
     }finally{
       await prisma.repositorySyncBaseline.upsert({where:{targetId:target.id},create:reviewBaseline,update:reviewBaseline});
       await prisma.repositorySyncTarget.update({where:{id:target.id},data:{locale:'en'}});
@@ -1043,6 +1061,8 @@ try {
   const reviewOtherTarget=await prisma.repositorySyncTarget.create({data:{projectId:summaryOtherProject.id,branchId:(await prisma.branch.findFirst({where:{projectId:summaryOtherProject.id}})).id,localBranch:'main',locale:'en',owner:'fixture',repo:'fixture',path:'en.json',remoteBranch:'main'}});
   const crossReview=await recoveryAuthService.reviewRepositoryRecovery(adminPrincipal,project.id,reviewOtherTarget.id,audit.id);
   check('internal recovery review hides actual other-project target',crossReview.reason==='target-unavailable'&&crossReview.recovery===null&&crossReview.repository===null&&crossReview.value===null);
+  const crossTargetHttp=await call(targetRecoveryPath.replace(target.id,reviewOtherTarget.id),{jwt});
+  check('target recovery HTTP hides actual other-project target',crossTargetHttp.status===200&&crossTargetHttp.json.reason==='target-unavailable'&&crossTargetHttp.json.value===null&&crossTargetHttp.json.recovery===null&&crossTargetHttp.json.repository===null);
   await prisma.repositorySyncTarget.delete({where:{id:reviewOtherTarget.id}});
   const reviewInterleavedProjects={requireAdmin:async(userId,projectId)=>{await recoveryProjects.requireAdmin(userId,projectId);await prisma.teamMember.update({where:{teamId_userId:{teamId:project.teamId,userId:admin.user.id}},data:{role:'MEMBER'}});},requireAdminInTransaction:(...args)=>recoveryProjects.requireAdminInTransaction(...args)};
   let reviewRevoked=false;try{await new AuditPageService(prisma,reviewInterleavedProjects,{}).reviewRepositoryRecovery(adminPrincipal,project.id,target.id,audit.id);}catch(e){reviewRevoked=e.getStatus?.()===403;}
@@ -1050,7 +1070,8 @@ try {
   const internalReviewGroup=await prisma.group.create({data:{teamId:project.teamId,name:'internal-review-group-admin',role:'ADMIN'}});
   await prisma.groupMember.create({data:{groupId:internalReviewGroup.id,userId:member.user.id}});
   let internalReviewGroupDenied=false;try{await recoveryAuthService.reviewRepositoryRecovery({via:'jwt',userId:member.user.id},project.id,target.id,audit.id);}catch(e){internalReviewGroupDenied=e.getStatus?.()===403;}
-  check('internal repository recovery review explicitly matches direct-admin-only composition',internalReviewGroupDenied);await prisma.group.delete({where:{id:internalReviewGroup.id}});
+  check('internal repository recovery review explicitly matches direct-admin-only composition',internalReviewGroupDenied);
+  check('target recovery HTTP review explicitly denies group-only admin',(await call(targetRecoveryPath,{jwt:member.accessToken})).status===403);await prisma.group.delete({where:{id:internalReviewGroup.id}});
   const snapshotReviewProjects={requireAdmin:(...args)=>recoveryProjects.requireAdmin(...args),requireAdminInTransaction:async(tx,...args)=>{await recoveryProjects.requireAdminInTransaction(tx,...args);await prisma.repositorySyncTarget.update({where:{id:target.id},data:{revision:{increment:1}}});}};
   let sameSnapshotReview;
   try{

@@ -235,6 +235,9 @@ export const OPENAPI = {
       post: p('Restore the project to a snapshot (atomic point-in-time recovery; fields added after a snapshot was taken - e.g. pluralForms in older snapshots - are left untouched, so a restore is not an exact historical reconstruction)', 'snapshots'),
     },
     '/api/projects/{projectId}/activity': { get: p('Project activity feed', 'projects') },
+    '/api/projects/{projectId}/sync/repository-targets/{targetId}/deletion-audits/{auditId}/recovery-review': {
+      get:{...p('Review target-scoped archived value and current recovery bindings (session direct-admin only)','sync'),security:[{bearerAuth:[]}],description:'UUID parameters,no-store,DB READ ONLY RepeatableRead with snapshot authorization. Returns asOf,reviewAvailable,reason,value (up to32768UTF8bytes or null),recovery and repository scopes (null on denial),maxValueBytes=32768,canRestore=false,reservationHeld=false,snapshotIncluded=false,historyReplay=false. Scopes bind current session actor,audit/key revision/branch/value digest and current target revision/baseline version/SHA/digest. These are review facts,not secrets or execution tokens. No history,full snapshot,baseline bytes,remote read or mutation. Review can become stale immediately;no restore endpoint.'},
+    },
     '/api/projects/{projectId}/sync/deletion-audits/{auditId}/recovery-value-review': {
       get:{...p('Read eligible archived flat value for review (session admin only)','sync'),security:[{bearerAuth:[]}],description:'No-store,read-only RepeatableRead snapshot with effective admin recheck. Returns asOf,reviewAvailable,reason,value (up to32768UTF8bytes or null),maxValueBytes plus canRestore=false,snapshotIncluded=false,historyReplay=false,reservationHeld=false. Denied or oversized values remain null. No full snapshot,history,internal digest/revision,restore token,reservation or mutation.'},
     },

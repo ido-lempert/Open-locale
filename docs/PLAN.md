@@ -200,3 +200,7 @@ authorization and bounded value review. No public route or restore grant. See re
 Internal authenticated recovery execution now binds session/project/target/audit
 and captured reviewed scopes before one Serializable composition transaction,with
 no retry and actual rollback/replay tests. No public restore route/UI. See review0220.
+
+Separate target-scoped read-only recovery review GET exposes bounded archived value
+and current review bindings to session direct admins,with UUID/no-store/denial
+privacy tests. No execution route or UI consumer yet. See review0221.
