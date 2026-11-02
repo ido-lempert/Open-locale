@@ -710,3 +710,7 @@ mutation cases and an old-code negative control are recorded in review0224.
 
 The shared repository write-scope guard owns its reviewed scalar bindings before
 any database await; real PostgreSQL mutation cases are recorded in review0225.
+
+Local precondition validation captures nested key/translation generations before
+async database work; stale review cannot be repaired by mid-call caller mutation.
+Real PostgreSQL controls are recorded in review0226.

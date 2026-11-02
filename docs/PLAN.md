@@ -222,3 +222,8 @@ Shared repository write-scope guard now captures its own scalar bindings before
 database awaits. Real PostgreSQL query-boundary mutation cases and old-code
 negative control cover actor consistency independently of caller copies. No new
 API or remote write. See review0225.
+
+Shared local precondition validator now owns nested key/translation generations
+before database awaits. Real PostgreSQL stale-to-current and valid-to-invalid
+caller mutations retain original entry semantics. No new execution/API. See
+review0226.

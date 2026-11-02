@@ -31,6 +31,10 @@ export async function lockLocalPreconditions(
     expected.keys.length > 10000
   )
     throw new Error('Invalid local snapshot preconditions');
+  // Capture nested reviewed generations before database work can yield.
+  expected = { ...expected, keys: expected.keys.map(key => ({
+    ...key, translation: key.translation ? { ...key.translation } : null,
+  })) };
   const isolation = await tx.$queryRaw<
     { transaction_isolation: string }[]
   >`SHOW transaction_isolation`;

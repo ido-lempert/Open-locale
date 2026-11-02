@@ -286,6 +286,30 @@ try {
   const validateLocal=expected=>prisma.$transaction(tx=>lockLocalPreconditions(tx,expected),{isolationLevel:'Serializable'});
   const currentLocalPlan=(await resolveRepository()).json.localChangePlan;
   check('internal serializable validator locks and validates real snapshot', (await validateLocal(currentLocalPlan.preconditions)).validatedKeys===currentLocalPlan.preconditions.keys.length);
+  const mutationGuardRows=await prisma.translation.findMany({where:{projectId:project.id},orderBy:{rowId:'asc'}});
+  for(const boundary of ['isolation','keys'])for(const mode of ['valid-to-invalid','stale-to-current']){
+    const mutableLocalSnapshot=structuredClone(currentLocalPlan.preconditions);
+    const nestedReview=mutableLocalSnapshot.keys.find(k=>k.key===localKey.name).translation;
+    const actualReviewedVersion=nestedReview.version;
+    if(mode==='stale-to-current')nestedReview.version=actualReviewedVersion+1;
+    let localSnapshotMutated=false,localSnapshotValidated=false,localSnapshotDenied=false;
+    try{await prisma.$transaction(async tx=>{
+      const observedTx=new Proxy(tx,{get(inner,key){
+        if(key==='$queryRaw')return async(...args)=>{
+          const rows=await inner.$queryRaw(...args);const sql=args[0].join('?');
+          if(!localSnapshotMutated&&(boundary==='isolation'?sql.includes('SHOW transaction_isolation'):sql.includes('FROM keys'))){
+            nestedReview.version=mode==='stale-to-current'?actualReviewedVersion:actualReviewedVersion+1;
+            localSnapshotMutated=true;
+          }
+          return rows;
+        };
+        const value=Reflect.get(inner,key);return typeof value==='function'?value.bind(inner):value;
+      }});
+      localSnapshotValidated=(await lockLocalPreconditions(observedTx,mutableLocalSnapshot)).validatedKeys===mutableLocalSnapshot.keys.length;
+    },{isolationLevel:'Serializable'});}catch(e){localSnapshotDenied=e.name==='RepositoryLocalError'&&e.kind==='conflict';}
+    check('shared local guard retains nested entry generation across '+boundary+' '+mode,localSnapshotMutated&&(mode==='valid-to-invalid'?localSnapshotValidated&&!localSnapshotDenied:localSnapshotDenied&&!localSnapshotValidated));
+  }
+  check('nested local guard mutation cases leave actual translations unchanged',JSON.stringify(await prisma.translation.findMany({where:{projectId:project.id},orderBy:{rowId:'asc'}}))===JSON.stringify(mutationGuardRows));
   let wrongIsolation=false;try{await prisma.$transaction(tx=>lockLocalPreconditions(tx,currentLocalPlan.preconditions));}catch(e){wrongIsolation=e.message.includes('serializable');}
   check('local validator refuses non-serializable transaction',wrongIsolation);
   const rejectsLocal=async(expected)=>{try{await validateLocal(expected);return false;}catch{return true;}};
