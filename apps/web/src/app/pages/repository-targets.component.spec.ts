@@ -509,3 +509,13 @@ describe('read-only recovery eligibility UI',()=>{
  it('late response after navigation cannot restore old eligibility',async()=>{let finish!:(v:unknown)=>void;const c=withPage({previewDeletionRecovery:()=>new Promise(r=>finish=r),getProject:async()=>({locales:[],baseLocale:'en'}),listBranches:async()=>[],listRepositoryTargets:async()=>({targets:[]})});const pending=c.checkRecovery('a');await c.load('other');finish(result);await pending;expect(c.recoveryPreview()).toBeNull();});
  it('uses safe fixed reason text for unknown reasons',()=>{const c=setup({});expect(c.recoveryReason({...result,eligibleNow:false,reason:'<private>'} as never)).toBe('Current recovery checks do not pass.');});
 });
+
+
+describe('explicit archived value review UI',()=>{
+ const result={source:'deletion-recovery-value-review',asOf:'2026-11-02T00:00:00.000Z',reviewAvailable:true,reason:'current-flat-value-absence',value:'private value',maxValueBytes:32768,canRestore:false,snapshotIncluded:false,historyReplay:false,reservationHeld:false};
+ function withPage(mock:Record<string,unknown>){const c=setup(mock);c.auditPage.set({audits:[{id:'a'}],nextCursor:null} as never);return c;}
+ it('loads only explicit listed value review',async()=>{const read=jest.fn(async()=>result);const c=withPage({reviewDeletionRecoveryValue:read});expect(read).not.toHaveBeenCalled();await c.reviewRecoveryValue('other');expect(read).not.toHaveBeenCalled();await c.reviewRecoveryValue('a');expect(read).toHaveBeenCalledWith('p','a');expect(c.recoveryValue()?.result).toEqual(result);});
+ it('clears private value on error without raw failure',async()=>{const c=withPage({reviewDeletionRecoveryValue:async()=>{throw new Error('private failure');}});c.recoveryValue.set({auditId:'a',result} as never);await c.reviewRecoveryValue('a');expect(c.recoveryValue()).toBeNull();expect(c.error()).toContain('No value was restored');expect(c.error()).not.toContain('private');});
+ it('clears value on audit refresh',async()=>{const c=withPage({listDeletionAudits:async()=>({audits:[],nextCursor:null})});c.recoveryValue.set({auditId:'a',result} as never);await c.loadAudits();expect(c.recoveryValue()).toBeNull();});
+ it('late private value cannot cross route change',async()=>{let finish!:(v:unknown)=>void;const c=withPage({reviewDeletionRecoveryValue:()=>new Promise(r=>finish=r),getProject:async()=>({locales:[],baseLocale:'en'}),listBranches:async()=>[],listRepositoryTargets:async()=>({targets:[]})});const pending=c.reviewRecoveryValue('a');await c.load('other');finish(result);await pending;expect(c.recoveryValue()).toBeNull();});
+});

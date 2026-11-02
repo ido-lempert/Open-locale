@@ -8,6 +8,7 @@ import {
   RepositoryEffectSummary,
   DeletionAuditPage,
   DeletionRecoveryPreview,
+  DeletionRecoveryValueReview,
   RepositoryTargetConfig,
   RepositoryFileSnapshot,
   RepositoryBaselineView,
@@ -33,6 +34,7 @@ const empty = (): RepositoryTargetInput => ({
       .audit-heading:focus { outline: 2px solid #285fbd; outline-offset: 4px; }
       .audit-list { padding: 0; list-style: none; }
       .audit-list li { border: 1px solid #dce2eb; border-radius: 8px; padding: 16px; margin: 12px 0; overflow-wrap: anywhere; }
+      .recovery-value pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow: auto; padding: 12px; background: #fff; border: 1px solid #dce2eb; }
       .audit-list dl { margin: 0; }
       .audit-list dd { margin: 0 0 8px; }
       .effect-summary dl { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 8px 16px; }
@@ -184,6 +186,15 @@ const empty = (): RepositoryTargetInput => ({
                   <dt>Key ID</dt><dd>{{ a.keyId }}</dd>
                   <dt>Audit ID</dt><dd>{{ a.id }}</dd>
                 </dl>
+                <button name="auditValueReview" [attr.data-value-audit-id]="a.id" type="button" (click)="reviewRecoveryValue(a.id)" [disabled]="busy()">Review archived value</button>
+                @if (recoveryValue()?.auditId === a.id) {
+                  <div class="recovery-value" aria-label="Archived value review">
+                    <p class="notice" role="status">{{ recoveryValue()!.result.reviewAvailable ? 'Archived flat value for review only.' : recoveryValue()!.result.reason === 'review-value-too-large' ? 'Archived value exceeds the 32768-byte review limit.' : 'Current checks do not allow value review.' }}
+                      Snapshot: {{ recoveryValue()!.result.asOf }} (UTC). Not live. No reservation is held. No restore action is available.</p>
+                    @if (recoveryValue()!.result.reviewAvailable) { <pre>{{ recoveryValue()!.result.value === '' ? '(Empty value)' : recoveryValue()!.result.value }}</pre> }
+                    <button name="auditValueHide" type="button" (click)="recoveryValue.set(null)">Hide archived value</button>
+                  </div>
+                }
                 <button name="auditCheck" [attr.data-audit-id]="a.id" type="button" (click)="checkRecovery(a.id)" [disabled]="busy()">Check recovery eligibility</button>
                 @if (recoveryPreview()?.auditId === a.id) {
                   <p class="notice" role="status">{{ recoveryReason(recoveryPreview()!.result) }}
@@ -746,6 +757,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   snapshot = signal<RepositoryFileSnapshot | null>(null);
   readAt = signal('');
   @ViewChild('auditHeading') auditHeading?: ElementRef<HTMLElement>;
+  recoveryValue = signal<{auditId:string;result:DeletionRecoveryValueReview}|null>(null);
   recoveryPreview = signal<{auditId:string;result:DeletionRecoveryPreview}|null>(null);
   auditLoading = signal(false);
   auditPage = signal<DeletionAuditPage | null>(null);
@@ -859,7 +871,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
         this.previewResult.set(null); this.clearDraft(); this.previewPage.set(0);
         this.snapshot.set(null);
     this.auditPage.set(null);
-    this.recoveryPreview.set(null); this.effectSummary.set(null); this.baselineView.set(null); this.confirmBaseline.set(false);
+    this.recoveryValue.set(null); this.recoveryPreview.set(null); this.effectSummary.set(null); this.baselineView.set(null); this.confirmBaseline.set(false);
         this.busy.set(false);
         window.scrollTo({top: 0, behavior: 'instant'});
       }
@@ -904,7 +916,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.generation++;
     this.auditPage.set(null);
-    this.recoveryPreview.set(null);
+    this.recoveryValue.set(null); this.recoveryPreview.set(null);
     this.auditLoading.set(false);
     this.snapshot.set(null);
     this.effectSummary.set(null);
@@ -925,10 +937,21 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     };
     return reasons[result.reason] ?? 'Current recovery checks do not pass.';
   }
+  async reviewRecoveryValue(auditId: string) {
+    if (this.busy() || !this.auditPage()?.audits.some(a=>a.id===auditId)) return;
+    const generation=++this.generation;
+    this.busy.set(true); this.recoveryValue.set(null); this.recoveryPreview.set(null); this.error.set(''); this.message.set('');
+    try {
+      const result=await this.api.reviewDeletionRecoveryValue(this.projectId,auditId);
+      if(generation===this.generation)this.recoveryValue.set({auditId,result});
+    } catch {
+      if(generation===this.generation)this.error.set('Could not review archived value. No value was restored. Review again to retry.');
+    } finally { if(generation===this.generation)this.busy.set(false); }
+  }
   async checkRecovery(auditId: string) {
     if (this.busy() || !this.auditPage()?.audits.some(a=>a.id===auditId)) return;
     const generation=++this.generation;
-    this.busy.set(true); this.recoveryPreview.set(null); this.error.set(''); this.message.set('');
+    this.busy.set(true); this.recoveryValue.set(null); this.recoveryPreview.set(null); this.error.set(''); this.message.set('');
     try {
       const result=await this.api.previewDeletionRecovery(this.projectId,auditId);
       if(generation===this.generation)this.recoveryPreview.set({auditId,result});
@@ -942,7 +965,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     this.busy.set(true);
     this.auditLoading.set(true);
     this.auditPage.set(null);
-    this.recoveryPreview.set(null);
+    this.recoveryValue.set(null); this.recoveryPreview.set(null);
     this.error.set(''); this.message.set('');
     try {
       const result = await this.api.listDeletionAudits(this.projectId, cursor);
@@ -979,7 +1002,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     const generation = ++this.generation;
     this.projectId = id;
     this.auditPage.set(null);
-    this.recoveryPreview.set(null);
+    this.recoveryValue.set(null); this.recoveryPreview.set(null);
     this.auditLoading.set(false);
     this.auditLoading.set(false);
     this.snapshot.set(null);

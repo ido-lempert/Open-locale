@@ -1,3 +1,4 @@
+export interface DeletionRecoveryValueReview {source:'deletion-recovery-value-review';asOf:string;reviewAvailable:boolean;reason:string;value:string|null;maxValueBytes:number;canRestore:false;snapshotIncluded:false;historyReplay:false;reservationHeld:false;}
 export interface DeletionRecoveryPreview {source:'deletion-recovery-eligibility-preview';asOf:string;eligibleNow:boolean;reason:string;canRestore:false;snapshotIncluded:false;historyReplay:false;reservationHeld:false;}
 export interface DeletionAuditPage {
  source:'local-deletion-audit-metadata';
@@ -256,6 +257,7 @@ export class ApiService {
       { method: 'POST', body: JSON.stringify({ expectedRevision }) },
     );
   }
+  reviewDeletionRecoveryValue(projectId:string,auditId:string){return this.request<DeletionRecoveryValueReview>(`/projects/${projectId}/sync/deletion-audits/${encodeURIComponent(auditId)}/recovery-value-review`);}
   previewDeletionRecovery(projectId:string,auditId:string){return this.request<DeletionRecoveryPreview>(`/projects/${projectId}/sync/deletion-audits/${encodeURIComponent(auditId)}/recovery-preview`);}
   listDeletionAudits(projectId:string,cursor?:string){return this.request<DeletionAuditPage>(`/projects/${projectId}/sync/deletion-audits${cursor?'?cursor='+encodeURIComponent(cursor):''}`);}
   repositoryEffectSummary(projectId: string, targetId: string) {

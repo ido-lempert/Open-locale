@@ -652,3 +652,8 @@ eligibility/metadata,no-store,same-snapshot effective admin;denied/oversized val
 null. Empty value is supported. No history,full snapshot,internal binding token,
 reservation or restore action. This route exposes private translation text only to
 the existing project-admin audience;no sharing is performed.
+
+Audit cards now offer explicit Review archived value and Hide archived value
+controls. Text is escaped,scroll-bounded and manual-only;UTC snapshot/not-live/no-
+restore notice stays visible. Page refresh,navigation,eligibility check or failed
+review clears prior private text;late replies cannot cross projects. No restore UI.
