@@ -627,6 +627,40 @@ try {
   const guardedRecovery=await prisma.$transaction(tx=>lockDeletionRecovery(tx,recoveryScope),{isolationLevel:'Serializable'});
   check('locked recovery revalidates current owner and candidate without write authority',guardedRecovery.eligible&&guardedRecovery.adminValidated&&guardedRecovery.canRestore===false);
   check('locked recovery accepts current project admin',(await prisma.$transaction(tx=>lockDeletionRecovery(tx,{...recoveryScope,actorId:admin.user.id}),{isolationLevel:'Serializable'})).adminValidated);
+  const recoveryAdminGroup=await prisma.group.create({data:{teamId:project.teamId,name:'locked-recovery-admin',role:'ADMIN'}});
+  await prisma.groupMember.create({data:{groupId:recoveryAdminGroup.id,userId:member.user.id}});
+  const groupRecoveryScope={...recoveryScope,actorId:member.user.id};
+  check('locked recovery accepts effective group admin',(await prisma.$transaction(tx=>lockDeletionRecovery(tx,groupRecoveryScope),{isolationLevel:'Serializable'})).adminValidated);
+  for(const change of ['role','grant','team-member']){
+    let denied=false;try{await prisma.$transaction(async tx=>{
+      if(change==='role')await tx.group.update({where:{id:recoveryAdminGroup.id},data:{role:'MEMBER'}});
+      if(change==='grant')await tx.groupMember.delete({where:{groupId_userId:{groupId:recoveryAdminGroup.id,userId:member.user.id}}});
+      if(change==='team-member')await tx.teamMember.delete({where:{teamId_userId:{teamId:project.teamId,userId:member.user.id}}});
+      await lockDeletionRecovery(tx,groupRecoveryScope);
+    },{isolationLevel:'Serializable'});}catch(e){denied=e.name==='RepositoryLocalError'&&e.kind==='conflict';}
+    check('locked recovery denies revoked group admin '+change,denied);
+  }
+  for(const resource of ['group-role','group-grant']){
+    let ready,release;const held=new Promise(r=>ready=r),gate=new Promise(r=>release=r);
+    const holding=prisma.$transaction(async tx=>{
+      if(resource==='group-role')await tx.$queryRaw`SELECT id FROM groups WHERE id=${recoveryAdminGroup.id}::uuid FOR UPDATE`;
+      else await tx.$queryRaw`SELECT "groupId" FROM group_members WHERE "groupId"=${recoveryAdminGroup.id}::uuid AND "userId"=${member.user.id}::uuid FOR UPDATE`;
+      ready();await gate;
+    },{timeout:10000});await held;
+    let timedOut=false;try{await prisma.$transaction(tx=>lockDeletionRecovery(tx,groupRecoveryScope),{isolationLevel:'Serializable',timeout:5000});}catch(e){timedOut=e.code==='P2010'&&e.meta?.code==='55P03';}finally{release();await holding;}
+    check('locked recovery actual '+resource+' contention fails closed',timedOut);
+  }
+  check('locked recovery group admin recovers after grant locks released',(await prisma.$transaction(tx=>lockDeletionRecovery(tx,groupRecoveryScope),{isolationLevel:'Serializable'})).eligible);
+  let groupWriterRow,groupWriterActivity;
+  try{await prisma.$transaction(async tx=>{
+    await writeDeletionRecovery(tx,groupRecoveryScope);
+    groupWriterRow=await tx.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}});
+    groupWriterActivity=await tx.activityEvent.findFirst({where:{projectId:project.id,keyName:'local',actorId:member.user.id},orderBy:{createdAt:'desc'}});
+    throw new Error('rollback group recovery writer');
+  },{isolationLevel:'Serializable'});}catch(e){if(e.message!=='rollback group recovery writer')throw e;}
+  check('effective group admin writer records correct actor and unverified value',groupWriterRow.value==='writer draft'&&groupWriterRow.status==='UNVERIFIED'&&groupWriterActivity.actorId===member.user.id&&groupWriterActivity.detail.auditId===audit.id);
+  check('group admin writer rollback keeps absent value and deletion generation',!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})&&await prisma.repositoryRemovalGeneration.count({where:{projectId:project.id,keyId:localKey.id,locale:'en',auditId:audit.id}})===1);
+  await prisma.group.delete({where:{id:recoveryAdminGroup.id}});
   let generationChanged=false;try{await prisma.$transaction(async tx=>{await tx.repositoryRemovalGeneration.update({where:{projectId_keyId_locale:{projectId:project.id,keyId:localKey.id,locale:'en'}},data:{auditId:owner.user.id}});await lockDeletionRecovery(tx,recoveryScope);},{isolationLevel:'Serializable'});}catch(e){generationChanged=e.name==='RepositoryLocalError';}
   check('locked recovery rejects in-transaction generation replacement',generationChanged);
   let nonserialDenied=false;try{await prisma.$transaction(tx=>lockDeletionRecovery(tx,recoveryScope));}catch(e){nonserialDenied=e.message==='Deletion recovery requires serializable transaction';}

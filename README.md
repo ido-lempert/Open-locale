@@ -631,3 +631,7 @@ not rewrite an already-started snapshot;this remains read-only,not a reservation
 Deletion-audit metadata pages also recheck effective direct/group admin within the
 same RepeatableRead snapshot as their bounded page query. Committed pre-snapshot
 revocations deny metadata;separate page requests are not one frozen snapshot.
+
+Internal recovery guard accepts effective group ADMIN as well as direct admin,
+while requiring current team membership. It locks matching group grant/role rows
+with the same per-lock timeout;revoked grants fail closed. No public restore action.
