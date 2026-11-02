@@ -987,6 +987,24 @@ try {
   check('target recovery HTTP repeated review leaves actual archive and all counts unchanged',JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(targetReviewCounts)&&JSON.stringify(await prisma.translationDeletionAudit.findUnique({where:{id:audit.id}}))===targetReviewArchive);
   const internalReview=await recoveryAuthService.reviewRepositoryRecovery(adminPrincipal,project.id,target.id,audit.id);
   check('internal repository recovery review derives exact current actor target baseline and key bindings',internalReview.reviewAvailable&&internalReview.value==='writer draft'&&internalReview.recovery.actorId===admin.user.id&&internalReview.recovery.auditId===audit.id&&internalReview.recovery.expectedValueDigest===recoveryScope.expectedValueDigest&&internalReview.recovery.expectedKeyRevision===recoveryScope.expectedKeyRevision&&internalReview.repository.targetId===target.id&&internalReview.repository.targetRevision===writeScope.targetRevision&&internalReview.repository.baselineVersion===writeScope.baselineVersion&&internalReview.canRestore===false&&internalReview.reservationHeld===false);
+  const principalMutationCounts=await recoveryCountsForComposition();
+  for(const phase of ['preflight','snapshot']){
+    const mutablePrincipal={via:'jwt',userId:admin.user.id};
+    const reviewActorCalls=[];
+    const principalMutationProjects={
+      requireAdmin:async(actorId,...args)=>{
+        reviewActorCalls.push(actorId);await recoveryProjects.requireAdmin(actorId,...args);
+        if(phase==='preflight')mutablePrincipal.userId=owner.user.id;
+      },
+      requireAdminInTransaction:async(tx,actorId,...args)=>{
+        reviewActorCalls.push(actorId);await recoveryProjects.requireAdminInTransaction(tx,actorId,...args);
+        if(phase==='snapshot')mutablePrincipal.userId=owner.user.id;
+      },
+    };
+    const capturedActorReview=await new AuditPageService(prisma,principalMutationProjects,{}).reviewRepositoryRecovery(mutablePrincipal,project.id,target.id,audit.id);
+    check('repository recovery review captures original actor across '+phase+' principal mutation',mutablePrincipal.userId===owner.user.id&&capturedActorReview.reviewAvailable===true&&capturedActorReview.recovery.actorId===admin.user.id&&capturedActorReview.repository.actorId===admin.user.id&&reviewActorCalls.length===2&&reviewActorCalls.every(id=>id===admin.user.id));
+  }
+  check('principal mutation review tests leave actual recovery values and effects unchanged',JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(principalMutationCounts));
   const beforeDerivedReviewCounts=await recoveryCountsForComposition();
   let reviewComposition=false;try{await prisma.$transaction(async tx=>{reviewComposition=(await deletionRecoveryTransaction(tx,internalReview.recovery,internalReview.repository)).pendingEffectIntents===1;throw new Error('rollback derived review');},{isolationLevel:'Serializable'});}catch(e){if(e.message!=='rollback derived review')throw e;}
   check('server-derived internal recovery review composes successfully without partial persistent effects',reviewComposition&&JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(beforeDerivedReviewCounts));

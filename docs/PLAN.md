@@ -212,3 +212,8 @@ Read-only,no restore action. See review0222.
 Target recovery review now selects only required baseline scalar bindings,not unused
 baseline text;actual Prisma SQL/result projection tested with a large private
 baseline fixture. No API/UI contract change. See review0223.
+
+Target recovery review now captures its original authenticated actor before any
+await and retains it across preflight/snapshot caller-principal mutations. Real
+PostgreSQL cases and old-code negative control cover both boundaries. No new
+restore route/action or remote write. See review0224.

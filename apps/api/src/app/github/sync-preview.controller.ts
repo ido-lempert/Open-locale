@@ -105,12 +105,15 @@ export class LocalSyncPreviewService {
   // executor must revalidate every binding in its SAME write transaction.
   async reviewRepositoryRecovery(user: AuthPrincipal, projectId: string, targetId: string, auditId: string) {
     if (user.via !== 'jwt') throw new ForbiddenException('Recovery review requires a signed-in session');
-    await this.projects.requireAdmin(user.userId, projectId);
+    // Caller-owned principals can change while authorization yields. Bind this
+    // entire snapshot and returned review to the original authenticated actor.
+    const actorId = user.userId;
+    await this.projects.requireAdmin(actorId, projectId);
     return this.prisma.$transaction(async tx => {
       await tx.$executeRaw`SET TRANSACTION READ ONLY`;
-      await this.projects.requireAdminInTransaction(tx, user.userId, projectId);
+      await this.projects.requireAdminInTransaction(tx, actorId, projectId);
       const project = await tx.project.findUniqueOrThrow({ where: { id: projectId }, select: { teamId: true } });
-      const member = await tx.teamMember.findUnique({ where: { teamId_userId: { teamId: project.teamId, userId: user.userId } } });
+      const member = await tx.teamMember.findUnique({ where: { teamId_userId: { teamId: project.teamId, userId: actorId } } });
       // Match current repository composition,which is direct-admin only.
       if (!member || !['OWNER','ADMIN'].includes(member.role)) throw new ForbiddenException('Repository recovery requires direct team admin');
       const stamp = await tx.$queryRaw<{asOf:Date}[]>`SELECT transaction_timestamp() AS "asOf"`;
@@ -134,9 +137,9 @@ export class LocalSyncPreviewService {
       if (value === null) return deny('review-value-too-large');
       return { source: 'internal-repository-recovery-review' as const, asOf: stamp[0].asOf,
         reviewAvailable: true as const, reason: plan.reason, value,
-        recovery: { projectId, actorId: user.userId, auditId, expectedBranchId: plan.branchId!,
+        recovery: { projectId, actorId, auditId, expectedBranchId: plan.branchId!,
           expectedKeyUpdatedAt: plan.keyUpdatedAt!, expectedKeyRevision: plan.keyRevision!, expectedValueDigest: plan.valueDigest! },
-        repository: { projectId, actorId: user.userId, targetId: target.id, targetRevision: target.revision,
+        repository: { projectId, actorId, targetId: target.id, targetRevision: target.revision,
           branchId: target.branchId, branch: target.localBranch, locale: target.locale,
           baselineVersion: base.version, baselineSha: base.remoteSha, baselineDigest: base.contentDigest },
         canRestore: false as const, reservationHeld: false as const };
