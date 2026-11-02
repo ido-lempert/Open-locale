@@ -100,6 +100,45 @@ export class LocalSyncPreviewService {
     }
   }
 
+  // Internal review only,no controller route or execution grant. Any future
+  // executor must revalidate every binding in its SAME write transaction.
+  async reviewRepositoryRecovery(user: AuthPrincipal, projectId: string, targetId: string, auditId: string) {
+    if (user.via !== 'jwt') throw new ForbiddenException('Recovery review requires a signed-in session');
+    await this.projects.requireAdmin(user.userId, projectId);
+    return this.prisma.$transaction(async tx => {
+      await tx.$executeRaw`SET TRANSACTION READ ONLY`;
+      await this.projects.requireAdminInTransaction(tx, user.userId, projectId);
+      const project = await tx.project.findUniqueOrThrow({ where: { id: projectId }, select: { teamId: true } });
+      const member = await tx.teamMember.findUnique({ where: { teamId_userId: { teamId: project.teamId, userId: user.userId } } });
+      // Match current repository composition,which is direct-admin only.
+      if (!member || !['OWNER','ADMIN'].includes(member.role)) throw new ForbiddenException('Repository recovery requires direct team admin');
+      const stamp = await tx.$queryRaw<{asOf:Date}[]>`SELECT transaction_timestamp() AS "asOf"`;
+      const deny = (reason: string) => ({ source: 'internal-repository-recovery-review' as const,
+        asOf: stamp[0].asOf, reviewAvailable: false as const, reason, value: null,
+        recovery: null, repository: null, canRestore: false as const, reservationHeld: false as const });
+      const target = await tx.repositorySyncTarget.findFirst({ where: { id: targetId, projectId }, include: { baseline: true, branch: true } });
+      if (!target || target.branch.projectId !== projectId || target.branch.name !== target.localBranch) return deny('target-unavailable');
+      const base = target.baseline;
+      if (!base || base.targetRevision !== target.revision) return deny('baseline-unavailable');
+      const plan = await inspectDeletionRecovery(tx, projectId, auditId);
+      if (!plan.eligible) return deny(plan.reason);
+      if (plan.branchId !== target.branchId || plan.locale !== target.locale) return deny('target-scope-mismatch');
+      const rows = await tx.$queryRaw<{value:string|null}[]>`
+        SELECT CASE WHEN octet_length(snapshot->'row'->>'value') <= 32768
+          THEN snapshot->'row'->>'value' ELSE NULL END AS value
+        FROM translation_deletion_audits WHERE id=${auditId}::uuid AND "projectId"=${projectId}::uuid`;
+      const value = rows[0]?.value ?? null;
+      if (value === null) return deny('review-value-too-large');
+      return { source: 'internal-repository-recovery-review' as const, asOf: stamp[0].asOf,
+        reviewAvailable: true as const, reason: plan.reason, value,
+        recovery: { projectId, actorId: user.userId, auditId, expectedBranchId: plan.branchId!,
+          expectedKeyUpdatedAt: plan.keyUpdatedAt!, expectedKeyRevision: plan.keyRevision!, expectedValueDigest: plan.valueDigest! },
+        repository: { projectId, actorId: user.userId, targetId: target.id, targetRevision: target.revision,
+          branchId: target.branchId, branch: target.localBranch, locale: target.locale,
+          baselineVersion: base.version, baselineSha: base.remoteSha, baselineDigest: base.contentDigest },
+        canRestore: false as const, reservationHeld: false as const };
+    }, { isolationLevel: 'RepeatableRead' });
+  }
   async previewDeletionRecovery(user: AuthPrincipal, projectId: string, auditId: string) {
     if (user.via !== 'jwt') throw new ForbiddenException('Recovery preview requires a signed-in session');
     await this.projects.requireAdmin(user.userId, projectId);

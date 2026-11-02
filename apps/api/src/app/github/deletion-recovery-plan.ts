@@ -7,7 +7,7 @@ export async function inspectDeletionRecovery(
   tx: Prisma.TransactionClient, projectId: string, auditId: string,
 ) {
   const deny = (reason: string) => ({ source: 'internal-deletion-recovery-plan' as const,
-    eligible: false, reason, canRestore: false as const, snapshotIncluded: false as const });
+    eligible: false as const, reason, canRestore: false as const, snapshotIncluded: false as const });
   // Bound the JSON before it crosses the database connection. PostgreSQL still
   // evaluates serialized size,but oversized snapshots never enter API memory.
   const audits = await tx.$queryRaw<{ id: string; keyId: string; keyName: string; localeCode: string; snapshot: Prisma.JsonValue; snapshotTooLarge: boolean }[]>`
@@ -40,7 +40,7 @@ export async function inspectDeletionRecovery(
   if (await tx.translation.findUnique({ where: { keyId_localeCode: { keyId: audit.keyId, localeCode: audit.localeCode } }, select: { keyId: true } })) return deny('value-exists');
   const marker = await tx.repositoryRemovalGeneration.findUnique({ where: { projectId_keyId_locale: { projectId, keyId: audit.keyId, locale: audit.localeCode } } });
   if (marker?.auditId !== audit.id) return deny('deletion-generation-changed');
-  return { source: 'internal-deletion-recovery-plan' as const, eligible: true, reason: 'current-flat-value-absence',
+  return { source: 'internal-deletion-recovery-plan' as const, eligible: true as const, reason: 'current-flat-value-absence',
     auditId: audit.id, keyId: audit.keyId, branchId: key.branchId, keyUpdatedAt: key.updatedAt.toISOString(), keyRevision: key.revision, locale: audit.localeCode,
     valueDigest: createHash('sha256').update(row['value']).digest('hex'),
     historyReplay: false as const, canRestore: false as const, snapshotIncluded: false as const };

@@ -683,3 +683,7 @@ one committed effect intent. No public restore execution. See review0217.
 Recovery-created intents now pass actual signed HTTP receiver and task automation
 through the combined internal step,checkpointed requeue and superseded-generation
 denial. No worker enablement or public restore execution. See review0218.
+
+Internal target-scoped recovery review now derives current audit/key and repository
+target/baseline bindings in one DB-enforced read-only snapshot,with direct-admin
+authorization and bounded value review. No public route or restore grant. See review0219.
