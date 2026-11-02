@@ -740,3 +740,7 @@ Recovery API HTTP failure/race evidence (review0230):actual project-lock busy409
 real intent-insert database fault500 with complete rollback/private-error hiding,
 and competing HTTP requests with one committed value/history/activity/intent.
 No app change or remote-delivery claim.
+
+Explicit local recovery enforces the same32768UTF8byte archived-value bound as
+review,inside its transaction. Correctly forged bindings cannot bypass this bound;
+exact-bound multibyte success and over-bound400/rollback tested in review0231.

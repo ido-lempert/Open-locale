@@ -248,3 +248,7 @@ historical implementation milestones.
 Explicit recovery API now has actual HTTP project-lock busy,real database intent
 fault rollback/private-error and competing-request one-winner evidence. Tests
 only,no app behavior change. See review0230.
+
+Recovery composition now enforces32768UTF8bytes before writes,matching public
+review. Actual HTTP multibyte exact-bound success and forged over-bound rejection
+cover the consistency fix. See review0231.

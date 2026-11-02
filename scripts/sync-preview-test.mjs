@@ -1267,6 +1267,24 @@ try {
   check('competing actual HTTP recoveries commit one winner and conflict one loser',httpRaceResults.filter(r=>r.status===201).length===1&&httpRaceResults.filter(r=>r.status===409).length===1&&httpRaceRow.value==='HTTP race value'&&await prisma.repositoryLocalEffectIntent.count({where:{keyId:httpRaceKey.id}})===1&&await prisma.translationHistory.count({where:{keyId:httpRaceKey.id}})===1&&await prisma.activityEvent.count({where:{projectId:project.id,keyName:httpRaceKey.name,action:'translation.value'}})===1);
   check('HTTP recovery race retains archive removes absence marker and preserves baseline',(await prisma.translationDeletionAudit.findUnique({where:{id:httpRaceAudit.id}})).snapshot.row.value==='HTTP race value'&&await prisma.repositoryRemovalGeneration.count({where:{keyId:httpRaceKey.id}})===0&&(await prisma.repositorySyncBaseline.findUnique({where:{targetId:target.id}})).version===httpRecoverInput.baselineVersion);
   await prisma.repositoryLocalEffectIntent.deleteMany({where:{keyId:httpRaceKey.id}});await prisma.key.delete({where:{id:httpRaceKey.id}});await prisma.translationDeletionAudit.delete({where:{id:httpRaceAudit.id}});await prisma.activityEvent.deleteMany({where:{projectId:project.id,keyName:httpRaceKey.name}});
+  for(const units of [16384,16385]){
+    const byteValue='א'.repeat(units);
+    const byteKey=await prisma.key.create({data:{projectId:project.id,branchId:writeScope.branchId,name:'http-recovery-bytes-'+units}});
+    const byteAudit=await prisma.translationDeletionAudit.create({data:{projectId:project.id,keyId:byteKey.id,keyName:byteKey.name,localeCode:'en',snapshot:{row:{projectId:project.id,keyId:byteKey.id,localeCode:'en',value:byteValue},history:[]}}});
+    await prisma.repositoryRemovalGeneration.create({data:{projectId:project.id,keyId:byteKey.id,locale:'en',auditId:byteAudit.id}});
+    const bytePath=httpRecoverPath.replace(httpRecoveryAudit.id,byteAudit.id);
+    const byteReview=(await call(bytePath.replace('/recover-local','/recovery-review'),{jwt:admin.accessToken})).json;
+    const byteInput={...httpRecoverInput,expectedKeyUpdatedAt:byteKey.updatedAt.toISOString(),expectedKeyRevision:byteKey.revision,expectedValueDigest:createHash('sha256').update(byteValue).digest('hex')};
+    const byteBefore=await recoveryCountsForComposition();
+    const byteResponse=await call(bytePath,{jwt:admin.accessToken,method:'POST',body:byteInput});
+    const byteRow=await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:byteKey.id,localeCode:'en'}}});
+    if(units===16384){
+      check('local recovery HTTP accepts exact32768UTF8bytes with matching review',byteReview.reviewAvailable===true&&Buffer.byteLength(byteReview.value)===32768&&byteResponse.status===201&&byteRow.value===byteValue&&await prisma.repositoryLocalEffectIntent.count({where:{keyId:byteKey.id}})===1);
+    }else{
+      check('local recovery HTTP rejects forged32770UTF8byte binding matching denied review',byteReview.reviewAvailable===false&&byteReview.reason==='review-value-too-large'&&byteReview.value===null&&byteResponse.status===400&&byteRow===null&&JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(byteBefore)&&await prisma.repositoryRemovalGeneration.count({where:{keyId:byteKey.id,auditId:byteAudit.id}})===1);
+    }
+    await prisma.repositoryLocalEffectIntent.deleteMany({where:{keyId:byteKey.id}});await prisma.key.delete({where:{id:byteKey.id}});await prisma.translationDeletionAudit.delete({where:{id:byteAudit.id}});await prisma.activityEvent.deleteMany({where:{projectId:project.id,keyName:byteKey.name}});
+  }
   const snapshotReviewProjects={requireAdmin:(...args)=>recoveryProjects.requireAdmin(...args),requireAdminInTransaction:async(tx,...args)=>{await recoveryProjects.requireAdminInTransaction(tx,...args);await prisma.repositorySyncTarget.update({where:{id:target.id},data:{revision:{increment:1}}});}};
   let sameSnapshotReview;
   try{

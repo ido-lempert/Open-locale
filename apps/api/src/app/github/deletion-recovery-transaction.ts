@@ -30,6 +30,10 @@ export async function deletionRecoveryTransaction(
     throw new RepositoryLocalError('conflict', 'Recovery repository branch changed');
   const audit = await tx.translationDeletionAudit.findUniqueOrThrow({ where: { id: recovery.auditId } });
   const value = (audit.snapshot as {row:{value:string}}).row.value;
+  // Public review exposes at most 32KiB. Forged bindings must not bypass that
+  // same execution bound, even when the larger archive is otherwise valid.
+  if (Buffer.byteLength(value, 'utf8') > 32768)
+    throw new RepositoryLocalError('unsupported', 'Recovery value exceeds review byte limit');
   await assertRepositoryEffectBudget(tx, recovery.projectId, [{ key: audit.keyName, nextValue: value }]);
   const result = await writeDeletionRecovery(tx, recovery);
   const row = await tx.translation.findUniqueOrThrow({ where: { keyId_localeCode: { keyId: plan.keyId!, localeCode: plan.locale! } } });
