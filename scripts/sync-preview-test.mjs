@@ -631,6 +631,20 @@ try {
   await prisma.groupMember.create({data:{groupId:recoveryAdminGroup.id,userId:member.user.id}});
   const groupRecoveryScope={...recoveryScope,actorId:member.user.id};
   check('locked recovery accepts effective group admin',(await prisma.$transaction(tx=>lockDeletionRecovery(tx,groupRecoveryScope),{isolationLevel:'Serializable'})).adminValidated);
+  const irrelevantRecoveryGroup=await prisma.group.create({data:{teamId:project.teamId,name:'irrelevant-recovery-member',role:'MEMBER'}});
+  await prisma.groupMember.createMany({data:[{groupId:irrelevantRecoveryGroup.id,userId:admin.user.id},{groupId:irrelevantRecoveryGroup.id,userId:member.user.id}]});
+  for(const [label,actorId] of [['direct-admin',admin.user.id],['effective-admin',member.user.id]]){
+    let ready,release;const held=new Promise(r=>ready=r),gate=new Promise(r=>release=r);
+    const holding=prisma.$transaction(async tx=>{await tx.$queryRaw`SELECT id FROM groups WHERE id=${irrelevantRecoveryGroup.id}::uuid FOR UPDATE`;ready();await gate;},{timeout:10000});await held;
+    let result,error;try{result=await prisma.$transaction(tx=>lockDeletionRecovery(tx,{...recoveryScope,actorId}),{isolationLevel:'Serializable',timeout:5000});}catch(e){error=e;}finally{release();await holding;}
+    check('locked recovery '+label+' ignores actual unrelated member-group lock',!error&&result?.adminValidated===true);
+  }
+  await prisma.groupMember.create({data:{groupId:recoveryAdminGroup.id,userId:admin.user.id}});
+  let directReady,directRelease;const directHeld=new Promise(r=>directReady=r),directGate=new Promise(r=>directRelease=r);
+  const directGroupHolding=prisma.$transaction(async tx=>{await tx.$queryRaw`SELECT id FROM groups WHERE id=${recoveryAdminGroup.id}::uuid FOR UPDATE`;directReady();await directGate;},{timeout:10000});await directHeld;
+  let directIndependent,directIndependentError;try{directIndependent=await prisma.$transaction(tx=>lockDeletionRecovery(tx,{...recoveryScope,actorId:admin.user.id}),{isolationLevel:'Serializable',timeout:5000});}catch(e){directIndependentError=e;}finally{directRelease();await directGroupHolding;}
+  check('direct admin recovery ignores actual additional admin-group lock',!directIndependentError&&directIndependent?.adminValidated===true);
+  await prisma.group.delete({where:{id:irrelevantRecoveryGroup.id}});
   for(const change of ['role','grant','team-member']){
     let denied=false;try{await prisma.$transaction(async tx=>{
       if(change==='role')await tx.group.update({where:{id:recoveryAdminGroup.id},data:{role:'MEMBER'}});

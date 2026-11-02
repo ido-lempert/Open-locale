@@ -30,10 +30,13 @@ export async function lockDeletionRecovery(
   if (!projects[0]) throw new RepositoryLocalError('conflict', 'Recovery project unavailable');
   const members = await tx.$queryRaw<{ role: string }[]>`SELECT role FROM team_members WHERE "teamId"=${projects[0].teamId}::uuid AND "userId"=${scope.actorId}::uuid FOR UPDATE`;
   if (!members[0]) throw new RepositoryLocalError('conflict', 'Recovery requires current project admin');
-  // Team membership is the outer boundary. Lock effective group grants as well
-  // as their roles so an accepted group-admin grant cannot change under a write.
-  const groups = await tx.$queryRaw<{ role: string }[]>`SELECT g.role FROM groups g JOIN group_members gm ON gm."groupId"=g.id WHERE g."teamId"=${projects[0].teamId}::uuid AND gm."userId"=${scope.actorId}::uuid ORDER BY g.id FOR UPDATE OF g,gm`;
-  if (!['OWNER', 'ADMIN'].includes(members[0].role) && !groups.some(g => g.role === 'ADMIN')) throw new RepositoryLocalError('conflict', 'Recovery requires current project admin');
+  // A direct admin grant is sufficient and already locked. Do not make its
+  // availability depend on unrelated group rows. Group-derived authority locks
+  // only ADMIN grants; MEMBER groups cannot authorize this operation.
+  if (!['OWNER', 'ADMIN'].includes(members[0].role)) {
+    const groups = await tx.$queryRaw<{ role: string }[]>`SELECT g.role FROM groups g JOIN group_members gm ON gm."groupId"=g.id WHERE g."teamId"=${projects[0].teamId}::uuid AND gm."userId"=${scope.actorId}::uuid AND g.role='ADMIN' ORDER BY g.id FOR UPDATE OF g,gm`;
+    if (!groups.length) throw new RepositoryLocalError('conflict', 'Recovery requires current project admin');
+  }
   const audits = await tx.$queryRaw<{ keyId: string; localeCode: string }[]>`SELECT "keyId","localeCode" FROM translation_deletion_audits WHERE id=${scope.auditId}::uuid AND "projectId"=${scope.projectId}::uuid FOR UPDATE`;
   if (!audits[0]) throw new RepositoryLocalError('conflict', 'Recovery audit unavailable');
   const a = audits[0];

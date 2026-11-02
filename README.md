@@ -635,3 +635,8 @@ revocations deny metadata;separate page requests are not one frozen snapshot.
 Internal recovery guard accepts effective group ADMIN as well as direct admin,
 while requiring current team membership. It locks matching group grant/role rows
 with the same per-lock timeout;revoked grants fail closed. No public restore action.
+
+Recovery direct-admin authorization depends only on its locked team grant,not
+unrelated group rows. Group-derived authorization locks matching ADMIN grants,
+not MEMBER groups that cannot authorize recovery. Required grant contention still
+fails closed;multiple matching ADMIN grants are conservatively all locked.
