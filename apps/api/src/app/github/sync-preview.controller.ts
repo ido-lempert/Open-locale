@@ -113,6 +113,27 @@ export class LocalSyncPreviewService {
       reason: plan.reason, canRestore: false, snapshotIncluded: false,
       historyReplay: false, reservationHeld: false };
   }
+  async reviewDeletionRecoveryValue(user: AuthPrincipal, projectId: string, auditId: string) {
+    if (user.via !== 'jwt') throw new ForbiddenException('Recovery value review requires a signed-in session');
+    await this.projects.requireAdmin(user.userId, projectId);
+    return this.prisma.$transaction(async tx => {
+      await this.projects.requireAdminInTransaction(tx, user.userId, projectId);
+      const stamp = await tx.$queryRaw<{asOf:Date}[]>`SELECT transaction_timestamp() AS "asOf"`;
+      const plan = await inspectDeletionRecovery(tx, projectId, auditId);
+      // Value review is a separate explicit read. Never return history,full snapshot,
+      // internal binding digest/revision or a token that could execute recovery.
+      const rows = plan.eligible ? await tx.$queryRaw<{value:string|null}[]>`
+        SELECT CASE WHEN octet_length(snapshot->'row'->>'value') <= 32768
+          THEN snapshot->'row'->>'value' ELSE NULL END AS value
+        FROM translation_deletion_audits WHERE id=${auditId}::uuid AND "projectId"=${projectId}::uuid` : [];
+      const value = rows[0]?.value ?? null;
+      return { source: 'deletion-recovery-value-review', asOf: stamp[0].asOf,
+        reviewAvailable: plan.eligible && value !== null,
+        reason: plan.eligible && value === null ? 'review-value-too-large' : plan.reason,
+        value, maxValueBytes: 32768, canRestore: false, snapshotIncluded: false,
+        historyReplay: false, reservationHeld: false };
+    }, { isolationLevel: 'RepeatableRead' });
+  }
   async listDeletionAudits(user: AuthPrincipal, projectId: string, cursor?: string) {
     if (user.via !== 'jwt') throw new ForbiddenException('Deletion audit metadata requires a signed-in session');
     await this.projects.requireAdmin(user.userId, projectId);
@@ -351,6 +372,13 @@ export class LocalSyncPreviewController {
   ) {
     return this.previews.resolve(user, projectId, input);
   }
+  @Get('deletion-audits/:auditId/recovery-value-review')
+  @Header('Cache-Control', 'no-store')
+  reviewDeletionRecoveryValue(
+    @CurrentUser() user: AuthPrincipal,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Param('auditId', new ParseUUIDPipe()) auditId: string,
+  ) { return this.previews.reviewDeletionRecoveryValue(user, projectId, auditId); }
   @Get('deletion-audits/:auditId/recovery-preview')
   @Header('Cache-Control', 'no-store')
   previewDeletionRecovery(

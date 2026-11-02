@@ -235,6 +235,9 @@ export const OPENAPI = {
       post: p('Restore the project to a snapshot (atomic point-in-time recovery; fields added after a snapshot was taken - e.g. pluralForms in older snapshots - are left untouched, so a restore is not an exact historical reconstruction)', 'snapshots'),
     },
     '/api/projects/{projectId}/activity': { get: p('Project activity feed', 'projects') },
+    '/api/projects/{projectId}/sync/deletion-audits/{auditId}/recovery-value-review': {
+      get:{...p('Read eligible archived flat value for review (session admin only)','sync'),security:[{bearerAuth:[]}],description:'No-store,read-only RepeatableRead snapshot with effective admin recheck. Returns asOf,reviewAvailable,reason,value (up to32768UTF8bytes or null),maxValueBytes plus canRestore=false,snapshotIncluded=false,historyReplay=false,reservationHeld=false. Denied or oversized values remain null. No full snapshot,history,internal digest/revision,restore token,reservation or mutation.'},
+    },
     '/api/projects/{projectId}/sync/deletion-audits/{auditId}/recovery-preview': {
       get:{...p('Inspect current deletion recovery eligibility without archived bytes (session admin only)','sync'),security:[{bearerAuth:[]}],description:'No-store,read-only RepeatableRead diagnostic snapshot. Returns database transaction snapshot asOf timestamp,eligibleNow/reason plus canRestore=false,snapshotIncluded=false,historyReplay=false,reservationHeld=false. No value,digest,history,write authorization or row reservation. Missing or cross-project audit returns audit-unavailable. No restore endpoint.'},
     },

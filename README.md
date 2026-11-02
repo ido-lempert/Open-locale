@@ -645,3 +645,10 @@ Recovery diagnostic applies its512KiB serialized-JSON bound in PostgreSQL CASE
 projection before transferring archive bytes to the API. PostgreSQL still evaluates
 serialized size;this is not a database CPU/storage bound. JSONB text whitespace
 counts toward the limit,so near-boundary archives may be conservatively rejected.
+
+Explicit session admins may GET /api/projects/{projectId}/sync/deletion-audits/{auditId}/recovery-value-review
+to review an eligible archived flat value,up to32768UTF8bytes. Separate from value-free
+eligibility/metadata,no-store,same-snapshot effective admin;denied/oversized value is
+null. Empty value is supported. No history,full snapshot,internal binding token,
+reservation or restore action. This route exposes private translation text only to
+the existing project-admin audience;no sharing is performed.

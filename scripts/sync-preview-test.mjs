@@ -570,6 +570,17 @@ try {
   check('recovery preview unavailable audit has no cross project metadata',(await call(`/projects/${summaryOtherProject.id}/sync/deletion-audits/${audit.id}/recovery-preview`,{jwt})).json.reason==='audit-unavailable');
   check('recovery preview missing audit is safe denial',(await call(deletionAuditsPath+'/'+owner.user.id+'/recovery-preview',{jwt})).json.reason==='audit-unavailable');
   check('recovery preview rejects invalid audit UUID',(await call(deletionAuditsPath+'/not-uuid/recovery-preview',{jwt})).status===400);
+  const valueReviewPath=deletionAuditsPath+'/'+audit.id+'/recovery-value-review';
+  check('recovery value review requires session',(await call(valueReviewPath)).status===401);
+  check('recovery value review denies contributor',(await call(valueReviewPath,{jwt:member.accessToken})).status===403);
+  check('recovery value review denies outsider',(await call(valueReviewPath,{jwt:outsider.accessToken})).status===404);
+  check('recovery value review denies API token',(await call(valueReviewPath,{apiKey:token.token})).status===403);
+  const valueReview=await call(valueReviewPath,{jwt});
+  check('explicit eligible value review returns bounded value without scope token or history',valueReview.status===200&&valueReview.json.reviewAvailable===true&&valueReview.json.value==='writer draft'&&valueReview.json.maxValueBytes===32768&&valueReview.json.canRestore===false&&valueReview.json.snapshotIncluded===false&&valueReview.json.historyReplay===false&&valueReview.json.reservationHeld===false&&Object.keys(valueReview.json).sort().join(',')==='asOf,canRestore,historyReplay,maxValueBytes,reason,reservationHeld,reviewAvailable,snapshotIncluded,source,value');
+  check('recovery value review accepts direct admin',(await call(valueReviewPath,{jwt:admin.accessToken})).json.value==='writer draft');
+  const valueReviewHeaders=await fetch(API+valueReviewPath,{headers:{Authorization:'Bearer '+jwt}});check('recovery value review no-store',valueReviewHeaders.headers.get('cache-control')==='no-store');await valueReviewHeaders.arrayBuffer();
+  check('recovery value review rejects invalid UUID',(await call(deletionAuditsPath+'/bad/recovery-value-review',{jwt})).status===400);
+  check('recovery value review hides cross project audit',(await call(`/projects/${summaryOtherProject.id}/sync/deletion-audits/${audit.id}/recovery-value-review`,{jwt})).json.value===null);
   const recoveryBefore=JSON.stringify(await prisma.translationDeletionAudit.findUnique({where:{id:audit.id}}));
   const recovery=await inspectDeletionRecovery(prisma,project.id,audit.id);
   check('internal recovery diagnostic recognizes exact current removal without execution grant',recovery.eligible&&recovery.canRestore===false&&recovery.snapshotIncluded===false&&recovery.historyReplay===false&&recovery.valueDigest===createHash('sha256').update('writer draft').digest('hex')&&!JSON.stringify(recovery).includes('writer draft'));
@@ -578,6 +589,7 @@ try {
   for(const [label,snapshot] of [['null',null],['row-mismatch',{...storedSnapshot,row:{...storedSnapshot.row,keyId:owner.user.id}}],['plural',{...storedSnapshot,row:{...storedSnapshot.row,pluralForms:{one:'x'}}}],['history-mismatch',{...storedSnapshot,history:[{keyId:owner.user.id,localeCode:'en',value:'x'}]}],['oversized',{...storedSnapshot,row:{...storedSnapshot.row,value:'x'.repeat(512*1024)}}]]){
     await prisma.translationDeletionAudit.update({where:{id:audit.id},data:{snapshot:snapshot===null?Prisma.JsonNull:snapshot}});
     check('internal recovery denies unsupported snapshot '+label,(await inspectDeletionRecovery(prisma,project.id,audit.id)).reason==='unsupported-snapshot');
+    const deniedValueReview=(await call(valueReviewPath,{jwt})).json;check('value review hides unsupported archive '+label,deniedValueReview.reviewAvailable===false&&deniedValueReview.value===null&&deniedValueReview.reason==='unsupported-snapshot');
     if(label==='oversized'){
       const oversizedPublic=await call(recoveryPreviewPath,{jwt});
       check('oversized recovery archive HTTP preview safely denies without archived bytes',oversizedPublic.status===200&&oversizedPublic.json.reason==='unsupported-snapshot'&&oversizedPublic.json.snapshotIncluded===false&&JSON.stringify(oversizedPublic.json).length<1024);
@@ -589,6 +601,11 @@ try {
       check('actual oversized archive projection returns metadata and null snapshot',boundedRows?.length===1&&boundedRows[0].id===audit.id&&boundedRows[0].snapshot===null&&boundedRows[0].snapshotTooLarge===true&&JSON.stringify(boundedRows).length<1024);
       await boundedClient.$disconnect();
     }
+  }
+  for(const [label,value,available] of [['empty','',true],['utf8-boundary','א'.repeat(16384),true],['utf8-over','א'.repeat(16385),false]]){
+    await prisma.translationDeletionAudit.update({where:{id:audit.id},data:{snapshot:{...storedSnapshot,row:{...storedSnapshot.row,value}}}});
+    const reviewed=(await call(valueReviewPath,{jwt})).json;
+    check('value review enforces actual UTF8 bytes '+label,reviewed.reviewAvailable===available&&reviewed.value===(available?value:null)&&reviewed.reason===(available?'current-flat-value-absence':'review-value-too-large'));
   }
   await prisma.translationDeletionAudit.update({where:{id:audit.id},data:{snapshot:storedSnapshot}});
   await prisma.key.update({where:{id:localKey.id},data:{maxLength:1}});
@@ -609,6 +626,7 @@ try {
   // Real locale deletion in rollback-only transaction: no fixture translation loss.
   let missingLocale;try{await prisma.$transaction(async tx=>{await tx.projectLocale.delete({where:{projectId_code:{projectId:project.id,code:'en'}}});missingLocale=await inspectDeletionRecovery(tx,project.id,audit.id);throw new Error('rollback locale fixture');});}catch(e){if(e?.message!=='rollback locale fixture')throw e;}
   check('internal recovery denies removed project locale',missingLocale.reason==='locale-unavailable');
+  check('value review leaves actual archive unchanged',JSON.stringify(await prisma.translationDeletionAudit.findUnique({where:{id:audit.id}}))===recoveryBefore);
   check('recovery preview repeated reads never change archived bytes',JSON.stringify(await prisma.translationDeletionAudit.findUnique({where:{id:audit.id}}))===recoveryBefore);
   check('internal recovery diagnostic never alters archived snapshot',JSON.stringify(await prisma.translationDeletionAudit.findUnique({where:{id:audit.id}}))===recoveryBefore);
   const currentRecoveryReview=await inspectDeletionRecovery(prisma,project.id,audit.id);
@@ -862,6 +880,10 @@ try {
   const revokedGroupProjects={requireAdmin:async(userId,projectId)=>{await recoveryProjects.requireAdmin(userId,projectId);await prisma.groupMember.delete({where:{groupId_userId:{groupId:groupGrant.id,userId:member.user.id}}});},requireAdminInTransaction:(...args)=>recoveryProjects.requireAdminInTransaction(...args)};
   let groupDenied=false;try{await new AuditPageService(prisma,revokedGroupProjects,{}).previewDeletionRecovery(groupPrincipal,project.id,audit.id);}catch(e){groupDenied=e.getStatus?.()===403;}
   check('recovery snapshot denies committed group grant removal after preflight',groupDenied);
+  await prisma.groupMember.create({data:{groupId:groupGrant.id,userId:member.user.id}});
+  check('value review accepts effective group admin',(await recoveryAuthService.reviewDeletionRecoveryValue(groupPrincipal,project.id,audit.id)).value==='writer draft');
+  let valueGroupDenied=false;try{await new AuditPageService(prisma,revokedGroupProjects,{}).reviewDeletionRecoveryValue(groupPrincipal,project.id,audit.id);}catch(e){valueGroupDenied=e.getStatus?.()===403;}
+  check('value review snapshot denies committed group revocation after preflight',valueGroupDenied);
   await prisma.group.delete({where:{id:groupGrant.id}});
   check('snapshot audit page auth accepts direct admin',(await recoveryAuthService.listDeletionAudits(adminPrincipal,project.id)).audits.some(a=>a.id===audit.id));
   for(const mode of ['demote','remove']){
@@ -905,6 +927,7 @@ try {
   check('locale removal archives exact row and full ordered history atomically',removed.removedValues===1&&canonicalAudit(audit.snapshot.row)===canonicalAudit(JSON.parse(JSON.stringify(deletedRow)))&&canonicalAudit(audit.snapshot.history)===canonicalAudit(JSON.parse(JSON.stringify(deletedHistory)))&&audit.actorId===owner.user.id&&audit.keyName==='local');
   check('locale removal deletes only selected translation not key or another locale',!await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})&&!!await prisma.key.findUnique({where:{id:localKey.id}})&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'he'}}})).value==='other locale preserved');
   await prisma.translation.create({data:{keyId:localKey.id,projectId:project.id,localeCode:'en',value:'writer draft',version:deletedRow.version+1}});
+  check('value review denies recreated value without archive disclosure',(await call(valueReviewPath,{jwt})).json.value===null&&(await call(valueReviewPath,{jwt})).json.reviewAvailable===false);
   check('public recovery preview rejects recreated value without exposing it',(await call(recoveryPreviewPath,{jwt})).json.reason==='value-exists');
   check('internal recovery denies overwriting recreated locale value',(await inspectDeletionRecovery(prisma,project.id,audit.id)).reason==='value-exists');
   check('deletion audit survives recreation with new row identity',await prisma.translationDeletionAudit.count({where:{id:audit.id}})===1&&(await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}})).rowId!==deletedRow.rowId);
