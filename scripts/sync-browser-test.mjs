@@ -558,6 +558,16 @@ try {
   check('incomplete binding browser notice explains read-only fresh-review path',await page.$eval('[name=auditRecoveryBindingsUnavailable]',e=>e.textContent.includes('read-only')&&e.textContent.includes('Refresh configuration and review again')&&e.textContent.includes('No recovery request was sent')));
   await page.$eval('.recovery-value',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/deletion-review-incomplete-bindings-narrow.png'});page.off('request',incompleteBindings);await page.setRequestInterception(false);
 
+  const bindingFixture={reviewAvailable:true,reason:'current-flat-value-absence',asOf:new Date().toISOString(),value:'complete scope fixture',recovery:{expectedBranchId:previewKey.branchId,expectedKeyUpdatedAt:new Date(previewKey.updatedAt).toISOString(),expectedKeyRevision:previewKey.revision,expectedValueDigest:'a'.repeat(64)},repository:{targetId:archivedReviewTarget.id,targetRevision:afterSavedTarget.revision,branch:afterSavedTarget.localBranch,locale:afterSavedTarget.locale,baselineVersion:1,baselineSha:'b'.repeat(40),baselineDigest:'c'.repeat(64)}};
+  for(const [field,value] of [['targetId','11111111-1111-4111-8111-111111111111'],['targetRevision',afterSavedTarget.revision+1],['branch','different-branch'],['locale','fr'],[null,null]]){
+    const response=structuredClone(bindingFixture);response.value=`complete scope fixture ${field??'matching'}`;if(field)response.repository[field]=value;
+    await page.setRequestInterception(true);const scopedBinding=async request=>request.url().endsWith('/recovery-review')?request.respond({status:200,contentType:'application/json',body:JSON.stringify(response)}):request.continue();page.on('request',scopedBinding);
+    await clickTarget(`[data-value-audit-id="${eligibleAudit.id}"]`);await page.waitForFunction(value=>document.querySelector('.recovery-value pre')?.textContent===value,{},response.value);
+    check(field?`complete binding browser ${field} mismatch stays read-only`:'complete matching binding browser control exposes Prepare only',field?!!await page.$('[name=auditRecoveryBindingsUnavailable]')&&!(await page.$('[name=auditRecoverPrepare]'))&&!(await page.$('[name=auditRecoverConfirm]')):!!await page.$('[name=auditRecoverPrepare]')&&!(await page.$('[name=auditRecoveryBindingsUnavailable]'))&&!(await page.$('[name=auditRecoverConfirm]')));
+    if(field==='locale'){await page.$eval('.recovery-value',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/deletion-review-scope-mismatch-narrow.png'});}
+    page.off('request',scopedBinding);await page.setRequestInterception(false);
+  }
+
   // Direct test-fixture restoration only:do not claim UI accepted a new baseline.
   await prisma.repositorySyncTarget.update({where:{id:archivedReviewTarget.id},data:{path:beforeSavedTarget.path}});
   await prisma.repositorySyncBaseline.create({data:{...beforeSavedBaseline,targetRevision:afterSavedTarget.revision}});

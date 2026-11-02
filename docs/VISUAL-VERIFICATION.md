@@ -56,3 +56,9 @@ Slice184 adds fixed read-only preparation guidance to the incomplete-binding
 fixture. Final480x900image inspected with full original notice,value,new guidance,
 Hide/focus outline visible,no Prepare/Confirm or horizontal overflow. Value-only
 mode has no selected-target warning. Browser198checks.
+
+Slice185 browser scope fixture uses complete well-shaped bindings with one
+selected-target ID/revision/branch/locale mismatch per case. All stay read-only;
+matching control exposes Prepare only. Final480x900locale-mismatchimage inspected
+with notice/value/guidance/Hide/no Prepare/Confirm or horizontal overflow. These
+are injected local review responses,not authority or server execution proof.
