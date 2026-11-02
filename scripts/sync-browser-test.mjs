@@ -555,6 +555,7 @@ try {
   await page.setRequestInterception(true);const incompleteBindings=async request=>request.url().endsWith('/recovery-review')?request.respond({status:200,contentType:'application/json',body:JSON.stringify({reviewAvailable:true,reason:'current-flat-value-absence',asOf:new Date().toISOString(),value:'read-only incomplete binding fixture',recovery:{expectedValueDigest:'a'.repeat(64)},repository:{targetId:archivedReviewTarget.id,baselineSha:'b'.repeat(40)}})}):request.continue();page.on('request',incompleteBindings);
   await clickTarget(`[data-value-audit-id="${eligibleAudit.id}"]`);await page.waitForSelector('.recovery-value pre');
   check('incomplete binding browser response keeps value read-only without prepare or confirm',await page.$eval('.recovery-value pre',e=>e.textContent==='read-only incomplete binding fixture')&&!(await page.$('[name=auditRecoverPrepare]'))&&!(await page.$('[name=auditRecoverConfirm]')));
+  check('incomplete binding browser notice explains read-only fresh-review path',await page.$eval('[name=auditRecoveryBindingsUnavailable]',e=>e.textContent.includes('read-only')&&e.textContent.includes('Refresh configuration and review again')&&e.textContent.includes('No recovery request was sent')));
   await page.$eval('.recovery-value',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/deletion-review-incomplete-bindings-narrow.png'});page.off('request',incompleteBindings);await page.setRequestInterception(false);
 
   // Direct test-fixture restoration only:do not claim UI accepted a new baseline.

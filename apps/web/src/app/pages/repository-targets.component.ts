@@ -213,6 +213,9 @@ const empty = (): RepositoryTargetInput => ({
                       @if (recoveryValue()!.targetLabel) { Target at review: {{ recoveryValue()!.targetLabel }}. }
                       Snapshot: {{ recoveryValue()!.result.asOf }} (UTC). Not live. No reservation is held. This review does not restore a value.</p>
                     @if (recoveryValue()!.result.reviewAvailable) { <pre>{{ recoveryValue()!.result.value === '' ? '(Empty value)' : recoveryValue()!.result.value }}</pre> }
+                    @if (recoveryBindingsUnavailable()) {
+                      <p class="notice" role="status" name="auditRecoveryBindingsUnavailable">This value is read-only. Complete matching recovery checks were not returned for the selected configuration. Refresh configuration and review again before preparing local recovery. No recovery request was sent.</p>
+                    }
                     @if (recoveryValue()!.recoveryInput) {
                       @if (recoveryValue()!.confirming) {
                         <div class="notice recovery-confirmation" tabindex="-1" role="region" aria-label="Confirm local recovery">
@@ -1019,6 +1022,10 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     } catch {
       if(generation===this.generation)this.error.set('Could not review archived value. No value was restored. Review again to retry.');
     } finally { if(generation===this.generation){this.busy.set(false);this.valueReviewLoading.set(null);} }
+  }
+  recoveryBindingsUnavailable() {
+    const review=this.recoveryValue();
+    return !!review?.targetId && review.result.reviewAvailable && !review.recoveryInput;
   }
   prepareLocalRecovery() {
     const review=this.recoveryValue();

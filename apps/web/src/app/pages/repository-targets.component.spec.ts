@@ -624,3 +624,9 @@ describe('bounded client archived review payload',()=>{
 describe('malformed target recovery bindings stay read-only',()=>{
  it('valid value with incomplete bindings cannot prepare or send',async()=>{const send=jest.fn();const c=setup({reviewRepositoryRecovery:async()=>({reviewAvailable:true,value:'read only',recovery:{},repository:{}}),recoverRepositoryLocal:send});c.auditPage.set({audits:[{id:'a'}]} as never);c.changeReviewTarget('t');await c.reviewRecoveryValue('a');expect(c.recoveryValue()?.result.value).toBe('read only');expect(c.recoveryValue()?.recoveryInput).toBeUndefined();c.prepareLocalRecovery();await c.recoverLocalValue();expect(c.recoveryValue()?.confirming).not.toBe(true);expect(send).not.toHaveBeenCalled();});
 });
+
+describe('read-only recovery binding explanation',()=>{
+ for(const [label,targetId,available,input,expected] of [
+ ['target missing input','t',true,undefined,true],['plain review',undefined,true,undefined,false],['denied target','t',false,undefined,false],['complete target','t',true,{},false]
+ ] as const)it(label,()=>{const c=setup({});c.recoveryValue.set({auditId:'a',targetId,result:{reviewAvailable:available},recoveryInput:input} as never);expect(c.recoveryBindingsUnavailable()).toBe(expected);c.recoveryValue.set(null);expect(c.recoveryBindingsUnavailable()).toBe(false);});
+});

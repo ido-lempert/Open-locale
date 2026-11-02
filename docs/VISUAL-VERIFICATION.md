@@ -51,3 +51,8 @@ Slice183 local injected available review with incomplete execution bindings stay
 read-only at480x900:value/notice/Hide visible,Prepare/Confirm absent,no horizontal
 page overflow. Browser197checks and unit projection guards cover this boundary.
 No server change or claim that client validation authenticates a response.
+
+Slice184 adds fixed read-only preparation guidance to the incomplete-binding
+fixture. Final480x900image inspected with full original notice,value,new guidance,
+Hide/focus outline visible,no Prepare/Confirm or horizontal overflow. Value-only
+mode has no selected-target warning. Browser198checks.

@@ -326,3 +326,7 @@ oversize tests verified,server unchanged. See review0247.
 Recovery preparation now requires complete typed bindings matching selected target
 ID/revision/branch/locale. Malformed bindings leave a valid archived value read-only,
 without Prepare/Confirm. Server authority/freshness checks unchanged. See review0249.
+
+Read-only selected-target review with missing/malformed execution bindings now
+explains why Prepare is absent and points to explicit configuration refresh/fresh
+review. No automatic requests. See review0250.
