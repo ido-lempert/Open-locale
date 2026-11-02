@@ -1038,6 +1038,17 @@ try {
   let serviceReplay=false;try{await recoveryAuthService.executeRepositoryRecovery(adminPrincipal,project.id,target.id,serviceAudit.id,serviceReview);}catch(e){serviceReplay=e.name==='RepositoryLocalError';}
   check('authenticated recovery service replay never duplicates committed effects',serviceReplay&&await prisma.repositoryLocalEffectIntent.count({where:{keyId:serviceKey.id}})===1&&await prisma.translationHistory.count({where:{keyId:serviceKey.id}})===1);
   await prisma.repositoryLocalEffectIntent.deleteMany({where:{keyId:serviceKey.id}});await prisma.key.delete({where:{id:serviceKey.id}});await prisma.translationDeletionAudit.delete({where:{id:serviceAudit.id}});await prisma.activityEvent.deleteMany({where:{projectId:project.id,keyName:serviceKey.name}});
+  const projectionBaseline=await prisma.repositorySyncBaseline.findUnique({where:{targetId:target.id}});
+  await prisma.repositorySyncBaseline.update({where:{targetId:target.id},data:{text:'large-private-baseline-'.repeat(50000)}});
+  const reviewProjectionClient=new PrismaClient({datasources:{db:{url}},log:[{emit:'event',level:'query'}]});const reviewProjectionSql=[];
+  reviewProjectionClient.$on('query',e=>{if(e.query.includes('repository_sync_baselines'))reviewProjectionSql.push(e.query);});
+  let observedProjectedTarget;
+  const reviewProjectionDb={$transaction:(fn,options)=>reviewProjectionClient.$transaction(tx=>fn(new Proxy(tx,{get(target,key){if(key==='repositorySyncTarget')return {findFirst:async args=>{observedProjectedTarget=await tx.repositorySyncTarget.findFirst(args);return observedProjectedTarget;}};const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;}})),options)};
+  try{
+    const projectedReview=await new AuditPageService(reviewProjectionDb,new RecoveryProjectsService(reviewProjectionClient,{}),{}).reviewRepositoryRecovery(adminPrincipal,project.id,target.id,audit.id);
+    check('actual repository recovery review baseline projection excludes unused text before API transfer',projectedReview.reviewAvailable===true&&observedProjectedTarget.baseline&&!Object.hasOwn(observedProjectedTarget.baseline,'text')&&Object.keys(observedProjectedTarget.baseline).sort().join(',')==='contentDigest,remoteSha,targetRevision,version'&&JSON.stringify(observedProjectedTarget).length<2048);
+    check('actual Prisma recovery review SQL never selects baseline text',reviewProjectionSql.length>0&&reviewProjectionSql.every(q=>!q.includes('"repository_sync_baselines"."text"')));
+  }finally{await reviewProjectionClient.$disconnect();await prisma.repositorySyncBaseline.update({where:{targetId:target.id},data:{text:projectionBaseline.text}});}
   const reviewBaseline=await prisma.repositorySyncBaseline.findUnique({where:{targetId:target.id}});
   for(const mode of ['baseline-missing','baseline-stale','target-locale','value-too-large','value-exists']){
     let reviewDenied;

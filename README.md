@@ -699,3 +699,7 @@ privacy tests. No execution route or UI consumer yet. See review0221.
 Archived review UI now explicitly chooses value-only or selected repository target,
 shows target/snapshot limits,and clears/fences private text when scope changes.
 Read-only,no restore action. See review0222.
+
+Target recovery review now selects only required baseline scalar bindings,not unused
+baseline text;actual Prisma SQL/result projection tested with a large private
+baseline fixture. No API/UI contract change. See review0223.

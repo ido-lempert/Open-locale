@@ -117,7 +117,9 @@ export class LocalSyncPreviewService {
       const deny = (reason: string) => ({ source: 'internal-repository-recovery-review' as const,
         asOf: stamp[0].asOf, reviewAvailable: false as const, reason, value: null,
         recovery: null, repository: null, canRestore: false as const, reservationHeld: false as const });
-      const target = await tx.repositorySyncTarget.findFirst({ where: { id: targetId, projectId }, include: { baseline: true, branch: true } });
+      const target = await tx.repositorySyncTarget.findFirst({ where: { id: targetId, projectId }, select: { id: true, revision: true, branchId: true, localBranch: true, locale: true,
+        baseline: { select: { version: true, targetRevision: true, remoteSha: true, contentDigest: true } },
+        branch: { select: { projectId: true, name: true } } } });
       if (!target || target.branch.projectId !== projectId || target.branch.name !== target.localBranch) return deny('target-unavailable');
       const base = target.baseline;
       if (!base || base.targetRevision !== target.revision) return deny('baseline-unavailable');
