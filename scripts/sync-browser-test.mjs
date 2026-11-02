@@ -500,6 +500,29 @@ try {
   page.off('request',loseCommittedRecovery);await page.setRequestInterception(false);
   await clickTarget(`[data-value-audit-id="${eligibleAudit.id}"]`);await page.waitForSelector('.recovery-value');
   check('fresh review after lost committed response cannot prepare duplicate recovery',!(await page.$('[name=auditRecoverPrepare]'))&&await page.$eval('.recovery-value',e=>!e.querySelector('pre'))&&await prisma.repositoryLocalEffectIntent.count({where:{keyId:previewKey.id}})===1);
+  // Independently commit a recovery,hold its201 response,and change project route.
+  await prisma.repositoryLocalEffectIntent.deleteMany({where:{keyId:previewKey.id}});await prisma.translation.deleteMany({where:{keyId:previewKey.id}});await prisma.translationHistory.deleteMany({where:{keyId:previewKey.id}});await prisma.activityEvent.deleteMany({where:{projectId:applyProject.id,keyName:previewKey.name}});
+  await prisma.repositoryRemovalGeneration.create({data:{projectId:applyProject.id,keyId:previewKey.id,locale:'en',auditId:eligibleAudit.id}});
+  await clickTarget(`[data-value-audit-id="${eligibleAudit.id}"]`);await page.waitForSelector('[name=auditRecoverPrepare]');await clickTarget('[name=auditRecoverPrepare]');
+  let heldRecoveryStatus=0,heldRecoveryPosts=0,releaseCommittedResponse;const committedGate=new Promise(r=>releaseCommittedResponse=r);
+  await page.setRequestInterception(true);
+  const holdCommittedRecovery=async request=>{
+    if(request.url().endsWith('/recover-local')){
+      heldRecoveryPosts++;const upstream=await fetch(request.url(),{method:request.method(),headers:request.headers(),body:request.postData()});const body=await upstream.text();heldRecoveryStatus=upstream.status;
+      await committedGate;return request.respond({status:upstream.status,contentType:'application/json',body});
+    }
+    return request.continue();
+  };
+  page.on('request',holdCommittedRecovery);await clickTarget('[name=auditRecoverConfirm]');
+  await page.waitForFunction(()=>document.activeElement?.textContent.includes('Leaving this page does not cancel'));
+  for(let n=0;n<100&&!heldRecoveryStatus;n++)await new Promise(r=>setTimeout(r,50));
+  check('pending recovery announces noncancelable request clears review and disables repeat',heldRecoveryStatus===201&&!(await page.$('.recovery-value'))&&await page.$eval('[name=auditLoad]',e=>e.disabled)&&await page.evaluate(()=>document.activeElement?.textContent.includes('check the current value')));
+  await page.screenshot({path:'/downloads/deletion-recovery-pending-narrow.png'});
+  await page.evaluate(id=>{history.pushState({},'',`/projects/${id}/sync/targets`);window.dispatchEvent(new PopStateEvent('popstate'));},second.id);await page.waitForSelector('[name=targetOwner]');await page.focus('[name=targetOwner]');releaseCommittedResponse();await new Promise(r=>setTimeout(r,800));page.off('request',holdCommittedRecovery);await page.setRequestInterception(false);
+  check('committed late recovery response cannot cross reused project route or steal focus',new URL(page.url()).pathname.includes(second.id)&&!(await page.content()).includes('Local value recovered:')&&!(await page.content()).includes('Local recovery request sent')&&!(await page.content()).includes('Archived review text')&&await page.evaluate(()=>document.activeElement?.getAttribute('name')==='targetOwner'));
+  const navigationCommitted=await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:previewKey.id,localeCode:'en'}}});
+  check('navigation does not cancel committed recovery or duplicate effects',heldRecoveryPosts===1&&navigationCommitted?.value===markupValue&&await prisma.repositoryLocalEffectIntent.count({where:{keyId:previewKey.id}})===1&&await prisma.translationHistory.count({where:{keyId:previewKey.id}})===1);
+  await page.goto(`${WEB}/projects/${applyProject.id}/sync/targets`,{waitUntil:'networkidle0'});await clickTarget('[name=auditLoad]');await page.waitForSelector(`[data-value-audit-id="${eligibleAudit.id}"]`);await page.select('[name=auditReviewTarget]',archivedReviewTarget.id);
   // Restore absence for the independent visible-success scenario below.
   await prisma.repositoryLocalEffectIntent.deleteMany({where:{keyId:previewKey.id}});await prisma.translation.deleteMany({where:{keyId:previewKey.id}});await prisma.translationHistory.deleteMany({where:{keyId:previewKey.id}});await prisma.activityEvent.deleteMany({where:{projectId:applyProject.id,keyName:previewKey.name}});
   await prisma.repositoryRemovalGeneration.create({data:{projectId:applyProject.id,keyId:previewKey.id,locale:'en',auditId:eligibleAudit.id}});

@@ -273,3 +273,8 @@ Committed recovery with unavailable browser response now has real local upstream
 and exact persisted value/history/intent proof,uncertainty/no-retry/fresh-review
 checks. Eligibility-only wording points to the separate confirmation flow instead
 of claiming all recovery unavailable. See review0236. No remote-delivery promotion.
+
+Pending recovery now has focused non-cancellation guidance and route/destroy cleanup.
+Actual committed201 response held across reused-component project navigation proves
+old outcome/private review/focus do not cross scope;original value/history/intent
+still persist once. See review0237. No durable outcome notification or remote sync.

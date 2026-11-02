@@ -157,6 +157,9 @@ const empty = (): RepositoryTargetInput => ({
         translations change unless you explicitly confirm a reviewed local apply or recovery below. Session admins only. Do not paste tokens or
         passwords here.
       </p>
+      @if (recoverySending()) {
+        <p #outcome tabindex="-1" role="status" class="notice">Local recovery request sent. Waiting for its result. Leaving this page does not cancel the request. Do not send another recovery until you check the current value.</p>
+      }
       @if (error()) {
         <p #outcome tabindex="-1" role="alert" class="error">{{ error() }}</p>
       }
@@ -787,6 +790,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   @ViewChild('outcome') outcome?: ElementRef<HTMLElement>;
   @ViewChild('auditRegion') auditRegion?: ElementRef<HTMLElement>;
   @ViewChild('auditHeading') auditHeading?: ElementRef<HTMLElement>;
+  recoverySending = signal(false);
   reviewTargetId = signal('');
   valueReviewLoading = signal<string|null>(null);
   recoveryValue = signal<{auditId:string;result:DeletionRecoveryValueReview;targetLabel?:string;targetId?:string;recoveryInput?:LocalRecoveryInput;confirming?:boolean}|null>(null);
@@ -948,6 +952,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   }
   ngOnDestroy() {
     this.generation++;
+    this.recoverySending.set(false);
     this.reviewTargetId.set('');
     this.auditPage.set(null);
     this.valueReviewLoading.set(null); this.recoveryValue.set(null); this.recoveryPreview.set(null);
@@ -1016,6 +1021,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     const projectId=this.projectId,targetId=review.targetId,auditId=review.auditId,input={...review.recoveryInput};
     const generation=++this.generation;
     this.recoveryValue.set(null);this.recoveryPreview.set(null);this.busy.set(true);this.error.set('');this.message.set('');
+    this.recoverySending.set(true);this.landRecoveryOutcome(generation);
     try{
       const result=await this.api.recoverRepositoryLocal(projectId,targetId,auditId,input);
       if(generation!==this.generation)return;
@@ -1023,8 +1029,11 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     }catch{
       if(generation===this.generation)this.error.set('Recovery result unavailable. If the response was lost, the local value may already have changed. Check the current value and review again before another request. No automatic retry was sent.');
     }finally{
-      if(generation===this.generation){this.busy.set(false);setTimeout(()=>{if(generation!==this.generation)return;this.outcome?.nativeElement.focus({preventScroll:true});this.outcome?.nativeElement.scrollIntoView({block:'center',behavior:'instant'});},0);}
+      if(generation===this.generation){this.recoverySending.set(false);this.busy.set(false);this.landRecoveryOutcome(generation);}
     }
+  }
+  private landRecoveryOutcome(generation:number) {
+    setTimeout(()=>{if(generation!==this.generation)return;this.outcome?.nativeElement.focus({preventScroll:true});this.outcome?.nativeElement.scrollIntoView({block:'center',behavior:'instant'});},0);
   }
   cancelValueReview() {
     const auditId=this.valueReviewLoading();
@@ -1106,10 +1115,10 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   async load(id: string) {
     const generation = ++this.generation;
     this.projectId = id;
+    this.recoverySending.set(false);
     this.reviewTargetId.set('');
     this.auditPage.set(null);
     this.valueReviewLoading.set(null); this.recoveryValue.set(null); this.recoveryPreview.set(null);
-    this.auditLoading.set(false);
     this.auditLoading.set(false);
     this.snapshot.set(null);
     this.effectSummary.set(null);

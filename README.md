@@ -772,3 +772,10 @@ Recovery browser tests also cover a real successful local commit whose response 
 replaced by503 before reaching the browser. The UI warns that the value may have
 changed,sends no automatic retry,and a fresh review cannot recover an existing
 value. This does not promise exactly-once external effects. See review0236.
+
+While local recovery is pending,the focused notice says leaving does not cancel
+its request. Route changes clear pending/private review UI and fence late outcomes
+and focus. A browser test holds a real committed201 response across same-component
+project navigation and verifies one persisted value/history/intent with no old
+project status or focus crossing the route. Check current value after returning;
+this is not a durable background outcome notification. See review0237.
