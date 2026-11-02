@@ -675,3 +675,7 @@ Internal recovery composition now commits a guarded fresh row and one generation
 repository effect intent atomically under current target/baseline scope and pending queue
 budget. No public restore route/UI, fresh GitHub read, worker enablement, remote write
 or baseline advance. Composition currently requires direct team admin. See review0216.
+
+Recovery composition now has actual PostgreSQL contention tests for both mutable
+caller scopes,project/target/baseline lock timeouts and competing recoveries with
+one committed effect intent. No public restore execution. See review0217.

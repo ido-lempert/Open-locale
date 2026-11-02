@@ -680,6 +680,57 @@ try {
   check('committed composed recovery repeated attempt never duplicates value or effect',composeRepeat&&await prisma.repositoryLocalEffectIntent.count({where:{keyId:composeKey.id}})===1&&await prisma.translationHistory.count({where:{keyId:composeKey.id}})===1);
   check('recovery composition never calls repository or advances accepted baseline',repoCalls===composeRepoCalls&&JSON.stringify(await prisma.repositorySyncBaseline.findUnique({where:{targetId:target.id}}))===composeBaselineBefore);
   await prisma.repositoryLocalEffectIntent.deleteMany({where:{keyId:composeKey.id}});await prisma.key.delete({where:{id:composeKey.id}});await prisma.translationDeletionAudit.delete({where:{id:composeAudit.id}});await prisma.activityEvent.deleteMany({where:{projectId:project.id,keyName:composeKey.name}});
+  {
+  const compositionWaiter=new PrismaClient({datasources:{db:{url:url+'?application_name=recovery-composition-waiter'}}});
+  let scopeReady,scopeRelease;const scopeHeld=new Promise(r=>scopeReady=r),scopeGate=new Promise(r=>scopeRelease=r);
+  const scopeHolding=prisma.$transaction(async tx=>{await tx.$queryRaw`SELECT id FROM projects WHERE id=${project.id}::uuid FOR UPDATE`;scopeReady();await scopeGate;},{timeout:10000});await scopeHeld;
+  const mutableCompositionRecovery={...recoveryScope},mutableCompositionRepository={...writeScope};let immutableCompositionRow,immutableCompositionIntent;
+  const mutableCompositionPending=compositionWaiter.$transaction(async tx=>{
+    const result=await deletionRecoveryTransaction(tx,mutableCompositionRecovery,mutableCompositionRepository);
+    immutableCompositionRow=await tx.translation.findUnique({where:{keyId_localeCode:{keyId:localKey.id,localeCode:'en'}}});
+    immutableCompositionIntent=await tx.repositoryLocalEffectIntent.findFirst({where:{translationRowId:result.rowId}});
+    throw new Error('rollback immutable composition');
+  },{isolationLevel:'Serializable',timeout:7000}).then(()=>({ok:false}),e=>({ok:e.message==='rollback immutable composition',error:e}));
+  let compositionWaitObserved=false;for(let n=0;n<60;n++){
+    const waits=await prisma.$queryRaw`SELECT wait_event_type FROM pg_stat_activity WHERE application_name='recovery-composition-waiter' AND state='active' AND wait_event_type='Lock'`;
+    if(waits.length){compositionWaitObserved=true;break;}await new Promise(r=>setTimeout(r,20));
+  }
+  Object.assign(mutableCompositionRecovery,{projectId:summaryOtherProject.id,actorId:outsider.user.id,auditId:owner.user.id,expectedBranchId:owner.user.id,expectedKeyRevision:0,expectedValueDigest:'a'.repeat(64)});
+  Object.assign(mutableCompositionRepository,{projectId:summaryOtherProject.id,actorId:outsider.user.id,targetId:owner.user.id,targetRevision:999,branchId:owner.user.id,branch:'wrong',locale:'he',baselineVersion:999,baselineDigest:'b'.repeat(64)});
+  scopeRelease();await scopeHolding;const immutableCompositionOutcome=await mutableCompositionPending;
+  check('actual composed recovery caller mutation waits on PostgreSQL project lock',compositionWaitObserved);
+  check('composed recovery retains both entry scopes after caller mutation',immutableCompositionOutcome.ok&&immutableCompositionRow.value==='writer draft'&&immutableCompositionIntent.projectId===project.id&&immutableCompositionIntent.actorId===owner.user.id&&immutableCompositionIntent.targetId===target.id&&immutableCompositionIntent.targetRevision===writeScope.targetRevision&&immutableCompositionIntent.branch==='main'&&immutableCompositionIntent.locale==='en'&&immutableCompositionIntent.translationRowId===immutableCompositionRow.rowId);
+  check('composed scope mutation rollback leaves all persistent counts unchanged',JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(composedRecoveryCounts));
+  for(const resource of ['project','target','baseline']){
+    let ready,release;const held=new Promise(r=>ready=r),gate=new Promise(r=>release=r);
+    const holding=prisma.$transaction(async tx=>{
+      if(resource==='project')await tx.$queryRaw`SELECT id FROM projects WHERE id=${project.id}::uuid FOR UPDATE`;
+      if(resource==='target')await tx.$queryRaw`SELECT id FROM repository_sync_targets WHERE id=${target.id}::uuid FOR UPDATE`;
+      if(resource==='baseline')await tx.$queryRaw`SELECT "targetId" FROM repository_sync_baselines WHERE "targetId"=${target.id}::uuid FOR UPDATE`;
+      ready();await gate;
+    },{timeout:10000});await held;
+    let timeout=false;try{await compositionWaiter.$transaction(tx=>deletionRecoveryTransaction(tx,recoveryScope,writeScope),{isolationLevel:'Serializable',timeout:6000});}catch(e){timeout=e.code==='P2010'&&e.meta?.code==='55P03';}finally{release();await holding;}
+    check('actual composed recovery '+resource+' blocker yields55P03 without partial effects',timeout&&JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(composedRecoveryCounts));
+  }
+  let afterCompositionLocks=false;try{await prisma.$transaction(async tx=>{afterCompositionLocks=(await deletionRecoveryTransaction(tx,recoveryScope,writeScope)).pendingEffectIntents===1;throw new Error('rollback composition lock recovery');},{isolationLevel:'Serializable'});}catch(e){if(e.message!=='rollback composition lock recovery')throw e;}
+  check('composed recovery works after actual project target baseline locks released',afterCompositionLocks&&JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(composedRecoveryCounts));
+  const raceCompositionKey=await prisma.key.create({data:{projectId:project.id,branchId:writeScope.branchId,name:'composed-recovery-race'}});
+  const raceCompositionAudit=await prisma.translationDeletionAudit.create({data:{projectId:project.id,keyId:raceCompositionKey.id,keyName:raceCompositionKey.name,localeCode:'en',snapshot:{row:{projectId:project.id,keyId:raceCompositionKey.id,localeCode:'en',value:'Composed race value'},history:[]}}});
+  await prisma.repositoryRemovalGeneration.create({data:{projectId:project.id,keyId:raceCompositionKey.id,locale:'en',auditId:raceCompositionAudit.id}});
+  const raceCompositionScope={...recoveryScope,auditId:raceCompositionAudit.id,expectedKeyUpdatedAt:raceCompositionKey.updatedAt.toISOString(),expectedKeyRevision:raceCompositionKey.revision,expectedValueDigest:createHash('sha256').update('Composed race value').digest('hex')};
+  let raceReady,raceRelease;const raceHeld=new Promise(r=>raceReady=r),raceGate=new Promise(r=>raceRelease=r);
+  const compositionFirst=prisma.$transaction(async tx=>{const result=await deletionRecoveryTransaction(tx,raceCompositionScope,writeScope);raceReady();await raceGate;return result;},{isolationLevel:'Serializable',timeout:10000});await raceHeld;
+  const compositionSecond=compositionWaiter.$transaction(tx=>deletionRecoveryTransaction(tx,raceCompositionScope,writeScope),{isolationLevel:'Serializable',timeout:7000}).then(result=>({ok:true,result}),error=>({ok:false,error}));
+  let raceCompositionWait=false;for(let n=0;n<60;n++){
+    const waits=await prisma.$queryRaw`SELECT wait_event_type FROM pg_stat_activity WHERE application_name='recovery-composition-waiter' AND state='active' AND wait_event_type='Lock'`;
+    if(waits.length){raceCompositionWait=true;break;}await new Promise(r=>setTimeout(r,20));
+  }
+  raceRelease();const winner=await compositionFirst,loser=await compositionSecond;
+  check('competing composed recoveries actually contend in PostgreSQL',raceCompositionWait);
+  check('competing composed recovery rejects stale transaction without false success',!loser.ok&&(loser.error.code==='P2034'||(loser.error.code==='P2010'&&loser.error.meta?.code==='40001')));
+  check('competing composed recovery commits exactly one fresh row history activity and intent',await prisma.translation.count({where:{keyId:raceCompositionKey.id}})===1&&await prisma.translationHistory.count({where:{keyId:raceCompositionKey.id}})===1&&await prisma.activityEvent.count({where:{projectId:project.id,keyName:raceCompositionKey.name}})===1&&await prisma.repositoryLocalEffectIntent.count({where:{keyId:raceCompositionKey.id,translationRowId:winner.rowId}})===1&&await prisma.repositoryLocalEffectIntent.count({where:{keyId:raceCompositionKey.id}})===1&&await prisma.repositoryRemovalGeneration.count({where:{keyId:raceCompositionKey.id}})===0);
+  await compositionWaiter.$disconnect();await prisma.repositoryLocalEffectIntent.deleteMany({where:{keyId:raceCompositionKey.id}});await prisma.key.delete({where:{id:raceCompositionKey.id}});await prisma.translationDeletionAudit.delete({where:{id:raceCompositionAudit.id}});await prisma.activityEvent.deleteMany({where:{projectId:project.id,keyName:raceCompositionKey.name}});
+  }
   const recoveryOtherBranch=await prisma.branch.create({data:{projectId:project.id,name:'recovery-other'}});
   let movedRecoveryDenied=false;try{await prisma.$transaction(async tx=>{await tx.key.update({where:{id:localKey.id},data:{branchId:recoveryOtherBranch.id}});await lockDeletionRecovery(tx,recoveryScope);},{isolationLevel:'Serializable'});}catch(e){movedRecoveryDenied=e.name==='RepositoryLocalError';}
   check('locked recovery rejects actual key movement away from reviewed branch',movedRecoveryDenied&&(await prisma.key.findUnique({where:{id:localKey.id}})).branchId===recovery.branchId);
