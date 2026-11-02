@@ -578,6 +578,17 @@ try {
   for(const [label,snapshot] of [['null',null],['row-mismatch',{...storedSnapshot,row:{...storedSnapshot.row,keyId:owner.user.id}}],['plural',{...storedSnapshot,row:{...storedSnapshot.row,pluralForms:{one:'x'}}}],['history-mismatch',{...storedSnapshot,history:[{keyId:owner.user.id,localeCode:'en',value:'x'}]}],['oversized',{...storedSnapshot,row:{...storedSnapshot.row,value:'x'.repeat(512*1024)}}]]){
     await prisma.translationDeletionAudit.update({where:{id:audit.id},data:{snapshot:snapshot===null?Prisma.JsonNull:snapshot}});
     check('internal recovery denies unsupported snapshot '+label,(await inspectDeletionRecovery(prisma,project.id,audit.id)).reason==='unsupported-snapshot');
+    if(label==='oversized'){
+      const oversizedPublic=await call(recoveryPreviewPath,{jwt});
+      check('oversized recovery archive HTTP preview safely denies without archived bytes',oversizedPublic.status===200&&oversizedPublic.json.reason==='unsupported-snapshot'&&oversizedPublic.json.snapshotIncluded===false&&JSON.stringify(oversizedPublic.json).length<1024);
+      const boundedClient=new PrismaClient({datasources:{db:{url}},log:[{emit:'event',level:'query'}]});let boundedSql;
+      boundedClient.$on('query',e=>{if(e.query.includes('snapshotTooLarge'))boundedSql=e.query;});
+      let boundedRows;const capturedClient={$queryRaw:async(...args)=>{boundedRows=await boundedClient.$queryRaw(...args);return boundedRows;}};
+      const oversizedPlan=await inspectDeletionRecovery(capturedClient,project.id,audit.id);
+      check('actual recovery diagnostic SQL bounds snapshot with CASE before transfer',oversizedPlan.reason==='unsupported-snapshot'&&boundedSql?.includes('CASE WHEN octet_length(snapshot::text) <= 524288 THEN snapshot ELSE NULL END')&&boundedSql.includes('"projectId"=$2::uuid'));
+      check('actual oversized archive projection returns metadata and null snapshot',boundedRows?.length===1&&boundedRows[0].id===audit.id&&boundedRows[0].snapshot===null&&boundedRows[0].snapshotTooLarge===true&&JSON.stringify(boundedRows).length<1024);
+      await boundedClient.$disconnect();
+    }
   }
   await prisma.translationDeletionAudit.update({where:{id:audit.id},data:{snapshot:storedSnapshot}});
   await prisma.key.update({where:{id:localKey.id},data:{maxLength:1}});

@@ -640,3 +640,8 @@ Recovery direct-admin authorization depends only on its locked team grant,not
 unrelated group rows. Group-derived authorization locks matching ADMIN grants,
 not MEMBER groups that cannot authorize recovery. Required grant contention still
 fails closed;multiple matching ADMIN grants are conservatively all locked.
+
+Recovery diagnostic applies its512KiB serialized-JSON bound in PostgreSQL CASE
+projection before transferring archive bytes to the API. PostgreSQL still evaluates
+serialized size;this is not a database CPU/storage bound. JSONB text whitespace
+counts toward the limit,so near-boundary archives may be conservatively rejected.

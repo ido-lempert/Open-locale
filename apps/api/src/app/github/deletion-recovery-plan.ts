@@ -8,8 +8,16 @@ export async function inspectDeletionRecovery(
 ) {
   const deny = (reason: string) => ({ source: 'internal-deletion-recovery-plan' as const,
     eligible: false, reason, canRestore: false as const, snapshotIncluded: false as const });
-  const audit = await tx.translationDeletionAudit.findFirst({ where: { id: auditId, projectId } });
+  // Bound the JSON before it crosses the database connection. PostgreSQL still
+  // evaluates serialized size,but oversized snapshots never enter API memory.
+  const audits = await tx.$queryRaw<{ id: string; keyId: string; keyName: string; localeCode: string; snapshot: Prisma.JsonValue; snapshotTooLarge: boolean }[]>`
+    SELECT id,"keyId","keyName","localeCode",
+      octet_length(snapshot::text) > 524288 AS "snapshotTooLarge",
+      CASE WHEN octet_length(snapshot::text) <= 524288 THEN snapshot ELSE NULL END AS snapshot
+    FROM translation_deletion_audits WHERE id=${auditId}::uuid AND "projectId"=${projectId}::uuid`;
+  const audit = audits[0];
   if (!audit) return deny('audit-unavailable');
+  if (audit.snapshotTooLarge) return deny('unsupported-snapshot');
   const serialized = JSON.stringify(audit.snapshot);
   if (Buffer.byteLength(serialized) > 512 * 1024) return deny('unsupported-snapshot');
   const snapshot = audit.snapshot as Record<string, unknown> | null;
