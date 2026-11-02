@@ -430,6 +430,8 @@ try {
   check('pending value review announces loading with usable cancel',await page.$eval('.value-review-loading',e=>e.getAttribute('aria-busy')==='true'&&e.textContent.includes('Loading archived value')));
   await page.setViewport({width:480,height:900});await page.$eval('.value-review-loading',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/deletion-value-loading-narrow.png'});
   await clickTarget('[name=auditValueCancel]');await page.waitForFunction(()=>!document.querySelector('.value-review-loading'));
+  await page.waitForFunction(id=>document.activeElement?.getAttribute('data-value-audit-id')===id,{},eligibleAudit.id);
+  check('cancel returns keyboard focus to originating review button',await page.evaluate(id=>document.activeElement?.getAttribute('data-value-audit-id')===id,eligibleAudit.id));
   check('cancel value review releases controls without showing private text',!(await page.$('.recovery-value'))&&await page.$eval('[name=auditLoad]',e=>!e.disabled));
   releaseCanceled();await new Promise(r=>setTimeout(r,800));page.off('request',holdCanceled);await page.setRequestInterception(false);
   check('canceled actual value response stays hidden',!(await page.$('.recovery-value'))&&!(await page.content()).includes('hidden recovery value'));
@@ -437,10 +439,12 @@ try {
   const markupValue='<img src=x onerror=alert(1)>\nArchived review text';
   await prisma.translationDeletionAudit.update({where:{id:eligibleAudit.id},data:{snapshot:{row:{projectId:applyProject.id,keyId:previewKey.id,localeCode:'en',value:markupValue},history:[]}}});
   await clickTarget(`[data-value-audit-id="${eligibleAudit.id}"]`);await page.waitForSelector('.recovery-value pre');
+  await page.waitForFunction(id=>document.activeElement?.getAttribute('data-value-result-id')===id,{},eligibleAudit.id);
+  check('successful review lands keyboard focus on result region',await page.$eval('.recovery-value',e=>document.activeElement===e&&e.getAttribute('role')==='region'));
   check('explicit value review escapes markup and remains read-only',await page.$eval('.recovery-value',e=>e.textContent.includes('<img src=x onerror=alert(1)>')&&e.textContent.includes('No restore action is available')&&e.textContent.includes('Not live')&&!e.querySelector('img'))&&await prisma.translation.count({where:{keyId:previewKey.id}})===0);
   await page.setViewport({width:480,height:900});await page.$eval('.recovery-value',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/deletion-value-review-narrow.png'});
   check('archived value review fits480viewport',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-  await clickTarget('[name=auditValueHide]');await page.waitForFunction(()=>!document.querySelector('.recovery-value'));check('hide archived value removes private text',!(await page.$('.recovery-value'))&&!(await page.content()).includes('Archived review text'));
+  await clickTarget('[name=auditValueHide]');await page.waitForFunction(()=>!document.querySelector('.recovery-value'));await page.waitForFunction(id=>document.activeElement?.getAttribute('data-value-audit-id')===id,{},eligibleAudit.id);check('hide returns keyboard focus to originating review button',await page.evaluate(id=>document.activeElement?.getAttribute('data-value-audit-id')===id,eligibleAudit.id));check('hide archived value removes private text',!(await page.$('.recovery-value'))&&!(await page.content()).includes('Archived review text'));
   await prisma.translationDeletionAudit.update({where:{id:eligibleAudit.id},data:{snapshot:{row:{projectId:applyProject.id,keyId:previewKey.id,localeCode:'en',value:'א'.repeat(16385)},history:[]}}});
   await clickTarget(`[data-value-audit-id="${eligibleAudit.id}"]`);await page.waitForSelector('.recovery-value');
   check('oversized archived review shows limit notice without private value',await page.$eval('.recovery-value',e=>e.textContent.includes('32768-byte review limit')&&!e.querySelector('pre')));

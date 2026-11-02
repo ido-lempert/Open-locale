@@ -661,3 +661,7 @@ review clears prior private text;late replies cannot cross projects. No restore 
 Pending archived-value review announces loading and offers Cancel value review.
 Cancel hides late responses and releases controls;it does not claim to abort the
 network request or erase its response from browser memory/history.
+
+Archived-value result lands keyboard focus on its labeled region. Hide/cancel
+returns focus to the originating review button after render;generation fencing
+prevents superseded navigation/actions from stealing focus.

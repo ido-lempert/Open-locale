@@ -528,3 +528,11 @@ describe('cancel pending archived value review',()=>{
  it('canceled response cannot replace a newer review or clear its busy state',async()=>{const finishes:((v:unknown)=>void)[]=[];const c=withPage({reviewDeletionRecoveryValue:()=>new Promise(r=>finishes.push(r))});const old=c.reviewRecoveryValue('a');c.cancelValueReview();const fresh=c.reviewRecoveryValue('a');finishes[0](result);await old;expect(c.busy()).toBe(true);expect(c.valueReviewLoading()).toBe('a');expect(c.recoveryValue()).toBeNull();finishes[1]({...result,value:'fresh'});await fresh;expect(c.recoveryValue()?.result.value).toBe('fresh');expect(c.valueReviewLoading()).toBeNull();});
  it('cancel without pending review does not erase visible review',()=>{const c=withPage({});c.recoveryValue.set({auditId:'a',result} as never);c.cancelValueReview();expect(c.recoveryValue()).not.toBeNull();});
 });
+
+
+describe('value review keyboard landing',()=>{
+ const result={reviewAvailable:true,value:'review'};
+ function withRegion(mock:Record<string,unknown>){const c=setup(mock);c.auditPage.set({audits:[{id:'a'}],nextCursor:null} as never);const focus=jest.fn(),scrollIntoView=jest.fn();const node={getAttribute:()=> 'a',focus,scrollIntoView};c.auditRegion={nativeElement:{querySelectorAll:()=>[node]}} as never;return {c,focus,scrollIntoView};}
+ it('lands current result then returns focus after hide',async()=>{const {c,focus,scrollIntoView}=withRegion({reviewDeletionRecoveryValue:async()=>result});await c.reviewRecoveryValue('a');await new Promise(r=>setTimeout(r,5));expect(focus).toHaveBeenCalledWith({preventScroll:true});expect(scrollIntoView).toHaveBeenCalled();focus.mockClear();c.hideValueReview();await new Promise(r=>setTimeout(r,5));expect(focus).toHaveBeenCalledWith({preventScroll:true});expect(c.recoveryValue()).toBeNull();});
+ it('does not focus after a newer action supersedes result',async()=>{const {c,focus}=withRegion({reviewDeletionRecoveryValue:async()=>result,listDeletionAudits:async()=>({audits:[],nextCursor:null})});await c.reviewRecoveryValue('a');await c.loadAudits();await new Promise(r=>setTimeout(r,5));expect(focus).not.toHaveBeenCalled();});
+});

@@ -34,6 +34,8 @@ const empty = (): RepositoryTargetInput => ({
       .audit-heading:focus { outline: 2px solid #285fbd; outline-offset: 4px; }
       .audit-list { padding: 0; list-style: none; }
       .audit-list li { border: 1px solid #dce2eb; border-radius: 8px; padding: 16px; margin: 12px 0; overflow-wrap: anywhere; }
+      .recovery-value:focus { outline: 2px solid #285fbd; outline-offset: 4px; }
+      .recovery-value { scroll-margin-top: 72px; }
       .recovery-value pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow: auto; padding: 12px; background: #fff; border: 1px solid #dce2eb; }
       .audit-list dl { margin: 0; }
       .audit-list dd { margin: 0 0 8px; }
@@ -169,7 +171,7 @@ const empty = (): RepositoryTargetInput => ({
         >
           Refresh configurations
         </button>
-        <section aria-label="Deletion audit metadata" [attr.aria-busy]="auditLoading()">
+        <section #auditRegion aria-label="Deletion audit metadata" [attr.aria-busy]="auditLoading()">
           <h2 #auditHeading class="audit-heading" tabindex="-1">Deletion audit metadata</h2>
           <p>Project-wide metadata only. No archived values or history. No restore action.</p>
           <button name="auditLoad" type="button" (click)="loadAudits()" [disabled]="busy()">Load newest audit page</button>
@@ -194,11 +196,11 @@ const empty = (): RepositoryTargetInput => ({
                   </div>
                 }
                 @if (recoveryValue()?.auditId === a.id) {
-                  <div class="recovery-value" aria-label="Archived value review">
+                  <div class="recovery-value" tabindex="-1" [attr.data-value-result-id]="a.id" role="region" aria-label="Archived value review">
                     <p class="notice" role="status">{{ recoveryValue()!.result.reviewAvailable ? 'Archived flat value for review only.' : recoveryValue()!.result.reason === 'review-value-too-large' ? 'Archived value exceeds the 32768-byte review limit.' : 'Current checks do not allow value review.' }}
                       Snapshot: {{ recoveryValue()!.result.asOf }} (UTC). Not live. No reservation is held. No restore action is available.</p>
                     @if (recoveryValue()!.result.reviewAvailable) { <pre>{{ recoveryValue()!.result.value === '' ? '(Empty value)' : recoveryValue()!.result.value }}</pre> }
-                    <button name="auditValueHide" type="button" (click)="recoveryValue.set(null)">Hide archived value</button>
+                    <button name="auditValueHide" type="button" (click)="hideValueReview()">Hide archived value</button>
                   </div>
                 }
                 <button name="auditCheck" [attr.data-audit-id]="a.id" type="button" (click)="checkRecovery(a.id)" [disabled]="busy()">Check recovery eligibility</button>
@@ -762,6 +764,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
   message = signal('');
   snapshot = signal<RepositoryFileSnapshot | null>(null);
   readAt = signal('');
+  @ViewChild('auditRegion') auditRegion?: ElementRef<HTMLElement>;
   @ViewChild('auditHeading') auditHeading?: ElementRef<HTMLElement>;
   valueReviewLoading = signal<string|null>(null);
   recoveryValue = signal<{auditId:string;result:DeletionRecoveryValueReview}|null>(null);
@@ -950,16 +953,36 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     this.busy.set(true); this.valueReviewLoading.set(null); this.recoveryValue.set(null); this.recoveryPreview.set(null); this.error.set(''); this.message.set(''); this.valueReviewLoading.set(auditId);
     try {
       const result=await this.api.reviewDeletionRecoveryValue(this.projectId,auditId);
-      if(generation===this.generation)this.recoveryValue.set({auditId,result});
+      if(generation===this.generation){this.recoveryValue.set({auditId,result});this.landValueFocus(auditId,generation,true);}
     } catch {
       if(generation===this.generation)this.error.set('Could not review archived value. No value was restored. Review again to retry.');
     } finally { if(generation===this.generation){this.busy.set(false);this.valueReviewLoading.set(null);} }
   }
   cancelValueReview() {
-    if (!this.valueReviewLoading()) return;
+    const auditId=this.valueReviewLoading();
+    if (!auditId) return;
     ++this.generation;
     this.valueReviewLoading.set(null); this.recoveryValue.set(null); this.busy.set(false);
     this.message.set('Value review canceled. Any late response will be hidden. No value was restored.');
+    this.landValueFocus(auditId,this.generation,false);
+  }
+  hideValueReview() {
+    const auditId=this.recoveryValue()?.auditId;
+    if (!auditId) return;
+    this.recoveryValue.set(null);
+    this.landValueFocus(auditId,this.generation,false);
+  }
+  private landValueFocus(auditId:string,generation:number,result:boolean) {
+    // Wait for Angular's conditional DOM. Never steal focus after a newer action
+    // or route change has superseded this review.
+    setTimeout(()=>{
+      if(generation!==this.generation)return;
+      const attr=result?'data-value-result-id':'data-value-audit-id';
+      const nodes=this.auditRegion?.nativeElement.querySelectorAll<HTMLElement>('['+attr+']');
+      const node=Array.from(nodes??[]).find(n=>n.getAttribute(attr)===auditId);
+      node?.focus({preventScroll:true});
+      if(result)node?.scrollIntoView({block:'center',behavior:'instant'});
+    },0);
   }
   async checkRecovery(auditId: string) {
     if (this.busy() || !this.auditPage()?.audits.some(a=>a.id===auditId)) return;
