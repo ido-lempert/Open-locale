@@ -252,3 +252,7 @@ only,no app behavior change. See review0230.
 Recovery composition now enforces32768UTF8bytes before writes,matching public
 review. Actual HTTP multibyte exact-bound success and forged over-bound rejection
 cover the consistency fix. See review0231.
+
+Actual committed post-review target/baseline/key/generation/value changes now have
+public recovery HTTP409 and exact unchanged-state evidence. Tests only,no app
+behavior change. See review0232,including non-discriminating negative limitation.

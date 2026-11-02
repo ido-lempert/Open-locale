@@ -1237,6 +1237,31 @@ try {
     check('local recovery HTTP denies stale '+field,(await call(httpRecoverPath,{jwt:admin.accessToken,method:'POST',body:{...httpRecoverInput,[field]:value}})).status===409);
   }
   check('local recovery HTTP all denials leave actual recovery counts unchanged',JSON.stringify(await recoveryCountsForComposition())===JSON.stringify(httpRecoveryBefore));
+  const httpStaleTarget=await prisma.repositorySyncTarget.findUnique({where:{id:target.id}});
+  const httpStaleBaseline=await prisma.repositorySyncBaseline.findUnique({where:{targetId:target.id}});
+  for(const mutation of ['target-revision','baseline-version','key-revision','removal-generation','value-exists']){
+    try{
+      if(mutation==='target-revision')await prisma.repositorySyncTarget.update({where:{id:target.id},data:{revision:{increment:1}}});
+      if(mutation==='baseline-version')await prisma.repositorySyncBaseline.update({where:{targetId:target.id},data:{version:{increment:1}}});
+      if(mutation==='key-revision')await prisma.key.update({where:{id:httpRecoveryKey.id},data:{description:'committed change after review'}});
+      if(mutation==='removal-generation')await prisma.repositoryRemovalGeneration.update({where:{projectId_keyId_locale:{projectId:project.id,keyId:httpRecoveryKey.id,locale:'en'}},data:{auditId:owner.user.id}});
+      if(mutation==='value-exists')await prisma.translation.create({data:{projectId:project.id,keyId:httpRecoveryKey.id,localeCode:'en',value:'new current value'}});
+      const committedState=async()=>({counts:await recoveryCountsForComposition(),row:await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:httpRecoveryKey.id,localeCode:'en'}}}),key:await prisma.key.findUnique({where:{id:httpRecoveryKey.id}}),target:await prisma.repositorySyncTarget.findUnique({where:{id:target.id}}),baseline:await prisma.repositorySyncBaseline.findUnique({where:{targetId:target.id}}),marker:await prisma.repositoryRemovalGeneration.findUnique({where:{projectId_keyId_locale:{projectId:project.id,keyId:httpRecoveryKey.id,locale:'en'}}}),archive:await prisma.translationDeletionAudit.findUnique({where:{id:httpRecoveryAudit.id}})});
+      const beforeCommitted=JSON.stringify(await committedState());
+      const committedDenial=await call(httpRecoverPath,{jwt:admin.accessToken,method:'POST',body:httpRecoverInput});
+      check('local recovery HTTP denies actual committed '+mutation+' without refreshing original review',committedDenial.status===409&&JSON.stringify(await committedState())===beforeCommitted);
+    }finally{
+      await prisma.repositorySyncTarget.update({where:{id:target.id},data:{revision:httpStaleTarget.revision}});
+      await prisma.repositorySyncBaseline.update({where:{targetId:target.id},data:{version:httpStaleBaseline.version}});
+      await prisma.repositoryRemovalGeneration.update({where:{projectId_keyId_locale:{projectId:project.id,keyId:httpRecoveryKey.id,locale:'en'}},data:{auditId:httpRecoveryAudit.id}});
+      await prisma.translation.deleteMany({where:{keyId:httpRecoveryKey.id,localeCode:'en'}});
+      if(mutation==='key-revision'){
+        await prisma.$executeRaw`UPDATE keys SET description=${httpRecoveryKey.description},"updatedAt"=${httpRecoveryKey.updatedAt} WHERE id=${httpRecoveryKey.id}::uuid`;
+        const refreshedHttpReview=(await call(httpRecoverPath.replace('/recover-local','/recovery-review'),{jwt:admin.accessToken})).json;
+        httpRecoverInput.expectedKeyUpdatedAt=refreshedHttpReview.recovery.expectedKeyUpdatedAt;httpRecoverInput.expectedKeyRevision=refreshedHttpReview.recovery.expectedKeyRevision;
+      }
+    }
+  }
   let httpBusyReady,httpBusyRelease;const httpBusyHeld=new Promise(r=>httpBusyReady=r),httpBusyGate=new Promise(r=>httpBusyRelease=r);
   const httpBusyBlocker=prisma.$transaction(async tx=>{await tx.$queryRaw`SELECT id FROM projects WHERE id=${project.id}::uuid FOR UPDATE`;httpBusyReady();await httpBusyGate;},{timeout:10000});await httpBusyHeld;
   let httpBusyResult;

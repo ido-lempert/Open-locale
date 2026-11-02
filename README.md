@@ -744,3 +744,8 @@ No app change or remote-delivery claim.
 Explicit local recovery enforces the same32768UTF8byte archived-value bound as
 review,inside its transaction. Correctly forged bindings cannot bypass this bound;
 exact-bound multibyte success and over-bound400/rollback tested in review0231.
+
+Recovery HTTP tests now commit actual target/baseline/key/deletion-generation/
+existing-value changes after review,then prove409 preserves exact pre-execution
+state without refreshing the stale request. Tests only;see review0232 and its
+negative-control limitation.
