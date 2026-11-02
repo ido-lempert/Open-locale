@@ -533,6 +533,11 @@ try {
   await clickTarget(`[data-value-audit-id="${eligibleAudit.id}"]`);await page.waitForFunction(()=>document.querySelector('.recovery-value')?.textContent.includes('will not be overwritten'));
   check('inconsistent denied browser response never renders private bytes or recovery control',!(await page.content()).includes('private-denied-sentinel')&&!(await page.$('.recovery-value pre'))&&!(await page.$('[name=auditRecoverPrepare]'))&&!(await page.$('[name=auditRecoverConfirm]')));
   page.off('request',inconsistentDeny);await page.setRequestInterception(false);
+  await page.setRequestInterception(true);const oversizedAvailable=async request=>request.url().endsWith('/recovery-review')?request.respond({status:200,contentType:'application/json',body:JSON.stringify({reviewAvailable:true,reason:'current-flat-value-absence',asOf:new Date().toISOString(),maxValueBytes:999999,value:'א'.repeat(16385),recovery:{expectedValueDigest:'oversized-binding'},repository:{baselineSha:'oversized-sha'}})}):request.continue();page.on('request',oversizedAvailable);
+  await clickTarget(`[data-value-audit-id="${eligibleAudit.id}"]`);await page.waitForFunction(()=>document.querySelector('.recovery-value')?.textContent.includes('Current checks do not allow'));
+  check('oversized available browser response cannot display value or prepare recovery',!(await page.$('.recovery-value pre'))&&!(await page.$('[name=auditRecoverPrepare]'))&&!(await page.$('[name=auditRecoverConfirm]')));
+  await page.$eval('.recovery-value',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/deletion-review-invalid-response-narrow.png'});page.off('request',oversizedAvailable);await page.setRequestInterception(false);
+
   // Direct test-fixture restoration only:do not claim UI accepted a new baseline.
   await prisma.repositorySyncTarget.update({where:{id:archivedReviewTarget.id},data:{path:beforeSavedTarget.path}});
   await prisma.repositorySyncBaseline.create({data:{...beforeSavedBaseline,targetRevision:afterSavedTarget.revision}});

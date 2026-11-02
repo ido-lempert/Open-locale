@@ -1009,11 +1009,12 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
     this.busy.set(true); this.valueReviewLoading.set(null); this.recoveryValue.set(null); this.recoveryPreview.set(null); this.error.set(''); this.message.set(''); this.valueReviewLoading.set(auditId);
     try {
       const raw=target?await this.api.reviewRepositoryRecovery(this.projectId,target.id,auditId):await this.api.reviewDeletionRecoveryValue(this.projectId,auditId);
+      const available=raw.reviewAvailable===true&&typeof raw.value==='string'&&new TextEncoder().encode(raw.value).byteLength<=32768;
       // Keep only the exact fields needed for this explicit local recovery,not raw response scopes.
-      const result:DeletionRecoveryValueReview={source:'deletion-recovery-value-review',asOf:raw.asOf,reviewAvailable:raw.reviewAvailable,reason:raw.reason,value:raw.reviewAvailable?raw.value:null,maxValueBytes:raw.maxValueBytes,canRestore:false,snapshotIncluded:false,historyReplay:false,reservationHeld:false};
+      const result:DeletionRecoveryValueReview={source:'deletion-recovery-value-review',asOf:raw.asOf,reviewAvailable:available,reason:raw.reviewAvailable===true&&!available?'invalid-review-response':raw.reason,value:available?raw.value:null,maxValueBytes:32768,canRestore:false,snapshotIncluded:false,historyReplay:false,reservationHeld:false};
       const targetLabel=target?`${target.localBranch} / ${target.locale} / ${target.owner}/${target.repo} / ${target.path}`:undefined;
       let recoveryInput:LocalRecoveryInput|undefined;
-      if(target && raw.reviewAvailable && 'recovery' in raw && 'repository' in raw && raw.recovery && raw.repository){
+      if(target && available && 'recovery' in raw && 'repository' in raw && raw.recovery && raw.repository){
         const r=raw.recovery, repo=raw.repository;
         recoveryInput={confirmation:'recover-local-value',expectedBranchId:r.expectedBranchId,expectedKeyUpdatedAt:r.expectedKeyUpdatedAt,expectedKeyRevision:r.expectedKeyRevision,expectedValueDigest:r.expectedValueDigest,targetRevision:repo.targetRevision,branch:repo.branch,locale:repo.locale,baselineVersion:repo.baselineVersion,baselineSha:repo.baselineSha,baselineDigest:repo.baselineDigest};
       }

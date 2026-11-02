@@ -824,3 +824,8 @@ Denied archived-review responses discard value bytes before component state stor
 even if an inconsistent response includes them;no recovery bindings are extracted.
 Target and value-only state tests plus browser denied-payload handling cover this.
 This is not network/runtime memory erasure. See review0246.
+
+Client archived-review display also requires literal available=true,a string value
+and at most32768UTF8bytes before storing value/extracting recovery bindings. Empty
+and exact boundary values work;malformed/oversized responses stay unavailable. This
+is not a network preparse bound or memory erasure. See review0247.

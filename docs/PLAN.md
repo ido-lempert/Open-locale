@@ -318,3 +318,7 @@ deleted value stays absent. Tests only,no app change. See review0245.
 Denied archived review now projects null value before state storage,defending
 against inconsistent denied responses carrying private bytes. Both review modes
 and browser rendering/control denial tested. No server change. See review0246.
+
+Client value review now enforces literal availability,string type and32768UTF8byte
+bound before retaining private value/bindings. Exact multibyte/empty and malformed/
+oversize tests verified,server unchanged. See review0247.
