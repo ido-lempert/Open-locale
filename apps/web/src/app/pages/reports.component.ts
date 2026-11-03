@@ -15,8 +15,9 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
         @for (b of branches(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }
       </select>
     </header>
-    <main>
-      @if (error(); as e) { <p class="error" role="alert">{{ e }}</p> }
+    <main [attr.aria-busy]="branchLoading() || dashboardsLoading()">
+      @if (error(); as e) { <p class="error" role="alert" name="branchReportError">{{ e }}</p> }
+      @if (branchLoading()) { <p role="status" name="branchReportLoading">Loading progress and quality reports for {{ branch() }}...</p> }
       @if (report(); as r) {
         <p class="muted">{{ r.totalKeys }} keys on {{ r.branch }}. A key counts as translated when its value is not empty; status counts cover non-empty values only.</p>
         <div class="table-scroll">
@@ -51,8 +52,6 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
           </tbody>
         </table>
         </div>
-      } @else if (!error()) {
-        <p class="muted">Loading…</p>
       }
 
       <h2>Quality</h2>
@@ -118,6 +117,7 @@ export class ReportsComponent implements OnInit, OnDestroy {
   branch = signal('main');
   statusColumns = signal<string[]>([]);
   error = signal('');
+  branchLoading=signal(false);
   usageError=signal(false);
   taskReportError=signal(false);
   dashboardsLoading=signal(false);
@@ -135,7 +135,7 @@ export class ReportsComponent implements OnInit, OnDestroy {
     if(this.destroyed)return;
     const scope=++this.projectGeneration;++this.generation;this.projectId=projectId;
     this.branch.set('main');this.branches.set([]);this.report.set(null);this.quality.set(null);
-    this.usage.set(null);this.taskReport.set(null);this.statusColumns.set([]);this.error.set('');this.usageError.set(false);this.taskReportError.set(false);this.dashboardsLoading.set(true);
+    this.usage.set(null);this.taskReport.set(null);this.statusColumns.set([]);this.error.set('');this.branchLoading.set(true);this.usageError.set(false);this.taskReportError.set(false);this.dashboardsLoading.set(true);
     const branches=await this.api.listBranches(projectId).catch(()=>[]);
     if(this.destroyed||scope!==this.projectGeneration)return;
     this.branches.set(branches);
@@ -151,14 +151,15 @@ export class ReportsComponent implements OnInit, OnDestroy {
   async fetch() {
     if(this.destroyed)return;
     const generation=++this.generation,projectId=this.projectId,branch=this.branch();
-    this.error.set('');this.report.set(null);this.quality.set(null);this.statusColumns.set([]);
+    this.error.set('');this.branchLoading.set(true);this.report.set(null);this.quality.set(null);this.statusColumns.set([]);
     try {
       const [r,q]=await Promise.all([this.api.getProgress(projectId,branch),this.api.getQuality(projectId,branch)]);
       if(this.destroyed||generation!==this.generation)return;
       const cols: string[] = [];
       for (const l of r.locales) for (const s of Object.keys(l.byStatus)) if (!cols.includes(s)) cols.push(s);
       this.report.set(r);this.statusColumns.set(cols);this.quality.set(q);
-    } catch (e) { if(!this.destroyed&&generation===this.generation)this.error.set(e instanceof Error ? e.message : 'Failed to load'); }
+    } catch { if(!this.destroyed&&generation===this.generation)this.error.set('Progress and quality reports unavailable. No branch figures are shown. Choose a branch again or reload this page to retry.'); }
+    finally { if(!this.destroyed&&generation===this.generation)this.branchLoading.set(false); }
   }
 
   async ngOnInitDashboards() {

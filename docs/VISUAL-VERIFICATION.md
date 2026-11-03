@@ -77,3 +77,7 @@ prove late response does not replace new figures. Layout/table scrolling unchang
 Slice188 local usage503fixture displays fixed unavailable/nofigures/reloadnotice,
 retains successful tasks/progress/quality,and excludes rawdetail/usagetables.
 Final480x900image inspected;existing table scrolling retained. Browser208checks.
+
+Slice189 local quality503fixture shows full fixed branchreportunavailable/retry
+notice,no progress/qualityfigures,retainsusage/tasks,norawdetails/staleloading.
+Final480x900image inspected;layoutunchanged. Browser209checks.

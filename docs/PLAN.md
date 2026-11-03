@@ -342,3 +342,7 @@ fence retained. Actual same-component navigation/held old usage verified. See025
 Report usage/tasks now show explicit loading and fixed section failure guidance
 instead of silent blank sections. Successful sibling retained after both settle;
 old project errors fenced. Actual usage503/browser proof. See0254.
+
+Progress/quality report failures now use fixed guidance,not raw serverdetails.
+Explicit branchloading/status/mainaria-busy respect stale-response fencing;
+quality503browser proves no partialfigures and successfulusage/tasksretained. See0255.
