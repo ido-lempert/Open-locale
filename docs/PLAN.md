@@ -525,3 +525,9 @@ invalidates old reads before debounce. Concurrent Load more suppressed; failedpa
 keeps prior rows/cursor and explicitretry appends once. ActualPG/Chrome activity6
 and six units (web173/11), review0293. NoAPI/query/schema or coverage/defaultOFF
 change; pending/failure are not empty-success, no delivery/exactly-once claim.
+
+## Continuation228 - Activity same-project browser race
+Actual heldolderpage now proves concurrent Load more stays oneHTTPrequest, then
+sameproject keyfilter completes11matchingrows and lateolderresponse cannotappend
+or change latestfeed/loading/cursor. Test-only; activitybrowser8, review0294.
+No application/API/schema or coverage/defaultOFF changes.

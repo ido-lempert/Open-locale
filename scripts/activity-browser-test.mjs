@@ -38,6 +38,17 @@ try {
   await page.setViewport({width:480,height:900});
   await page.goto(`${WEB}/projects/${project.id}/activity`,{waitUntil:'networkidle0'});await page.waitForSelector('.load-more');
   const initial=await page.$$eval('.activity-row',rows=>rows.length);check('actual activity has first page and more cursor',initial===50);
+  let olderHeld=false,releaseOlder,olderReads=0;const olderGate=new Promise(r=>releaseOlder=r);await page.setRequestInterception(true);
+  const holdOlder=async req=>{if(new URL(req.url()).pathname===`/api/projects/${project.id}/activity`&&new URL(req.url()).searchParams.has('cursor')){olderHeld=true;olderReads++;await olderGate;}return req.continue();};page.on('request',holdOlder);
+  await page.click('.load-more');for(let n=0;n<50&&!olderHeld;n++)await new Promise(r=>setTimeout(r,20));if(!olderHeld)throw new Error('older page not held');
+  await page.click('.load-more');await new Promise(r=>setTimeout(r,100));
+  check('held older page disables repeated load more and makes one actual request',olderReads===1&&await page.$eval('.load-more',e=>e.disabled)&&await page.$$eval('.activity-row',rows=>rows.length===50)&&!!await page.$('[name=activityLoading]'));
+  await page.$eval('[name=actKey]',e=>{e.value='event-1';e.dispatchEvent(new Event('input',{bubbles:true}));});
+  await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');const latestRows=await page.$$eval('.activity-row',rows=>rows.map(r=>r.textContent));
+  const olderResponse=page.waitForResponse(r=>new URL(r.url()).pathname===`/api/projects/${project.id}/activity`&&new URL(r.url()).searchParams.has('cursor'));releaseOlder();await olderResponse;await new Promise(r=>setTimeout(r,100));page.off('request',holdOlder);await page.setRequestInterception(false);
+  check('late older activity page cannot append across same-project key filter',latestRows.length===11&&await page.$$eval('.activity-row',(rows,texts)=>JSON.stringify(rows.map(r=>r.textContent))===JSON.stringify(texts),latestRows)&&!(await page.$('.load-more'))&&!(await page.$('[name=activityLoading]')));
+  await page.screenshot({path:'/downloads/activity-same-project-race-full.png',fullPage:true});
+  await page.$eval('[name=actKey]',e=>{e.value='';e.dispatchEvent(new Event('input',{bubbles:true}));});await page.waitForSelector('.load-more');
   let pageReads=0;await page.setRequestInterception(true);const failPage=async req=>{if(new URL(req.url()).pathname===`/api/projects/${project.id}/activity`&&new URL(req.url()).searchParams.has('cursor')){pageReads++;return req.respond({status:503,contentType:'application/json',body:JSON.stringify({message:'private-page-error'})});}return req.continue();};page.on('request',failPage);
   await page.click('.load-more');await page.waitForSelector('[name=retryActivity]');
   check('failed activity page retains prior rows without empty-success or raw detail',await page.$$eval('.activity-row',rows=>rows.length)===initial&&!(await page.$('[name=activityEmpty]'))&&!(await page.content()).includes('private-page-error')&&pageReads===1);
