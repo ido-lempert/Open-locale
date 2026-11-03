@@ -98,7 +98,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
 
       <h2>Tasks</h2>
       @if (tasksLoading()) { <p role="status" name="tasksLoading">Loading task report...</p> }
-      @if (taskReportError()) { <p class="error" role="alert" name="taskReportError">Task report unavailable. No task figures are shown. Reload this page to try again.</p> }
+      @if (taskReportError()) { <p class="error" role="alert" name="taskReportError">Task report unavailable. No task figures are shown. Retry tasks or reload this page.</p><button type="button" name="retryTasks" (click)="void loadTasks()">Retry tasks</button> }
       @if (taskReport(); as t) {
         <p class="muted">{{ t.total }} tasks: {{ t.byStatus['OPEN'] ?? 0 }} open, {{ t.byStatus['IN_PROGRESS'] ?? 0 }} in progress, {{ t.byStatus['DONE'] ?? 0 }} done.
           <span [class.error]="t.overdue > 0">{{ t.overdue }} overdue</span>, {{ t.dueSoon }} due within 7 days.</p>
@@ -134,6 +134,7 @@ export class ReportsComponent implements OnInit, OnDestroy {
   usageLoading=signal(false);
   usageDays=signal(30);
   private usageGeneration=0;
+  private taskGeneration=0;
   tasksLoading=signal(false);
   private generation=0;
   private destroyed=false;
@@ -148,7 +149,7 @@ export class ReportsComponent implements OnInit, OnDestroy {
   async loadProject(projectId:string) {
     if(this.destroyed)return;
     const scope=++this.projectGeneration;++this.generation;this.projectId=projectId;
-    this.usageDays.set(30);++this.usageGeneration;this.branch.set('main');this.branches.set([]);this.branchListError.set(false);this.branchListLoading.set(true);this.report.set(null);this.quality.set(null);
+    this.usageDays.set(30);++this.usageGeneration;++this.taskGeneration;this.branch.set('main');this.branches.set([]);this.branchListError.set(false);this.branchListLoading.set(true);this.report.set(null);this.quality.set(null);
     this.usage.set(null);this.taskReport.set(null);this.statusColumns.set([]);this.error.set('');this.branchLoading.set(true);this.usageError.set(false);this.taskReportError.set(false);this.dashboardsLoading.set(true);this.usageLoading.set(true);this.tasksLoading.set(true);
     const branchList=this.api.listBranches(projectId).then(branches=>{
       if(!this.destroyed&&scope===this.projectGeneration)this.branches.set(branches);
@@ -190,15 +191,18 @@ export class ReportsComponent implements OnInit, OnDestroy {
     finally { if(current()){this.usageLoading.set(false);this.dashboardsLoading.set(this.tasksLoading());} }
   }
 
+  async loadTasks() {
+    if(this.destroyed)return;
+    const generation=++this.taskGeneration,scope=this.projectGeneration,projectId=this.projectId;
+    const current=()=>!this.destroyed&&scope===this.projectGeneration&&generation===this.taskGeneration;
+    this.taskReport.set(null);this.taskReportError.set(false);this.tasksLoading.set(true);this.dashboardsLoading.set(true);
+    try { const value=await this.api.getTaskReport(projectId);if(current())this.taskReport.set(value); }
+    catch { if(current())this.taskReportError.set(true); }
+    finally { if(current()){this.tasksLoading.set(false);this.dashboardsLoading.set(this.usageLoading());} }
+  }
+
   async ngOnInitDashboards() {
     if(this.destroyed)return;
-    const scope=this.projectGeneration,projectId=this.projectId;
-    this.usage.set(null);this.taskReport.set(null);this.usageError.set(false);this.taskReportError.set(false);this.dashboardsLoading.set(true);this.usageLoading.set(true);this.tasksLoading.set(true);
-    const current=()=>!this.destroyed&&scope===this.projectGeneration;
-    const settle=()=>{if(current())this.dashboardsLoading.set(this.usageLoading()||this.tasksLoading());};
-    await Promise.all([
-      this.loadUsage(),
-      this.api.getTaskReport(projectId).then(value=>{if(current())this.taskReport.set(value);}).catch(()=>{if(current())this.taskReportError.set(true);}).finally(()=>{if(current())this.tasksLoading.set(false);settle();}),
-    ]);
+    await Promise.all([this.loadUsage(),this.loadTasks()]);
   }
 }

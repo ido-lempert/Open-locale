@@ -486,3 +486,7 @@ retained. Test-only, noapplicationchange. See0286.
 Failedusage now offers inlineRetryusage for selectedwindow without refreshingtasks.
 Actualbrowser failed7day/read-onlyretryclick verifies7dayresponsebounds/recovery/
 unchangedtaskcutoff. Existingrequestfences reused. NoAPIquerychange. See0287.
+
+Failedtasks now offers inlineRetrytasks without refreshingusage. Taskloader has
+sameprojectrequestgeneration+project/destroyfences. Unitstalesuccess/error/loading
+and actualbrowserretryclick/unchangedusagewindow verified. NoAPIquerychange. See0288.
