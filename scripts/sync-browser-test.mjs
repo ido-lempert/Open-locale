@@ -722,6 +722,12 @@ try {
   await page.screenshot({path:'/downloads/reports-held-branch-list-full.png',fullPage:true});
   const branchListResponse=page.waitForResponse(r=>new URL(r.url()).pathname===`/api/projects/${applyProject.id}/branches`);releaseList();await branchListResponse;page.off('request',holdBranchList);await page.setRequestInterception(false);
   const reloadReports=async()=>{await page.reload({waitUntil:'domcontentloaded'});await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');};
+  await page.setRequestInterception(true);const failBranchList=async request=>new URL(request.url()).pathname===`/api/projects/${applyProject.id}/branches`?request.respond({status:503,contentType:'application/json',body:JSON.stringify({message:'private-branch-list-detail'})}):request.continue();page.on('request',failBranchList);
+  await reloadReports();await page.waitForSelector('[name=branchListError]');
+  check('failed branch discovery has fixed guidance while main reports and dashboards remain',await page.$eval('[name=branchListError]',e=>e.textContent.includes('Only main is offered')&&e.textContent.includes('Reload this page'))&&!(await page.content()).includes('private-branch-list-detail')&&await page.$eval('[name=reportBranch]',e=>e.value==='main'&&e.options.length===1)&&!!await page.$('.progress-table')&&!!await page.$('.usage-table')&&!!await page.$('[name=taskWindow]'));
+  await page.screenshot({path:'/downloads/reports-branch-list-unavailable-full.png',fullPage:true});page.off('request',failBranchList);await page.setRequestInterception(false);
+  await reloadReports();await page.waitForFunction(()=>document.querySelector('[name=reportBranch]')?.options.length===2);
+  check('branch discovery recovers on reload without stale notice',!(await page.$('[name=branchListError]'))&&await page.$eval('[name=reportBranch]',e=>Array.from(e.options).some(o=>o.value==='held-report-branch')));
   const projectDashboardText=await page.$eval('main',e=>e.textContent.slice(e.textContent.indexOf('Usage and tasks cover')));
   let reportHeld=false,releaseReport;const reportGate=new Promise(r=>releaseReport=r);await page.setRequestInterception(true);
   const holdReport=async request=>{if(request.url().includes('/reports/quality?branch=held-report-branch')){reportHeld=true;await reportGate;}return request.continue();};page.on('request',holdReport);

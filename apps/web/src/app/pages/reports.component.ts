@@ -17,6 +17,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
       </select>
     </header>
     <main [attr.aria-busy]="branchLoading() || dashboardsLoading()">
+      @if (branchListError()) { <p class="error" role="alert" name="branchListError">Branch list unavailable. Only main is offered. Reload this page to try loading other branches.</p> }
       @if (error(); as e) { <p class="error" role="alert" name="branchReportError">{{ e }}</p> }
       @if (branchLoading()) { <p role="status" name="branchReportLoading">Loading progress and quality reports for {{ branch() }}...</p> }
       @if (report(); as r) {
@@ -118,6 +119,7 @@ export class ReportsComponent implements OnInit, OnDestroy {
   usage = signal<UsageReport | null>(null);
   taskReport = signal<TaskReport | null>(null);
   branches = signal<BranchInfo[]>([]);
+  branchListError=signal(false);
   branch = signal('main');
   statusColumns = signal<string[]>([]);
   error = signal('');
@@ -138,10 +140,12 @@ export class ReportsComponent implements OnInit, OnDestroy {
   async loadProject(projectId:string) {
     if(this.destroyed)return;
     const scope=++this.projectGeneration;++this.generation;this.projectId=projectId;
-    this.branch.set('main');this.branches.set([]);this.report.set(null);this.quality.set(null);
+    this.branch.set('main');this.branches.set([]);this.branchListError.set(false);this.report.set(null);this.quality.set(null);
     this.usage.set(null);this.taskReport.set(null);this.statusColumns.set([]);this.error.set('');this.branchLoading.set(true);this.usageError.set(false);this.taskReportError.set(false);this.dashboardsLoading.set(true);
-    const branchList=this.api.listBranches(projectId).catch(()=>[]).then(branches=>{
+    const branchList=this.api.listBranches(projectId).then(branches=>{
       if(!this.destroyed&&scope===this.projectGeneration)this.branches.set(branches);
+    }).catch(()=>{
+      if(!this.destroyed&&scope===this.projectGeneration)this.branchListError.set(true);
     });
     await Promise.all([branchList,this.fetch(),this.ngOnInitDashboards()]);
   }

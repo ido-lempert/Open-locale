@@ -459,3 +459,8 @@ Report loading now starts main reports/projectdashboards independently of branch
 list, retaining late-project/destroy fences. Main selector fallback visible while
 list unavailable. Unit and actual held-listbrowser verify figures finish without
 waiting for branch discovery. No APIquerychange. See0281.
+
+Branch discovery failure now shows fixedguidance instead of silently suggesting
+main is the onlybranch. Mainreports/projectdashboards retained, explicitreload
+recovers branchoptions. Current/lateproject/destroyfences unit-tested and actual
+browser503/recovery verified. NoAPIquerychange. See0282.
