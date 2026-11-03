@@ -445,3 +445,8 @@ Task report now returns exact asOf/dueSoonThrough deadline bounds from the query
 captured clock. UI shows inclusive due-soon window and separate-workload-read
 snapshot caveat. Unit parameter identity, actualHTTP ISO bounds and browser
 response-to-text verified. No new query or whole-report snapshot claim. See0278.
+
+Task report failure/recovery now has actualbrowser task-only503 evidence: fixed
+guidance/no stale taskfigures/window, successful siblings retained, explicitreload
+recovers zero summary/workload without stale error. Test-only, not memory erasure
+or externalservice outage proof. See0279.
