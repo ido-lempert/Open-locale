@@ -19,7 +19,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
     <main [attr.aria-busy]="branchLoading() || dashboardsLoading()">
       @if (branchListLoading()) { <p role="status" name="branchListLoading">Loading branch list. Main reports are available independently.</p> }
       @if (branchListError()) { <p class="error" role="alert" name="branchListError">Branch list unavailable. Only main is offered. Reload this page to try loading other branches.</p> }
-      @if (error(); as e) { <p class="error" role="alert" name="branchReportError">{{ e }}</p> }
+      @if (error(); as e) { <p class="error" role="alert" name="branchReportError">{{ e }}</p><button type="button" name="retryBranchReports" (click)="void fetch()">Retry branch reports</button> }
       @if (branchLoading()) { <p role="status" name="branchReportLoading">Loading progress and quality reports for {{ branch() }}...</p> }
       @if (report(); as r) {
         <p class="muted">{{ r.totalKeys }} keys on {{ r.branch }}. A key counts as translated when its value is not empty; status counts cover non-empty values only.</p>
@@ -177,7 +177,7 @@ export class ReportsComponent implements OnInit, OnDestroy {
       const cols: string[] = [];
       for (const l of r.locales) for (const s of Object.keys(l.byStatus)) if (!cols.includes(s)) cols.push(s);
       this.report.set(r);this.statusColumns.set(cols);this.quality.set(q);
-    } catch { if(!this.destroyed&&generation===this.generation)this.error.set('Progress and quality reports unavailable. No branch figures are shown. Choose a branch again or reload this page to retry.'); }
+    } catch { if(!this.destroyed&&generation===this.generation)this.error.set('Progress and quality reports unavailable. No branch figures are shown. Retry branch reports, choose a branch again or reload this page.'); }
     finally { if(!this.destroyed&&generation===this.generation)this.branchLoading.set(false); }
   }
 

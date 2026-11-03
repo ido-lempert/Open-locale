@@ -490,3 +490,10 @@ unchangedtaskcutoff. Existingrequestfences reused. NoAPIquerychange. See0287.
 Failedtasks now offers inlineRetrytasks without refreshingusage. Taskloader has
 sameprojectrequestgeneration+project/destroyfences. Unitstalesuccess/error/loading
 and actualbrowserretryclick/unchangedusagewindow verified. NoAPIquerychange. See0288.
+
+## Continuation223 - inline branch-report retry
+Added error-only Retry branch reports using existing fenced selected-branch pair
+fetch. Actual quality503/retry click recovers progress+quality, preserves selected
+branch and exact usage/task cutoff text. Selected-feature unit, web158/9,
+browser238; five-perspective review0289. No API/query/schema/provider changes;
+coverage22FULL/7PARTIAL/1MISSING/defaultOFF and snapshot caveats unchanged.
