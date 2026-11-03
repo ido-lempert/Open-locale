@@ -103,6 +103,7 @@ try {
   await call(`/projects/${pid}/tasks/${t3.id}`, { jwt, method: 'PATCH', body: { status: 'DONE' } });
   check('task fixtures created', t1.status === 201 && t2.status === 201 && !!t3.id);
   const tr = (await call(`/projects/${pid}/reports/tasks`, { jwt })).json;
+  check('tasks: captured deadline cutoff spans exactly seven days as ISO timestamps',typeof tr.asOf==='string'&&typeof tr.dueSoonThrough==='string'&&new Date(tr.asOf).toISOString()===tr.asOf&&new Date(tr.dueSoonThrough).toISOString()===tr.dueSoonThrough&&Date.parse(tr.dueSoonThrough)-Date.parse(tr.asOf)===7*86400000);
   check('tasks: status totals', tr.total === 3 && tr.byStatus.OPEN === 1 && tr.byStatus.IN_PROGRESS === 1 && tr.byStatus.DONE === 1, JSON.stringify(tr.byStatus));
   check('tasks: overdue and due-soon', tr.overdue === 1 && tr.dueSoon === 1, JSON.stringify({ o: tr.overdue, s: tr.dueSoon }));
   check('tasks: open work per assignee', tr.perAssignee.length === 2 && tr.perAssignee.every((a) => a.count === 1) && tr.perAssignee.some((a) => a.name === 'rp') && tr.perAssignee.some((a) => a.name === 'unassigned'), JSON.stringify(tr.perAssignee));

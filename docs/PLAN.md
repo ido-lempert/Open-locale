@@ -440,3 +440,8 @@ Quality report now explicitly explains zero findings from current checks on the
 named branch, retaining numeric zero summary. Realbrowser zero->untranslated-
 finding->cleanup transition and fresh480fullpage verified. No APIquerychange or
 blanket translation-correctness claim. See0277.
+
+Task report now returns exact asOf/dueSoonThrough deadline bounds from the query's
+captured clock. UI shows inclusive due-soon window and separate-workload-read
+snapshot caveat. Unit parameter identity, actualHTTP ISO bounds and browser
+response-to-text verified. No new query or whole-report snapshot claim. See0278.

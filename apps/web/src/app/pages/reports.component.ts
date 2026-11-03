@@ -96,6 +96,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
       @if (taskReport(); as t) {
         <p class="muted">{{ t.total }} tasks: {{ t.byStatus['OPEN'] ?? 0 }} open, {{ t.byStatus['IN_PROGRESS'] ?? 0 }} in progress, {{ t.byStatus['DONE'] ?? 0 }} done.
           <span [class.error]="t.overdue > 0">{{ t.overdue }} overdue</span>, {{ t.dueSoon }} due within 7 days.</p>
+        <p class="muted" name="taskWindow" style="overflow-wrap:anywhere">Deadline cutoff: <time>{{ t.asOf }}</time>. Due soon includes this cutoff through <time>{{ t.dueSoonThrough }}</time>. Workload is read separately, not one database snapshot.</p>
         @if (t.perAssignee.length > 0) {
           <div class="table-scroll">
           <table class="qa-table tasks-table">

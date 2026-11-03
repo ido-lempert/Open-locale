@@ -164,7 +164,7 @@ export class ReportsService {
     }));
     const total = byStatus.OPEN + byStatus.IN_PROGRESS + byStatus.DONE;
     return {
-      total, byStatus, overdue, dueSoon,
+      asOf:now, dueSoonThrough:in7, total, byStatus, overdue, dueSoon,
       perAssignee: perAssignee.sort((a,b)=>b.count-a.count||(a.kind+':'+(a.assigneeId??a.assigneeGroupId??'')).localeCompare(b.kind+':'+(b.assigneeId??b.assigneeGroupId??''))),
     };
   }

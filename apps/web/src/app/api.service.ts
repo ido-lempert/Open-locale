@@ -172,6 +172,7 @@ export interface UsageReport {
   topActors: { actorId: string; name: string; count: number }[];
 }
 export interface TaskReport {
+  asOf: string; dueSoonThrough: string;
   total: number; byStatus: Record<string, number>; overdue: number; dueSoon: number;
   perAssignee: { kind: 'user' | 'group' | 'unassigned'; assigneeId: string | null; assigneeGroupId: string | null; name: string; count: number }[];
 }
