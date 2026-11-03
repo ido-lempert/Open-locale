@@ -1,5 +1,6 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ActivityEntry, ApiService, MemberInfo } from '../api.service';
@@ -49,8 +50,9 @@ const ACTION_LABELS: Record<string, string> = {
       </select>
       <input aria-label="Filter by key" name="actKey" placeholder="key contains…" [ngModel]="keyFilter()" (ngModelChange)="onKeyInput($event)">
     </header>
-    <main>
-      @if (error(); as e) { <p class="error" role="alert">{{ e }}</p> }
+    <main [attr.aria-busy]="loading()">
+      @if (error(); as e) { <p class="error" role="alert">{{ e }}</p><button type="button" name="retryActivity" (click)="retry()">Retry activity</button> }
+      @if (loading()) { <p role="status" name="activityLoading">Loading activity...</p> }
       <ul class="activity-list">
         @for (ev of items(); track ev.id) {
           <li class="activity-row">
@@ -62,16 +64,16 @@ const ACTION_LABELS: Record<string, string> = {
             <time class="muted">{{ ev.createdAt | date:'short' }}</time>
           </li>
         } @empty {
-          <li class="muted">{{ loading() ? 'Loading…' : 'No activity yet' }}</li>
+          @if (!loading() && !error()) { <li class="muted" name="activityEmpty">No activity yet</li> }
         }
       </ul>
-      @if (nextCursor()) {
-        <button class="load-more" (click)="loadMore()">Load more</button>
+      @if (nextCursor() && !error()) {
+        <button [disabled]="loading()" class="load-more" (click)="loadMore()">Load more</button>
       }
     </main>
   `,
 })
-export class ActivityComponent implements OnInit {
+export class ActivityComponent implements OnInit, OnDestroy {
   projectId = '';
   items = signal<ActivityEntry[]>([]);
   nextCursor = signal<string | null>(null);
@@ -86,11 +88,23 @@ export class ActivityComponent implements OnInit {
 
   constructor(private route: ActivatedRoute, private api: ApiService) {}
 
+  private subscription?:Subscription;
+  private generation=0;
+  private projectGeneration=0;
+  private destroyed=false;
+  private failedReset=true;
   ngOnInit() {
-    this.projectId = this.route.snapshot.paramMap.get('id') ?? '';
-    void this.fetch(true);
-    this.api.listMembers(this.projectId).then((m) => this.members.set(m)).catch(() => this.members.set([]));
+    this.subscription=this.route.paramMap.subscribe(params=>{void this.loadProject(params.get('id')??'');});
   }
+  async loadProject(projectId:string) {
+    if(this.destroyed)return;
+    const scope=++this.projectGeneration;this.projectId=projectId;
+    if(this.keyTimer)clearTimeout(this.keyTimer);this.keyTimer=null;
+    this.actionFilter.set('');this.actorFilter.set('');this.keyFilter.set('');this.members.set([]);
+    const members=this.api.listMembers(projectId).then(m=>{if(!this.destroyed&&scope===this.projectGeneration)this.members.set(m);}).catch(()=>{if(!this.destroyed&&scope===this.projectGeneration)this.members.set([]);});
+    await Promise.all([members,this.fetch(true)]);
+  }
+  ngOnDestroy() {this.destroyed=true;++this.generation;++this.projectGeneration;this.subscription?.unsubscribe();if(this.keyTimer)clearTimeout(this.keyTimer);}
 
   setActor(actorId: string) {
     this.actorFilter.set(actorId);
@@ -99,6 +113,8 @@ export class ActivityComponent implements OnInit {
 
   // Debounced like the editor search: one request per pause, not per keystroke.
   onKeyInput(v: string) {
+    if(this.destroyed)return;
+    ++this.generation;this.items.set([]);this.nextCursor.set(null);this.error.set('');this.loading.set(true);
     this.keyFilter.set(v);
     if (this.keyTimer) clearTimeout(this.keyTimer);
     this.keyTimer = setTimeout(() => void this.fetch(true), 250);
@@ -164,21 +180,19 @@ export class ActivityComponent implements OnInit {
 
   loadMore() { void this.fetch(false); }
 
-  private async fetch(reset: boolean) {
-    if (reset) { this.items.set([]); this.nextCursor.set(null); this.loading.set(true); }
+  retry() {void this.fetch(this.failedReset);}
+  async fetch(reset: boolean) {
+    if(this.destroyed||(!reset&&(this.loading()||!this.nextCursor())))return;
+    const generation=++this.generation,scope=this.projectGeneration,projectId=this.projectId;
+    const current=()=>!this.destroyed&&scope===this.projectGeneration&&generation===this.generation;
+    const options={action:this.actionFilter()||undefined,actorId:this.actorFilter()||undefined,key:this.keyFilter().trim()||undefined,cursor:reset?undefined:this.nextCursor()??undefined};
+    if(reset){this.items.set([]);this.nextCursor.set(null);}
+    this.loading.set(true);this.error.set('');
     try {
-      const res = await this.api.listActivity(this.projectId, {
-        action: this.actionFilter() || undefined,
-        actorId: this.actorFilter() || undefined,
-        key: this.keyFilter().trim() || undefined,
-        cursor: reset ? undefined : this.nextCursor() ?? undefined,
-      });
-      this.items.set(reset ? res.items : [...this.items(), ...res.items]);
-      this.nextCursor.set(res.nextCursor);
-    } catch (e) {
-      this.error.set(e instanceof Error ? e.message : 'Failed to load activity');
-    } finally {
-      this.loading.set(false);
-    }
+      const res=await this.api.listActivity(projectId,options);
+      if(current()){this.items.set(reset?res.items:[...this.items(),...res.items]);this.nextCursor.set(res.nextCursor);}
+    } catch {
+      if(current()){this.failedReset=reset;this.error.set('Activity unavailable. Retry this read or reload the page.');}
+    } finally {if(current())this.loading.set(false);}
   }
 }

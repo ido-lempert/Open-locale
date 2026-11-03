@@ -48,7 +48,8 @@
     "test:oidc-link-browser": "node scripts/oidc-link-browser-test.mjs",
     "test:saml-link-browser": "node scripts/saml-link-browser-test.mjs",
     "test:visual-stage-config": "node scripts/visual-stage-config-test.mjs",
-    "test:qa-browser": "node scripts/qa-browser-test.mjs"
+    "test:qa-browser": "node scripts/qa-browser-test.mjs",
+    "test:activity-browser": "node scripts/activity-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

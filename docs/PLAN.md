@@ -518,3 +518,10 @@ plural API/browser proves one/other details both render with no duplicate-track
 diagnostics. Finding table now spaced and horizontally scrollable at480 rather
 than breaking key/badge words. QA browser9; review0292. NoAPI/query/schema or
 coverage/defaultOFF change; structural checks are not translation certification.
+
+## Continuation227 - Activity scope, pagination and retry
+Activity now fences project/filter/page responses and member metadata; typing
+invalidates old reads before debounce. Concurrent Load more suppressed; failedpage
+keeps prior rows/cursor and explicitretry appends once. ActualPG/Chrome activity6
+and six units (web173/11), review0293. NoAPI/query/schema or coverage/defaultOFF
+change; pending/failure are not empty-success, no delivery/exactly-once claim.
