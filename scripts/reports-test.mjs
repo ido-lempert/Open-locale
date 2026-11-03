@@ -129,6 +129,8 @@ try {
   check('task report identity buckets reconcile with all open tasks',identities.perAssignee.length===4&&identities.perAssignee.reduce((n,a)=>n+a.count,0)===identities.byStatus.OPEN+identities.byStatus.IN_PROGRESS);
 
   const taskGroup=(await call(`/projects/${pid}/groups`,{jwt,method:'POST',body:{name:'rp',role:'MEMBER'}})).json;
+  for(const person of [sameName,namedUnassigned])await call(`/projects/${pid}/groups/${taskGroup.id}/members/${person.user.id}`,{jwt,method:'PUT'});
+  check('group workload fixture has two actual members',await prisma.groupMember.count({where:{groupId:taskGroup.id}})===2);
   await call(`/projects/${pid}/tasks`,{jwt,method:'POST',body:{title:'group workload',assigneeGroupId:taskGroup.id}});
   const grouped=(await call(`/projects/${pid}/reports/tasks`,{jwt})).json;
   check('task report separates same-name group and users from truly unassigned',grouped.perAssignee.some(a=>a.kind==='group'&&a.assigneeGroupId===taskGroup.id&&a.assigneeId===null&&a.name==='rp'&&a.count===1)&&grouped.perAssignee.filter(a=>a.kind==='user'&&a.name==='rp').length===2&&grouped.perAssignee.some(a=>a.kind==='unassigned'&&a.assigneeId===null&&a.assigneeGroupId===null&&a.count===1));
@@ -215,6 +217,18 @@ try {
     check(`reports ${route} omitted branch resolves and reports main`,(await call(`/projects/${pid}/reports/${route}`,{jwt})).json.branch==='main');
     check(`reports ${route} unknown valid branch remains404`,(await call(`/projects/${pid}/reports/${route}?branch=valid-missing.1`,{jwt})).status===404);
   }
+
+  const lifecycleGroup=(await call(`/projects/${pid}/groups`,{jwt,method:'POST',body:{name:'workload lifecycle',role:'MEMBER'}})).json;
+  for(const person of [sameName,namedUnassigned])await call(`/projects/${pid}/groups/${lifecycleGroup.id}/members/${person.user.id}`,{jwt,method:'PUT'});
+  await call(`/projects/${pid}/tasks`,{jwt,method:'POST',body:{title:'lifecycle workload',assigneeGroupId:lifecycleGroup.id}});
+  const beforeRename=(await call(`/projects/${pid}/reports/tasks`,{jwt})).json;
+  await call(`/projects/${pid}/groups/${lifecycleGroup.id}`,{jwt,method:'PATCH',body:{name:'renamed workload lifecycle'}});
+  const afterRename=(await call(`/projects/${pid}/reports/tasks`,{jwt})).json;
+  check('task workload group rename changes label without identity or count',afterRename.total===beforeRename.total&&afterRename.perAssignee.find(r=>r.assigneeGroupId===lifecycleGroup.id)?.name==='renamed workload lifecycle'&&afterRename.perAssignee.find(r=>r.assigneeGroupId===lifecycleGroup.id)?.count===1&&!afterRename.perAssignee.some(r=>r.name==='workload lifecycle'));
+  const unassignedBefore=afterRename.perAssignee.find(r=>r.kind==='unassigned').count;
+  const removedGroup=await call(`/projects/${pid}/groups/${lifecycleGroup.id}`,{jwt,method:'DELETE'});
+  const afterGroupDelete=(await call(`/projects/${pid}/reports/tasks`,{jwt})).json;
+  check('task workload deleted group becomes one unassigned task without changing totals',removedGroup.status===200&&afterGroupDelete.total===afterRename.total&&!afterGroupDelete.perAssignee.some(r=>r.assigneeGroupId===lifecycleGroup.id)&&afterGroupDelete.perAssignee.find(r=>r.kind==='unassigned').count===unassignedBefore+1&&afterGroupDelete.perAssignee.reduce((n,r)=>n+r.count,0)===afterGroupDelete.byStatus.OPEN+afterGroupDelete.byStatus.IN_PROGRESS);
 
   // Access: member and read token can read; non-member and anonymous cannot.
   const member = (await call('/auth/signup', { method: 'POST', body: { email: `rpm${Date.now()}@t.dev`, password: 'pass1234', displayName: 'rpm' } })).json;

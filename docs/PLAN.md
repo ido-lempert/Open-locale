@@ -411,3 +411,7 @@ Progress key denominator and filled status groups now share one SQLstatement
 snapshot via scoped-key CTE/zero-preserving totals join. Project/locales/branch
 resolution remain separate, not whole-report snapshot. ExistingPGHTTP111 plus
 empty/retired-status singlequery units verified. See0270.
+
+Group workload fixture now has two actual members rather than an empty group.
+NormalAPI rename preserves stableID/count; deletion moves exactly one task to
+unassigned with totals unchanged. Sequential committed-change proof. See0271.
