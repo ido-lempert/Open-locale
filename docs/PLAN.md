@@ -537,3 +537,9 @@ QA locale discovery now independent with loading/fixedfailure/retry and own requ
 project/destroyfences. Actual metadata503/retry restoresoptions while findings and
 oneQAread remain unchanged. Three units/web176/11, QAbrowser11; review0295.
 NoAPI/query/schema or coverage/defaultOFF change.
+
+## Continuation230 - QA held locale discovery
+Actual heldmetadata retry proves independent status/selectorbusy with completed
+findings/count retained and no extraQAread; release settlesoptions/status without
+replacingtable. Test-only, QAbrowser12; review0296. Noapplication/API/schema or
+coverage/defaultOFF changes.
