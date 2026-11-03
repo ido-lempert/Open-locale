@@ -497,3 +497,10 @@ fetch. Actual quality503/retry click recovers progress+quality, preserves select
 branch and exact usage/task cutoff text. Selected-feature unit, web158/9,
 browser238; five-perspective review0289. No API/query/schema/provider changes;
 coverage22FULL/7PARTIAL/1MISSING/defaultOFF and snapshot caveats unchanged.
+
+## Continuation224 - inline branch-list retry
+Branch discovery now retries independently with request-generation/project/destroy
+fences, preserving selected branch and successful reports/dashboards. Actual503
+and realbuttonretry recover options with unchanged main/progress/usage/task
+cutoffs. Web161/9, browser239; five-perspective review0290. NoAPI/query/schema
+change; coverage22FULL/7PARTIAL/1MISSING/defaultOFF and snapshot caveats unchanged.

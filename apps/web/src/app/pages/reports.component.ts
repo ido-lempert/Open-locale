@@ -18,7 +18,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
     </header>
     <main [attr.aria-busy]="branchLoading() || dashboardsLoading()">
       @if (branchListLoading()) { <p role="status" name="branchListLoading">Loading branch list. Main reports are available independently.</p> }
-      @if (branchListError()) { <p class="error" role="alert" name="branchListError">Branch list unavailable. Only main is offered. Reload this page to try loading other branches.</p> }
+      @if (branchListError()) { <p class="error" role="alert" name="branchListError">Branch list unavailable. Retry loading branches or reload this page.</p><button type="button" name="retryBranches" (click)="void loadBranches()">Retry branch list</button> }
       @if (error(); as e) { <p class="error" role="alert" name="branchReportError">{{ e }}</p><button type="button" name="retryBranchReports" (click)="void fetch()">Retry branch reports</button> }
       @if (branchLoading()) { <p role="status" name="branchReportLoading">Loading progress and quality reports for {{ branch() }}...</p> }
       @if (report(); as r) {
@@ -133,6 +133,7 @@ export class ReportsComponent implements OnInit, OnDestroy {
   dashboardsLoading=signal(false);
   usageLoading=signal(false);
   usageDays=signal(30);
+  private branchListGeneration=0;
   private usageGeneration=0;
   private taskGeneration=0;
   tasksLoading=signal(false);
@@ -148,17 +149,20 @@ export class ReportsComponent implements OnInit, OnDestroy {
   }
   async loadProject(projectId:string) {
     if(this.destroyed)return;
-    const scope=++this.projectGeneration;++this.generation;this.projectId=projectId;
+    ++this.projectGeneration;++this.generation;this.projectId=projectId;
     this.usageDays.set(30);++this.usageGeneration;++this.taskGeneration;this.branch.set('main');this.branches.set([]);this.branchListError.set(false);this.branchListLoading.set(true);this.report.set(null);this.quality.set(null);
     this.usage.set(null);this.taskReport.set(null);this.statusColumns.set([]);this.error.set('');this.branchLoading.set(true);this.usageError.set(false);this.taskReportError.set(false);this.dashboardsLoading.set(true);this.usageLoading.set(true);this.tasksLoading.set(true);
-    const branchList=this.api.listBranches(projectId).then(branches=>{
-      if(!this.destroyed&&scope===this.projectGeneration)this.branches.set(branches);
-    }).catch(()=>{
-      if(!this.destroyed&&scope===this.projectGeneration)this.branchListError.set(true);
-    }).finally(()=>{
-      if(!this.destroyed&&scope===this.projectGeneration)this.branchListLoading.set(false);
-    });
-    await Promise.all([branchList,this.fetch(),this.ngOnInitDashboards()]);
+    await Promise.all([this.loadBranches(),this.fetch(),this.ngOnInitDashboards()]);
+  }
+
+  async loadBranches() {
+    if(this.destroyed)return;
+    const generation=++this.branchListGeneration,scope=this.projectGeneration,projectId=this.projectId;
+    const current=()=>!this.destroyed&&scope===this.projectGeneration&&generation===this.branchListGeneration;
+    this.branchListError.set(false);this.branchListLoading.set(true);
+    try { const branches=await this.api.listBranches(projectId);if(current())this.branches.set(branches); }
+    catch { if(current())this.branchListError.set(true); }
+    finally { if(current())this.branchListLoading.set(false); }
   }
 
   actionRows(u: UsageReport) {
