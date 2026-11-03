@@ -744,6 +744,16 @@ try {
   await page.reload({waitUntil:'networkidle0'});await page.waitForSelector('[name=usageActionsEmpty]');
   check('usage browser explains zero activity without inventing action counts',await page.$eval('[name=usageActionsEmpty]',e=>e.textContent.includes('No activity in this window'))&&await page.$eval('main',e=>e.textContent.includes('0 events touching 0 keys.'))&&!!await page.$('[name=usageActorsEmpty]')&&await page.$$eval('.usage-table:first-of-type tbody tr',rows=>rows.length===1));
   await page.screenshot({path:'/downloads/reports-no-activity-full.png',fullPage:true});
+  check('quality browser explains zero findings without inventing a result table',!!await page.$('[name=qualityEmpty]')&&!(await page.$('.quality-table'))&&await page.$eval('[name=qualityEmpty]',e=>e.textContent.includes('No findings from the current quality checks on main.'))&&await page.$eval('main',e=>e.textContent.includes('0 open findings across 0 keys on main.')));
+  await page.screenshot({path:'/downloads/reports-quality-empty-full.png',fullPage:true});
+  await prisma.projectLocale.create({data:{projectId:second.id,code:'he'}});
+  const qualityBranch=await prisma.branch.findFirstOrThrow({where:{projectId:second.id,name:'main'}});
+  const qualityFixture=await prisma.key.create({data:{projectId:second.id,branchId:qualityBranch.id,name:'quality-transition-fixture'}});
+  await prisma.translation.create({data:{keyId:qualityFixture.id,projectId:second.id,localeCode:'en',value:'Source'}});
+  await page.reload({waitUntil:'networkidle0'});await page.waitForSelector('.quality-table');
+  check('quality browser new untranslated finding replaces zero-findings message',!(await page.$('[name=qualityEmpty]'))&&await page.$eval('main',e=>e.textContent.includes('1 open findings across 1 keys on main.'))&&await page.$eval('.quality-table',e=>e.textContent.includes('untranslated')&&e.textContent.includes('he')));
+  await prisma.key.delete({where:{id:qualityFixture.id}});await prisma.projectLocale.delete({where:{projectId_code:{projectId:second.id,code:'he'}}});
+  await page.reload({waitUntil:'networkidle0'});await page.waitForSelector('[name=qualityEmpty]');
   check('task browser explicitly explains zero open workload',!!await page.$('[name=taskWorkloadEmpty]')&&!(await page.$('.tasks-table'))&&await page.$eval('[name=taskWorkloadEmpty]',e=>e.textContent.includes('No open tasks')));
   const doneOnlyTask=await prisma.task.create({data:{projectId:second.id,title:'completed-only report fixture',status:'DONE'}});
   await page.reload({waitUntil:'networkidle0'});await page.waitForSelector('[name=taskWorkloadEmpty]');

@@ -431,3 +431,12 @@ checks and fresh480fullpage verified. No API/querychange. See0274.
 Task report explicitly states No open tasks when workload empty, including DONE-
 only projects while retaining completed-task summary. Actualbrowser zero/DONE-only
 fixtures and fresh480fullpage verified. No API/querychange. See0275.
+
+Quality finding cardinality now has actualPGHTTP proof:4findings across2target
+locales on1key;type/locale sums reconcile and directQA endpoint count/keyidentity
+matches. Test-only, no applicationchange. See0276.
+
+Quality report now explicitly explains zero findings from current checks on the
+named branch, retaining numeric zero summary. Realbrowser zero->untranslated-
+finding->cleanup transition and fresh480fullpage verified. No APIquerychange or
+blanket translation-correctness claim. See0277.

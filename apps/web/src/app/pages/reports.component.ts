@@ -70,7 +70,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
             </tbody>
           </table>
           </div>
-        }
+        } @else { <p class="muted" name="qualityEmpty">No findings from the current quality checks on {{ q.branch }}.</p> }
       }
 
       <h2>Usage <span class="muted">last {{ usage()?.days ?? 30 }} days</span></h2>
