@@ -354,3 +354,7 @@ identitycue. Group-nullworkload semantics unchanged. See0256.
 Task reports now separate group workload by kind+stablegroupID rather than placing
 groupassignedtasks in unassigned. User/group/nullbucket counts oncepertask;UIgroup
 cue explicit. Same-namecollision/reconcileHTTP/browserverified. See0257.
+
+Usage days query requires decimal safeinteger when supplied;malformed/nonfinite/
+fractional/unsafe400. Missing30,validintegersclamp1..90,explicit0now1. NoUIchange.
+RealHTTP41/unitboundarytests verified. See0258.

@@ -110,6 +110,8 @@ try {
   check('usage: byDay covers today with all events', u.byDay.length === 1 && u.byDay[0].count === u.totalEvents, JSON.stringify(u.byDay));
   check('usage: top actor is the owner', u.topActors[0]?.name === 'rp' && u.topActors[0]?.count === u.totalEvents, JSON.stringify(u.topActors));
   check('usage: days clamped to 90', (await call(`/projects/${pid}/reports/usage?days=200`, { jwt })).json.days === 90);
+  for(const value of ['abc','NaN','Infinity','1.5','1e2',' ','','9007199254740992'])check(`usage rejects malformed days ${JSON.stringify(value)}`,(await call(`/projects/${pid}/reports/usage?days=${encodeURIComponent(value)}`,{jwt})).status===400);
+  check('usage zero and negative integers clamp to one day',(await call(`/projects/${pid}/reports/usage?days=0`,{jwt})).json.days===1&&(await call(`/projects/${pid}/reports/usage?days=-5`,{jwt})).json.days===1);
   const out2 = (await call('/auth/signup', { method: 'POST', body: { email: `rpu${Date.now()}@t.dev`, password: 'pass1234', displayName: 'out2' } })).json;
   check('usage: non-member rejected', [403, 404].includes((await call(`/projects/${pid}/reports/usage`, { jwt: out2.accessToken })).status));
   check('quality: non-member rejected', [403, 404].includes((await call(`/projects/${pid}/reports/quality`, { jwt: out2.accessToken })).status));

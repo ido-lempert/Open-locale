@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
@@ -85,7 +85,8 @@ export class ReportsService {
   // days, capped 1-90) - totals by action, by day, top actors, active keys.
   async usage(userId: string, projectId: string, daysRaw?: number) {
     await this.projects.getFor(userId, projectId);
-    const days = Math.min(Math.max(daysRaw || 30, 1), 90);
+    if(daysRaw!==undefined&&!Number.isSafeInteger(daysRaw))throw new BadRequestException('Usage days must be a finite safe integer');
+    const days = Math.min(Math.max(daysRaw ?? 30, 1), 90);
     const since = new Date(Date.now() - days * 86400_000);
     const byAction = await this.prisma.activityEvent.groupBy({
       by: ['action'], where: { projectId, createdAt: { gte: since } }, _count: { _all: true },

@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { ReportsService } from './reports.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -21,7 +21,8 @@ export class ReportsController {
 
   @Get('usage')
   usage(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Query('days') days?: string) {
-    return this.reports.usage(user.userId, projectId, days ? Number(days) : undefined);
+    if(days!==undefined&&(typeof days!=='string'||! /^-?\d+$/.test(days)))throw new BadRequestException('Usage days must be an integer');
+    return this.reports.usage(user.userId, projectId, days===undefined?undefined:Number(days));
   }
 
   @Get('tasks')
