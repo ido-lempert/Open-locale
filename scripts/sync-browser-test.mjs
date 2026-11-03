@@ -815,6 +815,11 @@ try {
   await page.screenshot({path:'/downloads/reports-actor-identity-narrow.png'});
   await page.screenshot({path:'/downloads/reports-usage-window-full.png',fullPage:true});
   await page.screenshot({path:'/downloads/reports-task-window-full.png',fullPage:true});
+  const taskBeforeWindow=await page.$eval('[name=taskWindow]',e=>e.textContent);
+  const sevenResponse=page.waitForResponse(r=>r.url().includes('/reports/usage?days=7')&&r.status()===200);
+  await page.select('[name=usageDays]','0: 7');const seven=await (await sevenResponse).json();await page.waitForSelector('[name=usageWindow]');
+  check('usage window picker requests seven days and preserves task cutoff',seven.days===7&&Date.parse(seven.asOf)-Date.parse(seven.since)===7*86400000&&await page.$eval('[name=usageWindow]',(e,u)=>e.textContent.includes(u.since)&&e.textContent.includes(u.asOf),seven)&&await page.$eval('[name=taskWindow]',(e,text)=>e.textContent===text,taskBeforeWindow));
+  await page.screenshot({path:'/downloads/reports-seven-day-window-full.png',fullPage:true});
   await page.evaluate(t=>localStorage.setItem('ol_token',t),member.accessToken);
   await page.goto(`${WEB}/projects/${project.id}/sync`,{waitUntil:'networkidle0'});await page.waitForSelector('textarea[name=syncBaseline]');
   await set('syncSha','a'.repeat(40));await set('syncBaseline','{}');await set('syncRemote','{}');await page.click('button[name=syncPreview]');await page.waitForSelector('[role=alert]');

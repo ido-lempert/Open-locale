@@ -77,7 +77,8 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
       }
 
       <p class="muted" name="projectDashboardScope">Usage and tasks cover the whole project. The branch selector filters progress and quality only.</p>
-      <h2>Usage <span class="muted">last {{ usage()?.days ?? 30 }} days</span></h2>
+      <h2>Usage <span class="muted">last {{ usage()?.days ?? usageDays() }} days</span></h2>
+      <label>Usage window <select name="usageDays" aria-label="Usage window" [ngModel]="usageDays()" (ngModelChange)="usageDays.set(+$event); void loadUsage()"><option [ngValue]="7">7 days</option><option [ngValue]="30">30 days</option><option [ngValue]="90">90 days</option></select></label>
       @if (usageLoading()) { <p role="status" name="usageLoading">Loading usage report...</p> }
       @if (usageError()) { <p class="error" role="alert" name="usageReportError">Usage report unavailable. No usage figures are shown. Reload this page to try again.</p> }
       @if (usage(); as u) {
@@ -131,6 +132,8 @@ export class ReportsComponent implements OnInit, OnDestroy {
   taskReportError=signal(false);
   dashboardsLoading=signal(false);
   usageLoading=signal(false);
+  usageDays=signal(30);
+  private usageGeneration=0;
   tasksLoading=signal(false);
   private generation=0;
   private destroyed=false;
@@ -145,7 +148,7 @@ export class ReportsComponent implements OnInit, OnDestroy {
   async loadProject(projectId:string) {
     if(this.destroyed)return;
     const scope=++this.projectGeneration;++this.generation;this.projectId=projectId;
-    this.branch.set('main');this.branches.set([]);this.branchListError.set(false);this.branchListLoading.set(true);this.report.set(null);this.quality.set(null);
+    this.usageDays.set(30);++this.usageGeneration;this.branch.set('main');this.branches.set([]);this.branchListError.set(false);this.branchListLoading.set(true);this.report.set(null);this.quality.set(null);
     this.usage.set(null);this.taskReport.set(null);this.statusColumns.set([]);this.error.set('');this.branchLoading.set(true);this.usageError.set(false);this.taskReportError.set(false);this.dashboardsLoading.set(true);this.usageLoading.set(true);this.tasksLoading.set(true);
     const branchList=this.api.listBranches(projectId).then(branches=>{
       if(!this.destroyed&&scope===this.projectGeneration)this.branches.set(branches);
@@ -177,6 +180,16 @@ export class ReportsComponent implements OnInit, OnDestroy {
     finally { if(!this.destroyed&&generation===this.generation)this.branchLoading.set(false); }
   }
 
+  async loadUsage() {
+    if(this.destroyed)return;
+    const generation=++this.usageGeneration,scope=this.projectGeneration,projectId=this.projectId,days=this.usageDays();
+    const current=()=>!this.destroyed&&scope===this.projectGeneration&&generation===this.usageGeneration;
+    this.usage.set(null);this.usageError.set(false);this.usageLoading.set(true);this.dashboardsLoading.set(true);
+    try { const value=await this.api.getUsage(projectId,days);if(current())this.usage.set(value); }
+    catch { if(current())this.usageError.set(true); }
+    finally { if(current()){this.usageLoading.set(false);this.dashboardsLoading.set(this.tasksLoading());} }
+  }
+
   async ngOnInitDashboards() {
     if(this.destroyed)return;
     const scope=this.projectGeneration,projectId=this.projectId;
@@ -184,7 +197,7 @@ export class ReportsComponent implements OnInit, OnDestroy {
     const current=()=>!this.destroyed&&scope===this.projectGeneration;
     const settle=()=>{if(current())this.dashboardsLoading.set(this.usageLoading()||this.tasksLoading());};
     await Promise.all([
-      this.api.getUsage(projectId).then(value=>{if(current())this.usage.set(value);}).catch(()=>{if(current())this.usageError.set(true);}).finally(()=>{if(current())this.usageLoading.set(false);settle();}),
+      this.loadUsage(),
       this.api.getTaskReport(projectId).then(value=>{if(current())this.taskReport.set(value);}).catch(()=>{if(current())this.taskReportError.set(true);}).finally(()=>{if(current())this.tasksLoading.set(false);settle();}),
     ]);
   }

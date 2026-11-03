@@ -473,3 +473,8 @@ Usage/tasks now publish independently with separatesectionloading while mainbusy
 covers eitherpending. Project/destroy fences retained perresult/error/finally.
 Heldsiblingunits and actualheldusagebrowser verify completedtasksvisible before
 usagefinishes. NoAPIquerychange/synchronizedsnapshotclaim. See0284.
+
+Usage window picker offers7/30/90days with default30/projectreset. Refreshesusage
+only; sameprojectrequestgeneration fences lateoldwindow success/error/loading.
+Unitfences and actualbrowser7dayresponse/taskcutoffunchanged verified. NoAPIquery
+change or synchronizedsnapshotclaim. See0285.
