@@ -230,6 +230,15 @@ try {
   const afterGroupDelete=(await call(`/projects/${pid}/reports/tasks`,{jwt})).json;
   check('task workload deleted group becomes one unassigned task without changing totals',removedGroup.status===200&&afterGroupDelete.total===afterRename.total&&!afterGroupDelete.perAssignee.some(r=>r.assigneeGroupId===lifecycleGroup.id)&&afterGroupDelete.perAssignee.find(r=>r.kind==='unassigned').count===unassignedBefore+1&&afterGroupDelete.perAssignee.reduce((n,r)=>n+r.count,0)===afterGroupDelete.byStatus.OPEN+afterGroupDelete.byStatus.IN_PROGRESS);
 
+  const qualityProject=(await call('/projects',{jwt,method:'POST',body:{name:'Quality counts',slug:'quality-counts-'+Date.now(),baseLocale:'en',locales:['en','he','fr']}})).json;
+  const qualityKey=(await call(`/projects/${qualityProject.id}/keys`,{jwt,method:'POST',body:{name:'multi-issue'}})).json;
+  for(const [locale,value] of [['en','Hello {name} 123'],['he','שלום 456'],['fr','Bonjour 789']])await call(`/projects/${qualityProject.id}/keys/${qualityKey.id}/translations`,{jwt,method:'PUT',body:{locale,value}});
+  const multiQuality=(await call(`/projects/${qualityProject.id}/reports/quality`,{jwt})).json;
+  const directQa=(await call(`/projects/${qualityProject.id}/qa`,{jwt})).json;
+  check('quality report counts multiple findings across locales but one distinct key',multiQuality.totalIssues===4&&multiQuality.keysWithIssues===1&&multiQuality.byType.placeholder_mismatch===2&&multiQuality.byType.number_mismatch===2&&multiQuality.types.join(',')==='number_mismatch,placeholder_mismatch');
+  check('quality locale and type counts reconcile without cross-locale duplication',multiQuality.locales.map(l=>l.locale).join(',')==='fr,he'&&multiQuality.locales.every(l=>l.total===2&&l.byType.number_mismatch===1&&l.byType.placeholder_mismatch===1)&&multiQuality.locales.reduce((n,l)=>n+l.total,0)===multiQuality.totalIssues&&Object.values(multiQuality.byType).reduce((n,c)=>n+c,0)===multiQuality.totalIssues);
+  check('quality report uses same findings as direct QA endpoint',directQa.issues.length===multiQuality.totalIssues&&new Set(directQa.issues.map(i=>i.keyId)).size===multiQuality.keysWithIssues&&directQa.issues.every(i=>i.keyId===qualityKey.id));
+
   // Access: member and read token can read; non-member and anonymous cannot.
   const member = (await call('/auth/signup', { method: 'POST', body: { email: `rpm${Date.now()}@t.dev`, password: 'pass1234', displayName: 'rpm' } })).json;
   await call(`/projects/${pid}/members`, { jwt, method: 'POST', body: { email: member.user.email } });
