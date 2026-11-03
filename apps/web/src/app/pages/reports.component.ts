@@ -80,7 +80,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
       <h2>Usage <span class="muted">last {{ usage()?.days ?? usageDays() }} days</span></h2>
       <label>Usage window <select name="usageDays" aria-label="Usage window" [ngModel]="usageDays()" (ngModelChange)="usageDays.set(+$event); void loadUsage()"><option [ngValue]="7">7 days</option><option [ngValue]="30">30 days</option><option [ngValue]="90">90 days</option></select></label>
       @if (usageLoading()) { <p role="status" name="usageLoading">Loading usage report...</p> }
-      @if (usageError()) { <p class="error" role="alert" name="usageReportError">Usage report unavailable. No usage figures are shown. Reload this page to try again.</p> }
+      @if (usageError()) { <p class="error" role="alert" name="usageReportError">Usage report unavailable. No usage figures are shown. Retry the selected window or reload this page.</p><button type="button" name="retryUsage" (click)="void loadUsage()">Retry usage</button> }
       @if (usage(); as u) {
         <p class="muted">{{ u.totalEvents }} events touching {{ u.activeKeys }} keys.</p>
         <p class="muted" name="usageWindow" style="overflow-wrap:anywhere">Captured window: <time>{{ u.since }}</time> through <time>{{ u.asOf }}</time>. UTC calendar days. Separate reads are not one database snapshot.</p>

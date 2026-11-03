@@ -482,3 +482,7 @@ change or synchronizedsnapshotclaim. See0285.
 Usagewindow sameprojectfence now has actualbrowser hold90->finish30->releaselate90
 proof: pendingselectionclearsfigures, latestselection/bounds/loading/taskcutoff
 retained. Test-only, noapplicationchange. See0286.
+
+Failedusage now offers inlineRetryusage for selectedwindow without refreshingtasks.
+Actualbrowser failed7day/read-onlyretryclick verifies7dayresponsebounds/recovery/
+unchangedtaskcutoff. Existingrequestfences reused. NoAPIquerychange. See0287.
