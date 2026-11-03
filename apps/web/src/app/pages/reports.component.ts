@@ -86,7 +86,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
         </table>
         <table class="qa-table usage-table">
           <thead><tr><th class="row-head">Top 5 actors</th><th>Events</th></tr></thead>
-          <tbody>@for (a of u.topActors; track a.actorId) { <tr><td>{{ a.name }}<small class="muted" style="display:block;overflow-wrap:anywhere">{{ a.actorId }}</small></td><td>{{ a.count }}</td></tr> }</tbody>
+          <tbody>@for (a of u.topActors; track a.actorId) { <tr><td>{{ a.name }}<small class="muted" style="display:block;overflow-wrap:anywhere">{{ a.actorId }}</small></td><td>{{ a.count }}</td></tr> } @empty { <tr name="usageActorsEmpty"><td colspan="2" class="muted">No attributed actors in this window.</td></tr> }</tbody>
         </table>
         </div>
       }

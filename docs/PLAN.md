@@ -419,3 +419,7 @@ unassigned with totals unchanged. Sequential committed-change proof. See0271.
 Usage UI now shows exact captured since/asOf window, UTCcalendar note and separate-
 reads snapshot caveat; actor ranking labeled Top5. Actualbrowser response-to-text
 checks and fresh480fullpage inspected. Normalverticalscroll, no querychange. See0272.
+
+Usage actor table now explains an empty attributed ranking without hiding null-
+actor activity totals. Actualnull-onlyevent/browserfixture and fresh480fullpage
+verified. No API/querychange. See0273.
