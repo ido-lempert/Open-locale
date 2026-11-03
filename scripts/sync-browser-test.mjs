@@ -741,9 +741,13 @@ try {
   await page.reload({waitUntil:'networkidle0'});await page.waitForSelector('[name=branchReportError]');await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');
   check('failed branch report shows fixed guidance no partial figures or raw detail',await page.$eval('[name=branchReportError]',e=>e.textContent.includes('No branch figures are shown')&&e.textContent.includes('Choose a branch again'))&&!(await page.content()).includes('private-quality-detail')&&!(await page.$('.progress-table'))&&!(await page.content()).includes('open findings across')&&!(await page.$('[name=branchReportLoading]'))&&!!await page.$('.usage-table'));
   await page.screenshot({path:'/downloads/reports-branch-unavailable-narrow.png'});page.off('request',failQuality);await page.setRequestInterception(false);
+  await page.reload({waitUntil:'networkidle0'});await page.waitForSelector('[name=usageActionsEmpty]');
+  check('usage browser explains zero activity without inventing action counts',await page.$eval('[name=usageActionsEmpty]',e=>e.textContent.includes('No activity in this window'))&&await page.$eval('main',e=>e.textContent.includes('0 events touching 0 keys.'))&&!!await page.$('[name=usageActorsEmpty]')&&await page.$$eval('.usage-table:first-of-type tbody tr',rows=>rows.length===1));
+  await page.screenshot({path:'/downloads/reports-no-activity-full.png',fullPage:true});
   await prisma.activityEvent.create({data:{projectId:second.id,actorId:null,action:'unattributed.fixture'}});
   await page.reload({waitUntil:'networkidle0'});await page.waitForSelector('[name=usageActorsEmpty]');
   check('usage browser explains empty actor ranking while retaining null-actor event total',await page.$eval('[name=usageActorsEmpty]',e=>e.textContent.includes('No attributed actors in this window'))&&await page.$eval('main',e=>e.textContent.includes('1 events touching 0 keys.'))&&await page.$$eval('.usage-table:nth-of-type(2) tbody tr',rows=>rows.length===1));
+  check('usage browser null-actor activity does not show no-activity placeholder',!(await page.$('[name=usageActionsEmpty]')));
   await page.screenshot({path:'/downloads/reports-unattributed-window-full.png',fullPage:true});
   await prisma.activityEvent.deleteMany({where:{projectId:second.id,action:'unattributed.fixture'}});
   const duplicateAssignee=await prisma.user.create({data:{email:`duplicate-${Date.now()}@fixture.test`,displayName:'Same assignee',passwordHash:'not-a-login'}});const otherAssignee=await prisma.user.create({data:{email:`other-${Date.now()}@fixture.test`,displayName:'Same assignee',passwordHash:'not-a-login'}});

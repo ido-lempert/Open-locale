@@ -423,3 +423,7 @@ checks and fresh480fullpage inspected. Normalverticalscroll, no querychange. See
 Usage actor table now explains an empty attributed ranking without hiding null-
 actor activity totals. Actualnull-onlyevent/browserfixture and fresh480fullpage
 verified. No API/querychange. See0273.
+
+Usage action table now explicitly states no activity for an empty window,
+distinct from no attributed actors. Actualzero-event/null-actortransition browser
+checks and fresh480fullpage verified. No API/querychange. See0274.

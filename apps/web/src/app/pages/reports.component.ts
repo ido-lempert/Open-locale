@@ -82,7 +82,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
         <div class="table-scroll">
         <table class="qa-table usage-table">
           <thead><tr><th class="row-head">Action</th><th>Events</th></tr></thead>
-          <tbody>@for (a of actionRows(u); track a.action) { <tr><td><code>{{ a.action }}</code></td><td>{{ a.count }}</td></tr> }</tbody>
+          <tbody>@for (a of actionRows(u); track a.action) { <tr><td><code>{{ a.action }}</code></td><td>{{ a.count }}</td></tr> } @empty { <tr name="usageActionsEmpty"><td colspan="2" class="muted">No activity in this window.</td></tr> }</tbody>
         </table>
         <table class="qa-table usage-table">
           <thead><tr><th class="row-head">Top 5 actors</th><th>Events</th></tr></thead>
