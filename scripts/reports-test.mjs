@@ -115,6 +115,14 @@ try {
   check('quality: non-member rejected', [403, 404].includes((await call(`/projects/${pid}/reports/quality`, { jwt: out2.accessToken })).status));
   check('tasks report: non-member rejected', [403, 404].includes((await call(`/projects/${pid}/reports/tasks`, { jwt: out2.accessToken })).status));
 
+  const sameName=(await call('/auth/signup',{method:'POST',body:{email:`same${Date.now()}@t.dev`,password:'pass1234',displayName:'rp'}})).json;
+  const namedUnassigned=(await call('/auth/signup',{method:'POST',body:{email:`unassigned${Date.now()}@t.dev`,password:'pass1234',displayName:'unassigned'}})).json;
+  for(const person of [sameName,namedUnassigned]){await call(`/projects/${pid}/members`,{jwt,method:'POST',body:{email:person.user.email}});await call(`/projects/${pid}/tasks`,{jwt,method:'POST',body:{title:'identity bucket',assigneeId:person.user.id}});}
+  const identities=(await call(`/projects/${pid}/reports/tasks`,{jwt})).json;
+  check('task report groups same display names by distinct stable identity',identities.perAssignee.filter(a=>a.name==='rp').length===2&&identities.perAssignee.some(a=>a.assigneeId===ownerId&&a.count===1)&&identities.perAssignee.some(a=>a.assigneeId===sameName.user.id&&a.count===1));
+  check('task report separates named unassigned person from null bucket',identities.perAssignee.filter(a=>a.name==='unassigned').length===2&&identities.perAssignee.some(a=>a.assigneeId===null&&a.count===1)&&identities.perAssignee.some(a=>a.assigneeId===namedUnassigned.user.id&&a.count===1));
+  check('task report identity buckets reconcile with all open tasks',identities.perAssignee.length===4&&identities.perAssignee.reduce((n,a)=>n+a.count,0)===identities.byStatus.OPEN+identities.byStatus.IN_PROGRESS);
+
   // Access: member and read token can read; non-member and anonymous cannot.
   const member = (await call('/auth/signup', { method: 'POST', body: { email: `rpm${Date.now()}@t.dev`, password: 'pass1234', displayName: 'rpm' } })).json;
   await call(`/projects/${pid}/members`, { jwt, method: 'POST', body: { email: member.user.email } });

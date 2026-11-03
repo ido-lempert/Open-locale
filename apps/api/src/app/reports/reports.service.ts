@@ -138,15 +138,16 @@ export class ReportsService {
       where: { projectId, status: { not: 'DONE' } },
       select: { assigneeId: true, assignee: { select: { displayName: true } } },
     });
-    const perAssignee = new Map<string, number>();
+    const perAssignee = new Map<string | null, { assigneeId:string|null; name:string; count:number }>();
     for (const t of openRows) {
-      const name = t.assignee?.displayName ?? 'unassigned';
-      perAssignee.set(name, (perAssignee.get(name) ?? 0) + 1);
+      const id=t.assigneeId;
+      const row=perAssignee.get(id)??{assigneeId:id,name:t.assignee?.displayName??'unassigned',count:0};
+      row.count++;perAssignee.set(id,row);
     }
     const total = byStatus.OPEN + byStatus.IN_PROGRESS + byStatus.DONE;
     return {
       total, byStatus, overdue, dueSoon,
-      perAssignee: [...perAssignee.entries()].sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count })),
+      perAssignee: [...perAssignee.values()].sort((a,b)=>b.count-a.count||(a.assigneeId??'').localeCompare(b.assigneeId??'')),
     };
   }
 }

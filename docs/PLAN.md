@@ -346,3 +346,7 @@ old project errors fenced. Actual usage503/browser proof. See0254.
 Progress/quality report failures now use fixed guidance,not raw serverdetails.
 Explicit branchloading/status/mainaria-busy respect stale-response fencing;
 quality503browser proves no partialfigures and successfulusage/tasksretained. See0255.
+
+Task report workload groups by stable nullableassigneeID,not displayname. Same-name
+people and person named unassigned remain distinct from nullbucket. UI shows full
+identitycue. Group-nullworkload semantics unchanged. See0256.

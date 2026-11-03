@@ -81,3 +81,7 @@ Final480x900image inspected;existing table scrolling retained. Browser208checks.
 Slice189 local quality503fixture shows full fixed branchreportunavailable/retry
 notice,no progress/qualityfigures,retainsusage/tasks,norawdetails/staleloading.
 Final480x900image inspected;layoutunchanged. Browser209checks.
+
+Slice190 actualsame-nameassigneefixture renders two distinct fullIDrows and null
+Noassigneebucket at480x900,eachcount1readable/tablefits. Finalimageinspected.
+Browser210/reportsHTTP30 verify separateidentitycounts;noexternalaccountsused.

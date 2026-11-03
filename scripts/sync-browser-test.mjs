@@ -741,6 +741,11 @@ try {
   await page.reload({waitUntil:'networkidle0'});await page.waitForSelector('[name=branchReportError]');await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');
   check('failed branch report shows fixed guidance no partial figures or raw detail',await page.$eval('[name=branchReportError]',e=>e.textContent.includes('No branch figures are shown')&&e.textContent.includes('Choose a branch again'))&&!(await page.content()).includes('private-quality-detail')&&!(await page.$('.progress-table'))&&!(await page.content()).includes('open findings across')&&!(await page.$('[name=branchReportLoading]'))&&!!await page.$('.usage-table'));
   await page.screenshot({path:'/downloads/reports-branch-unavailable-narrow.png'});page.off('request',failQuality);await page.setRequestInterception(false);
+  const duplicateAssignee=await prisma.user.create({data:{email:`duplicate-${Date.now()}@fixture.test`,displayName:'Same assignee',passwordHash:'not-a-login'}});const otherAssignee=await prisma.user.create({data:{email:`other-${Date.now()}@fixture.test`,displayName:'Same assignee',passwordHash:'not-a-login'}});
+  for(const assigneeId of [duplicateAssignee.id,otherAssignee.id,null])await prisma.task.create({data:{projectId:second.id,title:'report identity fixture',creatorId:owner.user.id,assigneeId}});
+  await page.reload({waitUntil:'networkidle0'});await page.waitForSelector('.tasks-table');
+  check('task report browser renders separate same-name stable identity rows and null bucket',await page.$$eval('.tasks-table tbody tr',(rows,ids)=>rows.length===3&&ids.every(id=>rows.some(r=>r.textContent.includes(id)))&&rows.some(r=>r.textContent.includes('No assignee')),[duplicateAssignee.id,otherAssignee.id]));
+  await page.screenshot({path:'/downloads/reports-assignee-identity-narrow.png'});
   await page.evaluate(t=>localStorage.setItem('ol_token',t),member.accessToken);
   await page.goto(`${WEB}/projects/${project.id}/sync`,{waitUntil:'networkidle0'});await page.waitForSelector('textarea[name=syncBaseline]');
   await set('syncSha','a'.repeat(40));await set('syncBaseline','{}');await set('syncRemote','{}');await page.click('button[name=syncPreview]');await page.waitForSelector('[role=alert]');
