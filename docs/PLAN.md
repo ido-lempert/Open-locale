@@ -389,3 +389,7 @@ locales. Test-only. See0264.
 All four report routes validate projectId as UUID before service/Prisma work.
 ActualHTTP malformed400/validunknown404/anonymousmalformed401 verified perroute.
 Project authorization remains separate. See0265.
+
+Successful report responses now explicitly use Cache-Control:no-store, verified
+on all four routes with member session and read token. No earlier-cache erasure,
+client-memory erasure or blanket error-response claim. See0266.

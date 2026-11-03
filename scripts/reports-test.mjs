@@ -20,7 +20,7 @@ async function call(path, { jwt, token, method = 'GET', body } = {}) {
   if (jwt) headers.Authorization = `Bearer ${jwt}`;
   if (token) headers['X-Api-Key'] = token;
   const res = await fetch(`${API}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined });
-  return { status: res.status, json: await res.json().catch(() => null) };
+  return { status: res.status, json: await res.json().catch(() => null), cacheControl:res.headers.get('cache-control') };
 }
 
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-rp-'));
@@ -205,6 +205,13 @@ try {
   check('member can read progress', (await call(`/projects/${pid}/reports/progress`, { jwt: member.accessToken })).status === 200);
   const rtok = (await call('/auth/tokens', { jwt, method: 'POST', body: { name: 'sdk', scopes: ['read'] } })).json.token;
   check('read token can read progress', (await call(`/projects/${pid}/reports/progress`, { token: rtok })).status === 200);
+  for(const route of ['progress','quality','usage','tasks']){
+    const sessionReport=await call(`/projects/${pid}/reports/${route}`,{jwt:member.accessToken});
+    check(`reports ${route} member session response explicitly no-store`,sessionReport.status===200&&sessionReport.cacheControl==='no-store');
+    const tokenReport=await call(`/projects/${pid}/reports/${route}`,{token:rtok});
+    check(`reports ${route} read token response explicitly no-store`,tokenReport.status===200&&tokenReport.cacheControl==='no-store');
+  }
+
   const out = (await call('/auth/signup', { method: 'POST', body: { email: `rpo${Date.now()}@t.dev`, password: 'pass1234', displayName: 'out' } })).json;
   check('non-member rejected', [403, 404].includes((await call(`/projects/${pid}/reports/progress`, { jwt: out.accessToken })).status));
   check('anonymous rejected (401)', (await fetch(`${API}/projects/${pid}/reports/progress`)).status === 401);
