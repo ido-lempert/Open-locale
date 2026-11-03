@@ -543,3 +543,9 @@ Actual heldmetadata retry proves independent status/selectorbusy with completed
 findings/count retained and no extraQAread; release settlesoptions/status without
 replacingtable. Test-only, QAbrowser12; review0296. Noapplication/API/schema or
 coverage/defaultOFF changes.
+
+## Continuation231 - Explicit QA refresh
+Run checks again reuses fenced readonlyloader with disabledpending control. Actual
+translationrepair/refreshclick reduces5to3findings, preservesselectedHebrew/no
+metadatareload. QAbrowser14, review0297. NoAPI/query/schema or coverage/defaultOFF
+changes; explicitrefresh, notlivepolling or translationcertification.

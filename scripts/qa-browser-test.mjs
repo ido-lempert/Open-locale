@@ -57,6 +57,16 @@ try {
   check('both plural category findings render distinctly without duplicate tracking diagnostics',pluralRows.length===2&&pluralRows.some(t=>t.includes('category "one"'))&&pluralRows.some(t=>t.includes('category "other"'))&&!diagnostics.some(t=>/NG0955|duplicat.*track/i.test(t)));
   check('finding table fits narrow document and keeps separated columns',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)&&await page.$eval('.qa-table',e=>getComputedStyle(e).borderCollapse==='collapse')&&await page.$eval('.qa-table td',e=>parseFloat(getComputedStyle(e).paddingLeft)>=8));
   await page.screenshot({path:'/downloads/qa-plural-findings-full.png',fullPage:true});await page.$eval('.table-scroll',e=>e.scrollLeft=e.scrollWidth);await page.screenshot({path:'/downloads/qa-plural-details-full.png',fullPage:true});
+  await page.select('[name=qaLocale]','he');await page.waitForSelector('[name=qaCount]');
+  await call(`${P}/keys/${plural.id}/translations`,{locale:'he',value:'items',pluralForms:{one:'{count} item',other:'{count} items'}},token,'PUT');
+  let refreshHeld=false,releaseRefresh,metadataReads=0;const refreshGate=new Promise(r=>releaseRefresh=r);await page.setRequestInterception(true);
+  const refreshHandler=async req=>{const path=new URL(req.url()).pathname;if(path===`/api/projects/${project.id}`)metadataReads++;if(path===`/api/projects/${project.id}/qa`){refreshHeld=true;await refreshGate;}return req.continue();};page.on('request',refreshHandler);
+  await page.click('[name=refreshQa]');for(let n=0;n<50&&!refreshHeld;n++)await new Promise(r=>setTimeout(r,20));if(!refreshHeld)throw new Error('QA refresh not held');await page.waitForSelector('[name=qaLoading]');
+  check('explicit QA refresh clears old findings and disables repeat while pending',await page.$eval('[name=refreshQa]',e=>e.disabled)&&!(await page.$('.qa-table'))&&!(await page.$('[name=qaCount]'))&&await page.$eval('[name=qaLocale]',e=>e.value==='he'));
+  const refreshedResponse=page.waitForResponse(r=>new URL(r.url()).pathname===`/api/projects/${project.id}/qa`);releaseRefresh();const refreshed=await (await refreshedResponse).json();await page.waitForSelector('[name=qaCount]');page.off('request',refreshHandler);await page.setRequestInterception(false);
+  check('real refresh reflects changed translations with selected locale and no metadata reload',refreshed.issues.length===3&&!(await page.$eval('.qa-table',e=>e.textContent.includes('plural.categories')))&&await page.$eval('[name=qaCount]',e=>e.textContent==='3 issues')&&await page.$eval('[name=qaLocale]',e=>e.value==='he')&&metadataReads===0&&await page.$eval('[name=refreshQa]',e=>!e.disabled));
+  await page.screenshot({path:'/downloads/qa-refreshed-findings-full.png',fullPage:true});
+  await page.select('[name=qaLocale]','');await page.waitForSelector('[name=qaCount]');
   let held=false,release;const gate=new Promise(r=>release=r);await page.setRequestInterception(true);
   const hold=async req=>{if(new URL(req.url()).pathname===`/api/projects/${project.id}/qa`&&new URL(req.url()).searchParams.get('locale')==='he'){held=true;await gate;}return req.continue();};page.on('request',hold);
   await page.select('[name=qaLocale]','he');for(let n=0;n<50&&!held;n++)await new Promise(r=>setTimeout(r,20));if(!held)throw new Error('QA locale not held');
