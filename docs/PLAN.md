@@ -450,3 +450,7 @@ Task report failure/recovery now has actualbrowser task-only503 evidence: fixed
 guidance/no stale taskfigures/window, successful siblings retained, explicitreload
 recovers zero summary/workload without stale error. Test-only, not memory erasure
 or externalservice outage proof. See0279.
+
+Report scope now explicitly states usage/tasks cover wholeproject; branchselector
+filters progress/quality only. Actual heldbranchbrowser verifies projectdashboard
+text/cutoffs stay unchanged while branchpair loads. No APIquerychange. See0280.

@@ -73,6 +73,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
         } @else { <p class="muted" name="qualityEmpty">No findings from the current quality checks on {{ q.branch }}.</p> }
       }
 
+      <p class="muted" name="projectDashboardScope">Usage and tasks cover the whole project. The branch selector filters progress and quality only.</p>
       <h2>Usage <span class="muted">last {{ usage()?.days ?? 30 }} days</span></h2>
       @if (dashboardsLoading()) { <p role="status">Loading usage and task reports...</p> }
       @if (usageError()) { <p class="error" role="alert" name="usageReportError">Usage report unavailable. No usage figures are shown. Reload this page to try again.</p> }
