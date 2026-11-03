@@ -555,3 +555,9 @@ Activity dropdown now offers11previouslymissing declaredserveractions for task/
 glossary/screenshot/MT/automation/embedorigins. Exactdeclaredset unit and actual
 taskcreate/filter proof; web177/11, activitybrowser9, review0298. NoAPI/query/
 schema or coverage/defaultOFF change; no neweventdetail/retention guarantee.
+
+## Continuation233 - Activity task and glossary details
+Existing bounded tasktitle/term snapshots now shown for fivecreated/updated/deleted
+eventkinds. String-only extraction and real literalmarkup rendering tested; web182/
+11, activitybrowser11, review0299. NoAPI/query/schema/newfield or coverage/defaultOFF
+change; eventnames are snapshots, not live/currentstate links.

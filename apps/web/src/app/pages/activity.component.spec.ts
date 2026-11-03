@@ -16,3 +16,8 @@ describe('activity scope and pagination',()=>{
 describe('activity action vocabulary',()=>{
  it('offers every declared server action with a readable label',()=>{const {readFileSync}=require('node:fs');const {join}=require('node:path');const source=readFileSync(join(__dirname,'../../../../api/src/app/activity/activity.service.ts'),'utf8');const block=source.split('export const ACTIVITY_ACTIONS = [')[1].split('] as const')[0];const actions=[...block.matchAll(/'([^']+)'/g)].map(m=>m[1]);const c=make({});expect([...c.actions].sort()).toEqual(actions.sort());for(const action of actions)expect(c.label(action)).not.toBe(action);expect(c.label('future.action')).toBe('future.action');});
 });
+
+
+describe('activity task and glossary identity details',()=>{
+ for(const [action,field] of [['task.created','title'],['task.deleted','title'],['glossary.created','term'],['glossary.updated','term'],['glossary.deleted','term']])it(`${action} uses only existing string snapshot`,()=>{const c=make({});expect(c.detailText({action,detail:{[field]:'<b>literal</b>'}} as never)).toBe('<b>literal</b>');for(const value of [null,42,{},['private']])expect(c.detailText({action,detail:{[field]:value}} as never)).toBe('');expect(c.detailText({action,detail:null} as never)).toBe('');});
+});

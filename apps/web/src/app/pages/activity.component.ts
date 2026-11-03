@@ -136,6 +136,13 @@ export class ActivityComponent implements OnInit, OnDestroy {
   detailText(ev: ActivityEntry): string {
     const d = ev.detail ?? {};
     switch (ev.action) {
+      case 'task.created':
+      case 'task.deleted':
+        return typeof d['title']==='string' ? d['title'] : '';
+      case 'glossary.created':
+      case 'glossary.updated':
+      case 'glossary.deleted':
+        return typeof d['term']==='string' ? d['term'] : '';
       case 'translation.value':
         return d['previousValue'] ? `"${d['previousValue']}" → "${d['value']}"` : `"${d['value']}"`;
       case 'translation.status':
