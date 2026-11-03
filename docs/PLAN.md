@@ -511,3 +511,10 @@ retry. Reused route/request/project/destroy fences prevent late findings/metadat
 from crossing scope. Six units plus dedicated actualPG/Chrome QA6 browser checks;
 web167/10. Pending/error are not zero-success. Five-perspective review0291.
 NoAPI/query/schema/provider changes or coverage/defaultOFF promotion.
+
+## Continuation226 - QA plural row identity
+Plural findings no longer share duplicate key/locale/type tracking identity. Real
+plural API/browser proves one/other details both render with no duplicate-track
+diagnostics. Finding table now spaced and horizontally scrollable at480 rather
+than breaking key/badge words. QA browser9; review0292. NoAPI/query/schema or
+coverage/defaultOFF change; structural checks are not translation certification.

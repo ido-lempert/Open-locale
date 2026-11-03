@@ -7,6 +7,7 @@ import { ApiService, Project, QaIssue } from '../api.service';
 @Component({
   selector: 'ol-qa',
   imports: [FormsModule, RouterLink],
+  styles: [` .qa-table { width:100%; min-width:680px; border-collapse:collapse; } .qa-table th,.qa-table td { text-align:left; padding:.5rem; vertical-align:top; border-bottom:1px solid #e5e7eb; } .qa-table td { overflow-wrap:anywhere; } .qa-table th:nth-child(-n+3),.qa-table td:nth-child(-n+3) { white-space:nowrap; } `],
   template: `
     <header class="bar">
       <a [routerLink]="['/projects', projectId]" class="back">&larr; Editor</a>
@@ -26,7 +27,7 @@ import { ApiService, Project, QaIssue } from '../api.service';
       <div class="table-scroll"><table class="qa-table">
         <thead><tr><th>Key</th><th>Locale</th><th>Issue</th><th>Detail</th></tr></thead>
         <tbody>
-          @for (i of issues(); track i.keyId + '-' + i.locale + '-' + i.type) {
+          @for (i of issues(); track $index) {
             <tr>
               <td><a class="qa-key" [routerLink]="['/projects', projectId]">{{ i.key }}</a></td>
               <td><code>{{ i.locale }}</code></td>
