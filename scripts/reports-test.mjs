@@ -192,6 +192,13 @@ try {
   const emptyBranch=(await call(`/projects/${pid}/reports/progress?branch=empty-report`,{jwt})).json;
   check('progress empty branch has zero totals and finite zero percentages in every locale',emptyBranch.branch==='empty-report'&&emptyBranch.totalKeys===0&&emptyBranch.locales.length===2&&emptyBranch.locales.every(l=>l.total===0&&l.translated===0&&l.untranslated===0&&l.percent===0&&Object.values(l.byStatus).every(n=>n===0)));
 
+  for(const route of ['progress','quality','usage','tasks']){
+    const malformed=await call(`/projects/not-a-uuid/reports/${route}`,{jwt});
+    check(`reports ${route} malformed project ID returns400 without database details`,malformed.status===400&&malformed.json?.statusCode===400&&!JSON.stringify(malformed.json).includes('Prisma'));
+    check(`reports ${route} unknown valid UUID remains404`,(await call(`/projects/00000000-0000-4000-8000-000000000000/reports/${route}`,{jwt})).status===404);
+    check(`reports ${route} unauthenticated malformed ID still401`,(await call(`/projects/not-a-uuid/reports/${route}`)).status===401);
+  }
+
   // Access: member and read token can read; non-member and anonymous cannot.
   const member = (await call('/auth/signup', { method: 'POST', body: { email: `rpm${Date.now()}@t.dev`, password: 'pass1234', displayName: 'rpm' } })).json;
   await call(`/projects/${pid}/members`, { jwt, method: 'POST', body: { email: member.user.email } });

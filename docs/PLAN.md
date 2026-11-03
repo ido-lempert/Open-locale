@@ -385,3 +385,7 @@ Progress edge contracts now have actualPGHTTP evidence: filled translations with
 removed custom status still count/reconcile; empty values with that status do not
 inflate filled/status totals; empty branches yield finite zero percentages in all
 locales. Test-only. See0264.
+
+All four report routes validate projectId as UUID before service/Prisma work.
+ActualHTTP malformed400/validunknown404/anonymousmalformed401 verified perroute.
+Project authorization remains separate. See0265.

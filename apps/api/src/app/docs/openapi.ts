@@ -298,7 +298,7 @@ export const OPENAPI = {
     },
     '/api/projects/{projectId}/qa': { get: p('Run QA checks over translations', 'qa') },
     '/api/projects/{projectId}/reports/quality': { get: p('Quality dashboard: QA findings aggregated by type and locale', 'projects') },
-    '/api/projects/{projectId}/reports/usage': { get: {...p('Usage dashboard: activity volume over a trailing window', 'projects'),description:'Optional days is a decimal safe integer; defaults to30 and clamps to1..90. Malformed,non-finite,fractional or unsafe values return400. Returns since/asOf captured trailing-window bounds and timezone=UTC;all aggregates exclude future events and byDay uses UTC calendar dates. Separate reads are not one database snapshot.'} },
+    '/api/projects/{projectId}/reports/usage': { get: {...p('Usage dashboard: activity volume over a trailing window', 'projects'),description:'Project ID must be a UUID (malformed400,unavailable404). Optional days is a decimal safe integer; defaults to30 and clamps to1..90. Malformed,non-finite,fractional or unsafe values return400. Returns since/asOf captured trailing-window bounds and timezone=UTC;all aggregates exclude future events and byDay uses UTC calendar dates. Separate reads are not one database snapshot.'} },
     '/api/projects/{projectId}/reports/tasks': { get: p('Task dashboard: status totals, overdue, workload per assignee', 'projects') },
   },
 };
