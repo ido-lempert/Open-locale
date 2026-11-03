@@ -156,6 +156,12 @@ try {
   await prisma.activityEvent.create({data:{projectId:otherProject.id,action:'distinct-count-fixture',keyName:'other-project-only'}});
   check('usage database distinct count remains project scoped',(await call(`/projects/${pid}/reports/usage`,{jwt})).json.activeKeys===keyCounts.activeKeys);
 
+  const workloadBefore=(await call(`/projects/${pid}/reports/tasks`,{jwt})).json;
+  await prisma.task.createMany({data:[...Array.from({length:1500},()=>({projectId:pid,title:'aggregated workload',assigneeId:ownerId})),{projectId:pid,title:'extra workload',assigneeId:ownerId},{projectId:pid,title:'done excluded',status:'DONE',assigneeId:ownerId},{projectId:otherProject.id,title:'other excluded',assigneeId:ownerId}]});
+  const workload=(await call(`/projects/${pid}/reports/tasks`,{jwt})).json;
+  check('task report aggregates large user workload without splitting user identity',workload.perAssignee.find(r=>r.assigneeId===ownerId)?.count===workloadBefore.perAssignee.find(r=>r.assigneeId===ownerId).count+1501&&workload.perAssignee.find(r=>r.assigneeId===ownerId)?.assigneeGroupId===null&&workload.perAssignee.find(r=>r.assigneeGroupId===taskGroup.id)?.count===1);
+  check('task report aggregated workload excludes DONE and other project and reconciles open statuses',workload.perAssignee.length===workloadBefore.perAssignee.length&&workload.perAssignee.reduce((n,r)=>n+r.count,0)===workload.byStatus.OPEN+workload.byStatus.IN_PROGRESS&&workload.total===workloadBefore.total+1502);
+
   // Access: member and read token can read; non-member and anonymous cannot.
   const member = (await call('/auth/signup', { method: 'POST', body: { email: `rpm${Date.now()}@t.dev`, password: 'pass1234', displayName: 'rpm' } })).json;
   await call(`/projects/${pid}/members`, { jwt, method: 'POST', body: { email: member.user.email } });

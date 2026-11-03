@@ -137,21 +137,28 @@ export class ReportsService {
     const dueSoon = await this.prisma.task.count({
       where: { projectId, status: { not: 'DONE' }, dueDate: { gte: now, lte: in7 } },
     });
-    const openRows = await this.prisma.task.findMany({
-      where: { projectId, status: { not: 'DONE' } },
-      select: { assigneeId: true, assigneeGroupId:true, assignee: { select: { displayName: true } },assigneeGroup:{select:{name:true}} },
-    });
-    const perAssignee = new Map<string, { kind:'user'|'group'|'unassigned'; assigneeId:string|null; assigneeGroupId:string|null; name:string; count:number }>();
-    for (const t of openRows) {
-      const kind=t.assigneeId?'user':t.assigneeGroupId?'group':'unassigned';
-      const key=kind+':'+(t.assigneeId??t.assigneeGroupId??'');
-      const row=perAssignee.get(key)??{kind,assigneeId:t.assigneeId,assigneeGroupId:t.assigneeId?null:t.assigneeGroupId,name:t.assigneeId?t.assignee?.displayName??'former member':t.assigneeGroupId?t.assigneeGroup?.name??'former group':'unassigned',count:0};
-      row.count++;perAssignee.set(key,row);
-    }
+    // Normalize privileged invalid dual assignments before grouping: the user
+    // wins, matching task workload semantics without materializing task rows.
+    const openRows = await this.prisma.$queryRaw<{ assigneeId:string|null; assigneeGroupId:string|null; name:string; count:bigint }[]>(Prisma.sql`
+      SELECT grouped."assigneeId", grouped."assigneeGroupId",
+        CASE WHEN grouped."assigneeId" IS NOT NULL THEN COALESCE(u."displayName",'former member')
+             WHEN grouped."assigneeGroupId" IS NOT NULL THEN COALESCE(g."name",'former group')
+             ELSE 'unassigned' END AS name, grouped.count
+      FROM (
+        SELECT "assigneeId", CASE WHEN "assigneeId" IS NULL THEN "assigneeGroupId" ELSE NULL END AS "assigneeGroupId", count(*) AS count
+        FROM "tasks" WHERE "projectId" = ${projectId}::uuid AND "status" <> 'DONE'
+        GROUP BY "assigneeId", CASE WHEN "assigneeId" IS NULL THEN "assigneeGroupId" ELSE NULL END
+      ) grouped
+      LEFT JOIN "users" u ON u.id = grouped."assigneeId"
+      LEFT JOIN "groups" g ON g.id = grouped."assigneeGroupId"`);
+    const perAssignee = openRows.map(t=>({
+      kind:t.assigneeId?'user' as const:t.assigneeGroupId?'group' as const:'unassigned' as const,
+      assigneeId:t.assigneeId,assigneeGroupId:t.assigneeGroupId,name:t.name,count:Number(t.count),
+    }));
     const total = byStatus.OPEN + byStatus.IN_PROGRESS + byStatus.DONE;
     return {
       total, byStatus, overdue, dueSoon,
-      perAssignee: [...perAssignee.values()].sort((a,b)=>b.count-a.count||(a.kind+':'+(a.assigneeId??a.assigneeGroupId??'')).localeCompare(b.kind+':'+(b.assigneeId??b.assigneeGroupId??''))),
+      perAssignee: perAssignee.sort((a,b)=>b.count-a.count||(a.kind+':'+(a.assigneeId??a.assigneeGroupId??'')).localeCompare(b.kind+':'+(b.assigneeId??b.assigneeGroupId??''))),
     };
   }
 }

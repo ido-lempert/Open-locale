@@ -371,3 +371,8 @@ Usage activeKeys now uses PostgreSQL COUNT(DISTINCT keyName), returning one scal
 instead of materializing every name in the API. Same activity-name/null/empty/
 project/window semantics. Actual1500-name fixture plus duplicate/null/empty/old/
 future/other-project controls verified. No DB resource-bound claim. See0261.
+
+Task workload now groups effective user/group/null assignments in PostgreSQL
+before joining names, rather than materializing every open task in the API.
+Preserves one count per task and same-name identity separation. Real1501-extra-
+user/DONE/other-project fixtures reconcile. No DB resource-bound claim. See0262.
