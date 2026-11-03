@@ -106,13 +106,14 @@ export class ReportsService {
       select: { id: true, displayName: true, email: true },
     });
     const nameOf = new Map(users.map((u) => [u.id, u.displayName]));
-    const keyRows = await this.prisma.activityEvent.findMany({
-      where: { projectId, createdAt: { gte: since, lte:asOf }, keyName: { not: null } },
-      select: { keyName: true }, distinct: ['keyName'],
-    });
+    // Count in PostgreSQL rather than materializing every distinct key name in
+    // the API process. This preserves activity-name semantics (not live key IDs).
+    const [keyCount] = await this.prisma.$queryRaw<{ count: bigint }[]>(Prisma.sql`
+      SELECT count(DISTINCT "keyName") AS count FROM "activity_events"
+      WHERE "projectId" = ${projectId}::uuid AND "createdAt" >= ${since} AND "createdAt" <= ${asOf}`);
     const totalEvents = byAction.reduce((n, a) => n + a._count._all, 0);
     return {
-      days, since, asOf, timezone:'UTC' as const, totalEvents, activeKeys: keyRows.length,
+      days, since, asOf, timezone:'UTC' as const, totalEvents, activeKeys: Number(keyCount.count),
       byAction: Object.fromEntries(byAction.map((a) => [a.action, a._count._all])),
       byDay: dayRows.map((r) => ({ day: r.day, count: Number(r.count) })),
       topActors: actorRows.map((a) => ({ actorId:a.actorId!, name: nameOf.get(a.actorId!) ?? 'former member', count: a._count._all })),

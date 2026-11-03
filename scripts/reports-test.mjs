@@ -147,6 +147,15 @@ try {
   check('usage days explicitly UTC under nonUTC database default',bounded.byDay.some(r=>r.day===utcBoundary.toISOString().slice(0,10)&&r.count===1)&&bounded.timezone==='UTC');
   check('usage one captured asOf bounds trailing window',new Date(bounded.asOf).getTime()-new Date(bounded.since).getTime()===30*86400000&&new Date(bounded.asOf)<future);
 
+  const keysBefore=(await call(`/projects/${pid}/reports/usage`,{jwt})).json.activeKeys;
+  const keyFixtures=[...Array.from({length:1500},(_,i)=>({projectId:pid,action:'distinct-count-fixture',keyName:'count-key-'+i})),{projectId:pid,action:'distinct-count-fixture',keyName:'count-key-0'},{projectId:pid,action:'distinct-count-fixture',keyName:null},{projectId:pid,action:'distinct-count-fixture',keyName:''},{projectId:pid,action:'distinct-count-fixture',keyName:'outside-old',createdAt:new Date(Date.now()-100*86400000)},{projectId:pid,action:'distinct-count-fixture',keyName:'outside-future',createdAt:future}];
+  await prisma.activityEvent.createMany({data:keyFixtures});
+  const keyCounts=(await call(`/projects/${pid}/reports/usage`,{jwt})).json;
+  check('usage database distinct count includes empty name once excludes null duplicate and out-of-window names',keyCounts.activeKeys===keysBefore+1501);
+  const otherProject=(await call('/projects',{jwt,method:'POST',body:{name:'Other count',slug:'other-count-'+Date.now(),baseLocale:'en',locales:['en']}})).json;
+  await prisma.activityEvent.create({data:{projectId:otherProject.id,action:'distinct-count-fixture',keyName:'other-project-only'}});
+  check('usage database distinct count remains project scoped',(await call(`/projects/${pid}/reports/usage`,{jwt})).json.activeKeys===keyCounts.activeKeys);
+
   // Access: member and read token can read; non-member and anonymous cannot.
   const member = (await call('/auth/signup', { method: 'POST', body: { email: `rpm${Date.now()}@t.dev`, password: 'pass1234', displayName: 'rpm' } })).json;
   await call(`/projects/${pid}/members`, { jwt, method: 'POST', body: { email: member.user.email } });

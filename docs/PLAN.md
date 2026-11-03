@@ -366,3 +366,8 @@ unchanged. RealHTTPsame-nameevents/browserverified. See0259.
 Usage aggregates share capturedsince/asOfinclusivewindow,exclude futureevents,
 and return explicitUTCdaylabels regardless DBtimezone. AdditiveasOf/timezoneUTC;
 separatequeriesNOToneDBsnapshot. ActualnonUTCDB/futurefixtureverified. See0260.
+
+Usage activeKeys now uses PostgreSQL COUNT(DISTINCT keyName), returning one scalar
+instead of materializing every name in the API. Same activity-name/null/empty/
+project/window semantics. Actual1500-name fixture plus duplicate/null/empty/old/
+future/other-project controls verified. No DB resource-bound claim. See0261.
