@@ -15,8 +15,10 @@ import { ApiService, Project, QaIssue } from '../api.service';
     </header>
     <main [attr.aria-busy]="loading()">
       @if (error(); as e) { <p class="error" role="alert">{{ e }}</p><button type="button" name="retryQa" (click)="void fetch()">Retry QA checks</button> }
+      @if (localesLoading()) { <p role="status" name="qaLocalesLoading">Loading locale filter options. Checks load independently.</p> }
+      @if (localesError()) { <p class="error" role="alert" name="qaLocalesError">Locale filter options unavailable. Checks remain available.</p><button type="button" name="retryQaLocales" (click)="void loadLocales()">Retry locale options</button> }
       <div class="toolbar">
-        <select aria-label="Filter by locale" name="qaLocale" [ngModel]="locale()" (ngModelChange)="locale.set($event); void fetch()">
+        <select aria-label="Filter by locale" name="qaLocale" [attr.aria-busy]="localesLoading()" [ngModel]="locale()" (ngModelChange)="locale.set($event); void fetch()">
           <option value="">all target locales</option>
           @for (l of targetLocales(); track l) { <option [value]="l">{{ l }}</option> }
         </select>
@@ -47,6 +49,9 @@ export class QaComponent implements OnInit, OnDestroy {
   issues = signal<QaIssue[]>([]);
   targetLocales = signal<string[]>([]);
   locale = signal('');
+  localesLoading=signal(false);
+  localesError=signal(false);
+  private localeGeneration=0;
   loading = signal(true);
   error = signal('');
 
@@ -62,11 +67,17 @@ export class QaComponent implements OnInit, OnDestroy {
   }
   async loadProject(projectId:string) {
     if(this.destroyed)return;
-    const scope=++this.projectGeneration;this.projectId=projectId;this.locale.set('');this.targetLocales.set([]);
-    const project=this.api.getProject(projectId).then((p:Project)=>{
-      if(!this.destroyed&&scope===this.projectGeneration)this.targetLocales.set(p.locales.map(l=>l.code).filter(c=>c!==p.baseLocale));
-    }).catch(()=>{if(!this.destroyed&&scope===this.projectGeneration)this.targetLocales.set([]);});
-    await Promise.all([project,this.fetch()]);
+    ++this.projectGeneration;this.projectId=projectId;this.locale.set('');this.targetLocales.set([]);
+    await Promise.all([this.loadLocales(),this.fetch()]);
+  }
+  async loadLocales() {
+    if(this.destroyed)return;
+    const scope=this.projectGeneration,generation=++this.localeGeneration,projectId=this.projectId;
+    const current=()=>!this.destroyed&&scope===this.projectGeneration&&generation===this.localeGeneration;
+    this.localesLoading.set(true);this.localesError.set(false);
+    try {const p:Project=await this.api.getProject(projectId);if(current())this.targetLocales.set(p.locales.map(l=>l.code).filter(c=>c!==p.baseLocale));}
+    catch {if(current())this.localesError.set(true);}
+    finally {if(current())this.localesLoading.set(false);}
   }
   ngOnDestroy() { this.destroyed=true;++this.generation;++this.projectGeneration;this.subscription?.unsubscribe(); }
 

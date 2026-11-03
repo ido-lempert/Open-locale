@@ -40,7 +40,14 @@ try {
   await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.evaluate(t=>localStorage.setItem('ol_token',t),token);
 
   await page.setViewport({width:480,height:900});
+  let qaReads=0;const countQa=req=>{if(new URL(req.url()).pathname===`/api/projects/${project.id}/qa`)qaReads++;};page.on('request',countQa);await page.setRequestInterception(true);const failMetadata=async req=>{const path=new URL(req.url()).pathname;if(path===`/api/projects/${project.id}`)return req.respond({status:503,contentType:'application/json',body:JSON.stringify({message:'private-project-detail'})});return req.continue();};page.on('request',failMetadata);
   await page.goto(`${WEB}/projects/${project.id}/qa`,{waitUntil:'networkidle0'});await page.waitForSelector('[name=qaCount]');
+  await page.waitForSelector('[name=retryQaLocales]');const beforeLocaleRetry=await page.$eval('.qa-table',e=>e.textContent);
+  check('failed locale discovery keeps actual findings without raw metadata error',!!await page.$('[name=qaLocalesError]')&&!(await page.content()).includes('private-project-detail')&&await page.$eval('[name=qaLocale]',e=>e.options.length===1&&e.getAttribute('aria-busy')==='false'));
+  await page.screenshot({path:'/downloads/qa-locale-options-failure-full.png',fullPage:true});page.off('request',failMetadata);await page.setRequestInterception(false);
+  await page.click('[name=retryQaLocales]');await page.waitForFunction(()=>document.querySelector('[name=qaLocale]')?.options.length===2&&document.querySelector('[name=qaLocale]')?.getAttribute('aria-busy')==='false');
+  check('locale discovery retry restores options without rerunning or replacing checks',qaReads===1&&await page.$eval('.qa-table',(e,t)=>e.textContent===t,beforeLocaleRetry)&&!(await page.$('[name=qaLocalesError]'))&&!(await page.$('[name=retryQaLocales]'))&&await page.$eval('[name=qaLocale]',e=>e.value===''));
+  page.off('request',countQa);
   check('actual QA fixtures render findings',await page.$eval('[name=qaCount]',e=>!e.textContent.startsWith('0 ')));
   const pluralRows=await page.$$eval('.qa-table tbody tr',rows=>rows.filter(r=>r.textContent.includes('plural.categories')).map(r=>r.textContent));
   check('both plural category findings render distinctly without duplicate tracking diagnostics',pluralRows.length===2&&pluralRows.some(t=>t.includes('category "one"'))&&pluralRows.some(t=>t.includes('category "other"'))&&!diagnostics.some(t=>/NG0955|duplicat.*track/i.test(t)));

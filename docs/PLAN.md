@@ -531,3 +531,9 @@ Actual heldolderpage now proves concurrent Load more stays oneHTTPrequest, then
 sameproject keyfilter completes11matchingrows and lateolderresponse cannotappend
 or change latestfeed/loading/cursor. Test-only; activitybrowser8, review0294.
 No application/API/schema or coverage/defaultOFF changes.
+
+## Continuation229 - QA locale options retry
+QA locale discovery now independent with loading/fixedfailure/retry and own request/
+project/destroyfences. Actual metadata503/retry restoresoptions while findings and
+oneQAread remain unchanged. Three units/web176/11, QAbrowser11; review0295.
+NoAPI/query/schema or coverage/defaultOFF change.
