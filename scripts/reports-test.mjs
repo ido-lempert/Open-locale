@@ -219,6 +219,21 @@ try {
     check(`reports ${route} read token response explicitly no-store`,tokenReport.status===200&&tokenReport.cacheControl==='no-store');
   }
 
+  const memberCredential=(await call('/auth/tokens',{jwt:member.accessToken,method:'POST',body:{name:'report-revocation',scopes:['read']}})).json;
+  for(const route of ['progress','quality','usage','tasks'])check(`reports ${route} member-owned token initially authorized`,(await call(`/projects/${pid}/reports/${route}`,{token:memberCredential.token})).status===200);
+  const removedReportMember=await call(`/projects/${pid}/members/${member.user.id}`,{jwt,method:'DELETE'});
+  check('report member revocation committed',removedReportMember.status===200);
+  for(const route of ['progress','quality','usage','tasks']){
+    const deniedSession=await call(`/projects/${pid}/reports/${route}`,{jwt:member.accessToken});
+    const deniedToken=await call(`/projects/${pid}/reports/${route}`,{token:memberCredential.token});
+    check(`reports ${route} existing session and token lose revoked team access`,[403,404].includes(deniedSession.status)&&[403,404].includes(deniedToken.status)&&!('totalEvents' in (deniedSession.json??{}))&&!('perAssignee' in (deniedToken.json??{})));
+  }
+  await call(`/projects/${pid}/members`,{jwt,method:'POST',body:{email:member.user.email}});
+  for(const route of ['progress','quality','usage','tasks'])check(`reports ${route} same session and token regain explicitly restored team access`,(await call(`/projects/${pid}/reports/${route}`,{jwt:member.accessToken})).status===200&&(await call(`/projects/${pid}/reports/${route}`,{token:memberCredential.token})).status===200);
+  const revokedReportToken=await call(`/auth/tokens/${memberCredential.id}`,{jwt:member.accessToken,method:'DELETE'});
+  check('report API token revocation committed',revokedReportToken.status===200||revokedReportToken.status===204);
+  for(const route of ['progress','quality','usage','tasks'])check(`reports ${route} revoked token denied401 while session remains valid`,(await call(`/projects/${pid}/reports/${route}`,{token:memberCredential.token})).status===401&&(await call(`/projects/${pid}/reports/${route}`,{jwt:member.accessToken})).status===200);
+
   const out = (await call('/auth/signup', { method: 'POST', body: { email: `rpo${Date.now()}@t.dev`, password: 'pass1234', displayName: 'out' } })).json;
   check('non-member rejected', [403, 404].includes((await call(`/projects/${pid}/reports/progress`, { jwt: out.accessToken })).status));
   check('anonymous rejected (401)', (await fetch(`${API}/projects/${pid}/reports/progress`)).status === 401);

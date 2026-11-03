@@ -397,3 +397,8 @@ client-memory erasure or blanket error-response claim. See0266.
 Task status/overdue/due-soon counts now share one PostgreSQL aggregate statement
 and captured clock. Assignment workload remains separate, not one report snapshot.
 Actual6-task date/status fixture and unit clock/query checks verified. See0267.
+
+All four reports now have actualHTTP membership/token revocation evidence:
+same member session/read token denied after committed team removal, restored by
+explicit re-add; revoked token401 while session remains200. Test-only, not in-flight
+revocation atomicity or client-cache erasure. See0268.
