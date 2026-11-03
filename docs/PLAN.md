@@ -380,3 +380,8 @@ user/DONE/other-project fixtures reconcile. No DB resource-bound claim. See0262.
 Usage top-five boundary now has actual PostgreSQL HTTP evidence with seven tied
 same-name actors, exact stable-ID cutoff/repeated read, null-actor events retained
 in totals but not ranking, and future-only actor excluded. Test-only. See0263.
+
+Progress edge contracts now have actualPGHTTP evidence: filled translations with
+removed custom status still count/reconcile; empty values with that status do not
+inflate filled/status totals; empty branches yield finite zero percentages in all
+locales. Test-only. See0264.

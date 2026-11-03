@@ -177,6 +177,21 @@ try {
   const reranked=(await call(`/projects/${rankingProject.id}/reports/usage`,{jwt})).json;
   check('usage repeated read preserves tied top-five cutoff',reranked.topActors.map(a=>a.actorId).join(',')===expectedTop.join(','));
 
+  // Progress retains removed workflow states only for filled values.
+  await call(`/projects/${pid}`,{jwt,method:'PATCH',body:{customStatuses:[]}});
+  const retired=(await call(`/projects/${pid}/reports/progress`,{jwt})).json;
+  const retiredEn=retired.locales.find(l=>l.locale==='en');
+  check('progress retains removed workflow status count for existing filled translation',retiredEn.byStatus.NEEDS_FIX===1&&retiredEn.translated===5&&retiredEn.translated===Object.values(retiredEn.byStatus).reduce((n,c)=>n+c,0));
+  await call(`/projects/${pid}`,{jwt,method:'PATCH',body:{customStatuses:['NEEDS_FIX']}});
+  await call(`/projects/${pid}/keys/${c.id}/translations/he/status`,{jwt,method:'PATCH',body:{status:'NEEDS_FIX'}});
+  await call(`/projects/${pid}`,{jwt,method:'PATCH',body:{customStatuses:[]}});
+  const emptyRetired=(await call(`/projects/${pid}/reports/progress`,{jwt})).json;
+  const emptyHe=emptyRetired.locales.find(l=>l.locale==='he');
+  check('progress excludes empty translation carrying retired status from filled and status totals',emptyHe.translated===3&&emptyHe.untranslated===4&&!emptyHe.byStatus.NEEDS_FIX&&emptyHe.total===7&&emptyHe.translated===Object.values(emptyHe.byStatus).reduce((n,c)=>n+c,0));
+  await call(`/projects/${pid}/branches`,{jwt,method:'POST',body:{name:'empty-report'}});
+  const emptyBranch=(await call(`/projects/${pid}/reports/progress?branch=empty-report`,{jwt})).json;
+  check('progress empty branch has zero totals and finite zero percentages in every locale',emptyBranch.branch==='empty-report'&&emptyBranch.totalKeys===0&&emptyBranch.locales.length===2&&emptyBranch.locales.every(l=>l.total===0&&l.translated===0&&l.untranslated===0&&l.percent===0&&Object.values(l.byStatus).every(n=>n===0)));
+
   // Access: member and read token can read; non-member and anonymous cannot.
   const member = (await call('/auth/signup', { method: 'POST', body: { email: `rpm${Date.now()}@t.dev`, password: 'pass1234', displayName: 'rpm' } })).json;
   await call(`/projects/${pid}/members`, { jwt, method: 'POST', body: { email: member.user.email } });
