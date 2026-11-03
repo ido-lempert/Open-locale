@@ -199,6 +199,13 @@ try {
     check(`reports ${route} unauthenticated malformed ID still401`,(await call(`/projects/not-a-uuid/reports/${route}`)).status===401);
   }
 
+  const datesProject=(await call('/projects',{jwt,method:'POST',body:{name:'Task dates',slug:'task-dates-'+Date.now(),baseLocale:'en',locales:['en']}})).json;
+  const pastDate=new Date(Date.now()-86400000),soonDate=new Date(Date.now()+3*86400000),laterDate=new Date(Date.now()+9*86400000);
+  await prisma.task.createMany({data:[{projectId:datesProject.id,title:'past open',dueDate:pastDate},{projectId:datesProject.id,title:'soon in progress',status:'IN_PROGRESS',dueDate:soonDate},{projectId:datesProject.id,title:'later open',dueDate:laterDate},{projectId:datesProject.id,title:'no deadline'},{projectId:datesProject.id,title:'done past',status:'DONE',dueDate:pastDate},{projectId:datesProject.id,title:'done soon',status:'DONE',dueDate:soonDate}]});
+  const dates=(await call(`/projects/${datesProject.id}/reports/tasks`,{jwt})).json;
+  check('task single-statement summary preserves exact status and deadline exclusions',dates.total===6&&dates.byStatus.OPEN===3&&dates.byStatus.IN_PROGRESS===1&&dates.byStatus.DONE===2&&dates.overdue===1&&dates.dueSoon===1);
+  check('task summary totals still reconcile separate assignment query in static fixture',dates.perAssignee.length===1&&dates.perAssignee[0].kind==='unassigned'&&dates.perAssignee[0].count===4);
+
   // Access: member and read token can read; non-member and anonymous cannot.
   const member = (await call('/auth/signup', { method: 'POST', body: { email: `rpm${Date.now()}@t.dev`, password: 'pass1234', displayName: 'rpm' } })).json;
   await call(`/projects/${pid}/members`, { jwt, method: 'POST', body: { email: member.user.email } });

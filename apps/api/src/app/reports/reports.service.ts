@@ -126,17 +126,17 @@ export class ReportsService {
     await this.projects.getFor(userId, projectId);
     const now = new Date();
     const in7 = new Date(now.getTime() + 7 * 86400_000);
-    const byStatusRows = await this.prisma.task.groupBy({
-      by: ['status'], where: { projectId }, _count: { _all: true },
-    });
-    const byStatus: Record<string, number> = { OPEN: 0, IN_PROGRESS: 0, DONE: 0 };
-    for (const r of byStatusRows) byStatus[r.status] = r._count._all;
-    const overdue = await this.prisma.task.count({
-      where: { projectId, status: { not: 'DONE' }, dueDate: { lt: now } },
-    });
-    const dueSoon = await this.prisma.task.count({
-      where: { projectId, status: { not: 'DONE' }, dueDate: { gte: now, lte: in7 } },
-    });
+    // Status and date counts share one statement snapshot and one captured
+    // clock. Assignment workload below remains a separate statement.
+    const [summary] = await this.prisma.$queryRaw<{ open:bigint; inProgress:bigint; done:bigint; overdue:bigint; dueSoon:bigint }[]>(Prisma.sql`
+      SELECT count(*) FILTER (WHERE "status" = 'OPEN') AS open,
+        count(*) FILTER (WHERE "status" = 'IN_PROGRESS') AS "inProgress",
+        count(*) FILTER (WHERE "status" = 'DONE') AS done,
+        count(*) FILTER (WHERE "status" <> 'DONE' AND "dueDate" < ${now}) AS overdue,
+        count(*) FILTER (WHERE "status" <> 'DONE' AND "dueDate" >= ${now} AND "dueDate" <= ${in7}) AS "dueSoon"
+      FROM "tasks" WHERE "projectId" = ${projectId}::uuid`);
+    const byStatus: Record<string,number> = {OPEN:Number(summary.open),IN_PROGRESS:Number(summary.inProgress),DONE:Number(summary.done)};
+    const overdue=Number(summary.overdue),dueSoon=Number(summary.dueSoon);
     // Normalize privileged invalid dual assignments before grouping: the user
     // wins, matching task workload semantics without materializing task rows.
     const openRows = await this.prisma.$queryRaw<{ assigneeId:string|null; assigneeGroupId:string|null; name:string; count:bigint }[]>(Prisma.sql`

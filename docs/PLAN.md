@@ -393,3 +393,7 @@ Project authorization remains separate. See0265.
 Successful report responses now explicitly use Cache-Control:no-store, verified
 on all four routes with member session and read token. No earlier-cache erasure,
 client-memory erasure or blanket error-response claim. See0266.
+
+Task status/overdue/due-soon counts now share one PostgreSQL aggregate statement
+and captured clock. Assignment workload remains separate, not one report snapshot.
+Actual6-task date/status fixture and unit clock/query checks verified. See0267.
