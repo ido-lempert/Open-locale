@@ -1,4 +1,4 @@
-// Real local browser -> QA screen -> built API + Postgres.
+// Real local browser -> Activity screen -> built API + Postgres.
 // No external provider requests. Requires nx build api.
 import { execFileSync, spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -55,6 +55,10 @@ try {
   await page.evaluate(()=>window.scrollTo({top:0,behavior:'instant'}));await new Promise(r=>setTimeout(r,120));await page.screenshot({path:'/downloads/activity-page-failure-full.png',fullPage:true});page.off('request',failPage);await page.setRequestInterception(false);
   await page.$eval('[name=retryActivity]',e=>e.scrollIntoView({block:'center',behavior:'instant'}));await new Promise(r=>setTimeout(r,120));await page.click('[name=retryActivity]');await page.waitForFunction(()=>document.querySelectorAll('.activity-row').length>50);
   check('real activity page retry appends remaining events once',await page.$$eval('.activity-row',rows=>rows.length===new Set(rows.map(r=>r.textContent)).size)&&!(await page.$('[name=retryActivity]'))&&!(await page.$('.load-more')));
+  await call(`${P}/tasks`,{title:'Activity filter task'},token);
+  const taskResponse=page.waitForResponse(r=>new URL(r.url()).pathname===`/api/projects/${project.id}/activity`&&new URL(r.url()).searchParams.get('action')==='task.created');await page.select('[aria-label="Filter by action"]','task.created');const taskEvents=await (await taskResponse).json();await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');
+  check('new task action option filters real created-task activity',taskEvents.items.length===1&&taskEvents.items[0].action==='task.created'&&await page.$$eval('.activity-row',rows=>rows.length===1&&rows[0].textContent.includes('created task'))&&await page.$eval('[aria-label="Filter by action"]',e=>e.value==='task.created'));
+  await page.screenshot({path:'/downloads/activity-task-filter-full.png',fullPage:true});
   let held=false,release;const gate=new Promise(r=>release=r);await page.setRequestInterception(true);const hold=async req=>{if(new URL(req.url()).pathname===`/api/projects/${project.id}/activity`&&new URL(req.url()).searchParams.get('action')==='translation.value'){held=true;await gate;}return req.continue();};page.on('request',hold);
   await page.select('[aria-label="Filter by action"]','translation.value');for(let n=0;n<50&&!held;n++)await new Promise(r=>setTimeout(r,20));if(!held)throw new Error('activity not held');
   check('held activity filter clears previous rows and announces loading',!(await page.$('.activity-row'))&&!!await page.$('[name=activityLoading]')&&!(await page.$('[name=activityEmpty]')));

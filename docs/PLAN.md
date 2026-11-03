@@ -549,3 +549,9 @@ Run checks again reuses fenced readonlyloader with disabledpending control. Actu
 translationrepair/refreshclick reduces5to3findings, preservesselectedHebrew/no
 metadatareload. QAbrowser14, review0297. NoAPI/query/schema or coverage/defaultOFF
 changes; explicitrefresh, notlivepolling or translationcertification.
+
+## Continuation232 - Activity action vocabulary
+Activity dropdown now offers11previouslymissing declaredserveractions for task/
+glossary/screenshot/MT/automation/embedorigins. Exactdeclaredset unit and actual
+taskcreate/filter proof; web177/11, activitybrowser9, review0298. NoAPI/query/
+schema or coverage/defaultOFF change; no neweventdetail/retention guarantee.

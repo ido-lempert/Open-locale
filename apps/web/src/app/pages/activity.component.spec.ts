@@ -11,3 +11,8 @@ describe('activity scope and pagination',()=>{
  it('destroy fences response and suppresses debounce and new reads',async()=>{jest.useFakeTimers();const old=deferred(),api={listActivity:jest.fn().mockReturnValue(old.promise)},c=make(api);const a=c.fetch(true);c.onKeyInput('new');c.ngOnDestroy();jest.runAllTimers();old.resolve({items:[{id:'private'}],nextCursor:'old'});await a;await c.fetch(true);expect(c.items()).toEqual([]);expect(api.listActivity).toHaveBeenCalledTimes(1);jest.useRealTimers();});
  it('typing invalidates held results before debounce fires',async()=>{jest.useFakeTimers();const old=deferred(),api={listActivity:jest.fn().mockReturnValue(old.promise)},c=make(api);const a=c.fetch(true);c.onKeyInput('new');old.resolve({items:[{id:'old'}],nextCursor:'old'});await a;expect(c.items()).toEqual([]);expect(c.loading()).toBe(true);c.ngOnDestroy();jest.useRealTimers();});
 });
+
+
+describe('activity action vocabulary',()=>{
+ it('offers every declared server action with a readable label',()=>{const {readFileSync}=require('node:fs');const {join}=require('node:path');const source=readFileSync(join(__dirname,'../../../../api/src/app/activity/activity.service.ts'),'utf8');const block=source.split('export const ACTIVITY_ACTIONS = [')[1].split('] as const')[0];const actions=[...block.matchAll(/'([^']+)'/g)].map(m=>m[1]);const c=make({});expect([...c.actions].sort()).toEqual(actions.sort());for(const action of actions)expect(c.label(action)).not.toBe(action);expect(c.label('future.action')).toBe('future.action');});
+});

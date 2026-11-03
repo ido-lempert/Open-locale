@@ -6,6 +6,17 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ActivityEntry, ApiService, MemberInfo } from '../api.service';
 
 const ACTION_LABELS: Record<string, string> = {
+  'screenshot.added': 'added screenshot',
+  'screenshot.deleted': 'deleted screenshot',
+  'task.created': 'created task',
+  'task.updated': 'updated task',
+  'task.deleted': 'deleted task',
+  'glossary.created': 'created glossary term',
+  'glossary.updated': 'updated glossary term',
+  'glossary.deleted': 'deleted glossary term',
+  'project.embedOrigins.updated': 'updated embed origins',
+  'mt.pretranslate': 'ran pretranslation',
+  'automation.run': 'ran automation',
   'key.created': 'created key',
   'key.deleted': 'deleted key',
   'key.tags': 'updated tags on',
