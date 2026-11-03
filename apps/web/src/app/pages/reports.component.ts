@@ -78,13 +78,14 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
       @if (usageError()) { <p class="error" role="alert" name="usageReportError">Usage report unavailable. No usage figures are shown. Reload this page to try again.</p> }
       @if (usage(); as u) {
         <p class="muted">{{ u.totalEvents }} events touching {{ u.activeKeys }} keys.</p>
+        <p class="muted" name="usageWindow" style="overflow-wrap:anywhere">Captured window: <time>{{ u.since }}</time> through <time>{{ u.asOf }}</time>. UTC calendar days. Separate reads are not one database snapshot.</p>
         <div class="table-scroll">
         <table class="qa-table usage-table">
           <thead><tr><th class="row-head">Action</th><th>Events</th></tr></thead>
           <tbody>@for (a of actionRows(u); track a.action) { <tr><td><code>{{ a.action }}</code></td><td>{{ a.count }}</td></tr> }</tbody>
         </table>
         <table class="qa-table usage-table">
-          <thead><tr><th class="row-head">Actor</th><th>Events</th></tr></thead>
+          <thead><tr><th class="row-head">Top 5 actors</th><th>Events</th></tr></thead>
           <tbody>@for (a of u.topActors; track a.actorId) { <tr><td>{{ a.name }}<small class="muted" style="display:block;overflow-wrap:anywhere">{{ a.actorId }}</small></td><td>{{ a.count }}</td></tr> }</tbody>
         </table>
         </div>

@@ -751,9 +751,14 @@ try {
   check('task report browser separates same-name group from users and no-assignee bucket',await page.$$eval('.tasks-table tbody tr',(rows,id)=>rows.some(r=>r.textContent.includes('Group: '+id))&&rows.filter(r=>r.textContent.includes('Same assignee')).length===3&&rows.some(r=>r.textContent.includes('No assignee')),reportGroup.id));
   await page.screenshot({path:'/downloads/reports-group-identity-narrow.png'});
   for(const actorId of [duplicateAssignee.id,otherAssignee.id])await prisma.activityEvent.create({data:{projectId:second.id,actorId,action:'report.identity.fixture',keyName:'identity'}});
+  const usageWindowResponse=page.waitForResponse(r=>r.url().includes(`/projects/${second.id}/reports/usage`)&&r.status()===200);
   await page.reload({waitUntil:'networkidle0'});await page.waitForFunction(()=>document.querySelectorAll('.usage-table:nth-of-type(2) tbody tr').length===2);
+  const observedUsageWindow=await (await usageWindowResponse).json();
+  check('usage browser displays exact captured response bounds UTC and snapshot caveat',await page.$eval('[name=usageWindow]',(e,u)=>e.textContent.includes(u.since)&&e.textContent.includes(u.asOf)&&e.textContent.includes('UTC calendar days')&&e.textContent.includes('not one database snapshot'),observedUsageWindow));
+  check('usage browser labels ranking as top five actors',await page.$eval('.usage-table:nth-of-type(2) thead',e=>e.textContent.includes('Top 5 actors')));
   check('usage browser keeps same-name actors as distinct identity rows',await page.$$eval('.usage-table:nth-of-type(2) tbody tr',(rows,ids)=>rows.length===2&&ids.every(id=>rows.some(r=>r.textContent.includes(id)&&r.textContent.includes('Same assignee'))),[duplicateAssignee.id,otherAssignee.id]));
   await page.screenshot({path:'/downloads/reports-actor-identity-narrow.png'});
+  await page.screenshot({path:'/downloads/reports-usage-window-full.png',fullPage:true});
   await page.evaluate(t=>localStorage.setItem('ol_token',t),member.accessToken);
   await page.goto(`${WEB}/projects/${project.id}/sync`,{waitUntil:'networkidle0'});await page.waitForSelector('textarea[name=syncBaseline]');
   await set('syncSha','a'.repeat(40));await set('syncBaseline','{}');await set('syncRemote','{}');await page.click('button[name=syncPreview]');await page.waitForSelector('[role=alert]');

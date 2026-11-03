@@ -415,3 +415,7 @@ empty/retired-status singlequery units verified. See0270.
 Group workload fixture now has two actual members rather than an empty group.
 NormalAPI rename preserves stableID/count; deletion moves exactly one task to
 unassigned with totals unchanged. Sequential committed-change proof. See0271.
+
+Usage UI now shows exact captured since/asOf window, UTCcalendar note and separate-
+reads snapshot caveat; actor ranking labeled Top5. Actualbrowser response-to-text
+checks and fresh480fullpage inspected. Normalverticalscroll, no querychange. See0272.
