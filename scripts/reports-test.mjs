@@ -2,6 +2,7 @@
 // Run: node scripts/reports-test.mjs
 import { execFileSync, spawn } from 'node:child_process';
 import EmbeddedPostgres from 'embedded-postgres';
+import { PrismaClient } from '@prisma/client';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -24,12 +25,14 @@ async function call(path, { jwt, token, method = 'GET', body } = {}) {
 
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-rp-'));
 const pg = new EmbeddedPostgres({ databaseDir: dataDir, user: 'postgres', password: 'postgres', port: PG_PORT, persistent: false });
-let api;
+let api,prisma;
 try {
   await pg.initialise(); await pg.start(); await pg.createDatabase('openlocale_rp');
   const url = `postgresql://postgres:postgres@localhost:${PG_PORT}/openlocale_rp`;
   execFileSync(join(root, 'node_modules', '.bin', 'prisma'), ['migrate', 'deploy'], {
     env: { ...process.env, DATABASE_URL: url }, stdio: 'pipe' });
+  prisma=new PrismaClient({datasources:{db:{url}}});
+  await prisma.$executeRawUnsafe(`ALTER DATABASE openlocale_rp SET timezone TO 'America/Los_Angeles'`);
   api = spawn(process.execPath, [join(root, 'dist', 'apps', 'api', 'main.js')], {
     env: { ...process.env, DATABASE_URL: url, JWT_SECRET: 'rp-secret', PORT: String(API_PORT) }, stdio: 'pipe' });
   let up = false;
@@ -136,6 +139,14 @@ try {
   check('usage same-name actors retain distinct stable IDs and own counts',actors.filter(a=>a.name==='rp').length===2&&actors.some(a=>a.actorId===ownerId&&a.count>1)&&actors.some(a=>a.actorId===sameName.user.id&&a.count===1));
   check('usage top-actor ties use deterministic actor ID order',actors.filter(a=>a.count===1).map(a=>a.actorId).join(',')===[sameName.user.id,namedUnassigned.user.id].sort().join(','));
 
+  const utcBoundary=new Date(Date.now()-2*86400000);utcBoundary.setUTCHours(0,30,0,0);
+  const future=new Date(Date.now()+86400000);
+  await prisma.activityEvent.createMany({data:[{projectId:pid,actorId:ownerId,action:'utc-boundary-fixture',keyName:'utc-only',createdAt:utcBoundary},{projectId:pid,actorId:ownerId,action:'future-fixture',keyName:'future-only',createdAt:future}]});
+  const bounded=(await call(`/projects/${pid}/reports/usage`,{jwt})).json;
+  check('usage future event excluded from all aggregates',!bounded.byAction['future-fixture']&&bounded.totalEvents===Object.values(bounded.byAction).reduce((a,b)=>a+b,0)&&bounded.byDay.reduce((a,b)=>a+b.count,0)===bounded.totalEvents&&bounded.activeKeys===u.activeKeys+3);
+  check('usage days explicitly UTC under nonUTC database default',bounded.byDay.some(r=>r.day===utcBoundary.toISOString().slice(0,10)&&r.count===1)&&bounded.timezone==='UTC');
+  check('usage one captured asOf bounds trailing window',new Date(bounded.asOf).getTime()-new Date(bounded.since).getTime()===30*86400000&&new Date(bounded.asOf)<future);
+
   // Access: member and read token can read; non-member and anonymous cannot.
   const member = (await call('/auth/signup', { method: 'POST', body: { email: `rpm${Date.now()}@t.dev`, password: 'pass1234', displayName: 'rpm' } })).json;
   await call(`/projects/${pid}/members`, { jwt, method: 'POST', body: { email: member.user.email } });
@@ -153,6 +164,7 @@ try {
   process.exit(1);
 } finally {
   if (api) api.kill('SIGTERM');
+  await prisma?.$disconnect();
   await pg.stop();
   rmSync(dataDir, { recursive: true, force: true });
 }

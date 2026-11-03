@@ -87,17 +87,18 @@ export class ReportsService {
     await this.projects.getFor(userId, projectId);
     if(daysRaw!==undefined&&!Number.isSafeInteger(daysRaw))throw new BadRequestException('Usage days must be a finite safe integer');
     const days = Math.min(Math.max(daysRaw ?? 30, 1), 90);
-    const since = new Date(Date.now() - days * 86400_000);
+    const asOf=new Date();
+    const since = new Date(asOf.getTime() - days * 86400_000);
     const byAction = await this.prisma.activityEvent.groupBy({
-      by: ['action'], where: { projectId, createdAt: { gte: since } }, _count: { _all: true },
+      by: ['action'], where: { projectId, createdAt: { gte: since, lte:asOf } }, _count: { _all: true },
     });
-    const dayRows = await this.prisma.$queryRaw<{ day: Date; count: bigint }[]>(Prisma.sql`
-      SELECT date_trunc('day', "createdAt") AS day, count(*) AS count
+    const dayRows = await this.prisma.$queryRaw<{ day: string; count: bigint }[]>(Prisma.sql`
+      SELECT to_char("createdAt" AT TIME ZONE 'UTC','YYYY-MM-DD') AS day, count(*) AS count
       FROM "activity_events"
-      WHERE "projectId" = ${projectId}::uuid AND "createdAt" >= ${since}
+      WHERE "projectId" = ${projectId}::uuid AND "createdAt" >= ${since} AND "createdAt" <= ${asOf}
       GROUP BY 1 ORDER BY 1`);
     const actorRows = await this.prisma.activityEvent.groupBy({
-      by: ['actorId'], where: { projectId, createdAt: { gte: since }, actorId: { not: null } },
+      by: ['actorId'], where: { projectId, createdAt: { gte: since, lte:asOf }, actorId: { not: null } },
       _count: { _all: true }, orderBy: [{ _count: { actorId: 'desc' } },{actorId:'asc'}], take: 5,
     });
     const users = await this.prisma.user.findMany({
@@ -106,14 +107,14 @@ export class ReportsService {
     });
     const nameOf = new Map(users.map((u) => [u.id, u.displayName]));
     const keyRows = await this.prisma.activityEvent.findMany({
-      where: { projectId, createdAt: { gte: since }, keyName: { not: null } },
+      where: { projectId, createdAt: { gte: since, lte:asOf }, keyName: { not: null } },
       select: { keyName: true }, distinct: ['keyName'],
     });
     const totalEvents = byAction.reduce((n, a) => n + a._count._all, 0);
     return {
-      days, since, totalEvents, activeKeys: keyRows.length,
+      days, since, asOf, timezone:'UTC' as const, totalEvents, activeKeys: keyRows.length,
       byAction: Object.fromEntries(byAction.map((a) => [a.action, a._count._all])),
-      byDay: dayRows.map((r) => ({ day: r.day.toISOString().slice(0, 10), count: Number(r.count) })),
+      byDay: dayRows.map((r) => ({ day: r.day, count: Number(r.count) })),
       topActors: actorRows.map((a) => ({ actorId:a.actorId!, name: nameOf.get(a.actorId!) ?? 'former member', count: a._count._all })),
     };
   }

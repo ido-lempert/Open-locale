@@ -166,7 +166,7 @@ export interface QualityReport {
   locales: { locale: string; total: number; byType: Record<string, number> }[];
 }
 export interface UsageReport {
-  days: number; since: string; totalEvents: number; activeKeys: number;
+  days: number; since: string; asOf: string; timezone: 'UTC'; totalEvents: number; activeKeys: number;
   byAction: Record<string, number>;
   byDay: { day: string; count: number }[];
   topActors: { actorId: string; name: string; count: number }[];

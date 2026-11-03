@@ -362,3 +362,7 @@ RealHTTP41/unitboundarytests verified. See0258.
 Usage topactors now retain stableactorID with deterministic tieorder/UIidentitycue;
 same-nameactors remain separate and distinguishable. Top5/nullactorsemantics
 unchanged. RealHTTPsame-nameevents/browserverified. See0259.
+
+Usage aggregates share capturedsince/asOfinclusivewindow,exclude futureevents,
+and return explicitUTCdaylabels regardless DBtimezone. AdditiveasOf/timezoneUTC;
+separatequeriesNOToneDBsnapshot. ActualnonUTCDB/futurefixtureverified. See0260.
