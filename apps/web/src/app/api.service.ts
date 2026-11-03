@@ -169,7 +169,7 @@ export interface UsageReport {
   days: number; since: string; totalEvents: number; activeKeys: number;
   byAction: Record<string, number>;
   byDay: { day: string; count: number }[];
-  topActors: { name: string; count: number }[];
+  topActors: { actorId: string; name: string; count: number }[];
 }
 export interface TaskReport {
   total: number; byStatus: Record<string, number>; overdue: number; dueSoon: number;

@@ -89,3 +89,7 @@ Browser210/reportsHTTP30 verify separateidentitycounts;noexternalaccountsused.
 Slice191 local same-namegroup/personfixture at480x900shows GroupIDcue,twouserID
 rows and nullNoassigneebucket,allfourcounts1readable/tablefits. Finalimage inspected
 followingTLSreadretry. Browser211/reportsHTTP32 verifygroupseparation.
+
+Slice193 actualsame-nameactorfixture at480x900shows twodistinctfullIDrows/count1,
+usage2events and retainedtaskrows. Finalimageinspected;tablefits/existingprogress
+scrollunchanged. Browser212/reportsHTTP43 verifyidentity/count/tieorder.

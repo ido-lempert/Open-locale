@@ -131,6 +131,11 @@ try {
   check('task report separates same-name group and users from truly unassigned',grouped.perAssignee.some(a=>a.kind==='group'&&a.assigneeGroupId===taskGroup.id&&a.assigneeId===null&&a.name==='rp'&&a.count===1)&&grouped.perAssignee.filter(a=>a.kind==='user'&&a.name==='rp').length===2&&grouped.perAssignee.some(a=>a.kind==='unassigned'&&a.assigneeId===null&&a.assigneeGroupId===null&&a.count===1));
   check('group workload counts once not expanded by group membership',grouped.perAssignee.length===5&&grouped.perAssignee.reduce((n,a)=>n+a.count,0)===grouped.byStatus.OPEN+grouped.byStatus.IN_PROGRESS);
 
+  for(const person of [sameName,namedUnassigned])await call(`/projects/${pid}/keys`,{jwt:person.accessToken,method:'POST',body:{name:'actor-'+person.user.id}});
+  const actors=(await call(`/projects/${pid}/reports/usage`,{jwt})).json.topActors;
+  check('usage same-name actors retain distinct stable IDs and own counts',actors.filter(a=>a.name==='rp').length===2&&actors.some(a=>a.actorId===ownerId&&a.count>1)&&actors.some(a=>a.actorId===sameName.user.id&&a.count===1));
+  check('usage top-actor ties use deterministic actor ID order',actors.filter(a=>a.count===1).map(a=>a.actorId).join(',')===[sameName.user.id,namedUnassigned.user.id].sort().join(','));
+
   // Access: member and read token can read; non-member and anonymous cannot.
   const member = (await call('/auth/signup', { method: 'POST', body: { email: `rpm${Date.now()}@t.dev`, password: 'pass1234', displayName: 'rpm' } })).json;
   await call(`/projects/${pid}/members`, { jwt, method: 'POST', body: { email: member.user.email } });

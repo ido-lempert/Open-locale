@@ -358,3 +358,7 @@ cue explicit. Same-namecollision/reconcileHTTP/browserverified. See0257.
 Usage days query requires decimal safeinteger when supplied;malformed/nonfinite/
 fractional/unsafe400. Missing30,validintegersclamp1..90,explicit0now1. NoUIchange.
 RealHTTP41/unitboundarytests verified. See0258.
+
+Usage topactors now retain stableactorID with deterministic tieorder/UIidentitycue;
+same-nameactors remain separate and distinguishable. Top5/nullactorsemantics
+unchanged. RealHTTPsame-nameevents/browserverified. See0259.

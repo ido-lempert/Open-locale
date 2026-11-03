@@ -98,7 +98,7 @@ export class ReportsService {
       GROUP BY 1 ORDER BY 1`);
     const actorRows = await this.prisma.activityEvent.groupBy({
       by: ['actorId'], where: { projectId, createdAt: { gte: since }, actorId: { not: null } },
-      _count: { _all: true }, orderBy: { _count: { actorId: 'desc' } }, take: 5,
+      _count: { _all: true }, orderBy: [{ _count: { actorId: 'desc' } },{actorId:'asc'}], take: 5,
     });
     const users = await this.prisma.user.findMany({
       where: { id: { in: actorRows.map((a) => a.actorId!) } },
@@ -114,7 +114,7 @@ export class ReportsService {
       days, since, totalEvents, activeKeys: keyRows.length,
       byAction: Object.fromEntries(byAction.map((a) => [a.action, a._count._all])),
       byDay: dayRows.map((r) => ({ day: r.day.toISOString().slice(0, 10), count: Number(r.count) })),
-      topActors: actorRows.map((a) => ({ name: nameOf.get(a.actorId!) ?? 'former member', count: a._count._all })),
+      topActors: actorRows.map((a) => ({ actorId:a.actorId!, name: nameOf.get(a.actorId!) ?? 'former member', count: a._count._all })),
     };
   }
 

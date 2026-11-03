@@ -750,6 +750,10 @@ try {
   await page.reload({waitUntil:'networkidle0'});await page.waitForFunction(()=>document.querySelectorAll('.tasks-table tbody tr').length===4);
   check('task report browser separates same-name group from users and no-assignee bucket',await page.$$eval('.tasks-table tbody tr',(rows,id)=>rows.some(r=>r.textContent.includes('Group: '+id))&&rows.filter(r=>r.textContent.includes('Same assignee')).length===3&&rows.some(r=>r.textContent.includes('No assignee')),reportGroup.id));
   await page.screenshot({path:'/downloads/reports-group-identity-narrow.png'});
+  for(const actorId of [duplicateAssignee.id,otherAssignee.id])await prisma.activityEvent.create({data:{projectId:second.id,actorId,action:'report.identity.fixture',keyName:'identity'}});
+  await page.reload({waitUntil:'networkidle0'});await page.waitForFunction(()=>document.querySelectorAll('.usage-table:nth-of-type(2) tbody tr').length===2);
+  check('usage browser keeps same-name actors as distinct identity rows',await page.$$eval('.usage-table:nth-of-type(2) tbody tr',(rows,ids)=>rows.length===2&&ids.every(id=>rows.some(r=>r.textContent.includes(id)&&r.textContent.includes('Same assignee'))),[duplicateAssignee.id,otherAssignee.id]));
+  await page.screenshot({path:'/downloads/reports-actor-identity-narrow.png'});
   await page.evaluate(t=>localStorage.setItem('ol_token',t),member.accessToken);
   await page.goto(`${WEB}/projects/${project.id}/sync`,{waitUntil:'networkidle0'});await page.waitForSelector('textarea[name=syncBaseline]');
   await set('syncSha','a'.repeat(40));await set('syncBaseline','{}');await set('syncRemote','{}');await page.click('button[name=syncPreview]');await page.waitForSelector('[role=alert]');
