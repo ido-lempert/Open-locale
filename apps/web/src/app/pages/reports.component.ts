@@ -11,12 +11,13 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
     <header class="bar">
       <a [routerLink]="['/projects', projectId]" class="back">&larr; Editor</a>
       <h1>Reports</h1>
-      <select aria-label="Branch" name="reportBranch" [ngModel]="branch()" (ngModelChange)="branch.set($event); void fetch()">
+      <select aria-label="Branch" [attr.aria-busy]="branchListLoading()" name="reportBranch" [ngModel]="branch()" (ngModelChange)="branch.set($event); void fetch()">
         @if (!branches().length) { <option value="main">main</option> }
         @for (b of branches(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }
       </select>
     </header>
     <main [attr.aria-busy]="branchLoading() || dashboardsLoading()">
+      @if (branchListLoading()) { <p role="status" name="branchListLoading">Loading branch list. Main reports are available independently.</p> }
       @if (branchListError()) { <p class="error" role="alert" name="branchListError">Branch list unavailable. Only main is offered. Reload this page to try loading other branches.</p> }
       @if (error(); as e) { <p class="error" role="alert" name="branchReportError">{{ e }}</p> }
       @if (branchLoading()) { <p role="status" name="branchReportLoading">Loading progress and quality reports for {{ branch() }}...</p> }
@@ -120,6 +121,7 @@ export class ReportsComponent implements OnInit, OnDestroy {
   taskReport = signal<TaskReport | null>(null);
   branches = signal<BranchInfo[]>([]);
   branchListError=signal(false);
+  branchListLoading=signal(false);
   branch = signal('main');
   statusColumns = signal<string[]>([]);
   error = signal('');
@@ -140,12 +142,14 @@ export class ReportsComponent implements OnInit, OnDestroy {
   async loadProject(projectId:string) {
     if(this.destroyed)return;
     const scope=++this.projectGeneration;++this.generation;this.projectId=projectId;
-    this.branch.set('main');this.branches.set([]);this.branchListError.set(false);this.report.set(null);this.quality.set(null);
+    this.branch.set('main');this.branches.set([]);this.branchListError.set(false);this.branchListLoading.set(true);this.report.set(null);this.quality.set(null);
     this.usage.set(null);this.taskReport.set(null);this.statusColumns.set([]);this.error.set('');this.branchLoading.set(true);this.usageError.set(false);this.taskReportError.set(false);this.dashboardsLoading.set(true);
     const branchList=this.api.listBranches(projectId).then(branches=>{
       if(!this.destroyed&&scope===this.projectGeneration)this.branches.set(branches);
     }).catch(()=>{
       if(!this.destroyed&&scope===this.projectGeneration)this.branchListError.set(true);
+    }).finally(()=>{
+      if(!this.destroyed&&scope===this.projectGeneration)this.branchListLoading.set(false);
     });
     await Promise.all([branchList,this.fetch(),this.ngOnInitDashboards()]);
   }

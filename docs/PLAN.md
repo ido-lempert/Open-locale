@@ -464,3 +464,7 @@ Branch discovery failure now shows fixedguidance instead of silently suggesting
 main is the onlybranch. Mainreports/projectdashboards retained, explicitreload
 recovers branchoptions. Current/lateproject/destroyfences unit-tested and actual
 browser503/recovery verified. NoAPIquerychange. See0282.
+
+Branch discovery now has separatereadable loadingstatus and selectoraria-busy,
+without blockingreports. Oldprojectcompletion cannot clear newerloading. Unit+
+actualheldlistbrowser verifies loading/settledstates. NoAPIquerychange. See0283.

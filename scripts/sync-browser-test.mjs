@@ -719,8 +719,11 @@ try {
   const holdBranchList=async request=>{if(new URL(request.url()).pathname===`/api/projects/${applyProject.id}/branches`){listHeld=true;await listGate;}return request.continue();};page.on('request',holdBranchList);
   await page.goto(`${WEB}/projects/${applyProject.id}/reports`,{waitUntil:'domcontentloaded'});await page.waitForSelector('[name=taskWindow]');await page.waitForSelector('.progress-table');
   check('held branch list does not block main reports and project dashboards',listHeld&&await page.$eval('[name=reportBranch]',e=>e.value==='main')&&await page.$eval('main',e=>e.getAttribute('aria-busy')==='false')&&!!await page.$('.usage-table'));
+  check('held branch list has separate loading status and busy selector without blocking reports',!!await page.$('[name=branchListLoading]')&&await page.$eval('[name=reportBranch]',e=>e.getAttribute('aria-busy')==='true')&&await page.$eval('main',e=>e.getAttribute('aria-busy')==='false'));
   await page.screenshot({path:'/downloads/reports-held-branch-list-full.png',fullPage:true});
   const branchListResponse=page.waitForResponse(r=>new URL(r.url()).pathname===`/api/projects/${applyProject.id}/branches`);releaseList();await branchListResponse;page.off('request',holdBranchList);await page.setRequestInterception(false);
+  await page.waitForFunction(()=>document.querySelector('[name=reportBranch]')?.getAttribute('aria-busy')==='false');
+  check('settled branch list clears loading status and selector busy state',!(await page.$('[name=branchListLoading]')));
   const reloadReports=async()=>{await page.reload({waitUntil:'domcontentloaded'});await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');};
   await page.setRequestInterception(true);const failBranchList=async request=>new URL(request.url()).pathname===`/api/projects/${applyProject.id}/branches`?request.respond({status:503,contentType:'application/json',body:JSON.stringify({message:'private-branch-list-detail'})}):request.continue();page.on('request',failBranchList);
   await reloadReports();await page.waitForSelector('[name=branchListError]');
