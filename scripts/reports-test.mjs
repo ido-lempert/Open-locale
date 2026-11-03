@@ -123,6 +123,12 @@ try {
   check('task report separates named unassigned person from null bucket',identities.perAssignee.filter(a=>a.name==='unassigned').length===2&&identities.perAssignee.some(a=>a.assigneeId===null&&a.count===1)&&identities.perAssignee.some(a=>a.assigneeId===namedUnassigned.user.id&&a.count===1));
   check('task report identity buckets reconcile with all open tasks',identities.perAssignee.length===4&&identities.perAssignee.reduce((n,a)=>n+a.count,0)===identities.byStatus.OPEN+identities.byStatus.IN_PROGRESS);
 
+  const taskGroup=(await call(`/projects/${pid}/groups`,{jwt,method:'POST',body:{name:'rp',role:'MEMBER'}})).json;
+  await call(`/projects/${pid}/tasks`,{jwt,method:'POST',body:{title:'group workload',assigneeGroupId:taskGroup.id}});
+  const grouped=(await call(`/projects/${pid}/reports/tasks`,{jwt})).json;
+  check('task report separates same-name group and users from truly unassigned',grouped.perAssignee.some(a=>a.kind==='group'&&a.assigneeGroupId===taskGroup.id&&a.assigneeId===null&&a.name==='rp'&&a.count===1)&&grouped.perAssignee.filter(a=>a.kind==='user'&&a.name==='rp').length===2&&grouped.perAssignee.some(a=>a.kind==='unassigned'&&a.assigneeId===null&&a.assigneeGroupId===null&&a.count===1));
+  check('group workload counts once not expanded by group membership',grouped.perAssignee.length===5&&grouped.perAssignee.reduce((n,a)=>n+a.count,0)===grouped.byStatus.OPEN+grouped.byStatus.IN_PROGRESS);
+
   // Access: member and read token can read; non-member and anonymous cannot.
   const member = (await call('/auth/signup', { method: 'POST', body: { email: `rpm${Date.now()}@t.dev`, password: 'pass1234', displayName: 'rpm' } })).json;
   await call(`/projects/${pid}/members`, { jwt, method: 'POST', body: { email: member.user.email } });

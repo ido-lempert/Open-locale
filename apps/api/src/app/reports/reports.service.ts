@@ -136,18 +136,19 @@ export class ReportsService {
     });
     const openRows = await this.prisma.task.findMany({
       where: { projectId, status: { not: 'DONE' } },
-      select: { assigneeId: true, assignee: { select: { displayName: true } } },
+      select: { assigneeId: true, assigneeGroupId:true, assignee: { select: { displayName: true } },assigneeGroup:{select:{name:true}} },
     });
-    const perAssignee = new Map<string | null, { assigneeId:string|null; name:string; count:number }>();
+    const perAssignee = new Map<string, { kind:'user'|'group'|'unassigned'; assigneeId:string|null; assigneeGroupId:string|null; name:string; count:number }>();
     for (const t of openRows) {
-      const id=t.assigneeId;
-      const row=perAssignee.get(id)??{assigneeId:id,name:t.assignee?.displayName??'unassigned',count:0};
-      row.count++;perAssignee.set(id,row);
+      const kind=t.assigneeId?'user':t.assigneeGroupId?'group':'unassigned';
+      const key=kind+':'+(t.assigneeId??t.assigneeGroupId??'');
+      const row=perAssignee.get(key)??{kind,assigneeId:t.assigneeId,assigneeGroupId:t.assigneeId?null:t.assigneeGroupId,name:t.assigneeId?t.assignee?.displayName??'former member':t.assigneeGroupId?t.assigneeGroup?.name??'former group':'unassigned',count:0};
+      row.count++;perAssignee.set(key,row);
     }
     const total = byStatus.OPEN + byStatus.IN_PROGRESS + byStatus.DONE;
     return {
       total, byStatus, overdue, dueSoon,
-      perAssignee: [...perAssignee.values()].sort((a,b)=>b.count-a.count||(a.assigneeId??'').localeCompare(b.assigneeId??'')),
+      perAssignee: [...perAssignee.values()].sort((a,b)=>b.count-a.count||(a.kind+':'+(a.assigneeId??a.assigneeGroupId??'')).localeCompare(b.kind+':'+(b.assigneeId??b.assigneeGroupId??''))),
     };
   }
 }

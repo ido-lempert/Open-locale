@@ -746,6 +746,10 @@ try {
   await page.reload({waitUntil:'networkidle0'});await page.waitForSelector('.tasks-table');
   check('task report browser renders separate same-name stable identity rows and null bucket',await page.$$eval('.tasks-table tbody tr',(rows,ids)=>rows.length===3&&ids.every(id=>rows.some(r=>r.textContent.includes(id)))&&rows.some(r=>r.textContent.includes('No assignee')),[duplicateAssignee.id,otherAssignee.id]));
   await page.screenshot({path:'/downloads/reports-assignee-identity-narrow.png'});
+  const reportGroup=await prisma.group.create({data:{teamId:(await prisma.project.findUnique({where:{id:second.id}})).teamId,name:'Same assignee'}});await prisma.task.create({data:{projectId:second.id,title:'group report fixture',assigneeGroupId:reportGroup.id}});
+  await page.reload({waitUntil:'networkidle0'});await page.waitForFunction(()=>document.querySelectorAll('.tasks-table tbody tr').length===4);
+  check('task report browser separates same-name group from users and no-assignee bucket',await page.$$eval('.tasks-table tbody tr',(rows,id)=>rows.some(r=>r.textContent.includes('Group: '+id))&&rows.filter(r=>r.textContent.includes('Same assignee')).length===3&&rows.some(r=>r.textContent.includes('No assignee')),reportGroup.id));
+  await page.screenshot({path:'/downloads/reports-group-identity-narrow.png'});
   await page.evaluate(t=>localStorage.setItem('ol_token',t),member.accessToken);
   await page.goto(`${WEB}/projects/${project.id}/sync`,{waitUntil:'networkidle0'});await page.waitForSelector('textarea[name=syncBaseline]');
   await set('syncSha','a'.repeat(40));await set('syncBaseline','{}');await set('syncRemote','{}');await page.click('button[name=syncPreview]');await page.waitForSelector('[role=alert]');

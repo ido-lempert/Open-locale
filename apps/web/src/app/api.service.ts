@@ -173,7 +173,7 @@ export interface UsageReport {
 }
 export interface TaskReport {
   total: number; byStatus: Record<string, number>; overdue: number; dueSoon: number;
-  perAssignee: { assigneeId: string | null; name: string; count: number }[];
+  perAssignee: { kind: 'user' | 'group' | 'unassigned'; assigneeId: string | null; assigneeGroupId: string | null; name: string; count: number }[];
 }
 
 export interface CommentEntry {

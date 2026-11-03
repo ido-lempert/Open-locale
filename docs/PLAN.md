@@ -350,3 +350,7 @@ quality503browser proves no partialfigures and successfulusage/tasksretained. Se
 Task report workload groups by stable nullableassigneeID,not displayname. Same-name
 people and person named unassigned remain distinct from nullbucket. UI shows full
 identitycue. Group-nullworkload semantics unchanged. See0256.
+
+Task reports now separate group workload by kind+stablegroupID rather than placing
+groupassignedtasks in unassigned. User/group/nullbucket counts oncepertask;UIgroup
+cue explicit. Same-namecollision/reconcileHTTP/browserverified. See0257.

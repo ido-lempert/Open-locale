@@ -99,7 +99,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
           <div class="table-scroll">
           <table class="qa-table tasks-table">
             <thead><tr><th class="row-head">Assignee</th><th>Open tasks</th></tr></thead>
-            <tbody>@for (a of t.perAssignee; track a.assigneeId) { <tr><td>{{ a.name }}<small class="muted" style="display:block;overflow-wrap:anywhere">{{ a.assigneeId ?? 'No assignee' }}</small></td><td>{{ a.count }}</td></tr> }</tbody>
+            <tbody>@for (a of t.perAssignee; track a.kind + ':' + (a.assigneeId ?? a.assigneeGroupId ?? '')) { <tr><td>{{ a.name }}<small class="muted" style="display:block;overflow-wrap:anywhere">{{ a.kind === 'group' ? 'Group: ' + a.assigneeGroupId : a.assigneeId ?? 'No assignee' }}</small></td><td>{{ a.count }}</td></tr> }</tbody>
           </table>
           </div>
         }

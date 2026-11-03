@@ -85,3 +85,7 @@ Final480x900image inspected;layoutunchanged. Browser209checks.
 Slice190 actualsame-nameassigneefixture renders two distinct fullIDrows and null
 Noassigneebucket at480x900,eachcount1readable/tablefits. Finalimageinspected.
 Browser210/reportsHTTP30 verify separateidentitycounts;noexternalaccountsused.
+
+Slice191 local same-namegroup/personfixture at480x900shows GroupIDcue,twouserID
+rows and nullNoassigneebucket,allfourcounts1readable/tablefits. Finalimage inspected
+followingTLSreadretry. Browser211/reportsHTTP32 verifygroupseparation.
