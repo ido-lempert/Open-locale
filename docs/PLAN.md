@@ -376,3 +376,7 @@ Task workload now groups effective user/group/null assignments in PostgreSQL
 before joining names, rather than materializing every open task in the API.
 Preserves one count per task and same-name identity separation. Real1501-extra-
 user/DONE/other-project fixtures reconcile. No DB resource-bound claim. See0262.
+
+Usage top-five boundary now has actual PostgreSQL HTTP evidence with seven tied
+same-name actors, exact stable-ID cutoff/repeated read, null-actor events retained
+in totals but not ranking, and future-only actor excluded. Test-only. See0263.

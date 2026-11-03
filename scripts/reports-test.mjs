@@ -162,6 +162,21 @@ try {
   check('task report aggregates large user workload without splitting user identity',workload.perAssignee.find(r=>r.assigneeId===ownerId)?.count===workloadBefore.perAssignee.find(r=>r.assigneeId===ownerId).count+1501&&workload.perAssignee.find(r=>r.assigneeId===ownerId)?.assigneeGroupId===null&&workload.perAssignee.find(r=>r.assigneeGroupId===taskGroup.id)?.count===1);
   check('task report aggregated workload excludes DONE and other project and reconciles open statuses',workload.perAssignee.length===workloadBefore.perAssignee.length&&workload.perAssignee.reduce((n,r)=>n+r.count,0)===workload.byStatus.OPEN+workload.byStatus.IN_PROGRESS&&workload.total===workloadBefore.total+1502);
 
+  // Dedicated ranking project isolates the cutoff from earlier report fixtures.
+  const rankingProject=(await call('/projects',{jwt,method:'POST',body:{name:'Ranking',slug:'ranking-'+Date.now(),baseLocale:'en',locales:['en']}})).json;
+  await prisma.activityEvent.deleteMany({where:{projectId:rankingProject.id}});
+  const rankingUsers=[];
+  for(let i=0;i<7;i++)rankingUsers.push(await prisma.user.create({data:{email:`ranking-${i}-${Date.now()}@t.dev`,displayName:'same ranking name',passwordHash:'fixture-not-login'}}));
+  const futureActor=await prisma.user.create({data:{email:`future-ranking-${Date.now()}@t.dev`,displayName:'future ranking actor',passwordHash:'fixture-not-login'}});
+  await prisma.activityEvent.createMany({data:[...rankingUsers.flatMap(person=>Array.from({length:2},()=>({projectId:rankingProject.id,actorId:person.id,action:'ranking-tie',keyName:'ranking-shared'}))),...Array.from({length:8},()=>({projectId:rankingProject.id,actorId:null,action:'ranking-null',keyName:null})),...Array.from({length:9},()=>({projectId:rankingProject.id,actorId:futureActor.id,action:'ranking-future',keyName:'ranking-future',createdAt:future}))]});
+  const ranking=(await call(`/projects/${rankingProject.id}/reports/usage`,{jwt})).json;
+  const expectedTop=rankingUsers.map(p=>p.id).sort().slice(0,5);
+  check('usage top-five cutoff deterministic among seven tied same-name actor IDs',ranking.topActors.length===5&&ranking.topActors.map(a=>a.actorId).join(',')===expectedTop.join(',')&&ranking.topActors.every(a=>a.name==='same ranking name'&&a.count===2));
+  check('usage null-actor events remain in totals and days but not ranked actors',ranking.totalEvents===22&&ranking.byAction['ranking-null']===8&&ranking.byDay.reduce((n,d)=>n+d.count,0)===22&&ranking.topActors.every(a=>a.actorId!==null));
+  check('usage future-only actor cannot displace real tied actors',!ranking.byAction['ranking-future']&&!ranking.topActors.some(a=>a.actorId===futureActor.id)&&ranking.activeKeys===1);
+  const reranked=(await call(`/projects/${rankingProject.id}/reports/usage`,{jwt})).json;
+  check('usage repeated read preserves tied top-five cutoff',reranked.topActors.map(a=>a.actorId).join(',')===expectedTop.join(','));
+
   // Access: member and read token can read; non-member and anonymous cannot.
   const member = (await call('/auth/signup', { method: 'POST', body: { email: `rpm${Date.now()}@t.dev`, password: 'pass1234', displayName: 'rpm' } })).json;
   await call(`/projects/${pid}/members`, { jwt, method: 'POST', body: { email: member.user.email } });
