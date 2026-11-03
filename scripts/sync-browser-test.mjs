@@ -745,6 +745,9 @@ try {
   let usageHeld=false,releaseUsage;const usageGate=new Promise(r=>releaseUsage=r);await page.setRequestInterception(true);
   const holdUsage=async request=>{if(request.url().includes(`/projects/${applyProject.id}/reports/usage`)){usageHeld=true;await usageGate;}return request.continue();};page.on('request',holdUsage);
   await page.goto(`${WEB}/projects/${applyProject.id}/reports`,{waitUntil:'domcontentloaded'});await page.waitForSelector('.progress-table');for(let n=0;n<50&&!usageHeld;n++)await new Promise(r=>setTimeout(r,50));if(!usageHeld)throw new Error('project usage request not held');
+  await page.waitForSelector('[name=taskWindow]');
+  check('held usage publishes completed tasks with independent loading state',!!await page.$('[name=usageLoading]')&&!(await page.$('[name=tasksLoading]'))&&!(await page.$('.usage-table'))&&await page.$eval('main',e=>e.getAttribute('aria-busy')==='true'));
+  await page.screenshot({path:'/downloads/reports-independent-dashboards-full.png',fullPage:true});
   await page.evaluate(id=>{history.pushState({},'',`/projects/${id}/reports`);window.dispatchEvent(new PopStateEvent('popstate'));},second.id);
   await page.waitForFunction(()=>document.body.textContent.includes('0 keys on main.')&&document.querySelectorAll('.usage-table').length===2);
   const newProjectUsage=await page.$eval('main',e=>e.textContent);check('reused report route loads new project and clears old progress',newProjectUsage.includes('0 keys on main.')&&!newProjectUsage.includes('1 keys on main.'));

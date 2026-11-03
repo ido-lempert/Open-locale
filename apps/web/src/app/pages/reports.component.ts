@@ -78,7 +78,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
 
       <p class="muted" name="projectDashboardScope">Usage and tasks cover the whole project. The branch selector filters progress and quality only.</p>
       <h2>Usage <span class="muted">last {{ usage()?.days ?? 30 }} days</span></h2>
-      @if (dashboardsLoading()) { <p role="status">Loading usage and task reports...</p> }
+      @if (usageLoading()) { <p role="status" name="usageLoading">Loading usage report...</p> }
       @if (usageError()) { <p class="error" role="alert" name="usageReportError">Usage report unavailable. No usage figures are shown. Reload this page to try again.</p> }
       @if (usage(); as u) {
         <p class="muted">{{ u.totalEvents }} events touching {{ u.activeKeys }} keys.</p>
@@ -96,6 +96,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
       }
 
       <h2>Tasks</h2>
+      @if (tasksLoading()) { <p role="status" name="tasksLoading">Loading task report...</p> }
       @if (taskReportError()) { <p class="error" role="alert" name="taskReportError">Task report unavailable. No task figures are shown. Reload this page to try again.</p> }
       @if (taskReport(); as t) {
         <p class="muted">{{ t.total }} tasks: {{ t.byStatus['OPEN'] ?? 0 }} open, {{ t.byStatus['IN_PROGRESS'] ?? 0 }} in progress, {{ t.byStatus['DONE'] ?? 0 }} done.
@@ -129,6 +130,8 @@ export class ReportsComponent implements OnInit, OnDestroy {
   usageError=signal(false);
   taskReportError=signal(false);
   dashboardsLoading=signal(false);
+  usageLoading=signal(false);
+  tasksLoading=signal(false);
   private generation=0;
   private destroyed=false;
 
@@ -143,7 +146,7 @@ export class ReportsComponent implements OnInit, OnDestroy {
     if(this.destroyed)return;
     const scope=++this.projectGeneration;++this.generation;this.projectId=projectId;
     this.branch.set('main');this.branches.set([]);this.branchListError.set(false);this.branchListLoading.set(true);this.report.set(null);this.quality.set(null);
-    this.usage.set(null);this.taskReport.set(null);this.statusColumns.set([]);this.error.set('');this.branchLoading.set(true);this.usageError.set(false);this.taskReportError.set(false);this.dashboardsLoading.set(true);
+    this.usage.set(null);this.taskReport.set(null);this.statusColumns.set([]);this.error.set('');this.branchLoading.set(true);this.usageError.set(false);this.taskReportError.set(false);this.dashboardsLoading.set(true);this.usageLoading.set(true);this.tasksLoading.set(true);
     const branchList=this.api.listBranches(projectId).then(branches=>{
       if(!this.destroyed&&scope===this.projectGeneration)this.branches.set(branches);
     }).catch(()=>{
@@ -177,11 +180,12 @@ export class ReportsComponent implements OnInit, OnDestroy {
   async ngOnInitDashboards() {
     if(this.destroyed)return;
     const scope=this.projectGeneration,projectId=this.projectId;
-    this.usage.set(null);this.taskReport.set(null);this.usageError.set(false);this.taskReportError.set(false);this.dashboardsLoading.set(true);
-    const [usage,tasks]=await Promise.allSettled([this.api.getUsage(projectId),this.api.getTaskReport(projectId)]);
-    if(this.destroyed||scope!==this.projectGeneration)return;
-    this.usage.set(usage.status==='fulfilled'?usage.value:null);this.usageError.set(usage.status==='rejected');
-    this.taskReport.set(tasks.status==='fulfilled'?tasks.value:null);this.taskReportError.set(tasks.status==='rejected');
-    this.dashboardsLoading.set(false);
+    this.usage.set(null);this.taskReport.set(null);this.usageError.set(false);this.taskReportError.set(false);this.dashboardsLoading.set(true);this.usageLoading.set(true);this.tasksLoading.set(true);
+    const current=()=>!this.destroyed&&scope===this.projectGeneration;
+    const settle=()=>{if(current())this.dashboardsLoading.set(this.usageLoading()||this.tasksLoading());};
+    await Promise.all([
+      this.api.getUsage(projectId).then(value=>{if(current())this.usage.set(value);}).catch(()=>{if(current())this.usageError.set(true);}).finally(()=>{if(current())this.usageLoading.set(false);settle();}),
+      this.api.getTaskReport(projectId).then(value=>{if(current())this.taskReport.set(value);}).catch(()=>{if(current())this.taskReportError.set(true);}).finally(()=>{if(current())this.tasksLoading.set(false);settle();}),
+    ]);
   }
 }

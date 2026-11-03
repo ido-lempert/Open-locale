@@ -468,3 +468,8 @@ browser503/recovery verified. NoAPIquerychange. See0282.
 Branch discovery now has separatereadable loadingstatus and selectoraria-busy,
 without blockingreports. Oldprojectcompletion cannot clear newerloading. Unit+
 actualheldlistbrowser verifies loading/settledstates. NoAPIquerychange. See0283.
+
+Usage/tasks now publish independently with separatesectionloading while mainbusy
+covers eitherpending. Project/destroy fences retained perresult/error/finally.
+Heldsiblingunits and actualheldusagebrowser verify completedtasksvisible before
+usagefinishes. NoAPIquerychange/synchronizedsnapshotclaim. See0284.
