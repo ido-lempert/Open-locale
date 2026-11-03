@@ -406,3 +406,8 @@ revocation atomicity or client-cache erasure. See0268.
 Progress/quality branch queries now require one valid branch name when supplied.
 Empty/repeated/malformed400;omittedmain/validunknown404. Literal bracket query key
 is ignored by simple query parser, not interpreted as branch object. See0269.
+
+Progress key denominator and filled status groups now share one SQLstatement
+snapshot via scoped-key CTE/zero-preserving totals join. Project/locales/branch
+resolution remain separate, not whole-report snapshot. ExistingPGHTTP111 plus
+empty/retired-status singlequery units verified. See0270.

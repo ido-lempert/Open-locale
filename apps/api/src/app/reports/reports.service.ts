@@ -22,15 +22,22 @@ export class ReportsService {
   async progress(userId: string, projectId: string, branchName?: string) {
     const project = await this.projects.getFor(userId, projectId);
     const branch = await this.branches.branchFor(projectId, branchName ?? DEFAULT_BRANCH);
-    const total = await this.prisma.key.count({ where: { branchId: branch.id } });
-    const rows = await this.prisma.$queryRaw<{ localeCode: string; status: string; count: bigint }[]>(Prisma.sql`
-      SELECT t."localeCode", t."status", count(*) AS count
-      FROM "translations" t
-      JOIN "keys" k ON k."id" = t."keyId"
-      WHERE k."branchId" = ${branch.id}::uuid AND t."value" <> ''
-      GROUP BY t."localeCode", t."status"`);
+    // Key denominator and filled status groups share one statement snapshot.
+    // Project/locales and branch resolution above are still separate reads.
+    const rows = await this.prisma.$queryRaw<{ total:bigint; localeCode:string|null; status:string|null; count:bigint|null }[]>(Prisma.sql`
+      WITH scoped_keys AS (SELECT id FROM "keys" WHERE "branchId" = ${branch.id}::uuid),
+      totals AS (SELECT count(*) AS total FROM scoped_keys),
+      filled AS (
+        SELECT t."localeCode", t."status", count(*) AS count
+        FROM "translations" t JOIN scoped_keys k ON k.id = t."keyId"
+        WHERE t."value" <> '' GROUP BY t."localeCode", t."status"
+      )
+      SELECT totals.total, filled."localeCode", filled."status", filled.count
+      FROM totals LEFT JOIN filled ON true`);
+    const total=Number(rows[0].total);
     const byLocale = new Map<string, Map<string, number>>();
     for (const r of rows) {
+      if(r.localeCode===null||r.status===null)continue;
       if (!byLocale.has(r.localeCode)) byLocale.set(r.localeCode, new Map());
       byLocale.get(r.localeCode)!.set(r.status, Number(r.count));
     }
