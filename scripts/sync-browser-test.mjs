@@ -714,9 +714,14 @@ try {
   check('late audit page cannot cross project navigation',!(await page.$('.audit-list')));
   check('late audit response cannot retain loading or steal focus',await page.$eval('section[aria-label="Deletion audit metadata"]',e=>e.getAttribute('aria-busy')==='false')&&!(await page.$eval('.audit-heading',e=>document.activeElement===e)));
   await clickTarget('[name=auditLoad]');await page.waitForSelector('.audit-list li');await page.setViewport({width:480,height:900});await page.screenshot({path:'/downloads/deletion-audit-focus-narrow.png'});
-  const reloadReports=async()=>{await page.reload({waitUntil:'domcontentloaded'});await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');};
   const reportBranch=await prisma.branch.create({data:{projectId:applyProject.id,name:'held-report-branch'}});await prisma.key.create({data:{projectId:applyProject.id,branchId:reportBranch.id,name:'held-report-key'}});
-  await page.goto(`${WEB}/projects/${applyProject.id}/reports`,{waitUntil:'networkidle0'});await page.waitForSelector('.progress-table');
+  let listHeld=false,releaseList;const listGate=new Promise(r=>releaseList=r);await page.setRequestInterception(true);
+  const holdBranchList=async request=>{if(new URL(request.url()).pathname===`/api/projects/${applyProject.id}/branches`){listHeld=true;await listGate;}return request.continue();};page.on('request',holdBranchList);
+  await page.goto(`${WEB}/projects/${applyProject.id}/reports`,{waitUntil:'domcontentloaded'});await page.waitForSelector('[name=taskWindow]');await page.waitForSelector('.progress-table');
+  check('held branch list does not block main reports and project dashboards',listHeld&&await page.$eval('[name=reportBranch]',e=>e.value==='main')&&await page.$eval('main',e=>e.getAttribute('aria-busy')==='false')&&!!await page.$('.usage-table'));
+  await page.screenshot({path:'/downloads/reports-held-branch-list-full.png',fullPage:true});
+  const branchListResponse=page.waitForResponse(r=>new URL(r.url()).pathname===`/api/projects/${applyProject.id}/branches`);releaseList();await branchListResponse;page.off('request',holdBranchList);await page.setRequestInterception(false);
+  const reloadReports=async()=>{await page.reload({waitUntil:'domcontentloaded'});await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');};
   const projectDashboardText=await page.$eval('main',e=>e.textContent.slice(e.textContent.indexOf('Usage and tasks cover')));
   let reportHeld=false,releaseReport;const reportGate=new Promise(r=>releaseReport=r);await page.setRequestInterception(true);
   const holdReport=async request=>{if(request.url().includes('/reports/quality?branch=held-report-branch')){reportHeld=true;await reportGate;}return request.continue();};page.on('request',holdReport);

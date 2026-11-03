@@ -454,3 +454,8 @@ or externalservice outage proof. See0279.
 Report scope now explicitly states usage/tasks cover wholeproject; branchselector
 filters progress/quality only. Actual heldbranchbrowser verifies projectdashboard
 text/cutoffs stay unchanged while branchpair loads. No APIquerychange. See0280.
+
+Report loading now starts main reports/projectdashboards independently of branch
+list, retaining late-project/destroy fences. Main selector fallback visible while
+list unavailable. Unit and actual held-listbrowser verify figures finish without
+waiting for branch discovery. No APIquerychange. See0281.

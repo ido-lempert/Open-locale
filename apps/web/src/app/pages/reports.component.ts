@@ -12,6 +12,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
       <a [routerLink]="['/projects', projectId]" class="back">&larr; Editor</a>
       <h1>Reports</h1>
       <select aria-label="Branch" name="reportBranch" [ngModel]="branch()" (ngModelChange)="branch.set($event); void fetch()">
+        @if (!branches().length) { <option value="main">main</option> }
         @for (b of branches(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }
       </select>
     </header>
@@ -139,10 +140,10 @@ export class ReportsComponent implements OnInit, OnDestroy {
     const scope=++this.projectGeneration;++this.generation;this.projectId=projectId;
     this.branch.set('main');this.branches.set([]);this.report.set(null);this.quality.set(null);
     this.usage.set(null);this.taskReport.set(null);this.statusColumns.set([]);this.error.set('');this.branchLoading.set(true);this.usageError.set(false);this.taskReportError.set(false);this.dashboardsLoading.set(true);
-    const branches=await this.api.listBranches(projectId).catch(()=>[]);
-    if(this.destroyed||scope!==this.projectGeneration)return;
-    this.branches.set(branches);
-    await Promise.all([this.fetch(),this.ngOnInitDashboards()]);
+    const branchList=this.api.listBranches(projectId).catch(()=>[]).then(branches=>{
+      if(!this.destroyed&&scope===this.projectGeneration)this.branches.set(branches);
+    });
+    await Promise.all([branchList,this.fetch(),this.ngOnInitDashboards()]);
   }
 
   actionRows(u: UsageReport) {
