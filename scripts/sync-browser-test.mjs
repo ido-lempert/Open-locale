@@ -744,6 +744,12 @@ try {
   await page.reload({waitUntil:'networkidle0'});await page.waitForSelector('[name=usageActionsEmpty]');
   check('usage browser explains zero activity without inventing action counts',await page.$eval('[name=usageActionsEmpty]',e=>e.textContent.includes('No activity in this window'))&&await page.$eval('main',e=>e.textContent.includes('0 events touching 0 keys.'))&&!!await page.$('[name=usageActorsEmpty]')&&await page.$$eval('.usage-table:first-of-type tbody tr',rows=>rows.length===1));
   await page.screenshot({path:'/downloads/reports-no-activity-full.png',fullPage:true});
+  check('task browser explicitly explains zero open workload',!!await page.$('[name=taskWorkloadEmpty]')&&!(await page.$('.tasks-table'))&&await page.$eval('[name=taskWorkloadEmpty]',e=>e.textContent.includes('No open tasks')));
+  const doneOnlyTask=await prisma.task.create({data:{projectId:second.id,title:'completed-only report fixture',status:'DONE'}});
+  await page.reload({waitUntil:'networkidle0'});await page.waitForSelector('[name=taskWorkloadEmpty]');
+  check('task browser DONE-only summary keeps empty workload without inventing assignee',await page.$eval('main',e=>e.textContent.includes('1 tasks: 0 open, 0 in progress, 1 done.'))&&!(await page.$('.tasks-table')));
+  await page.screenshot({path:'/downloads/reports-done-only-workload-full.png',fullPage:true});
+  await prisma.task.delete({where:{id:doneOnlyTask.id}});
   await prisma.activityEvent.create({data:{projectId:second.id,actorId:null,action:'unattributed.fixture'}});
   await page.reload({waitUntil:'networkidle0'});await page.waitForSelector('[name=usageActorsEmpty]');
   check('usage browser explains empty actor ranking while retaining null-actor event total',await page.$eval('[name=usageActorsEmpty]',e=>e.textContent.includes('No attributed actors in this window'))&&await page.$eval('main',e=>e.textContent.includes('1 events touching 0 keys.'))&&await page.$$eval('.usage-table:nth-of-type(2) tbody tr',rows=>rows.length===1));

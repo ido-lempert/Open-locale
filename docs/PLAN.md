@@ -427,3 +427,7 @@ verified. No API/querychange. See0273.
 Usage action table now explicitly states no activity for an empty window,
 distinct from no attributed actors. Actualzero-event/null-actortransition browser
 checks and fresh480fullpage verified. No API/querychange. See0274.
+
+Task report explicitly states No open tasks when workload empty, including DONE-
+only projects while retaining completed-task summary. Actualbrowser zero/DONE-only
+fixtures and fresh480fullpage verified. No API/querychange. See0275.

@@ -103,7 +103,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
             <tbody>@for (a of t.perAssignee; track a.kind + ':' + (a.assigneeId ?? a.assigneeGroupId ?? '')) { <tr><td>{{ a.name }}<small class="muted" style="display:block;overflow-wrap:anywhere">{{ a.kind === 'group' ? 'Group: ' + a.assigneeGroupId : a.assigneeId ?? 'No assignee' }}</small></td><td>{{ a.count }}</td></tr> }</tbody>
           </table>
           </div>
-        }
+        } @else { <p class="muted" name="taskWorkloadEmpty">No open tasks.</p> }
       }
     </main>
   `,
