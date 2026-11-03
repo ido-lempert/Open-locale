@@ -820,6 +820,15 @@ try {
   await page.select('[name=usageDays]','0: 7');const seven=await (await sevenResponse).json();await page.waitForSelector('[name=usageWindow]');
   check('usage window picker requests seven days and preserves task cutoff',seven.days===7&&Date.parse(seven.asOf)-Date.parse(seven.since)===7*86400000&&await page.$eval('[name=usageWindow]',(e,u)=>e.textContent.includes(u.since)&&e.textContent.includes(u.asOf),seven)&&await page.$eval('[name=taskWindow]',(e,text)=>e.textContent===text,taskBeforeWindow));
   await page.screenshot({path:'/downloads/reports-seven-day-window-full.png',fullPage:true});
+  let oldWindowHeld=false,releaseOldWindow;const oldWindowGate=new Promise(r=>releaseOldWindow=r);await page.setRequestInterception(true);
+  const holdOldWindow=async request=>{if(request.url().includes('/reports/usage?days=90')){oldWindowHeld=true;await oldWindowGate;}return request.continue();};page.on('request',holdOldWindow);
+  await page.select('[name=usageDays]','2: 90');for(let n=0;n<50&&!oldWindowHeld;n++)await new Promise(r=>setTimeout(r,20));if(!oldWindowHeld)throw new Error('old usage window not held');
+  check('changing usage window clears previous figures and announces pending selection',!!await page.$('[name=usageLoading]')&&!(await page.$('[name=usageWindow]'))&&!(await page.$('.usage-table'))&&await page.$eval('[name=usageDays]',e=>e.value==='2: 90'));
+  const thirtyResponse=page.waitForResponse(r=>r.url().includes('/reports/usage?days=30')&&r.status()===200);await page.select('[name=usageDays]','1: 30');const thirty=await (await thirtyResponse).json();await page.waitForSelector('[name=usageWindow]');
+  const newestWindowText=await page.$eval('[name=usageWindow]',e=>e.textContent);
+  const oldWindowResponse=page.waitForResponse(r=>r.url().includes('/reports/usage?days=90'));releaseOldWindow();await oldWindowResponse;await new Promise(r=>setTimeout(r,100));page.off('request',holdOldWindow);await page.setRequestInterception(false);
+  check('late ninety-day response cannot replace selected thirty-day figures or loading',thirty.days===30&&await page.$eval('[name=usageDays]',e=>e.value==='1: 30')&&await page.$eval('[name=usageWindow]',(e,text)=>e.textContent===text,newestWindowText)&&await page.$eval('[name=usageWindow]',(e,t)=>e.textContent.includes(t.since)&&e.textContent.includes(t.asOf),thirty)&&!(await page.$('[name=usageLoading]'))&&await page.$eval('[name=taskWindow]',(e,text)=>e.textContent===text,taskBeforeWindow));
+  await page.screenshot({path:'/downloads/reports-usage-window-race-full.png',fullPage:true});
   await page.evaluate(t=>localStorage.setItem('ol_token',t),member.accessToken);
   await page.goto(`${WEB}/projects/${project.id}/sync`,{waitUntil:'networkidle0'});await page.waitForSelector('textarea[name=syncBaseline]');
   await set('syncSha','a'.repeat(40));await set('syncBaseline','{}');await set('syncRemote','{}');await page.click('button[name=syncPreview]');await page.waitForSelector('[role=alert]');

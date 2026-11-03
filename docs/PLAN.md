@@ -478,3 +478,7 @@ Usage window picker offers7/30/90days with default30/projectreset. Refreshesusag
 only; sameprojectrequestgeneration fences lateoldwindow success/error/loading.
 Unitfences and actualbrowser7dayresponse/taskcutoffunchanged verified. NoAPIquery
 change or synchronizedsnapshotclaim. See0285.
+
+Usagewindow sameprojectfence now has actualbrowser hold90->finish30->releaselate90
+proof: pendingselectionclearsfigures, latestselection/bounds/loading/taskcutoff
+retained. Test-only, noapplicationchange. See0286.
