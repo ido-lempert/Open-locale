@@ -504,3 +504,10 @@ fences, preserving selected branch and successful reports/dashboards. Actual503
 and realbuttonretry recover options with unchanged main/progress/usage/task
 cutoffs. Web161/9, browser239; five-perspective review0290. NoAPI/query/schema
 change; coverage22FULL/7PARTIAL/1MISSING/defaultOFF and snapshot caveats unchanged.
+
+## Continuation225 - QA page scope and retry
+QA findings now clear during loading/failure, with fixed error and selected-locale
+retry. Reused route/request/project/destroy fences prevent late findings/metadata
+from crossing scope. Six units plus dedicated actualPG/Chrome QA6 browser checks;
+web167/10. Pending/error are not zero-success. Five-perspective review0291.
+NoAPI/query/schema/provider changes or coverage/defaultOFF promotion.
