@@ -206,6 +206,16 @@ try {
   check('task single-statement summary preserves exact status and deadline exclusions',dates.total===6&&dates.byStatus.OPEN===3&&dates.byStatus.IN_PROGRESS===1&&dates.byStatus.DONE===2&&dates.overdue===1&&dates.dueSoon===1);
   check('task summary totals still reconcile separate assignment query in static fixture',dates.perAssignee.length===1&&dates.perAssignee[0].kind==='unassigned'&&dates.perAssignee[0].count===4);
 
+  for(const route of ['progress','quality']){
+    for(const suffix of ['branch=','branch=a&branch=b','branch='+encodeURIComponent('bad branch'),'branch='+('a'.repeat(41))]){
+      const malformedBranch=await call(`/projects/${pid}/reports/${route}?${suffix}`,{jwt});
+      check(`reports ${route} rejects malformed branch query ${suffix}`,malformedBranch.status===400&&!JSON.stringify(malformedBranch.json).includes('Prisma'));
+    }
+    check(`reports ${route} bracket query key is not interpreted as branch`,(await call(`/projects/${pid}/reports/${route}?branch%5Bx%5D=a`,{jwt})).json.branch==='main');
+    check(`reports ${route} omitted branch resolves and reports main`,(await call(`/projects/${pid}/reports/${route}`,{jwt})).json.branch==='main');
+    check(`reports ${route} unknown valid branch remains404`,(await call(`/projects/${pid}/reports/${route}?branch=valid-missing.1`,{jwt})).status===404);
+  }
+
   // Access: member and read token can read; non-member and anonymous cannot.
   const member = (await call('/auth/signup', { method: 'POST', body: { email: `rpm${Date.now()}@t.dev`, password: 'pass1234', displayName: 'rpm' } })).json;
   await call(`/projects/${pid}/members`, { jwt, method: 'POST', body: { email: member.user.email } });

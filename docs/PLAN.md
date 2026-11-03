@@ -402,3 +402,7 @@ All four reports now have actualHTTP membership/token revocation evidence:
 same member session/read token denied after committed team removal, restored by
 explicit re-add; revoked token401 while session remains200. Test-only, not in-flight
 revocation atomicity or client-cache erasure. See0268.
+
+Progress/quality branch queries now require one valid branch name when supplied.
+Empty/repeated/malformed400;omittedmain/validunknown404. Literal bracket query key
+is ignored by simple query parser, not interpreted as branch object. See0269.
