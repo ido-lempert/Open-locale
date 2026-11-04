@@ -788,3 +788,9 @@ ActualheldfirstAmembers503afterA->B->A cannotclearcurrentoptions/actorselection/
 orpublisholderror/retry/loading/rawdetail. Activitybrowser24/review0335; test-only,
 noapplication/API/schema/coverage/defaultOFF change/cancellationclaim. Isolatedsync
 interruption/cleanretry chronologyrecorded.
+
+## Continuation270 - Consume Activity key debounce on immediate read
+Acceptedfetch cancelskeytimer, so immediateaction/actorchange consumescombinedquery
+withoutlaterduplicateread. Twounits/web274/13/actualquery Activitybrowser26/review0336.
+NoAPI/schema/coverage/defaultOFF change/alldeduplicationclaim. Fixtureexpectationand
+SAMLbind/temporaryPG55542verification chronologyrecorded.

@@ -233,6 +233,7 @@ export class ActivityComponent implements OnInit, OnDestroy {
   retry() {void this.fetch(this.failedReset);}
   async fetch(reset: boolean) {
     if(this.destroyed||(!reset&&(this.loading()||!this.nextCursor())))return;
+    if(this.keyTimer)clearTimeout(this.keyTimer);this.keyTimer=null;
     const generation=++this.generation,scope=this.projectGeneration,projectId=this.projectId;
     const current=()=>!this.destroyed&&scope===this.projectGeneration&&generation===this.generation;
     const options={action:this.actionFilter()||undefined,actorId:this.actorFilter()||undefined,key:this.keyFilter().trim()||undefined,cursor:reset?undefined:this.nextCursor()??undefined};
