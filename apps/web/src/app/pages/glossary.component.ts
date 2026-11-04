@@ -16,14 +16,15 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
       @if (error(); as e) { <p class="error" role="alert">{{ e }}</p> }
       <section class="panel">
         <h2>New term</h2>
-        <form class="task-form" (ngSubmit)="create()">
+        <form class="task-form" [attr.aria-busy]="creating()" (ngSubmit)="create()">
           <input aria-label="Term" placeholder="e.g. checkout" maxlength="200" name="gTerm"
             [ngModel]="term()" (ngModelChange)="term.set($event)" required />
           <input aria-label="Notes (optional)" placeholder="Context for translators" name="gNotes"
             [ngModel]="notes()" (ngModelChange)="notes.set($event)" />
           <label class="dnt"><input type="checkbox" name="gDnt"
             [ngModel]="doNotTranslate()" (ngModelChange)="doNotTranslate.set($event)" /> do not translate</label>
-          <button class="primary" type="submit">Add term</button>
+          <button class="primary" type="submit" [disabled]="creating()">Add term</button>
+          @if (creating()) { <span role="status" name="glossaryCreating">Adding term...</span> }
         </form>
       </section>
       @if (listError()) { <p class="error" role="alert" name="glossaryListError">Glossary unavailable. No terms are shown. Retry this read or reload the page.</p><button type="button" name="retryGlossaryList" (click)="void fetch()">Retry glossary</button> }
@@ -57,6 +58,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   locales = signal<string[]>([]);
   loading = signal(true);
   error = signal('');
+  creating=signal(false);
   listError = signal(false);
   private fetchSeq=0;
   private projectGeneration=0;
@@ -76,7 +78,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
     if(this.destroyed)return;
     const scope=++this.projectGeneration;
     this.projectId=pid;++this.fetchSeq;
-    this.terms.set([]);this.locales.set([]);this.error.set('');this.listError.set(false);
+    this.terms.set([]);this.locales.set([]);this.error.set('');this.listError.set(false);this.creating.set(false);
     this.term.set('');this.notes.set('');this.doNotTranslate.set(false);
     void this.fetch();
     void this.api.getProject(pid)
@@ -100,8 +102,9 @@ export class GlossaryComponent implements OnInit, OnDestroy {
 
   async create() {
     const term = this.term().trim();
-    if (!term||this.destroyed) return;
+    if (!term||this.destroyed||this.creating()) return;
     const scope=this.projectGeneration,pid=this.projectId;
+    this.creating.set(true);this.error.set('');
     try {
       await this.api.createGlossaryTerm(pid, {
         term,
@@ -111,7 +114,8 @@ export class GlossaryComponent implements OnInit, OnDestroy {
       if(!this.current(scope))return;
       this.term.set(''); this.notes.set(''); this.doNotTranslate.set(false);
       await this.fetch();
-    } catch (e) { if(this.current(scope))this.error.set(e instanceof Error ? e.message : 'Failed to add term'); }
+    } catch { if(this.current(scope))this.error.set('Adding term failed. Check the glossary before trying again.'); }
+    finally {if(this.current(scope))this.creating.set(false);}
   }
 
   setTranslation(t: GlossaryTermItem, locale: string, value: string) {

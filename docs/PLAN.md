@@ -675,3 +675,10 @@ metadata byvisit/destroy, including A->B->A. Existingmutation callbacks pinorigi
 project/visit toavoid crossvisit effects. Sevenunits/web233/13, actualoldAPIbytesrace/
 glossarybrowser8, review0317. NoAPI/schema/coverage/defaultOFF change. Mutationpending/
 rawcurrenterrors stillseparate; oldwritemayfinishoriginalproject, notcancellation.
+
+## Continuation252 - Glossary creation pending guard
+Createpending/disabledsubmit/busystatus suppressduplicates; visitfencedcleanup and
+fixed inspect-before-retry failure retain draft. Fourunits/web237/13, actualheld/
+failedPOST/glossarybrowser11, review0318. NoAPI/schema/coverage/defaultOFF change;
+oldrequest mayfinishoriginalproject, notcancellation/idempotency/autoretry. Update/
+deletepending and rawcurrenterrors remain separatework.
