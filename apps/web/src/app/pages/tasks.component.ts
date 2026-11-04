@@ -57,6 +57,7 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
       </section>
       @if (listError()) { <p class="error" role="alert" name="taskListError">Tasks unavailable. No tasks are shown. Retry this read or reload the page.</p><button type="button" name="retryTaskList" (click)="void fetch()">Retry tasks</button> }
       @if (loading()) { <p role="status" name="taskListLoading">Loading tasks...</p> }
+      @if (!listError()) { <button type="button" name="refreshTaskList" [disabled]="loading()" (click)="refresh()">Refresh tasks</button> }
       <ul class="task-list">
         @for (t of tasks(); track t.id) {
           <li class="task-row">
@@ -186,6 +187,8 @@ export class TasksComponent implements OnInit, OnDestroy {
       localStorage.setItem(this.filterKey(), JSON.stringify({ status: this.statusFilter(), mine: this.mineFilter() }));
     } catch { /* private mode/quota: persistence is best-effort */ }
   }
+
+  refresh() { if(!this.loading())void this.fetch(); }
 
   async fetch() {
     // Latest-request-wins: rapid filter changes (or a project switch) fire

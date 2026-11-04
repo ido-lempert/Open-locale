@@ -620,3 +620,9 @@ Test-only; noapplication/API/schema/coverage/defaultOFF change.
 Member/group/key callbacks now fence each projectvisit, preventing stale A->B->A
 responses from replacing current options. Four units/web202/12, actualkeybytesrace/
 Tasksbrowser9, review0309. NoAPI/schema/coverage/defaultOFF change.
+
+## Continuation244 - Explicit Tasks refresh
+Refresh tasks reuses fenced listread, preserves filters/formdraft and skipsmetadata.
+Pending duplicate suppressed; actualrenamedtaskappears afterclick. Two units/
+web204/12/Tasksbrowser11, review0310. NoAPI/query/schema/coverage/defaultOFF change;
+explicitread, notpolling or mutationlifecyclehardening.

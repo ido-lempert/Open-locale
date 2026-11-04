@@ -69,6 +69,16 @@ try {
   const currentKeys=await page.$eval('[name=taskLockKeys]',e=>Array.from(e.options).map(o=>[o.value,o.textContent]));const lateKeys=page.waitForResponse(r=>new URL(r.url()).pathname===`/api/projects/${project.id}/keys`);releaseKeys();await lateKeys;await new Promise(r=>setTimeout(r,120));
   check('actual first-visit key response cannot overwrite newer options after A B A route reuse',!oldKeyBytes.includes('fresh.second.visit')&&currentKeys.some(o=>o[1]==='fresh.second.visit')&&await page.$eval('[name=taskLockKeys]',(e,options)=>JSON.stringify(Array.from(e.options).map(o=>[o.value,o.textContent]))===JSON.stringify(options),currentKeys)&&await page.$eval('.back',(e,id)=>e.getAttribute('href')===`/projects/${id}`,project.id));
   page.off('request',holdFirstKeys);await page.setRequestInterception(false);await page.screenshot({path:'/downloads/tasks-metadata-repeat-project-full.png',fullPage:true});
+  await page.select('[aria-label="Filter by assignee"]','');await page.waitForSelector('.task-row');
+  await page.type('[name=taskTitle]','Unsaved task draft');
+  const currentTask=(await call(`${P}/tasks`,null,token)).find(task=>task.title==='Actual task recovery');await call(`${P}/tasks/${currentTask.id}`,{title:'Fresh task after change'},token,'PATCH');
+  let refreshReads=0,metadataReads=0,refreshHeld=false,releaseRefresh;const refreshGate=new Promise(r=>releaseRefresh=r);await page.setRequestInterception(true);
+  const holdRefresh=async req=>{const path=new URL(req.url()).pathname;if([`${P}/members`,`${P}/groups`,`${P}/keys`].some(p=>path===`/api${p}`))metadataReads++;if(path===`/api${P}/tasks`){refreshReads++;refreshHeld=true;await refreshGate;}return req.continue();};page.on('request',holdRefresh);
+  await page.click('[name=refreshTaskList]');await page.waitForSelector('[name=taskListLoading]');if(!refreshHeld)throw new Error('task refresh not held');await page.click('[name=refreshTaskList]');await new Promise(r=>setTimeout(r,100));
+  check('held task refresh suppresses duplicate reads and preserves unsaved draft',refreshReads===1&&metadataReads===0&&await page.$eval('[name=refreshTaskList]',e=>e.disabled)&&await page.$eval('[name=taskTitle]',e=>e.value==='Unsaved task draft')&&!(await page.$('.task-row'))&&!(await page.$('[name=taskListEmpty]')));
+  releaseRefresh();await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');
+  check('explicit task refresh shows changed real task with same filter and no metadata reload',refreshReads===1&&metadataReads===0&&await page.$$eval('.task-row',rows=>rows.length===1&&rows[0].textContent.includes('Fresh task after change'))&&await page.$eval('[aria-label="Filter by status"]',e=>e.value==='OPEN')&&await page.$eval('[name=taskTitle]',e=>e.value==='Unsaved task draft'));
+  page.off('request',holdRefresh);await page.setRequestInterception(false);await page.screenshot({path:'/downloads/tasks-refresh-full.png',fullPage:true});
   console.log(failures?'TASKS BROWSER CHECKS FAILED':'ALL TASKS BROWSER CHECKS PASSED');process.exitCode=failures?1:0;
 } catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
