@@ -567,3 +567,10 @@ Actor discovery now has independent loading/fixedfailure/retry with own request/
 project/destroy fences. Real metadata503 and heldretry prove feed bytes/count/
 requestcount unchanged while actor options recover. Five units/web187/11 and
 activitybrowser14; review0300. NoAPI/query/schema or coverage/defaultOFF change.
+
+## Continuation235 - Explicit Activity refresh
+Refresh activity reuses fenced readonly firstpage loader, preserving selected
+filters and leaving actor metadata alone. Pending control suppresses duplicate
+reads. Actual newtask/refresh shows newevent without metadatareload; two units/
+web189/11/activitybrowser16, review0301. NoAPI/query/schema or coverage/defaultOFF
+change; explicitrefresh, notlivepolling or completehistory guarantee.

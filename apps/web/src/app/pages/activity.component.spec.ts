@@ -31,3 +31,9 @@ describe('activity actor metadata recovery',()=>{
  it('late metadata failure cannot cross project reuse',async()=>{const old=deferred(),c=make({listMembers:jest.fn().mockReturnValueOnce(old.promise).mockResolvedValueOnce([{id:'new'}]),listActivity:jest.fn().mockResolvedValue({items:[],nextCursor:null})});const a=c.loadProject('old');await c.loadProject('new');old.reject(new Error('private'));await a;expect(c.projectId).toBe('new');expect(c.members()[0].id).toBe('new');expect(c.membersError()).toBe(false);expect(c.membersLoading()).toBe(false);});
 
 });
+
+
+describe('activity explicit refresh',()=>{
+ it('refresh resets page with selected filters but does not reload members',async()=>{const api={listActivity:jest.fn().mockResolvedValue({items:[{id:'fresh'}],nextCursor:'fresh-cursor'}),listMembers:jest.fn()},c=make(api);c.projectId='project';c.actionFilter.set('task.created');c.actorFilter.set('owner');c.keyFilter.set(' title ');c.items.set([{id:'old'}] as never);c.nextCursor.set('old-cursor');c.loading.set(false);c.refresh();await Promise.resolve();expect(api.listActivity).toHaveBeenCalledWith('project',{action:'task.created',actorId:'owner',key:'title',cursor:undefined});expect(c.items()[0].id).toBe('fresh');expect(c.nextCursor()).toBe('fresh-cursor');expect(api.listMembers).not.toHaveBeenCalled();});
+ it('pending refresh suppresses duplicate reads and destroyed refresh stays silent',async()=>{const wait=deferred(),api={listActivity:jest.fn().mockReturnValue(wait.promise)},c=make(api);c.loading.set(false);c.refresh();c.refresh();expect(api.listActivity).toHaveBeenCalledTimes(1);c.ngOnDestroy();wait.resolve({items:[],nextCursor:null});await Promise.resolve();c.loading.set(false);c.refresh();expect(api.listActivity).toHaveBeenCalledTimes(1);});
+});

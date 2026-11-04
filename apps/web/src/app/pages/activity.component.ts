@@ -66,6 +66,7 @@ const ACTION_LABELS: Record<string, string> = {
       @if (membersError()) { <p class="error" role="alert" name="activityActorsError">Actor filter options unavailable. Activity remains available.</p><button type="button" name="retryActivityActors" (click)="void loadMembers()">Retry actor options</button> }
       @if (error(); as e) { <p class="error" role="alert">{{ e }}</p><button type="button" name="retryActivity" (click)="retry()">Retry activity</button> }
       @if (loading()) { <p role="status" name="activityLoading">Loading activity...</p> }
+      @if (!error()) { <button type="button" name="refreshActivity" [disabled]="loading()" (click)="refresh()">Refresh activity</button> }
       <ul class="activity-list">
         @for (ev of items(); track ev.id) {
           <li class="activity-row">
@@ -208,6 +209,8 @@ export class ActivityComponent implements OnInit, OnDestroy {
     this.actionFilter.set(action);
     void this.fetch(true);
   }
+
+  refresh() { if(!this.loading())void this.fetch(true); }
 
   loadMore() { void this.fetch(false); }
 
