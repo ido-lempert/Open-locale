@@ -593,3 +593,9 @@ Task update detail now validates map/pairs and existing string/null/boolean/stri
 array values rather than coercing malformed snapshots into bogus summaries. Valid
 neighbor changes survive; three units/web195/11/activitybrowser21, review0304.
 NoAPI/query/schema/coverage/defaultOFF change; not all audit detailformats hardened.
+
+## Continuation239 - Linked-task creation audit
+Task createIn now records existing creation event before keyed-task early return,
+inside the same transaction. Actual linkedtask records exactlyoneevent; injected
+DBlinkfailure leaves neither task nor event. Tasks75->77/activity22, review0305.
+NoAPI/query/schema/coverage/defaultOFF change; fixes future events, no historybackfill.

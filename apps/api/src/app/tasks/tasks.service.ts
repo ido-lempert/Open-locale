@@ -206,15 +206,15 @@ export class TasksService {
       },
       include: this.includePeople,
     }).catch((e) => this.rethrowUnlessAssigneeGroupDeleted(e));
+    await this.activity.record(tx, {
+      projectId, actorId: userId, action: 'task.created',
+      detail: { title: truncate(title, 80) },
+    });
     if (input.keyIds?.length) {
       await tx.taskKey.createMany({ data: input.keyIds.map((keyId) => ({ taskId: task.id, keyId })) });
       // The create's include resolved before the key rows existed; re-read.
       return tx.task.findUniqueOrThrow({ where: { id: task.id }, include: this.includePeople });
     }
-    await this.activity.record(tx, {
-      projectId, actorId: userId, action: 'task.created',
-      detail: { title: truncate(title, 80) },
-    });
     return task;
   }
 

@@ -206,6 +206,19 @@ try {
   const lockTask = (await call(base, { token: at, method: 'POST', body: { title: 'Lock cart keys', lockKeys: true, keyIds: [k1.id], assigneeId: a.user.id } })).json;
   check('task created with key lock', lockTask.lockKeys === true && lockTask.keys?.[0]?.key?.name === 'cart.checkout', JSON.stringify(lockTask.keys));
 
+  const linkedCreates=(await call(`/projects/${proj.id}/activity?action=task.created&limit=100`,{token:at})).json.items.filter(e=>e.detail?.title==='Lock cart keys');
+  check('linked-key task creation records exactly one creation audit',linkedCreates.length===1&&linkedCreates[0].actorId===a.user.id);
+  const auditDb=new PrismaClient({datasources:{db:{url}}});
+  try {
+    await auditDb.$executeRawUnsafe(`CREATE FUNCTION reject_task_link_fixture() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture task link failure'; END $$`);
+    await auditDb.$executeRawUnsafe(`CREATE TRIGGER reject_task_link_fixture BEFORE INSERT ON "task_keys" FOR EACH ROW EXECUTE FUNCTION reject_task_link_fixture()`);
+    const rejected=await call(base,{token:at,method:'POST',body:{title:'Rollback linked task',keyIds:[k1.id]}});
+    check('task key-link failure rolls back task and earlier creation audit',rejected.status===500&&await auditDb.task.count({where:{projectId:proj.id,title:'Rollback linked task'}})===0&&await auditDb.activityEvent.count({where:{projectId:proj.id,action:'task.created',detail:{path:['title'],equals:'Rollback linked task'}}})===0);
+  } finally {
+    await auditDb.$executeRawUnsafe('DROP TRIGGER IF EXISTS reject_task_link_fixture ON "task_keys"');
+    await auditDb.$executeRawUnsafe('DROP FUNCTION IF EXISTS reject_task_link_fixture()');
+    await auditDb.$disconnect();
+  }
   const bobUpsert = await call(`/projects/${proj.id}/keys/${k1.id}/translations`, { token: bt, method: 'PUT', body: { locale: 'he', value: 'bob value' } });
   check('non-assignee member edit of a locked key rejected (403)', bobUpsert.status === 403 && String(bobUpsert.json?.message ?? '').includes('Lock cart keys'), `${bobUpsert.status} ${JSON.stringify(bobUpsert.json?.message)}`);
 

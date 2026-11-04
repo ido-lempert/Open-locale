@@ -55,9 +55,11 @@ try {
   await page.evaluate(()=>window.scrollTo({top:0,behavior:'instant'}));await new Promise(r=>setTimeout(r,120));await page.screenshot({path:'/downloads/activity-page-failure-full.png',fullPage:true});page.off('request',failPage);await page.setRequestInterception(false);
   await page.$eval('[name=retryActivity]',e=>e.scrollIntoView({block:'center',behavior:'instant'}));await new Promise(r=>setTimeout(r,120));await page.click('[name=retryActivity]');await page.waitForFunction(()=>document.querySelectorAll('.activity-row').length>50);
   check('real activity page retry appends remaining events once',await page.$$eval('.activity-row',rows=>rows.length===new Set(rows.map(r=>r.textContent)).size)&&!(await page.$('[name=retryActivity]'))&&!(await page.$('.load-more')));
-  await call(`${P}/tasks`,{title:'<b>Activity filter task</b>'},token);
+  const linkedKey=await prisma.key.findFirstOrThrow({where:{projectId:project.id,name:'title'}});
+  const linkedTask=await call(`${P}/tasks`,{title:'<b>Activity filter task</b>',keyIds:[linkedKey.id]},token);
   const taskResponse=page.waitForResponse(r=>new URL(r.url()).pathname===`/api/projects/${project.id}/activity`&&new URL(r.url()).searchParams.get('action')==='task.created');await page.select('[aria-label="Filter by action"]','task.created');const taskEvents=await (await taskResponse).json();await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');
   check('new task action option filters real created-task activity',taskEvents.items.length===1&&taskEvents.items[0].action==='task.created'&&await page.$$eval('.activity-row',rows=>rows.length===1&&rows[0].textContent.includes('created task'))&&await page.$eval('[aria-label="Filter by action"]',e=>e.value==='task.created'));
+  check('actual linked-key task creation is visible exactly once in filtered activity',linkedTask.keys.length===1&&taskEvents.items.length===1&&taskEvents.items[0].detail.title==='<b>Activity filter task</b>');
   check('actual task title snapshot renders as literal text without HTML elements',await page.$eval('.activity-row',e=>e.textContent.includes('<b>Activity filter task</b>')&&!e.querySelector('b')));
   await page.screenshot({path:'/downloads/activity-task-filter-full.png',fullPage:true});
   await call(`${P}/glossary`,{term:'<i>checkout</i>'},token);
