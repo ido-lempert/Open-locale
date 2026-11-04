@@ -3,7 +3,7 @@ import {createHash} from 'node:crypto';
 // Real local browser -> Angular file preview -> built API + Postgres.
 // No external provider requests. Requires nx build api.
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, existsSync, mkdirSync, lstatSync, readdirSync, cpSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
@@ -12,40 +12,55 @@ import puppeteer from 'puppeteer-core';
 const PG_PORT = 55479, WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, mock, browser, prisma;
+let failures = 0, checks = 0, api, web, mock, browser, prisma, savedState;
 process.exitCode = 1;
-let repositoryCalls=0;
-let repositoryJson=JSON.stringify({hello:'Repository value',unsafe:'<img src=x onerror="window.repoXss=true">'});
+const stage=process.env.SYNC_BROWSER_STAGE,checkpoint=process.env.SYNC_BROWSER_CHECKPOINT_DIR;
+const digestTree=dir=>{const h=createHash('sha256');const visit=(path,relative='')=>{for(const name of readdirSync(path).sort()){const full=join(path,name),rel=relative+'/'+name,stat=lstatSync(full);if(stat.isSymbolicLink())throw new Error('Checkpoint tree cannot contain symlinks');h.update(rel);if(stat.isDirectory())visit(full,rel);else if(stat.isFile())h.update(readFileSync(full));else throw new Error('Checkpoint tree requires regular files');}};visit(dir);return h.digest('hex');};
+const sourceHash=createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
+const appHash=()=>createHash('sha256').update(readFileSync('dist/apps/api/main.js')).update(digestTree('apps/web/src')).digest('hex');
+let resume=null,completed=false;
+if(stage){
+ if(!['first','second'].includes(stage)||!checkpoint?.startsWith('/'))throw new Error('Set SYNC_BROWSER_STAGE=first|second and an absolute SYNC_BROWSER_CHECKPOINT_DIR');
+ if(stage==='first')mkdirSync(checkpoint,{mode:0o700});
+ else{
+  const st=lstatSync(checkpoint);if(!st.isDirectory()||st.isSymbolicLink()||(st.mode&0o077)||st.uid!==process.getuid())throw new Error('Checkpoint must be an owned private directory');
+  const meta=lstatSync(join(checkpoint,'state.json'));if(!meta.isFile()||meta.isSymbolicLink()||(meta.mode&0o077)||meta.uid!==process.getuid())throw new Error('Checkpoint state must be private');
+  resume=JSON.parse(readFileSync(join(checkpoint,'state.json'),'utf8'));
+  if(resume.sourceHash!==sourceHash||resume.appHash!==appHash()||!Number.isSafeInteger(resume.checks)||resume.checks!==95||resume.failures!==0)throw new Error('Checkpoint source mismatch or failed first stage');
+  if(![resume.owner?.user?.id,resume.member?.user?.id,resume.project?.id,resume.second?.id,resume.owner?.accessToken,resume.member?.accessToken,resume.repositoryJson].every(v=>typeof v==='string'&&v.length>0)||!Number.isSafeInteger(resume.repositoryCalls)||resume.repositoryCalls<0||!Number.isInteger(resume.viewport?.width)||resume.viewport.width<1||!Number.isInteger(resume.viewport?.height)||resume.viewport.height<1)throw new Error('Checkpoint fixture metadata invalid');
+  if(resume.databaseHash!==digestTree(join(checkpoint,'postgres')))throw new Error('Checkpoint database mismatch');
+ }
+}else if(checkpoint)throw new Error('SYNC_BROWSER_CHECKPOINT_DIR requires SYNC_BROWSER_STAGE');
+process.on('exit',()=>{if(!completed)process.exitCode=1;});
+let repositoryCalls=resume?.repositoryCalls??0;
+let repositoryJson=resume?.repositoryJson??JSON.stringify({hello:'Repository value',unsafe:'<img src=x onerror="window.repoXss=true">'});
 const repositoryFixture=createServer((req,res)=>{repositoryCalls++;req.resume();const bytes=Buffer.from(repositoryJson);res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({type:'file',path:'external/new.json',encoding:'base64',size:bytes.length,sha:createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex'),content:bytes.toString('base64')}));});
 await new Promise(r=>repositoryFixture.listen(0,'127.0.0.1',r));
 const repositoryOrigin=`http://127.0.0.1:${repositoryFixture.address().port}`;
-const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
+const check = (name, ok) => {checks++;console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);};
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-sync-browser-'));
-const pg = new EmbeddedPostgres({ databaseDir: dataDir, user: 'postgres', password: 'postgres', port: PG_PORT, persistent: false });
+const pg = new EmbeddedPostgres({ databaseDir: dataDir, user: 'postgres', password: 'postgres', port: PG_PORT, persistent: !!stage });
 try {
-  await pg.initialise();await pg.start();await pg.createDatabase('sync_browser');
+  if(resume)cpSync(join(checkpoint,'postgres'),dataDir,{recursive:true});else await pg.initialise();await pg.start();if(!resume)await pg.createDatabase('sync_browser');
   const url=`postgresql://postgres:postgres@localhost:${PG_PORT}/sync_browser`;
   prisma=new PrismaClient({datasources:{db:{url}}});
   execFileSync('node_modules/.bin/prisma',['migrate','deploy'],{env:{...process.env,DATABASE_URL:url},stdio:'pipe'});
   api=spawn(process.execPath,['dist/apps/api/main.js'],{env:{...process.env,DATABASE_URL:url,JWT_SECRET:'sync-browser-secret',NODE_ENV:'test',GITHUB_READ_OWNER:'owner',GITHUB_READ_REPO:'repo',GITHUB_READ_TOKEN:'fixture-browser-read',GITHUB_READ_FIXTURE_ORIGIN:repositoryOrigin,PORT:String(API_PORT)},stdio:'pipe'});
   await waitFor(`${API}/projects`);
   const call=async(path,body,token)=>{const r=await fetch(`${API}${path}`,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},body:body?JSON.stringify(body):undefined});if(!r.ok)throw new Error(`${path}: ${r.status}`);return r.json();};
-  const owner=await call('/auth/signup',{email:'sync-owner@example.com',password:'pass1234',displayName:'Owner'});
-  const member=await call('/auth/signup',{email:'sync-member@example.com',password:'pass1234',displayName:'Member'});
+  const owner=resume?.owner??await call('/auth/signup',{email:'sync-owner@example.com',password:'pass1234',displayName:'Owner'});
+  const member=resume?.member??await call('/auth/signup',{email:'sync-member@example.com',password:'pass1234',displayName:'Member'});
   const token=owner.accessToken;
-  const project=await call('/projects',{name:'Sync browser',slug:'sync-browser',locales:['en','he']},token);
+  const project=resume?.project??await call('/projects',{name:'Sync browser',slug:'sync-browser',locales:['en','he']},token);
   const P=`/projects/${project.id}`;
-  await call(`${P}/members`,{email:member.user.email,role:'MEMBER'},token);
+  if(!resume){await call(`${P}/members`,{email:member.user.email,role:'MEMBER'},token);
   await call(`${P}/import/en`,{entries:{title:'Local title',conflict:'Local edit',remote:'Old text',empty:''}},token);
+  }
   web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{stdio:'pipe',detached:true});await waitFor(WEB);
   browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH??'/usr/bin/google-chrome',args:['--no-sandbox','--disable-dev-shm-usage']});
   const page=await browser.newPage();await page.setViewport({width:1280,height:900});
   await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.evaluate(t=>localStorage.setItem('ol_token',t),token);
-  await page.goto(`${WEB}/projects/${project.id}`,{waitUntil:'networkidle0'});
-  await page.click('.sync-link');await page.waitForSelector('textarea[name=syncBaseline]');
-  check('editor links to file preview screen',new URL(page.url()).pathname.endsWith('/sync'));
-  check('provenance and no-write warning visible',(await page.content()).includes('not verified with GitHub') && (await page.content()).includes('Nothing is uploaded, imported or saved'));
   const clickTarget=async selector=>{
     await page.waitForFunction(s=>{const e=document.querySelector(s);return e&&!e.disabled;},{},selector);
     await page.$eval(selector,e=>{e.style.scrollBehavior='auto';e.scrollIntoView({block:'center',behavior:'instant'});});
@@ -54,6 +69,13 @@ try {
     await page.click(selector);
   };
   const set=async(name,value)=>page.$eval(`[name=${name}]`,(e,v)=>{e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}));},value);
+  const chooseRepo=async(key,value)=>page.$eval(`[data-repo-choice="${key}"]`,(e,v)=>{e.value=v;e.dispatchEvent(new Event('change',{bubbles:true}));},value);
+  let second=resume?.second;
+  if(stage!=='second'){
+  await page.goto(`${WEB}/projects/${project.id}`,{waitUntil:'networkidle0'});
+  await page.click('.sync-link');await page.waitForSelector('textarea[name=syncBaseline]');
+  check('editor links to file preview screen',new URL(page.url()).pathname.endsWith('/sync'));
+  check('provenance and no-write warning visible',(await page.content()).includes('not verified with GitHub') && (await page.content()).includes('Nothing is uploaded, imported or saved'));
   await set('syncSha','a'.repeat(40));
   await set('syncBaseline',JSON.stringify({title:'Old title',conflict:'Old edit',remote:'Old text',empty:''}));
   await set('syncRemote',JSON.stringify({title:'Old title',conflict:'Remote edit',remote:'New text',empty:''}));
@@ -155,7 +177,7 @@ try {
   await set('syncRemote','{}');await page.click('button[name=syncPreview]');await page.waitForSelector('section[aria-label="Preview results"]');
   check('new preview resets pagination to first page',!(await page.$('button[name=syncNext]')) && await page.$eval('tbody',e=>e.textContent.includes('title')));
   // Drive Router navigation without reloading to prove reused scope resets.
-  const second=await call('/projects',{name:'Second scope',slug:'second-scope',locales:['en']},token);
+  second=await call('/projects',{name:'Second scope',slug:'second-scope',locales:['en']},token);
   await page.evaluate(id=>{const link=window.ng.getDirectives(document.querySelector('.back')).find(d=>d.router);return link.router.navigateByUrl('/projects/'+id+'/sync');},second.id);
   await page.waitForFunction(id=>location.pathname==='/projects/'+id+'/sync',{},second.id);
   await page.waitForSelector('textarea[name=syncBaseline]');
@@ -216,7 +238,7 @@ try {
   check('repository comparison marks actual conflicting key for manual review',await page.$eval('section[aria-label="Repository comparison"] tr.manual',e=>e.textContent.includes('manual review')));
   check('repository comparison distinguishes missing and empty values',await page.$eval('section[aria-label="Repository comparison"]',e=>e.textContent.includes('[missing]')&&e.textContent.includes('[empty string]')));
   check('comparison remains explicitly not applied and renders hostile values literally',!(await page.$('section[aria-label="Repository comparison"] img'))&&!await page.evaluate(()=>window.repoXss)&&(await page.content()).includes('Repository comparison - not applied'));
-  const chooseRepo=async(key,value)=>page.$eval(`[data-repo-choice="${key}"]`,(e,v)=>{e.value=v;e.dispatchEvent(new Event('change',{bubbles:true}));},value);
+
   check('repository draft requires every differing key explicitly selected',await page.$eval('[name=targetResolve]',e=>e.disabled));
   for(const key of await page.$$eval('[data-repo-choice]',els=>els.map(e=>e.getAttribute('data-repo-choice'))))await chooseRepo(key,key==='hello'?'remote':'local');
   await clickTarget('[name=targetResolve]');await page.waitForSelector('[name=targetDraft]');
@@ -345,6 +367,15 @@ try {
   check('late save cannot add old-project configuration to new screen',!(await page.$('article'))&&!(await page.content()).includes('Configuration saved'));
   check('held target request still saved only to original project',(await call(`${P}/sync/repository-targets`,undefined,token)).targets.some(t=>t.path==='dirty.json')&&(await call(`/projects/${second.id}/sync/repository-targets`,undefined,token)).targets.length===0);
   check('same-component target route clears previous scope form and records',await page.$eval('[name=targetOwner]',e=>e.value==='')&&!(await page.$('article')));
+  if(stage==='first'&&checks!==95)throw new Error('First-stage assertion count mismatch');
+  if(stage==='first')savedState={sourceHash,appHash:appHash(),checks,failures,owner,member,project,second,repositoryCalls,repositoryJson,viewport:page.viewport()};
+  }
+  if(stage!=='first'){
+  if(resume){
+   const ids=await prisma.project.count({where:{id:{in:[project.id,second.id]}}}),users=await prisma.user.count({where:{id:{in:[owner.user.id,member.user.id]}}});
+   if(ids!==2||users!==2)throw new Error('Checkpoint fixture identity mismatch');
+   await page.setViewport(resume.viewport);
+  }
   const applyProject=await call('/projects',{name:'Apply browser',slug:'apply-browser',locales:['en','he']},token),AP=`/projects/${applyProject.id}`;
   await call(AP+'/import/en',{entries:{existing:'before'}},token);await call(AP+'/import/he',{entries:{existing:'base other locale'}},token);
   const applyTarget=(await call(AP+'/sync/repository-targets',{localBranch:'main',locale:'en',owner:'owner',repo:'repo',path:'external/new.json',remoteBranch:'main'},token)).target;
@@ -850,8 +881,10 @@ try {
   check('member history denial exposes no saved record',!(await page.$('article')) && (await page.$eval('[role=alert]',e=>e.textContent)).includes('admin'));
   await page.goto(`${WEB}/projects/${project.id}/sync/targets`,{waitUntil:'networkidle0'});await page.waitForSelector('[role=alert]');
   check('member target denial exposes no form or configuration',!(await page.$('[name=targetSave]'))&&!(await page.$('article'))&&(await page.$eval('[role=alert]',e=>e.textContent)).includes('admin'));
-  console.log(failures?'SYNC BROWSER CHECKS FAILED':'ALL SYNC BROWSER CHECKS PASSED');process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  }
+  if(stage==='second'&&resume.checks+checks!==239)throw new Error('Staged assertion count mismatch');
+  if(!stage&&checks!==239)throw new Error('Canonical assertion count mismatch');
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -863,7 +896,15 @@ finally {
     else child.kill('SIGKILL');
   }));
   await Promise.all(stopped);
-  await new Promise(r=>repositoryFixture.close(r));await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
+  await new Promise(r=>repositoryFixture.close(r));await prisma?.$disconnect();let stoppedDatabase=true;
+  await pg.stop().catch(()=>{stoppedDatabase=false;failures++;});
+  if(stage==='first'&&stoppedDatabase&&failures===0&&savedState){cpSync(dataDir,join(checkpoint,'postgres'),{recursive:true});savedState.databaseHash=digestTree(join(checkpoint,'postgres'));writeFileSync(join(checkpoint,'state.json'),JSON.stringify(savedState),{mode:0o600});}
+  else if(stage)rmSync(checkpoint,{recursive:true,force:true});
+  rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+if(failures){console.log('SYNC BROWSER CHECKS FAILED');process.exit(1);}
+if(stage==='first'&&!savedState)process.exit(1);
+completed=true;
+console.log(stage==='first'?`SYNC_BROWSER_STAGE_FIRST_RC=0 checks=${checks}; second stage still required`:`ALL SYNC BROWSER CHECKS PASSED${stage?' (staged)':''}; checks=${checks}${resume?'; combined='+(resume.checks+checks):''}`);
+process.exit(0);

@@ -820,3 +820,10 @@ Clear stale restore rows during pending/failure, fixed list error/independent re
 no false empty-success/raw list detail. Threeunits/web280/14/newactualsnapshotbrowser5
 andreview0341. Mutationerror/routeReuse handling remains outside this slice. NoAPI/
 schema/coverage/defaultOFF change/restoreparityclaim.
+
+## Continuation276 - Pending snapshot capture draft and staged sync verification
+Capture uses submitted label and clears only unchanged raw draft. Twounits/web282/14
+andactualheldPOST snapshotbrowser7. Reviewed staged syncbrowser95+144=239unique with
+private/source/app/database-bound checkpoint and16negative configchecks. Canonical
+uninterrupted run remains unverified after120s interruptions; review0342 records full
+chronology. NoAPI/schema/coverage/defaultOFF change.
