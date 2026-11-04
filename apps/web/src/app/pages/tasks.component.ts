@@ -23,7 +23,7 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
         <option value="DONE">done</option>
       </select>
     </header>
-    <main>
+    <main [attr.aria-busy]="loading()">
       @if (error(); as e) { <p class="error" role="alert">{{ e }}</p> }
       <section class="panel">
         <h2>New task</h2>
@@ -55,6 +55,8 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
           <button class="primary" type="submit">Create task</button>
         </form>
       </section>
+      @if (listError()) { <p class="error" role="alert" name="taskListError">Tasks unavailable. No tasks are shown. Retry this read or reload the page.</p><button type="button" name="retryTaskList" (click)="void fetch()">Retry tasks</button> }
+      @if (loading()) { <p role="status" name="taskListLoading">Loading tasks...</p> }
       <ul class="task-list">
         @for (t of tasks(); track t.id) {
           <li class="task-row">
@@ -87,7 +89,7 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
             <button class="danger" [attr.aria-label]="'Delete task ' + t.title" (click)="remove(t)">&times;</button>
           </li>
         } @empty {
-          <li class="muted">{{ loading() ? 'Loading…' : 'No tasks yet' }}</li>
+          @if (!loading() && !listError()) { <li class="muted" name="taskListEmpty">No tasks yet</li> }
         }
       </ul>
     </main>
@@ -103,6 +105,7 @@ export class TasksComponent implements OnInit, OnDestroy {
   lockKeys = signal(false);
   statusFilter = signal('');
   mineFilter = signal('');
+  listError = signal(false);
   loading = signal(true);
   error = signal('');
   title = signal('');
@@ -113,6 +116,7 @@ export class TasksComponent implements OnInit, OnDestroy {
 
   private routeSub?: Subscription;
   private fetchSeq = 0;
+  private destroyed = false;
 
   constructor(private route: ActivatedRoute, private api: ApiService) {}
 
@@ -124,10 +128,12 @@ export class TasksComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.destroyed=true;++this.fetchSeq;
     this.routeSub?.unsubscribe();
   }
 
   private initForProject(pid: string) {
+    if(this.destroyed)return;
     this.projectId = pid;
     this.fetchSeq++; // invalidate every in-flight fetch from the previous project
     this.error.set('');
@@ -147,14 +153,14 @@ export class TasksComponent implements OnInit, OnDestroy {
     } catch { /* corrupt or unavailable storage: fall back to defaults */ }
     void this.fetch();
     void this.api.listMembers(pid)
-      .then((m) => { if (this.projectId === pid) this.members.set(m); })
-      .catch(() => { if (this.projectId === pid) this.members.set([]); });
+      .then((m) => { if (!this.destroyed && this.projectId === pid) this.members.set(m); })
+      .catch(() => { if (!this.destroyed && this.projectId === pid) this.members.set([]); });
     void this.api.listGroups(pid)
-      .then((g) => { if (this.projectId === pid) this.groups.set(g); })
-      .catch(() => { if (this.projectId === pid) this.groups.set([]); });
+      .then((g) => { if (!this.destroyed && this.projectId === pid) this.groups.set(g); })
+      .catch(() => { if (!this.destroyed && this.projectId === pid) this.groups.set([]); });
     void this.api.listKeys(pid)
-      .then((k) => { if (this.projectId === pid) this.keys.set(k); })
-      .catch(() => { if (this.projectId === pid) this.keys.set([]); });
+      .then((k) => { if (!this.destroyed && this.projectId === pid) this.keys.set(k); })
+      .catch(() => { if (!this.destroyed && this.projectId === pid) this.keys.set([]); });
   }
 
   setFilter(status: string) {
@@ -183,14 +189,16 @@ export class TasksComponent implements OnInit, OnDestroy {
     // Latest-request-wins: rapid filter changes (or a project switch) fire
     // overlapping fetches; only the newest response may touch the list,
     // the error banner or the loading flag.
+    if(this.destroyed)return;
     const seq = ++this.fetchSeq;
+    this.tasks.set([]);this.listError.set(false);
     this.loading.set(true);
     try {
       const list = await this.api.listTasks(this.projectId, this.statusFilter() || undefined, this.mineFilter() === 'me');
       if (seq !== this.fetchSeq) return;
       this.tasks.set(list);
-    } catch (e) {
-      if (seq === this.fetchSeq) this.error.set(e instanceof Error ? e.message : 'Failed to load tasks');
+    } catch {
+      if (seq === this.fetchSeq) this.listError.set(true);
     } finally {
       if (seq === this.fetchSeq) this.loading.set(false);
     }

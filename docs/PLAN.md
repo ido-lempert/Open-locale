@@ -604,3 +604,9 @@ NoAPI/query/schema/coverage/defaultOFF change; fixes future events, no historyba
 RealDBauditINSERTfailure proves neither ordinary nor keyedtask survives without
 its audit; removedtrigger restoresexactlyonetask/link/event. Tasks77->80, review0306.
 Test-only; noapplication/API/schema/coverage/defaultOFF change.
+
+## Continuation241 - Tasks list failure and retry
+Filtered task reads now clear stale rows with independent fixederror/retry/loading,
+latestrequest/project/destroy fences. Mutation errors kept separate. Three units/
+web198/12 and newactualPG/ChromeTasks5, review0307. NoAPI/query/schema or coverage/
+defaultOFF change; metadata and mutation lifecycle hardening remain separate work.
