@@ -632,3 +632,11 @@ Create pendingguard/status suppress duplicate submissions; projectvisit/destroyf
 prevents oldcompletion clearingnewdraft or refreshingnewlist. Fixedfailure retains
 draft with inspect-before-retry guidance. Four units/web208/12/Tasksbrowser13,
 review0311. NoAPI/schema/coverage/defaultOFF change; notserveridempotency/cancellation.
+
+## Continuation246 - Task create failure browser proof
+Actual local Chrome rejectedPOST retains unsaved title, clears pending/disabled
+submit, shows fixed inspect-before-retry guidance without rawdetail. OnePOST during
+bounded observation and unchanged realpersistedlist; Tasksbrowser13->15, review0312.
+Test-only; noapplication/API/schema/coverage/defaultOFF change. Notidempotency,
+cancellation or unboundedretryproof. Interrupted regression calls and cleanreruns
+are recorded separately from finalgreen results.

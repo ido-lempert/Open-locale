@@ -88,6 +88,13 @@ try {
   const persisted=await call(`${P}/tasks`,null,token);
   check('late actual task creation persists once only in old project without clearing new draft',persisted.filter(t=>t.title==='Unsaved task draft').length===1&&await page.$eval('[name=taskTitle]',e=>e.value==='New project unsaved draft')&&await page.$eval('.task-list',e=>e.textContent.includes('Current project task')&&!e.textContent.includes('Unsaved task draft'))&&!(await page.$('[name=taskCreating]'))&&!await page.$eval('.task-form button[type=submit]',e=>e.disabled));
   page.off('request',holdCreate);await page.setRequestInterception(false);await page.screenshot({path:'/downloads/tasks-create-route-fence-full.png',fullPage:true});
+  let failedCreates=0;await page.setRequestInterception(true);
+  const failCreate=req=>{if(new URL(req.url()).pathname===`/api/projects/${next.id}/tasks`&&req.method()==='POST'){failedCreates++;return req.respond({status:503,contentType:'application/json',body:JSON.stringify({message:'private-create-detail'})});}return req.continue();};page.on('request',failCreate);
+  await page.click('.task-form button[type=submit]');await page.waitForFunction(()=>document.querySelector('[role=alert]')?.textContent.includes('Check the task list before trying again.'));await page.waitForFunction(()=>document.querySelector('.task-form')?.getAttribute('aria-busy')==='false');
+  check('actual rejected task create retains draft and shows fixed guidance without raw detail',failedCreates===1&&await page.$eval('[name=taskTitle]',e=>e.value==='New project unsaved draft')&&!(await page.content()).includes('private-create-detail')&&!(await page.$('[name=taskCreating]'))&&!await page.$eval('.task-form button[type=submit]',e=>e.disabled));
+  await new Promise(r=>setTimeout(r,200));const currentTasks=await call(`/projects/${next.id}/tasks`,null,token);
+  check('rejected task create has no resend during observation and leaves persisted task list unchanged',failedCreates===1&&currentTasks.length===1&&currentTasks[0].title==='Current project task'&&await page.$eval('.task-list',e=>e.textContent.includes('Current project task')&&!e.textContent.includes('New project unsaved draft')));
+  page.off('request',failCreate);await page.setRequestInterception(false);await page.screenshot({path:'/downloads/tasks-create-failure-full.png',fullPage:true});
   console.log(failures?'TASKS BROWSER CHECKS FAILED':'ALL TASKS BROWSER CHECKS PASSED');process.exitCode=failures?1:0;
 } catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
