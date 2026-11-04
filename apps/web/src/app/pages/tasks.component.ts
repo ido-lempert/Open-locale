@@ -61,13 +61,13 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
       @if (!listError()) { <button type="button" name="refreshTaskList" [disabled]="loading()" (click)="refresh()">Refresh tasks</button> }
       <ul class="task-list">
         @for (t of tasks(); track t.id) {
-          <li class="task-row">
+          <li class="task-row" [attr.aria-busy]="updatingIds().includes(t.id)">
             <span class="task-status task-{{ t.status.toLowerCase().replace('_', '-') }}">{{ t.status.toLowerCase().replace('_', ' ') }}</span>
             <div class="task-body">
               <strong>{{ t.title }}</strong>
               @if (t.description) { <span class="muted">{{ t.description }}</span> }
               <span class="muted">waits on:
-                <select class="depends-select" [attr.aria-label]="'Depends on for ' + t.title" [ngModel]="t.dependsOn?.id ?? ''"
+                <select [disabled]="updatingIds().includes(t.id)" class="depends-select" [attr.aria-label]="'Depends on for ' + t.title" [ngModel]="t.dependsOn?.id ?? ''"
                   (change)="update(t, { dependsOnId: $any($event.target).value || null }, $any($event.target), t.dependsOn?.id ?? '')">
                   <option value="">no predecessor</option>
                   @for (p of tasks(); track p.id) { @if (p.id !== t.id) { <option [value]="p.id">{{ p.title }} ({{ p.status.toLowerCase().replace('_', ' ') }})</option> } }
@@ -75,20 +75,21 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
               </span>
               @if (t.lockKeys && t.keys.length) { <span class="muted lock-chip">locks {{ t.keys.length }} key(s): {{ lockedNames(t) }}</span> }
             </div>
-            <select [attr.aria-label]="'Status for ' + t.title" [ngModel]="t.status"
+            <select [disabled]="updatingIds().includes(t.id)" [attr.aria-label]="'Status for ' + t.title" [ngModel]="t.status"
               (change)="update(t, { status: $any($event.target).value }, $any($event.target), t.status)">
               <option value="OPEN">open</option>
               <option value="IN_PROGRESS">in progress</option>
               <option value="DONE">done</option>
             </select>
-            <select [attr.aria-label]="'Assignee for ' + t.title" [ngModel]="assigneeValue(t)"
+            <select [disabled]="updatingIds().includes(t.id)" [attr.aria-label]="'Assignee for ' + t.title" [ngModel]="assigneeValue(t)"
               (change)="update(t, assigneePatch($any($event.target).value), $any($event.target), assigneeValue(t))">
               <option value="">unassigned</option>
               @for (m of members(); track m.id) { <option [value]="m.id">{{ m.displayName }}</option> }
               @for (g of groups(); track g.id) { <option [value]="'g:' + g.id">Group: {{ g.name }}</option> }
             </select>
             @if (t.dueDate) { <time class="muted">due {{ t.dueDate | date:'mediumDate' }}</time> }
-            <button class="danger" [attr.aria-label]="'Delete task ' + t.title" (click)="remove(t)">&times;</button>
+            @if (updatingIds().includes(t.id)) { <span role="status" name="taskUpdating">Updating task...</span> }
+            <button [disabled]="updatingIds().includes(t.id)" class="danger" [attr.aria-label]="'Delete task ' + t.title" (click)="remove(t)">&times;</button>
           </li>
         } @empty {
           @if (!loading() && !listError()) { <li class="muted" name="taskListEmpty">No tasks yet</li> }
@@ -111,6 +112,7 @@ export class TasksComponent implements OnInit, OnDestroy {
   loading = signal(true);
   error = signal('');
   creating = signal(false);
+  updatingIds = signal<string[]>([]);
   title = signal('');
   description = signal('');
   dueDate = signal('');
@@ -141,7 +143,7 @@ export class TasksComponent implements OnInit, OnDestroy {
     const scope=++this.projectGeneration;
     this.projectId = pid;
     this.fetchSeq++; // invalidate every in-flight fetch from the previous project
-    this.error.set('');this.creating.set(false);
+    this.error.set('');this.creating.set(false);this.updatingIds.set([]);
     this.tasks.set([]); this.members.set([]); this.groups.set([]); this.keys.set([]);
     this.title.set(''); this.description.set(''); this.dueDate.set('');
     this.assigneeId.set(''); this.dependsOnId.set(''); this.selectedKeyIds.set([]); this.lockKeys.set(false);
@@ -250,19 +252,26 @@ export class TasksComponent implements OnInit, OnDestroy {
   }
 
   async update(t: TaskItem, patch: Record<string, unknown>, el?: HTMLSelectElement, revertValue?: string) {
+    if(this.destroyed||this.updatingIds().includes(t.id))return;
+    const scope=this.projectGeneration,projectId=this.projectId;
+    const current=()=>!this.destroyed&&scope===this.projectGeneration;
+    this.updatingIds.update(ids=>[...ids,t.id]);this.error.set('');
     try {
-      await this.api.updateTask(this.projectId, t.id, patch);
-      await this.fetch();
+      await this.api.updateTask(projectId, t.id, patch);
+      if(current())await this.fetch();
     } catch (e) {
-      this.error.set(e instanceof Error ? e.message : 'Failed to update task');
-      // Revert the control to the last server-known value (the model never
-      // drifted, so a binding alone would not push the old value back).
+      if(!current())return;
+      // Preserve actionable domain guidance only for exact reviewed messages.
+      const known=e instanceof Error&&['Task is blocked until its predecessor is done','Task dependency would create a cycle'].includes(e.message)?e.message:null;
+      this.error.set(known??'Task update failed. Check the task list before trying again.');
+      // Revert the control before a fresh server read settles uncertain outcomes.
       if (el && revertValue !== undefined) el.value = revertValue;
       await this.fetch();
-    }
+    } finally { if(current())this.updatingIds.update(ids=>ids.filter(id=>id!==t.id)); }
   }
 
   async remove(t: TaskItem) {
+    if(this.updatingIds().includes(t.id))return;
     try {
       await this.api.deleteTask(this.projectId, t.id);
       await this.fetch();

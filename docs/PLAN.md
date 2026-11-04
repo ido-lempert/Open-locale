@@ -640,3 +640,11 @@ bounded observation and unchanged realpersistedlist; Tasksbrowser13->15, review0
 Test-only; noapplication/API/schema/coverage/defaultOFF change. Notidempotency,
 cancellation or unboundedretryproof. Interrupted regression calls and cleanreruns
 are recorded separately from finalgreen results.
+
+## Continuation247 - Task update lifecycle fence
+Per-row pending guard/busy/status disables competing controls and duplicate update/
+delete. Visit/destroy fence prevents oldupdate callbacks refreshingnewproject or
+revertingnewcontrols. Fixedfallback preserves exactreviewed blocked/cycleguidance;
+native caught and fixed initialblanketfallback regression beforecommit. Nineunits/
+web217/12, actualheld/failurePATCH/Tasksbrowser18, review0313. NoAPI/schema/coverage/
+defaultOFF change; oldrequest mayfinishoriginalproject, delete lifecycle separate.

@@ -1757,7 +1757,7 @@ try {
   }, { timeout: 10000 });
   check('chained task row shows its predecessor in the depends-on select', true);
   await page.evaluate(() => {
-    const row = [...document.querySelectorAll('.task-row')].find((r) => r.textContent.includes('Proofread after translation'));
+    const row = [...document.querySelectorAll('.task-row')].find((r) => (r.querySelector('.task-body strong')?.textContent || '').includes('Proofread after translation'));
     const sel = row.querySelector('select[aria-label^="Status for"]');
     sel.value = 'IN_PROGRESS';
     sel.dispatchEvent(new Event('change', { bubbles: true }));
