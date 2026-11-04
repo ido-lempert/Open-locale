@@ -648,3 +648,10 @@ revertingnewcontrols. Fixedfallback preserves exactreviewed blocked/cycleguidanc
 native caught and fixed initialblanketfallback regression beforecommit. Nineunits/
 web217/12, actualheld/failurePATCH/Tasksbrowser18, review0313. NoAPI/schema/coverage/
 defaultOFF change; oldrequest mayfinishoriginalproject, delete lifecycle separate.
+
+## Continuation248 - Task delete lifecycle fence
+Per-row deletion pending/status disables conflicting updates/deletes; pinnedproject
+and visit/destroyfence prevent oldcallbacks touchingnewvisit. Fixedfailure guidance
+and freshserverread preserve uncertainoutcomes without rawdetail. Sixunits/web223/12,
+actualheld/rejectedDELETE/Tasksbrowser21, review0314. NoAPI/schema/coverage/defaultOFF
+change; oldrequest mayfinishoriginalproject, notcancellation/idempotency/autoretry.
