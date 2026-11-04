@@ -64,3 +64,7 @@ describe('task pending create draft retention',()=>{
 describe('task explicit refresh mutation guard',()=>{
  for(const mutation of ['create','update','delete'])it(`suppresses refresh during ${mutation} and permits it after settlement`,async()=>{const api={listTasks:jest.fn().mockResolvedValue([])},c=make(api);c.loading.set(false);if(mutation==='create')c.creating.set(true);else if(mutation==='update')c.updatingIds.set(['task']);else c.deletingIds.set(['task']);c.refresh();expect(api.listTasks).not.toHaveBeenCalled();expect(c.mutationsPending()).toBe(true);c.creating.set(false);c.updatingIds.set([]);c.deletingIds.set([]);c.refresh();await Promise.resolve();expect(api.listTasks).toHaveBeenCalledTimes(1);expect(c.mutationsPending()).toBe(false);});
 });
+
+describe('task filtered empty guidance',()=>{
+ it('distinguishes status and mine filters from unfiltered view',()=>{const c=make({});expect(c.hasFilters()).toBe(false);c.statusFilter.set('DONE');expect(c.hasFilters()).toBe(true);c.statusFilter.set('');c.mineFilter.set('me');expect(c.hasFilters()).toBe(true);c.mineFilter.set('');expect(c.hasFilters()).toBe(false);});
+});

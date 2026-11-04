@@ -93,7 +93,7 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
             <button [disabled]="rowPending(t.id)" class="danger" [attr.aria-label]="'Delete task ' + t.title" (click)="remove(t)">&times;</button>
           </li>
         } @empty {
-          @if (!loading() && !listError()) { <li class="muted" name="taskListEmpty">No tasks yet</li> }
+          @if (!loading() && !listError()) { <li class="muted" name="taskListEmpty">{{ hasFilters() ? 'No tasks match these filters' : 'No tasks yet' }}</li> }
         }
       </ul>
     </main>
@@ -183,6 +183,8 @@ export class TasksComponent implements OnInit, OnDestroy {
     this.persistFilters();
     void this.fetch();
   }
+
+  hasFilters() { return !!(this.statusFilter()||this.mineFilter()==='me'); }
 
   private filterKey(): string {
     return 'ol.taskFilters.' + this.projectId;

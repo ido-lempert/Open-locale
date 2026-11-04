@@ -799,3 +799,8 @@ SAMLbind/temporaryPG55542verification chronologyrecorded.
 Filteredempty saysnomatchingeventsratherthannohistory; unfilteredempty retainsprior
 text. Oneunit/web275/13 andactualtwo-state Activitybrowser28/review0337. NoAPI/schema/
 coverage/defaultOFF change/historyscopeclaim. Publicationtooltransportissuesrecorded.
+
+## Continuation272 - Filtered Tasks empty guidance
+Filteredempty saysnomatchingtasksratherthannotasks; unfilteredempty retainspriortext.
+Oneunit/web276/13 andactualtwo-state Tasksbrowser31/review0338. NoAPI/schema/coverage/
+defaultOFF change/filtermatchclaim. Transportinterruptionsrecordedseparately.
