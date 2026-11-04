@@ -715,3 +715,9 @@ Held failedmetadataGET afterA->B->A cannotclearworkingcolumns/table/draft orpubl
 old error/retry/loading. Rawmarker absent/narrowfit/runtimeclean. Twochecks/glossary
 browser24, review0323. Test-only/noapplication/API/schema/coverage/defaultOFF change;
 boundedobservation, notcancellation/unboundedretry.
+
+## Continuation258 - Skip unchanged glossary blur writes
+Fetched/lastsuccessfulsubmitted map comparison skipsunchangedblurPATCH; failedwrite
+retains retryeligibility. Twounits/web249/13, actualfocusblur/noPATCH/glossarybrowser25,
+review0324. NoAPI/schema/coverage/defaultOFF change; notservernormalizedtruth or
+crossclientconcurrency. Link/QAtimeout andcleanreruns recorded.

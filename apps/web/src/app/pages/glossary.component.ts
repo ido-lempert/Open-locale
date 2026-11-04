@@ -67,6 +67,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   savingIds=signal<string[]>([]);
   listError = signal(false);
   private fetchSeq=0;
+  private savedTranslations=new Map<string,Record<string,string>>();
   private projectGeneration=0;
   private routeSub?:Subscription;
   private destroyed=false;
@@ -83,7 +84,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   private initForProject(pid:string) {
     if(this.destroyed)return;
     ++this.projectGeneration;
-    this.projectId=pid;++this.fetchSeq;
+    this.projectId=pid;++this.fetchSeq;this.savedTranslations.clear();
     this.terms.set([]);this.locales.set([]);this.error.set('');this.listError.set(false);this.creating.set(false);this.deletingIds.set([]);this.savingIds.set([]);
     this.term.set('');this.notes.set('');this.doNotTranslate.set(false);
     void this.fetch();
@@ -109,7 +110,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
     this.terms.set([]);this.listError.set(false);this.loading.set(true);
     try {
       const terms=await this.api.listGlossary(this.projectId);
-      if(seq===this.fetchSeq)this.terms.set(terms);
+      if(seq===this.fetchSeq){this.terms.set(terms);this.savedTranslations=new Map(terms.map(t=>[t.id,{...t.translations} ]));}
     } catch { if(seq===this.fetchSeq)this.listError.set(true); }
     finally { if(seq===this.fetchSeq)this.loading.set(false); }
   }
@@ -145,10 +146,12 @@ export class GlossaryComponent implements OnInit, OnDestroy {
     // Read the current immutable row, not an older event-handler snapshot.
     const row=this.terms().find(x=>x.id===t.id);
     if(!row)return;
-    const translations={...row.translations};
+    const translations={...row.translations},saved=this.savedTranslations.get(t.id);
+    if(saved&&Object.keys(saved).length===Object.keys(translations).length&&Object.entries(translations).every(([key,value])=>saved[key]===value))return;
     this.savingIds.update(ids=>[...ids,t.id]);this.error.set('');
     try {
       await this.api.updateGlossaryTerm(pid, t.id, { translations });
+      if(this.current(scope))this.savedTranslations.set(t.id,translations);
     } catch {if(this.current(scope))this.error.set('Saving translation failed. Your text is kept here. Check the glossary before trying again.');}
     finally {if(this.current(scope))this.savingIds.update(ids=>ids.filter(id=>id!==t.id));}
   }
