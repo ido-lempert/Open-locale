@@ -814,3 +814,9 @@ defaultOFF change/checksemanticsclaim. Verificationboundary/retry chronologyreco
 ActualheldfirstAlist503afterA->B->A cannotclearcurrentrows/columns/wholeDraft orpublish
 olderror/retry/loading/rawdetail. Glossarybrowser38/review0340; test-only, noapplication/
 API/schema/coverage/defaultOFF change/cancellationclaim.
+
+## Continuation275 - Snapshot list recovery
+Clear stale restore rows during pending/failure, fixed list error/independent retry,
+no false empty-success/raw list detail. Threeunits/web280/14/newactualsnapshotbrowser5
+andreview0341. Mutationerror/routeReuse handling remains outside this slice. NoAPI/
+schema/coverage/defaultOFF change/restoreparityclaim.

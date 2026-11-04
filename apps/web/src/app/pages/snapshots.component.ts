@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiService, SnapshotMeta } from '../api.service';
@@ -20,7 +20,9 @@ import { ApiService, SnapshotMeta } from '../api.service';
                placeholder="Label, e.g. before release 1.4" maxlength="200" />
         <button type="submit" [disabled]="creating()">Take snapshot</button>
       </form>
-      <ul class="snapshot-list">
+      @if (listError()) { <p class="error" role="alert" name="snapshotListError">Snapshots unavailable. No snapshots are shown. Retry this read or reload the page.</p><button type="button" name="retrySnapshotList" (click)="void reload()">Retry snapshots</button> }
+      @if (loading()) { <p role="status" name="snapshotListLoading">Loading snapshots...</p> }
+      @if (!loading() && !listError()) { <ul class="snapshot-list">
         @for (s of items(); track s.id) {
           <li class="snapshot-row">
             <span class="snapshot-label">{{ s.label }}</span>
@@ -30,16 +32,19 @@ import { ApiService, SnapshotMeta } from '../api.service';
             <button class="restore" (click)="restore(s)" [disabled]="restoring()">Restore</button>
           </li>
         } @empty {
-          <li class="muted">{{ loading() ? 'Loading…' : 'No snapshots yet' }}</li>
+          <li class="muted" name="snapshotListEmpty">No snapshots yet</li>
         }
-      </ul>
+      </ul> }
     </main>
   `,
 })
-export class SnapshotsComponent implements OnInit {
+export class SnapshotsComponent implements OnInit, OnDestroy {
   projectId = '';
   items = signal<SnapshotMeta[]>([]);
   label = '';
+  listError = signal(false);
+  private readGeneration=0;
+  private destroyed=false;
   loading = signal(true);
   creating = signal(false);
   restoring = signal(false);
@@ -53,15 +58,20 @@ export class SnapshotsComponent implements OnInit {
     this.reload();
   }
 
+  ngOnDestroy() { this.destroyed=true;++this.readGeneration; }
+
   async reload() {
-    this.loading.set(true);
-    this.error.set('');
+    if(this.destroyed)return;
+    const generation=++this.readGeneration;
+    const current=()=>!this.destroyed&&generation===this.readGeneration;
+    this.items.set([]);this.listError.set(false);this.loading.set(true);
     try {
-      this.items.set(await this.api.listSnapshots(this.projectId));
-    } catch (e) {
-      this.error.set(e instanceof Error ? e.message : 'Failed to load snapshots');
+      const items=await this.api.listSnapshots(this.projectId);
+      if(current())this.items.set(items);
+    } catch {
+      if(current())this.listError.set(true);
     } finally {
-      this.loading.set(false);
+      if(current())this.loading.set(false);
     }
   }
 
