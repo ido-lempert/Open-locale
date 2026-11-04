@@ -574,3 +574,9 @@ filters and leaving actor metadata alone. Pending control suppresses duplicate
 reads. Actual newtask/refresh shows newevent without metadatareload; two units/
 web189/11/activitybrowser16, review0301. NoAPI/query/schema or coverage/defaultOFF
 change; explicitrefresh, notlivepolling or completehistory guarantee.
+
+## Continuation236 - Activity actor metadata route race
+Actual held oldteam member response released after reusedroute settles newteam
+options/feed cannot replace either or alter their loading/error state. Separate
+team fixture ensures distinct membership; Activitybrowser18, review0302. Test-only;
+noapplication/API/schema/coverage/defaultOFF change.

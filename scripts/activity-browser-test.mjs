@@ -95,6 +95,22 @@ try {
   await page.evaluate(id=>{history.pushState({},'',`/projects/${id}/activity`);window.dispatchEvent(new PopStateEvent('popstate'));},next.id);await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');
   const currentText=await page.$eval('.activity-list',e=>e.textContent);const late=page.waitForResponse(r=>new URL(r.url()).pathname===`/api/projects/${project.id}/activity`&&new URL(r.url()).searchParams.get('action')==='translation.value');release();await late;await new Promise(r=>setTimeout(r,100));page.off('request',hold);await page.setRequestInterception(false);
   check('late activity cannot cross reused project route',await page.$eval('.activity-list',(e,t)=>e.textContent===t,currentText)&&await page.$eval('[aria-label="Filter by action"]',e=>e.value==='')&&await page.$eval('.back',(e,id)=>e.getAttribute('href')===`/projects/${id}`,next.id));
+  const oldOnly=await call('/auth/signup',{email:'old-actor@example.com',password:'pass1234',displayName:'Old project only'},undefined);
+  await call(`${P}/members`,{email:oldOnly.user.email,role:'MEMBER'},token);
+  const otherOwner=await call('/auth/signup',{email:'other-team@example.com',password:'pass1234',displayName:'Other team owner'},undefined);
+  const actorNext=await call('/projects',{name:'Separate team',slug:'separate-team',locales:['en','fr']},otherOwner.accessToken);
+  await call(`/projects/${actorNext.id}/members`,{email:owner.user.email,role:'MEMBER'},otherOwner.accessToken);
+  let oldActorsHeld=false,releaseOldActors;const oldActorsGate=new Promise(r=>releaseOldActors=r);await page.setRequestInterception(true);
+  const holdOldActors=async req=>{if(new URL(req.url()).pathname===`/api/projects/${project.id}/members`){oldActorsHeld=true;await oldActorsGate;}return req.continue();};page.on('request',holdOldActors);
+  await page.evaluate(id=>{history.pushState({},'',`/projects/${id}/activity`);window.dispatchEvent(new PopStateEvent('popstate'));},project.id);
+  await page.waitForSelector('[name=activityActorsLoading]');await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');if(!oldActorsHeld)throw new Error('old actor metadata not held');
+  check('actual held old-project actor read stays independent from completed activity',await page.$eval('[name=actActor]',e=>e.getAttribute('aria-busy')==='true'&&e.options.length===1)&&!!await page.$('.activity-row'));
+  await page.evaluate(id=>{history.pushState({},'',`/projects/${id}/activity`);window.dispatchEvent(new PopStateEvent('popstate'));},actorNext.id);
+  await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false'&&document.querySelector('[name=actActor]')?.getAttribute('aria-busy')==='false');
+  const newestFeed=await page.$eval('.activity-list',e=>e.textContent);const newestOptions=await page.$eval('[name=actActor]',e=>Array.from(e.options).map(o=>[o.value,o.textContent]));
+  const oldActorResponse=page.waitForResponse(r=>new URL(r.url()).pathname===`/api/projects/${project.id}/members`);releaseOldActors();const oldActorBody=await (await oldActorResponse).json();await new Promise(r=>setTimeout(r,120));
+  check('late actual old-project members cannot enter reused new-project selector or settle its feed',oldActorBody.some(m=>m.id===oldOnly.user.id)&&!newestOptions.some(o=>o[0]===oldOnly.user.id)&&await page.$eval('[name=actActor]',(e,options)=>JSON.stringify(Array.from(e.options).map(o=>[o.value,o.textContent]))===JSON.stringify(options),newestOptions)&&await page.$eval('.activity-list',(e,text)=>e.textContent===text,newestFeed)&&!(await page.$('[name=activityActorsLoading]'))&&!(await page.$('[name=activityActorsError]'))&&await page.$eval('.back',(e,id)=>e.getAttribute('href')===`/projects/${id}`,actorNext.id));
+  page.off('request',holdOldActors);await page.setRequestInterception(false);await page.screenshot({path:'/downloads/activity-actor-project-race-full.png',fullPage:true});
   check('activity recovery fits narrow viewport',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:'/downloads/activity-recovered-full.png',fullPage:true});
   console.log(failures?'ACTIVITY BROWSER CHECKS FAILED':'ALL ACTIVITY BROWSER CHECKS PASSED');process.exitCode=failures?1:0;
 } catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
