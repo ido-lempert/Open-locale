@@ -29,6 +29,8 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
       </section>
       @if (listError()) { <p class="error" role="alert" name="glossaryListError">Glossary unavailable. No terms are shown. Retry this read or reload the page.</p><button type="button" name="retryGlossaryList" (click)="void fetch()">Retry glossary</button> }
       @if (loading()) { <p role="status" name="glossaryListLoading">Loading glossary...</p> }
+      @if (localesError()) { <p class="error" role="alert" name="glossaryLocalesError">Translation columns unavailable. Terms remain available.</p><button type="button" name="retryGlossaryLocales" (click)="void loadLocales()">Retry translation columns</button> }
+      @if (localesLoading()) { <p role="status" name="glossaryLocalesLoading">Loading translation columns...</p> }
       <table class="glossary-table">
         <thead><tr><th>Term</th>@for (l of locales(); track l) { <th>{{ l }}</th> }<th>Notes</th><th></th></tr></thead>
         <tbody>
@@ -56,6 +58,8 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   projectId = '';
   terms = signal<GlossaryTermItem[]>([]);
   locales = signal<string[]>([]);
+  localesError=signal(false);
+  localesLoading=signal(false);
   loading = signal(true);
   error = signal('');
   creating=signal(false);
@@ -78,14 +82,22 @@ export class GlossaryComponent implements OnInit, OnDestroy {
 
   private initForProject(pid:string) {
     if(this.destroyed)return;
-    const scope=++this.projectGeneration;
+    ++this.projectGeneration;
     this.projectId=pid;++this.fetchSeq;
     this.terms.set([]);this.locales.set([]);this.error.set('');this.listError.set(false);this.creating.set(false);this.deletingIds.set([]);this.savingIds.set([]);
     this.term.set('');this.notes.set('');this.doNotTranslate.set(false);
     void this.fetch();
-    void this.api.getProject(pid)
-      .then((p:Project)=>{if(this.current(scope))this.locales.set(p.locales.map(l=>l.code).filter(c=>c!==p.baseLocale));})
-      .catch(()=>{if(this.current(scope))this.locales.set([]);});
+    this.localesLoading.set(false);this.localesError.set(false);
+    void this.loadLocales();
+  }
+
+  async loadLocales() {
+    if(this.destroyed||this.localesLoading())return;
+    const scope=this.projectGeneration,pid=this.projectId;
+    this.localesLoading.set(true);this.localesError.set(false);
+    try {const p:Project=await this.api.getProject(pid);if(this.current(scope))this.locales.set(p.locales.map(l=>l.code).filter(c=>c!==p.baseLocale));}
+    catch {if(this.current(scope)){this.locales.set([]);this.localesError.set(true);}}
+    finally {if(this.current(scope))this.localesLoading.set(false);}
   }
 
   private current(scope:number) { return !this.destroyed&&scope===this.projectGeneration; }

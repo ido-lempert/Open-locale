@@ -702,3 +702,10 @@ Held actual successfulPATCH persistsoriginalproject withoutcurrentread/draft/err
 pendingchange afterroute reuse; heldfailedPATCH cannotpublisholderror/rawdetail or
 clearcurrentdraft. Two checks/glossarybrowser19, review0321. Test-only/noAPI/schema/
 coverage/defaultOFF change; notcancellation/idempotency/concurrency/unboundedretry.
+
+## Continuation256 - Glossary translation-column retry
+Independent locale discovery loading/error/fixedguidance/retry leaves termsavailable,
+pendingduplicateguard and visit/destroyfence. Retrymetadataonly retainsdraft/terms.
+Twounits/web247/13, actualfailed/held/recoveredGET/glossarybrowser22, review0322.
+NoAPI/schema/mutation/coverage/defaultOFF change. Automationbind andsyncbrowsertimeout
+attempts pluscleanfinalruns recorded separately.
