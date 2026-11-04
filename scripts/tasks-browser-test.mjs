@@ -48,6 +48,18 @@ try {
   release();await page.waitForSelector('.task-row');await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');
   check('actual selected-filter task retry restores real task and clears failure',reads===2&&await page.$$eval('.task-row',rows=>rows.length===1&&rows[0].textContent.includes('Actual task recovery'))&&!(await page.$('[name=taskListError]'))&&!(await page.$('[name=taskListLoading]')));
   check('task recovery fits narrow viewport',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:'/downloads/tasks-list-recovered-full.png',fullPage:true});page.off('request',holdRead);await page.setRequestInterception(false);
+  const next=await call('/projects',{name:'Next task project',slug:'next-task-project',locales:['en','fr']},token);
+  await call(`/projects/${next.id}/tasks`,{title:'Current project task'},token);
+  let oldHeld=false,releaseOld;const oldGate=new Promise(r=>releaseOld=r);await page.setRequestInterception(true);
+  const holdOld=async req=>{if(new URL(req.url()).pathname===`/api/projects/${project.id}/tasks`){oldHeld=true;await oldGate;}return req.continue();};page.on('request',holdOld);
+  await page.select('[aria-label="Filter by assignee"]','me');await page.waitForSelector('[name=taskListLoading]');if(!oldHeld)throw new Error('old project tasks not held');
+  check('held task filter clears old rows before reused route',!(await page.$('.task-row'))&&!(await page.$('[name=taskListEmpty]')));
+  await page.evaluate(id=>{history.pushState({},'',`/projects/${id}/tasks`);window.dispatchEvent(new PopStateEvent('popstate'));},next.id);
+  await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false'&&document.querySelector('.task-row')?.textContent.includes('Current project task'));
+  const latestRows=await page.$eval('.task-list',e=>e.textContent);const oldResponse=page.waitForResponse(r=>new URL(r.url()).pathname===`/api/projects/${project.id}/tasks`);releaseOld();const oldBody=await (await oldResponse).json();await new Promise(r=>setTimeout(r,120));
+  check('late actual old-project empty task response cannot replace current project rows or status',oldBody.length===0&&await page.$eval('.task-list',(e,text)=>e.textContent===text,latestRows)&&!(await page.$('[name=taskListLoading]'))&&!(await page.$('[name=taskListError]'))&&!(await page.$('[name=taskListEmpty]'))&&await page.$eval('.back',(e,id)=>e.getAttribute('href')===`/projects/${id}`,next.id)&&await page.$eval('[aria-label="Filter by assignee"]',e=>e.value==='')&&await page.$eval('[aria-label="Filter by status"]',e=>e.value===''));
+  check('task reused-route race leaves no browser runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));
+  page.off('request',holdOld);await page.setRequestInterception(false);await page.screenshot({path:'/downloads/tasks-project-race-full.png',fullPage:true});
   console.log(failures?'TASKS BROWSER CHECKS FAILED':'ALL TASKS BROWSER CHECKS PASSED');process.exitCode=failures?1:0;
 } catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {

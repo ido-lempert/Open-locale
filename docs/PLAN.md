@@ -610,3 +610,8 @@ Filtered task reads now clear stale rows with independent fixederror/retry/loadi
 latestrequest/project/destroy fences. Mutation errors kept separate. Three units/
 web198/12 and newactualPG/ChromeTasks5, review0307. NoAPI/query/schema or coverage/
 defaultOFF change; metadata and mutation lifecycle hardening remain separate work.
+
+## Continuation242 - Tasks actual reused-route race
+Held actual older assigned-to-me response released after newprojecttask settles
+cannot replace currentrows/status/backlink/filters. Tasksbrowser5->8, review0308.
+Test-only; noapplication/API/schema/coverage/defaultOFF change.
