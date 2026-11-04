@@ -741,3 +741,9 @@ form. Eightunits/web262/13, actualheldPOST/edit/release/persistedsnapshot/tasksb
 review0327. NoAPI/schema/coverage/defaultOFF change; notserverconcurrency/idempotency/
 cancellation. Encodedselectfixturefailures andisolatedsyncbrowserinterruption/clean
 rerun recorded separately; knownslowsuitesisolated.
+
+## Continuation262 - Explicit glossary list refresh
+Terms-onlyrefresh pending/duplicateguard retainswhole new-termdraft/locales and shows
+actualexternallyaddedterm withoutreload. Visiblehint makesrowtranslationreplacement
+explicit. Twounits/web264/13, actualheldread/glossarybrowser31, review0328. NoAPI/schema/
+coverage/defaultOFF change; notunsavedrowretention/concurrency/synchronization.
