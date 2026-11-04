@@ -747,3 +747,9 @@ Terms-onlyrefresh pending/duplicateguard retainswhole new-termdraft/locales and 
 actualexternallyaddedterm withoutreload. Visiblehint makesrowtranslationreplacement
 explicit. Twounits/web264/13, actualheldread/glossarybrowser31, review0328. NoAPI/schema/
 coverage/defaultOFF change; notunsavedrowretention/concurrency/synchronization.
+
+## Continuation263 - Explicit glossary refresh failure/retry proof
+Actualrejectedrefresh hidesstalelist/refresh withoutemptysuccess/rawdetail andkeeps
+whole draft; retryrestoresactualrows/control. Visualreviewremovedorphanedcompressed
+headingsbyhidingtableonlistError. Web264/13/glossarybrowser33/review0329. NoAPI/schema/
+coverage/defaultOFF change; notunsavedrowretention/concurrency/autoretry.

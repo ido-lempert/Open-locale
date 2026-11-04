@@ -32,7 +32,7 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
       @if (localesError()) { <p class="error" role="alert" name="glossaryLocalesError">Translation columns unavailable. Terms remain available.</p><button type="button" name="retryGlossaryLocales" (click)="void loadLocales()">Retry translation columns</button> }
       @if (localesLoading()) { <p role="status" name="glossaryLocalesLoading">Loading translation columns...</p> }
       @if (!listError()) { <button type="button" name="refreshGlossaryList" [disabled]="loading()" (click)="refresh()">Refresh glossary</button><p class="muted" name="glossaryRefreshHint">Refresh replaces translation fields with server values. Your new-term draft stays here.</p> }
-      <table class="glossary-table">
+      @if (!listError()) { <table class="glossary-table">
         <thead><tr><th>Term</th>@for (l of locales(); track l) { <th>{{ l }}</th> }<th>Notes</th><th></th></tr></thead>
         <tbody>
           @for (t of terms(); track t.id) {
@@ -51,7 +51,7 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
             @if (!loading() && !listError()) { <tr name="glossaryListEmpty"><td colspan="9" class="muted">No glossary terms yet</td></tr> }
           }
         </tbody>
-      </table>
+      </table> }
     </main>
   `,
 })
