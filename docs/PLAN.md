@@ -759,3 +759,10 @@ Explicitrefresh disabled/guardedwhilecreate/save/deletepending, avoidingmanualre
 replacementwithprewritevalues. Threeunits/web267/13 andactualheldPOST/DELETE/PATCH
 noGETproof/glossarybrowser36, review0330. NoAPI/schema/coverage/defaultOFF change;
 notallmutationrefetchserialization/serverconcurrency/unsavedrowpreservation.
+
+## Continuation265 - Tasks refresh mutation guard
+Explicitrefresh disabled/guardedwhilecreate/update/deletepending. Threeunits/web270/13
+andactualheldPOST/PATCH/DELETEnoGETproof/tasksbrowser29, review0331. NoAPI/schema/
+coverage/defaultOFF change; notfilterread/allmutationrefetchserialization/concurrency.
+Twoisolatedsyncbrowser120s interruptions andfreshresumed239/inner0/outer0 recorded;
+priorcompletedchecksretainedonunchangedsource.
