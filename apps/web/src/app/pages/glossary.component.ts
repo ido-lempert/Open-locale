@@ -31,7 +31,7 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
       @if (loading()) { <p role="status" name="glossaryListLoading">Loading glossary...</p> }
       @if (localesError()) { <p class="error" role="alert" name="glossaryLocalesError">Translation columns unavailable. Terms remain available.</p><button type="button" name="retryGlossaryLocales" (click)="void loadLocales()">Retry translation columns</button> }
       @if (localesLoading()) { <p role="status" name="glossaryLocalesLoading">Loading translation columns...</p> }
-      @if (!listError()) { <button type="button" name="refreshGlossaryList" [disabled]="loading()" (click)="refresh()">Refresh glossary</button><p class="muted" name="glossaryRefreshHint">Refresh replaces translation fields with server values. Your new-term draft stays here.</p> }
+      @if (!listError()) { <button type="button" name="refreshGlossaryList" [disabled]="loading() || mutationsPending()" (click)="refresh()">Refresh glossary</button><p class="muted" name="glossaryRefreshHint">Refresh replaces translation fields with server values. Your new-term draft stays here.</p> }
       @if (!listError()) { <table class="glossary-table">
         <thead><tr><th>Term</th>@for (l of locales(); track l) { <th>{{ l }}</th> }<th>Notes</th><th></th></tr></thead>
         <tbody>
@@ -105,7 +105,8 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   private current(scope:number) { return !this.destroyed&&scope===this.projectGeneration; }
   ngOnDestroy() { this.destroyed=true;++this.fetchSeq;++this.projectGeneration;this.routeSub?.unsubscribe(); }
 
-  refresh() { if(!this.loading())void this.fetch(); }
+  mutationsPending() { return this.creating()||this.savingIds().length>0||this.deletingIds().length>0; }
+  refresh() { if(!this.loading()&&!this.mutationsPending())void this.fetch(); }
 
   async fetch() {
     if(this.destroyed)return;

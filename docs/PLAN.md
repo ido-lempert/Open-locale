@@ -753,3 +753,9 @@ Actualrejectedrefresh hidesstalelist/refresh withoutemptysuccess/rawdetail andke
 whole draft; retryrestoresactualrows/control. Visualreviewremovedorphanedcompressed
 headingsbyhidingtableonlistError. Web264/13/glossarybrowser33/review0329. NoAPI/schema/
 coverage/defaultOFF change; notunsavedrowretention/concurrency/autoretry.
+
+## Continuation264 - Glossary refresh mutation guard
+Explicitrefresh disabled/guardedwhilecreate/save/deletepending, avoidingmanualread
+replacementwithprewritevalues. Threeunits/web267/13 andactualheldPOST/DELETE/PATCH
+noGETproof/glossarybrowser36, review0330. NoAPI/schema/coverage/defaultOFF change;
+notallmutationrefetchserialization/serverconcurrency/unsavedrowpreservation.
