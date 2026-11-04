@@ -38,7 +38,7 @@ import { ApiService, Project, QaIssue } from '../api.service';
               <td class="muted">{{ i.detail }}</td>
             </tr>
           } @empty {
-            <tr><td colspan="4" class="muted">No QA issues found</td></tr>
+            <tr name="qaEmpty"><td colspan="4" class="muted">{{ emptyLabel() }}</td></tr>
           }
         </tbody>
       </table></div> }
@@ -95,6 +95,8 @@ export class QaComponent implements OnInit, OnDestroy {
     } catch { if(current())this.error.set('QA checks unavailable. No findings are shown. Retry checks or reload this page.'); }
     finally { if(current())this.loading.set(false); }
   }
+
+  emptyLabel() { return this.locale() ? 'No QA issues found for ' + this.locale() : 'No QA issues found'; }
 
   label(type: QaIssue['type']): string {
     switch (type) {

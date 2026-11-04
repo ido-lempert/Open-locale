@@ -804,3 +804,8 @@ coverage/defaultOFF change/historyscopeclaim. Publicationtooltransportissuesreco
 Filteredempty saysnomatchingtasksratherthannotasks; unfilteredempty retainspriortext.
 Oneunit/web276/13 andactualtwo-state Tasksbrowser31/review0338. NoAPI/schema/coverage/
 defaultOFF change/filtermatchclaim. Transportinterruptionsrecordedseparately.
+
+## Continuation273 - Selected-locale QA empty guidance
+Selected-locale empty names the checked locale; all-locales empty retains prior text.
+Oneunit/web277/13 andactualtwo-state QAbrowser21/review0339. NoAPI/schema/coverage/
+defaultOFF change/checksemanticsclaim. Verificationboundary/retry chronologyrecorded.

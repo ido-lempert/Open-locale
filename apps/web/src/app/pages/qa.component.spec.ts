@@ -24,3 +24,7 @@ describe('QA explicit refresh guard',()=>{
  it('reads selected locale without metadata and suppresses pending repeats',async()=>{const wait=deferred(),api={runQa:jest.fn().mockReturnValue(wait.promise),getProject:jest.fn()},c=make(api);c.projectId='project';c.loading.set(false);c.locale.set('he');c.refresh();c.refresh();expect(api.runQa.mock.calls).toEqual([['project','he']]);expect(c.loading()).toBe(true);expect(api.getProject).not.toHaveBeenCalled();wait.resolve({issues:[]});await Promise.resolve();expect(c.loading()).toBe(false);});
  it('suppresses refresh after destroy even with cleared loading state',()=>{const api={runQa:jest.fn()},c=make(api);c.ngOnDestroy();c.loading.set(false);c.refresh();expect(api.runQa).not.toHaveBeenCalled();});
 });
+
+describe('QA empty result scope guidance',()=>{
+ it('names selected locale without implying all locales were checked',()=>{const c=make({});expect(c.emptyLabel()).toBe('No QA issues found');c.locale.set('fr');expect(c.emptyLabel()).toBe('No QA issues found for fr');c.locale.set('he');expect(c.emptyLabel()).toBe('No QA issues found for he');});
+});
