@@ -33,16 +33,16 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
         <thead><tr><th>Term</th>@for (l of locales(); track l) { <th>{{ l }}</th> }<th>Notes</th><th></th></tr></thead>
         <tbody>
           @for (t of terms(); track t.id) {
-            <tr>
+            <tr [attr.aria-busy]="deletingIds().includes(t.id)">
               <td><code>{{ t.term }}</code>@if (t.doNotTranslate) { <span class="dnt-badge">do not translate</span> }</td>
               @for (l of locales(); track l) {
                 <td>
-                  <input [attr.aria-label]="t.term + ' in ' + l" [ngModel]="t.translations[l] ?? ''"
+                  <input [disabled]="deletingIds().includes(t.id)" [attr.aria-label]="t.term + ' in ' + l" [ngModel]="t.translations[l] ?? ''"
                     (ngModelChange)="setTranslation(t, l, $event)" (blur)="saveTranslations(t)" />
                 </td>
               }
               <td class="muted">{{ t.notes }}</td>
-              <td><button class="danger" [attr.aria-label]="'Delete term ' + t.term" (click)="remove(t)">&times;</button></td>
+              <td>@if (deletingIds().includes(t.id)) { <span role="status" name="glossaryDeleting">Deleting term...</span> }<button [disabled]="deletingIds().includes(t.id)" class="danger" [attr.aria-label]="'Delete term ' + t.term" (click)="remove(t)">&times;</button></td>
             </tr>
           } @empty {
             @if (!loading() && !listError()) { <tr name="glossaryListEmpty"><td colspan="9" class="muted">No glossary terms yet</td></tr> }
@@ -59,6 +59,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   loading = signal(true);
   error = signal('');
   creating=signal(false);
+  deletingIds=signal<string[]>([]);
   listError = signal(false);
   private fetchSeq=0;
   private projectGeneration=0;
@@ -78,7 +79,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
     if(this.destroyed)return;
     const scope=++this.projectGeneration;
     this.projectId=pid;++this.fetchSeq;
-    this.terms.set([]);this.locales.set([]);this.error.set('');this.listError.set(false);this.creating.set(false);
+    this.terms.set([]);this.locales.set([]);this.error.set('');this.listError.set(false);this.creating.set(false);this.deletingIds.set([]);
     this.term.set('');this.notes.set('');this.doNotTranslate.set(false);
     void this.fetch();
     void this.api.getProject(pid)
@@ -124,7 +125,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   }
 
   async saveTranslations(t: GlossaryTermItem) {
-    if(this.destroyed)return;
+    if(this.destroyed||this.deletingIds().includes(t.id))return;
     const scope=this.projectGeneration,pid=this.projectId;
     try {
       await this.api.updateGlossaryTerm(pid, t.id, { translations: t.translations });
@@ -132,11 +133,16 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   }
 
   async remove(t: GlossaryTermItem) {
-    if(this.destroyed)return;
+    if(this.destroyed||this.deletingIds().includes(t.id))return;
     const scope=this.projectGeneration,pid=this.projectId;
+    this.deletingIds.update(ids=>[...ids,t.id]);this.error.set('');
     try {
       await this.api.deleteGlossaryTerm(pid, t.id);
       if(this.current(scope))await this.fetch();
-    } catch (e) { if(this.current(scope))this.error.set(e instanceof Error ? e.message : 'Failed to delete term'); }
+    } catch {
+      if(!this.current(scope))return;
+      this.error.set('Deleting term failed. Check the glossary before trying again.');
+      await this.fetch();
+    } finally {if(this.current(scope))this.deletingIds.update(ids=>ids.filter(id=>id!==t.id));}
   }
 }

@@ -682,3 +682,10 @@ fixed inspect-before-retry failure retain draft. Fourunits/web237/13, actualheld
 failedPOST/glossarybrowser11, review0318. NoAPI/schema/coverage/defaultOFF change;
 oldrequest mayfinishoriginalproject, notcancellation/idempotency/autoretry. Update/
 deletepending and rawcurrenterrors remain separatework.
+
+## Continuation253 - Glossary deletion pending guard
+Per-rowdelete pending/status/busy disablesinput/delete and suppressesduplicateDELETE/
+subsequentsave. Fixedfailureguidance+serverread, visitfencedcleanup. Fourunits/web241/13,
+actualheld/rejectedDELETE/glossarybrowser14, review0319. NoAPI/schema/coverage/defaultOFF
+change; alreadyinflight saves notserialized, savelifecycle separate. Notcancellation/
+idempotency/autoretry. TransientSAMLbindattempts andcleanfinalstandardrun recorded.
