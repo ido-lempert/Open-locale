@@ -809,3 +809,8 @@ defaultOFF change/filtermatchclaim. Transportinterruptionsrecordedseparately.
 Selected-locale empty names the checked locale; all-locales empty retains prior text.
 Oneunit/web277/13 andactualtwo-state QAbrowser21/review0339. NoAPI/schema/coverage/
 defaultOFF change/checksemanticsclaim. Verificationboundary/retry chronologyrecorded.
+
+## Continuation274 - Repeated-visit glossary list failure proof
+ActualheldfirstAlist503afterA->B->A cannotclearcurrentrows/columns/wholeDraft orpublish
+olderror/retry/loading/rawdetail. Glossarybrowser38/review0340; test-only, noapplication/
+API/schema/coverage/defaultOFF change/cancellationclaim.
