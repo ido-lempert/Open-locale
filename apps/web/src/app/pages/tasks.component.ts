@@ -235,19 +235,26 @@ export class TasksComponent implements OnInit, OnDestroy {
     if (!title||this.creating()||this.destroyed) return;
     const scope=this.projectGeneration,projectId=this.projectId;
     const current=()=>!this.destroyed&&scope===this.projectGeneration;
+    const draft={title:this.title(),description:this.description(),dueDate:this.dueDate(),
+      assigneeId:this.assigneeId(),dependsOnId:this.dependsOnId(),keyIds:[...this.selectedKeyIds()],lockKeys:this.lockKeys()};
     this.creating.set(true);this.error.set('');
     try {
       await this.api.createTask(projectId, {
         title,
-        ...(this.description().trim() ? { description: this.description().trim() } : {}),
-        ...(this.dueDate() ? { dueDate: this.dueDate() } : {}),
-        ...this.assigneePatch(this.assigneeId()),
-        ...(this.dependsOnId() ? { dependsOnId: this.dependsOnId() } : {}),
-        ...(this.selectedKeyIds().length ? { keyIds: this.selectedKeyIds(), lockKeys: this.lockKeys() } : {}),
+        ...(draft.description.trim() ? { description: draft.description.trim() } : {}),
+        ...(draft.dueDate ? { dueDate: draft.dueDate } : {}),
+        ...this.assigneePatch(draft.assigneeId),
+        ...(draft.dependsOnId ? { dependsOnId: draft.dependsOnId } : {}),
+        ...(draft.keyIds.length ? { keyIds: draft.keyIds, lockKeys: draft.lockKeys } : {}),
       });
       if(!current())return;
-      this.title.set(''); this.description.set(''); this.dueDate.set(''); this.assigneeId.set(''); this.dependsOnId.set('');
-      this.selectedKeyIds.set([]); this.lockKeys.set(false);
+      // Inputs remain editable during POST. Never clear a newer whole draft.
+      if(this.title()===draft.title&&this.description()===draft.description&&this.dueDate()===draft.dueDate&&
+        this.assigneeId()===draft.assigneeId&&this.dependsOnId()===draft.dependsOnId&&this.lockKeys()===draft.lockKeys&&
+        this.selectedKeyIds().length===draft.keyIds.length&&this.selectedKeyIds().every((id,i)=>id===draft.keyIds[i])){
+        this.title.set(''); this.description.set(''); this.dueDate.set(''); this.assigneeId.set(''); this.dependsOnId.set('');
+        this.selectedKeyIds.set([]); this.lockKeys.set(false);
+      }
       await this.fetch();
     } catch { if(current())this.error.set('Task creation failed. Check the task list before trying again.'); }
     finally {if(current())this.creating.set(false);}

@@ -734,3 +734,10 @@ newerterm/notes/checkbox typedwhilepending. Threeunits/web254/13, actualheldPOST
 release/persistedsnapshot/glossarybrowser29, review0326. NoAPI/schema/coverage/defaultOFF
 change; notserveridempotency/concurrency/cancellation. Incompletecombinedverification
 calls/stalesocketretries andcleanisolatedreruns recorded separately.
+
+## Continuation261 - Keep newer task create draft
+Captureallsevenformfields/copyselectedkeys; successfulPOST clearsonlyunchangedwhole
+form. Eightunits/web262/13, actualheldPOST/edit/release/persistedsnapshot/tasksbrowser26,
+review0327. NoAPI/schema/coverage/defaultOFF change; notserverconcurrency/idempotency/
+cancellation. Encodedselectfixturefailures andisolatedsyncbrowserinterruption/clean
+rerun recorded separately; knownslowsuitesisolated.
