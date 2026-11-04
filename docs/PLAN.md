@@ -661,3 +661,10 @@ Held actual DELETE from firstvisit rejected after A->B->A cannot showerror/refet
 change currentdraft/list/pending; persistedtask intact/rawdetail absent. Two checks,
 Tasksbrowser21->23, review0315. Test-only/noapplication/API/schema/coverage/defaultOFF
 change; boundedobservation, notcancellation/idempotency/genericserveratomicity.
+
+## Continuation250 - Glossary list recovery
+Failed glossary read clearsstale terms, separatesloading/error/empty, fixedguidance/
+explicitretry with latestread/destroyfence. Threeunits/web226/13 and actualPG/Chrome
+create->failedread->heldretry/recovery5checks, review0316. Draft/mutationerror retained
+onretry. NoAPI/schema/coverage/defaultOFF change; projectroute/metadata/mutation
+lifecycle remain separatework, notclaimedfixed.

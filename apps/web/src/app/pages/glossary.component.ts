@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiService, GlossaryTermItem, Project } from '../api.service';
@@ -11,7 +11,7 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
       <a [routerLink]="['/projects', projectId]" class="back">&larr; Editor</a>
       <h1>Glossary</h1>
     </header>
-    <main>
+    <main [attr.aria-busy]="loading()">
       @if (error(); as e) { <p class="error" role="alert">{{ e }}</p> }
       <section class="panel">
         <h2>New term</h2>
@@ -25,6 +25,8 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
           <button class="primary" type="submit">Add term</button>
         </form>
       </section>
+      @if (listError()) { <p class="error" role="alert" name="glossaryListError">Glossary unavailable. No terms are shown. Retry this read or reload the page.</p><button type="button" name="retryGlossaryList" (click)="void fetch()">Retry glossary</button> }
+      @if (loading()) { <p role="status" name="glossaryListLoading">Loading glossary...</p> }
       <table class="glossary-table">
         <thead><tr><th>Term</th>@for (l of locales(); track l) { <th>{{ l }}</th> }<th>Notes</th><th></th></tr></thead>
         <tbody>
@@ -41,19 +43,22 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
               <td><button class="danger" [attr.aria-label]="'Delete term ' + t.term" (click)="remove(t)">&times;</button></td>
             </tr>
           } @empty {
-            <tr><td colspan="9" class="muted">{{ loading() ? 'Loading…' : 'No glossary terms yet' }}</td></tr>
+            @if (!loading() && !listError()) { <tr name="glossaryListEmpty"><td colspan="9" class="muted">No glossary terms yet</td></tr> }
           }
         </tbody>
       </table>
     </main>
   `,
 })
-export class GlossaryComponent implements OnInit {
+export class GlossaryComponent implements OnInit, OnDestroy {
   projectId = '';
   terms = signal<GlossaryTermItem[]>([]);
   locales = signal<string[]>([]);
   loading = signal(true);
   error = signal('');
+  listError = signal(false);
+  private fetchSeq=0;
+  private destroyed=false;
   term = signal('');
   notes = signal('');
   doNotTranslate = signal(false);
@@ -68,12 +73,17 @@ export class GlossaryComponent implements OnInit {
       .catch(() => this.locales.set([]));
   }
 
+  ngOnDestroy() { this.destroyed=true;++this.fetchSeq; }
+
   async fetch() {
-    this.loading.set(true);
+    if(this.destroyed)return;
+    const seq=++this.fetchSeq;
+    this.terms.set([]);this.listError.set(false);this.loading.set(true);
     try {
-      this.terms.set(await this.api.listGlossary(this.projectId));
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load glossary'); }
-    finally { this.loading.set(false); }
+      const terms=await this.api.listGlossary(this.projectId);
+      if(seq===this.fetchSeq)this.terms.set(terms);
+    } catch { if(seq===this.fetchSeq)this.listError.set(true); }
+    finally { if(seq===this.fetchSeq)this.loading.set(false); }
   }
 
   async create() {
