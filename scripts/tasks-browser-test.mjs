@@ -79,6 +79,15 @@ try {
   releaseRefresh();await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');
   check('explicit task refresh shows changed real task with same filter and no metadata reload',refreshReads===1&&metadataReads===0&&await page.$$eval('.task-row',rows=>rows.length===1&&rows[0].textContent.includes('Fresh task after change'))&&await page.$eval('[aria-label="Filter by status"]',e=>e.value==='OPEN')&&await page.$eval('[name=taskTitle]',e=>e.value==='Unsaved task draft'));
   page.off('request',holdRefresh);await page.setRequestInterception(false);await page.screenshot({path:'/downloads/tasks-refresh-full.png',fullPage:true});
+  let creates=0,createHeld=false,releaseCreate;const createGate=new Promise(r=>releaseCreate=r);await page.setRequestInterception(true);
+  const holdCreate=async req=>{if(new URL(req.url()).pathname===`/api${P}/tasks`&&req.method()==='POST'){creates++;createHeld=true;await createGate;}return req.continue();};page.on('request',holdCreate);
+  await page.click('.task-form button[type=submit]');await page.waitForSelector('[name=taskCreating]');if(!createHeld)throw new Error('create not held');await page.click('.task-form button[type=submit]');await new Promise(r=>setTimeout(r,100));
+  check('held task creation suppresses duplicate pointer submit and announces pending',creates===1&&await page.$eval('.task-form button[type=submit]',e=>e.disabled)&&await page.$eval('.task-form',e=>e.getAttribute('aria-busy')==='true'));
+  await route(next.id);await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');await page.type('[name=taskTitle]','New project unsaved draft');
+  const created=page.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname===`/api${P}/tasks`);releaseCreate();await created;await new Promise(r=>setTimeout(r,150));
+  const persisted=await call(`${P}/tasks`,null,token);
+  check('late actual task creation persists once only in old project without clearing new draft',persisted.filter(t=>t.title==='Unsaved task draft').length===1&&await page.$eval('[name=taskTitle]',e=>e.value==='New project unsaved draft')&&await page.$eval('.task-list',e=>e.textContent.includes('Current project task')&&!e.textContent.includes('Unsaved task draft'))&&!(await page.$('[name=taskCreating]'))&&!await page.$eval('.task-form button[type=submit]',e=>e.disabled));
+  page.off('request',holdCreate);await page.setRequestInterception(false);await page.screenshot({path:'/downloads/tasks-create-route-fence-full.png',fullPage:true});
   console.log(failures?'TASKS BROWSER CHECKS FAILED':'ALL TASKS BROWSER CHECKS PASSED');process.exitCode=failures?1:0;
 } catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {

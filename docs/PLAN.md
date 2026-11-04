@@ -626,3 +626,9 @@ Refresh tasks reuses fenced listread, preserves filters/formdraft and skipsmetad
 Pending duplicate suppressed; actualrenamedtaskappears afterclick. Two units/
 web204/12/Tasksbrowser11, review0310. NoAPI/query/schema/coverage/defaultOFF change;
 explicitread, notpolling or mutationlifecyclehardening.
+
+## Continuation245 - Task create lifecycle fence
+Create pendingguard/status suppress duplicate submissions; projectvisit/destroyfence
+prevents oldcompletion clearingnewdraft or refreshingnewlist. Fixedfailure retains
+draft with inspect-before-retry guidance. Four units/web208/12/Tasksbrowser13,
+review0311. NoAPI/schema/coverage/defaultOFF change; notserveridempotency/cancellation.

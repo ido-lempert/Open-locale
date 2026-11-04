@@ -27,7 +27,7 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
       @if (error(); as e) { <p class="error" role="alert">{{ e }}</p> }
       <section class="panel">
         <h2>New task</h2>
-        <form class="task-form" (ngSubmit)="create()">
+        <form class="task-form" [attr.aria-busy]="creating()" (ngSubmit)="create()">
           <input aria-label="Task title" placeholder="e.g. Translate checkout to Hebrew" maxlength="200"
             [ngModel]="title()" (ngModelChange)="title.set($event)" name="taskTitle" required />
           <input aria-label="Description (optional)" placeholder="Details, key names, context"
@@ -52,7 +52,8 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
             lock the selected keys while this task is open
           </label>
           <span class="muted lock-scope-note">A lock blocks editor saves, status changes, MT fills, branch merges, snapshot restores and key deletion for everyone except the assignee and team admins. Imports skip locked keys and report them in the run; other keys still import.</span>
-          <button class="primary" type="submit">Create task</button>
+          <button class="primary" type="submit" [disabled]="creating()">Create task</button>
+          @if (creating()) { <span role="status" name="taskCreating">Creating task...</span> }
         </form>
       </section>
       @if (listError()) { <p class="error" role="alert" name="taskListError">Tasks unavailable. No tasks are shown. Retry this read or reload the page.</p><button type="button" name="retryTaskList" (click)="void fetch()">Retry tasks</button> }
@@ -109,6 +110,7 @@ export class TasksComponent implements OnInit, OnDestroy {
   listError = signal(false);
   loading = signal(true);
   error = signal('');
+  creating = signal(false);
   title = signal('');
   description = signal('');
   dueDate = signal('');
@@ -139,7 +141,7 @@ export class TasksComponent implements OnInit, OnDestroy {
     const scope=++this.projectGeneration;
     this.projectId = pid;
     this.fetchSeq++; // invalidate every in-flight fetch from the previous project
-    this.error.set('');
+    this.error.set('');this.creating.set(false);
     this.tasks.set([]); this.members.set([]); this.groups.set([]); this.keys.set([]);
     this.title.set(''); this.description.set(''); this.dueDate.set('');
     this.assigneeId.set(''); this.dependsOnId.set(''); this.selectedKeyIds.set([]); this.lockKeys.set(false);
@@ -226,9 +228,12 @@ export class TasksComponent implements OnInit, OnDestroy {
 
   async create() {
     const title = this.title().trim();
-    if (!title) return;
+    if (!title||this.creating()||this.destroyed) return;
+    const scope=this.projectGeneration,projectId=this.projectId;
+    const current=()=>!this.destroyed&&scope===this.projectGeneration;
+    this.creating.set(true);this.error.set('');
     try {
-      await this.api.createTask(this.projectId, {
+      await this.api.createTask(projectId, {
         title,
         ...(this.description().trim() ? { description: this.description().trim() } : {}),
         ...(this.dueDate() ? { dueDate: this.dueDate() } : {}),
@@ -236,10 +241,12 @@ export class TasksComponent implements OnInit, OnDestroy {
         ...(this.dependsOnId() ? { dependsOnId: this.dependsOnId() } : {}),
         ...(this.selectedKeyIds().length ? { keyIds: this.selectedKeyIds(), lockKeys: this.lockKeys() } : {}),
       });
+      if(!current())return;
       this.title.set(''); this.description.set(''); this.dueDate.set(''); this.assigneeId.set(''); this.dependsOnId.set('');
       this.selectedKeyIds.set([]); this.lockKeys.set(false);
       await this.fetch();
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to create task'); }
+    } catch { if(current())this.error.set('Task creation failed. Check the task list before trying again.'); }
+    finally {if(current())this.creating.set(false);}
   }
 
   async update(t: TaskItem, patch: Record<string, unknown>, el?: HTMLSelectElement, revertValue?: string) {
