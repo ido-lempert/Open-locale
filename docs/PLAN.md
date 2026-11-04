@@ -827,3 +827,9 @@ andactualheldPOST snapshotbrowser7. Reviewed staged syncbrowser95+144=239unique 
 private/source/app/database-bound checkpoint and16negative configchecks. Canonical
 uninterrupted run remains unverified after120s interruptions; review0342 records full
 chronology. NoAPI/schema/coverage/defaultOFF change.
+
+## Continuation277 - Snapshot capture failure guidance
+Fixed uncertain-outcome capture error keeps draft/current list without raw server
+text; new attempt clears stale success notice. Oneunit/web283/14/actualheld503POST
+snapshotbrowser9/review0343. NoAPI/schema/restoreerror/routeReuse/coverage/defaultOFF
+change. Staged sync95+144=239unique, native116+128 remain explicitly staged.
