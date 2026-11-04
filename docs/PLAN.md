@@ -782,3 +782,9 @@ noapplication/API/schema/coverage/defaultOFF change/cancellationclaim.
 Actualheldselectedherefresh503afternewerall-localesfetch cannotreplacecurrenttable/
 count/selectionorpublisholderror/retry/loading. QAbrowser19/review0334; test-only,
 noapplication/API/schema/coverage/defaultOFF change/cancellationclaim.
+
+## Continuation269 - Repeated-visit Activity actor failure proof
+ActualheldfirstAmembers503afterA->B->A cannotclearcurrentoptions/actorselection/feed
+orpublisholderror/retry/loading/rawdetail. Activitybrowser24/review0335; test-only,
+noapplication/API/schema/coverage/defaultOFF change/cancellationclaim. Isolatedsync
+interruption/cleanretry chronologyrecorded.
