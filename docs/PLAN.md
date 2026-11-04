@@ -599,3 +599,8 @@ Task createIn now records existing creation event before keyed-task early return
 inside the same transaction. Actual linkedtask records exactlyoneevent; injected
 DBlinkfailure leaves neither task nor event. Tasks75->77/activity22, review0305.
 NoAPI/query/schema/coverage/defaultOFF change; fixes future events, no historybackfill.
+
+## Continuation240 - Creation audit failure rollback
+RealDBauditINSERTfailure proves neither ordinary nor keyedtask survives without
+its audit; removedtrigger restoresexactlyonetask/link/event. Tasks77->80, review0306.
+Test-only; noapplication/API/schema/coverage/defaultOFF change.

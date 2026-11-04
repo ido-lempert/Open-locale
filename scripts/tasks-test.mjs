@@ -219,6 +219,24 @@ try {
     await auditDb.$executeRawUnsafe('DROP FUNCTION IF EXISTS reject_task_link_fixture()');
     await auditDb.$disconnect();
   }
+  const auditFailureDb=new PrismaClient({datasources:{db:{url}}});
+  try {
+    await auditFailureDb.$executeRawUnsafe(`CREATE FUNCTION reject_task_audit_fixture() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action = 'task.created' THEN RAISE EXCEPTION 'fixture audit failure'; END IF; RETURN NEW; END $$`);
+    await auditFailureDb.$executeRawUnsafe(`CREATE TRIGGER reject_task_audit_fixture BEFORE INSERT ON "activity_events" FOR EACH ROW EXECUTE FUNCTION reject_task_audit_fixture()`);
+    for(const keyed of [false,true]) {
+      const title=keyed?'Audit failure keyed':'Audit failure ordinary';
+      const rejected=await call(base,{token:at,method:'POST',body:{title,...(keyed?{keyIds:[k1.id]}:{})}});
+      check(`creation audit failure rolls back ${keyed?'keyed':'ordinary'} task without orphan links`,rejected.status===500&&await auditFailureDb.task.count({where:{projectId:proj.id,title}})===0&&await auditFailureDb.taskKey.count({where:{task:{projectId:proj.id,title}}})===0&&await auditFailureDb.activityEvent.count({where:{projectId:proj.id,action:'task.created',detail:{path:['title'],equals:title}}})===0);
+    }
+    await auditFailureDb.$executeRawUnsafe('DROP TRIGGER reject_task_audit_fixture ON "activity_events"');
+    const recovered=await call(base,{token:at,method:'POST',body:{title:'Audit recovery keyed',keyIds:[k1.id]}});
+    check('keyed creation recovers with one task link and audit after failed audit is removed',recovered.status===201&&await auditFailureDb.task.count({where:{projectId:proj.id,title:'Audit recovery keyed'}})===1&&await auditFailureDb.taskKey.count({where:{taskId:recovered.json.id}})===1&&await auditFailureDb.activityEvent.count({where:{projectId:proj.id,action:'task.created',detail:{path:['title'],equals:'Audit recovery keyed'}}})===1);
+    await call(`${base}/${recovered.json.id}`,{token:at,method:'DELETE'});
+  } finally {
+    await auditFailureDb.$executeRawUnsafe('DROP TRIGGER IF EXISTS reject_task_audit_fixture ON "activity_events"');
+    await auditFailureDb.$executeRawUnsafe('DROP FUNCTION IF EXISTS reject_task_audit_fixture()');
+    await auditFailureDb.$disconnect();
+  }
   const bobUpsert = await call(`/projects/${proj.id}/keys/${k1.id}/translations`, { token: bt, method: 'PUT', body: { locale: 'he', value: 'bob value' } });
   check('non-assignee member edit of a locked key rejected (403)', bobUpsert.status === 403 && String(bobUpsert.json?.message ?? '').includes('Lock cart keys'), `${bobUpsert.status} ${JSON.stringify(bobUpsert.json?.message)}`);
 
