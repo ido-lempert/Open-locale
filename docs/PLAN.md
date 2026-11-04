@@ -689,3 +689,10 @@ subsequentsave. Fixedfailureguidance+serverread, visitfencedcleanup. Fourunits/w
 actualheld/rejectedDELETE/glossarybrowser14, review0319. NoAPI/schema/coverage/defaultOFF
 change; alreadyinflight saves notserialized, savelifecycle separate. Notcancellation/
 idempotency/autoretry. TransientSAMLbindattempts andcleanfinalstandardrun recorded.
+
+## Continuation254 - Glossary save pending guard
+Save latestimmutable rowmap, per-rowpending/status/busy disablestranslation/delete
+and guardssame-rowduplicate/save-delete conflict. Fixedfailure retains editedtext.
+Fourunits/web245/13, actualblur/held/rejectedPATCH/glossarybrowser17, review0320. NoAPI/
+schema/coverage/defaultOFF change; notserverconcurrency/idempotency/cancellation.
+Othermutationrefetch canstillreplaceunsavededits; broaderdraftretention separate.
