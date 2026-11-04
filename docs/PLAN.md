@@ -580,3 +580,10 @@ Actual held oldteam member response released after reusedroute settles newteam
 options/feed cannot replace either or alter their loading/error state. Separate
 team fixture ensures distinct membership; Activitybrowser18, review0302. Test-only;
 noapplication/API/schema/coverage/defaultOFF change.
+
+## Continuation237 - Incomplete Activity role snapshots
+Member/group update detail guards now reject missing/malformed nested role/locale
+snapshots rather than throwing during feed rendering. Valid summaries unchanged;
+three units/web192/11 and actual persisted malformed+valid rows/activitybrowser20,
+review0303. NoAPI/query/schema/coverage/defaultOFF change; other detail formats
+not covered by this bounded hardening.

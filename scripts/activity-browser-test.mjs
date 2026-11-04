@@ -64,6 +64,15 @@ try {
   const glossaryResponse=page.waitForResponse(r=>new URL(r.url()).pathname===`/api/projects/${project.id}/activity`&&new URL(r.url()).searchParams.get('action')==='glossary.created');await page.select('[aria-label="Filter by action"]','glossary.created');await glossaryResponse;await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');
   check('actual glossary term snapshot renders literal text in filtered activity',await page.$$eval('.activity-row',rows=>rows.length===1&&rows[0].textContent.includes('<i>checkout</i>')&&!rows[0].querySelector('i')));
   await page.screenshot({path:'/downloads/activity-glossary-filter-full.png',fullPage:true});
+  await prisma.activityEvent.createMany({data:['member.updated','group.updated'].flatMap(action=>[
+    {projectId:project.id,actorId:owner.user.id,action,detail:{from:null,to:{role:42,allowedLocales:'bad'}}},
+    {projectId:project.id,actorId:owner.user.id,action,detail:{email:'member@example.com',name:'Reviewers',from:{role:'MEMBER',allowedLocales:[]},to:{role:'ADMIN',allowedLocales:['he']}}}
+  ])});
+  for(const action of ['member.updated','group.updated']){
+    await page.select('[aria-label="Filter by action"]',action);await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');
+    check(`actual ${action} incomplete persisted snapshot cannot break valid feed rendering`,await page.$$eval('.activity-row',rows=>rows.length===2&&rows.some(r=>r.textContent.includes('member → admin, locales all → he')))&&!diagnostics.some(d=>/TypeError|Cannot read properties/.test(d)));
+  }
+  await page.screenshot({path:'/downloads/activity-incomplete-snapshot-full.png',fullPage:true});
   let actorReads=0,feedReads=0;await page.setRequestInterception(true);
   const failActors=req=>{const path=new URL(req.url()).pathname;if(path===`/api/projects/${project.id}/activity`)feedReads++;if(path===`/api/projects/${project.id}/members`){actorReads++;return req.respond({status:503,contentType:'application/json',body:JSON.stringify({message:'private-actor-error'})});}return req.continue();};page.on('request',failActors);
   // A same-project route reload triggers the real metadata read independently.

@@ -44,6 +44,13 @@ const ACTION_LABELS: Record<string, string> = {
   'group.member.removed': 'removed a member from group',
 };
 
+// Older or incomplete audit snapshots must never break rendering the whole feed.
+function roleSnapshot(value: unknown): value is { role: string; allowedLocales: string[] } {
+  if(!value||typeof value!=='object'||Array.isArray(value))return false;
+  const snapshot=value as Record<string,unknown>;
+  return typeof snapshot['role']==='string'&&Array.isArray(snapshot['allowedLocales'])&&snapshot['allowedLocales'].every(locale=>typeof locale==='string');
+}
+
 @Component({
   selector: 'ol-activity',
   imports: [FormsModule, RouterLink, DatePipe],
@@ -172,7 +179,8 @@ export class ActivityComponent implements OnInit, OnDestroy {
       case 'member.added':
         return `${d['email']} (${String(d['role']).toLowerCase()}${Array.isArray(d['allowedLocales']) && (d['allowedLocales'] as string[]).length ? ': ' + (d['allowedLocales'] as string[]).join(', ') : ''})`;
       case 'member.updated': {
-        const f = d['from'] as { role: string; allowedLocales: string[] }; const t = d['to'] as { role: string; allowedLocales: string[] };
+        const f = d['from'],t = d['to'];
+        if(!roleSnapshot(f)||!roleSnapshot(t))return '';
         return `${d['email']}: ${f.role.toLowerCase()} → ${t.role.toLowerCase()}${JSON.stringify(f.allowedLocales) !== JSON.stringify(t.allowedLocales) ? `, locales ${f.allowedLocales.join(',') || 'all'} → ${t.allowedLocales.join(',') || 'all'}` : ''}`;
       }
       case 'member.removed':
@@ -180,7 +188,8 @@ export class ActivityComponent implements OnInit, OnDestroy {
       case 'group.created':
         return `"${d['name']}" (${String(d['role']).toLowerCase()}${Array.isArray(d['allowedLocales']) && (d['allowedLocales'] as string[]).length ? ': ' + (d['allowedLocales'] as string[]).join(', ') : ''})`;
       case 'group.updated': {
-        const f = d['from'] as { role: string; allowedLocales: string[] }; const t = d['to'] as { role: string; allowedLocales: string[] };
+        const f = d['from'],t = d['to'];
+        if(!roleSnapshot(f)||!roleSnapshot(t))return '';
         const parts: string[] = [];
         if (f.role !== t.role) parts.push(`${f.role.toLowerCase()} → ${t.role.toLowerCase()}`);
         if (JSON.stringify(f.allowedLocales) !== JSON.stringify(t.allowedLocales)) parts.push(`locales ${f.allowedLocales.join(',') || 'all'} → ${t.allowedLocales.join(',') || 'all'}`);
