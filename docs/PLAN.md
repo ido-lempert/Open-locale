@@ -721,3 +721,9 @@ Fetched/lastsuccessfulsubmitted map comparison skipsunchangedblurPATCH; failedwr
 retains retryeligibility. Twounits/web249/13, actualfocusblur/noPATCH/glossarybrowser25,
 review0324. NoAPI/schema/coverage/defaultOFF change; notservernormalizedtruth or
 crossclientconcurrency. Link/QAtimeout andcleanreruns recorded.
+
+## Continuation259 - Glossary confirmed save bytes
+Currentunchangedrow rendersconfirmedservermap and usesit forunchangedblurcomparison,
+not paddedsubmittedbytes. Visit/destroy/rowidentity guard preservesneweredit/refetch.
+Twounits/web251/13, actualtrimmedPATCH/norepeatblur/glossarybrowser27, review0325.
+NoAPI/schema/coverage/defaultOFF change; notcrossclientconflict/concurrencyguarantee.

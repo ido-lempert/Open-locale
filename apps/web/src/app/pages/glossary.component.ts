@@ -150,8 +150,14 @@ export class GlossaryComponent implements OnInit, OnDestroy {
     if(saved&&Object.keys(saved).length===Object.keys(translations).length&&Object.entries(translations).every(([key,value])=>saved[key]===value))return;
     this.savingIds.update(ids=>[...ids,t.id]);this.error.set('');
     try {
-      await this.api.updateGlossaryTerm(pid, t.id, { translations });
-      if(this.current(scope))this.savedTranslations.set(t.id,translations);
+      const updated=await this.api.updateGlossaryTerm(pid, t.id, { translations });
+      if(!this.current(scope))return;
+      const confirmed={...updated.translations};
+      // Do not replace a row or its comparison refreshed/edited since submission.
+      if(this.terms().find(x=>x.id===t.id)===row){
+        this.savedTranslations.set(t.id,confirmed);
+        this.terms.update(all=>all.map(x=>x===row?{...x,translations:confirmed}:x));
+      }
     } catch {if(this.current(scope))this.error.set('Saving translation failed. Your text is kept here. Check the glossary before trying again.');}
     finally {if(this.current(scope))this.savingIds.update(ids=>ids.filter(id=>id!==t.id));}
   }
