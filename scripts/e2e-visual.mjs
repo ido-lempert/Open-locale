@@ -1778,6 +1778,8 @@ try {
       const sel = row?.querySelector('select[aria-label^="Depends on for"]');
       return !!sel && [...sel.options].some((o) => o.textContent.startsWith(op));
     }, { timeout: 10000 }, rowTitle, optionPrefix);
+    const updated=page.waitForResponse(response=>response.request().method()==='PATCH'&&new URL(response.url()).pathname.startsWith(`/api/projects/${projId}/tasks/`));
+    const refreshed=page.waitForResponse(response=>response.request().method()==='GET'&&new URL(response.url()).pathname===`/api/projects/${projId}/tasks`);
     await page.evaluate((rt, op) => {
       const row = [...document.querySelectorAll('.task-row')].find((r) => (r.querySelector('.task-body strong')?.textContent || '').includes(rt));
       const sel = row.querySelector('select[aria-label^="Depends on for"]');
@@ -1785,6 +1787,11 @@ try {
       sel.value = opt.value;
       sel.dispatchEvent(new Event('change', { bubbles: true }));
     }, rowTitle, optionPrefix);
+    await updated;
+    // Model selection changes before the successful mutation refetch clears rows.
+    // Await the real request boundary and settled read, not the optimistic select.
+    await refreshed;
+    await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');
   };
   const selectedDepends = (rowTitle) => page.evaluate((rt) => {
     const row = [...document.querySelectorAll('.task-row')].find((r) => (r.querySelector('.task-body strong')?.textContent || '').includes(rt));

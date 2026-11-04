@@ -117,6 +117,7 @@ export class TasksComponent implements OnInit, OnDestroy {
   private routeSub?: Subscription;
   private fetchSeq = 0;
   private destroyed = false;
+  private projectGeneration = 0;
 
   constructor(private route: ActivatedRoute, private api: ApiService) {}
 
@@ -128,12 +129,13 @@ export class TasksComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    this.destroyed=true;++this.fetchSeq;
+    this.destroyed=true;++this.fetchSeq;++this.projectGeneration;
     this.routeSub?.unsubscribe();
   }
 
   private initForProject(pid: string) {
     if(this.destroyed)return;
+    const scope=++this.projectGeneration;
     this.projectId = pid;
     this.fetchSeq++; // invalidate every in-flight fetch from the previous project
     this.error.set('');
@@ -153,14 +155,14 @@ export class TasksComponent implements OnInit, OnDestroy {
     } catch { /* corrupt or unavailable storage: fall back to defaults */ }
     void this.fetch();
     void this.api.listMembers(pid)
-      .then((m) => { if (!this.destroyed && this.projectId === pid) this.members.set(m); })
-      .catch(() => { if (!this.destroyed && this.projectId === pid) this.members.set([]); });
+      .then((m) => { if (!this.destroyed && scope === this.projectGeneration) this.members.set(m); })
+      .catch(() => { if (!this.destroyed && scope === this.projectGeneration) this.members.set([]); });
     void this.api.listGroups(pid)
-      .then((g) => { if (!this.destroyed && this.projectId === pid) this.groups.set(g); })
-      .catch(() => { if (!this.destroyed && this.projectId === pid) this.groups.set([]); });
+      .then((g) => { if (!this.destroyed && scope === this.projectGeneration) this.groups.set(g); })
+      .catch(() => { if (!this.destroyed && scope === this.projectGeneration) this.groups.set([]); });
     void this.api.listKeys(pid)
-      .then((k) => { if (!this.destroyed && this.projectId === pid) this.keys.set(k); })
-      .catch(() => { if (!this.destroyed && this.projectId === pid) this.keys.set([]); });
+      .then((k) => { if (!this.destroyed && scope === this.projectGeneration) this.keys.set(k); })
+      .catch(() => { if (!this.destroyed && scope === this.projectGeneration) this.keys.set([]); });
   }
 
   setFilter(status: string) {

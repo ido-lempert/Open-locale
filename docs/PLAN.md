@@ -615,3 +615,8 @@ defaultOFF change; metadata and mutation lifecycle hardening remain separate wor
 Held actual older assigned-to-me response released after newprojecttask settles
 cannot replace currentrows/status/backlink/filters. Tasksbrowser5->8, review0308.
 Test-only; noapplication/API/schema/coverage/defaultOFF change.
+
+## Continuation243 - Task metadata visit fence
+Member/group/key callbacks now fence each projectvisit, preventing stale A->B->A
+responses from replacing current options. Four units/web202/12, actualkeybytesrace/
+Tasksbrowser9, review0309. NoAPI/schema/coverage/defaultOFF change.
