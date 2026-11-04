@@ -55,13 +55,15 @@ const ACTION_LABELS: Record<string, string> = {
         <option value="">all actions</option>
         @for (a of actions; track a) { <option [value]="a">{{ label(a) }}</option> }
       </select>
-      <select aria-label="Filter by actor" name="actActor" [ngModel]="actorFilter()" (ngModelChange)="setActor($event)">
+      <select aria-label="Filter by actor" [attr.aria-busy]="membersLoading()" name="actActor" [ngModel]="actorFilter()" (ngModelChange)="setActor($event)">
         <option value="">all actors</option>
         @for (m of members(); track m.id) { <option [value]="m.id">{{ m.displayName }}</option> }
       </select>
       <input aria-label="Filter by key" name="actKey" placeholder="key contains…" [ngModel]="keyFilter()" (ngModelChange)="onKeyInput($event)">
     </header>
     <main [attr.aria-busy]="loading()">
+      @if (membersLoading()) { <p role="status" name="activityActorsLoading">Loading actor filter options. Activity loads independently.</p> }
+      @if (membersError()) { <p class="error" role="alert" name="activityActorsError">Actor filter options unavailable. Activity remains available.</p><button type="button" name="retryActivityActors" (click)="void loadMembers()">Retry actor options</button> }
       @if (error(); as e) { <p class="error" role="alert">{{ e }}</p><button type="button" name="retryActivity" (click)="retry()">Retry activity</button> }
       @if (loading()) { <p role="status" name="activityLoading">Loading activity...</p> }
       <ul class="activity-list">
@@ -92,6 +94,9 @@ export class ActivityComponent implements OnInit, OnDestroy {
   actorFilter = signal('');
   keyFilter = signal('');
   members = signal<MemberInfo[]>([]);
+  membersLoading = signal(false);
+  membersError = signal(false);
+  private memberGeneration = 0;
   loading = signal(true);
   error = signal('');
   actions = Object.keys(ACTION_LABELS);
@@ -109,11 +114,19 @@ export class ActivityComponent implements OnInit, OnDestroy {
   }
   async loadProject(projectId:string) {
     if(this.destroyed)return;
-    const scope=++this.projectGeneration;this.projectId=projectId;
+    ++this.projectGeneration;this.projectId=projectId;
     if(this.keyTimer)clearTimeout(this.keyTimer);this.keyTimer=null;
     this.actionFilter.set('');this.actorFilter.set('');this.keyFilter.set('');this.members.set([]);
-    const members=this.api.listMembers(projectId).then(m=>{if(!this.destroyed&&scope===this.projectGeneration)this.members.set(m);}).catch(()=>{if(!this.destroyed&&scope===this.projectGeneration)this.members.set([]);});
-    await Promise.all([members,this.fetch(true)]);
+    await Promise.all([this.loadMembers(),this.fetch(true)]);
+  }
+  async loadMembers() {
+    if(this.destroyed)return;
+    const scope=this.projectGeneration,generation=++this.memberGeneration,projectId=this.projectId;
+    const current=()=>!this.destroyed&&scope===this.projectGeneration&&generation===this.memberGeneration;
+    this.membersLoading.set(true);this.membersError.set(false);
+    try {const members=await this.api.listMembers(projectId);if(current())this.members.set(members);}
+    catch {if(current())this.membersError.set(true);}
+    finally {if(current())this.membersLoading.set(false);}
   }
   ngOnDestroy() {this.destroyed=true;++this.generation;++this.projectGeneration;this.subscription?.unsubscribe();if(this.keyTimer)clearTimeout(this.keyTimer);}
 

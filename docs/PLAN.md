@@ -561,3 +561,9 @@ Existing bounded tasktitle/term snapshots now shown for fivecreated/updated/dele
 eventkinds. String-only extraction and real literalmarkup rendering tested; web182/
 11, activitybrowser11, review0299. NoAPI/query/schema/newfield or coverage/defaultOFF
 change; eventnames are snapshots, not live/currentstate links.
+
+## Continuation234 - Activity actor options retry
+Actor discovery now has independent loading/fixedfailure/retry with own request/
+project/destroy fences. Real metadata503 and heldretry prove feed bytes/count/
+requestcount unchanged while actor options recover. Five units/web187/11 and
+activitybrowser14; review0300. NoAPI/query/schema or coverage/defaultOFF change.
