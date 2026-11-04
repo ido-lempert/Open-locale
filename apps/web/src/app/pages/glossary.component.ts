@@ -1,6 +1,7 @@
 import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { ApiService, GlossaryTermItem, Project } from '../api.service';
 
 @Component({
@@ -58,6 +59,8 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   error = signal('');
   listError = signal(false);
   private fetchSeq=0;
+  private projectGeneration=0;
+  private routeSub?:Subscription;
   private destroyed=false;
   term = signal('');
   notes = signal('');
@@ -66,14 +69,23 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   constructor(private route: ActivatedRoute, private api: ApiService) {}
 
   ngOnInit() {
-    this.projectId = this.route.snapshot.paramMap.get('id') ?? '';
-    void this.fetch();
-    void this.api.getProject(this.projectId)
-      .then((p: Project) => this.locales.set(p.locales.map((l) => l.code).filter((c) => c !== p.baseLocale)))
-      .catch(() => this.locales.set([]));
+    this.routeSub=this.route.paramMap.subscribe(pm=>this.initForProject(pm.get('id')??''));
   }
 
-  ngOnDestroy() { this.destroyed=true;++this.fetchSeq; }
+  private initForProject(pid:string) {
+    if(this.destroyed)return;
+    const scope=++this.projectGeneration;
+    this.projectId=pid;++this.fetchSeq;
+    this.terms.set([]);this.locales.set([]);this.error.set('');this.listError.set(false);
+    this.term.set('');this.notes.set('');this.doNotTranslate.set(false);
+    void this.fetch();
+    void this.api.getProject(pid)
+      .then((p:Project)=>{if(this.current(scope))this.locales.set(p.locales.map(l=>l.code).filter(c=>c!==p.baseLocale));})
+      .catch(()=>{if(this.current(scope))this.locales.set([]);});
+  }
+
+  private current(scope:number) { return !this.destroyed&&scope===this.projectGeneration; }
+  ngOnDestroy() { this.destroyed=true;++this.fetchSeq;++this.projectGeneration;this.routeSub?.unsubscribe(); }
 
   async fetch() {
     if(this.destroyed)return;
@@ -88,16 +100,18 @@ export class GlossaryComponent implements OnInit, OnDestroy {
 
   async create() {
     const term = this.term().trim();
-    if (!term) return;
+    if (!term||this.destroyed) return;
+    const scope=this.projectGeneration,pid=this.projectId;
     try {
-      await this.api.createGlossaryTerm(this.projectId, {
+      await this.api.createGlossaryTerm(pid, {
         term,
         ...(this.notes().trim() ? { notes: this.notes().trim() } : {}),
         doNotTranslate: this.doNotTranslate(),
       });
+      if(!this.current(scope))return;
       this.term.set(''); this.notes.set(''); this.doNotTranslate.set(false);
       await this.fetch();
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to add term'); }
+    } catch (e) { if(this.current(scope))this.error.set(e instanceof Error ? e.message : 'Failed to add term'); }
   }
 
   setTranslation(t: GlossaryTermItem, locale: string, value: string) {
@@ -106,15 +120,19 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   }
 
   async saveTranslations(t: GlossaryTermItem) {
+    if(this.destroyed)return;
+    const scope=this.projectGeneration,pid=this.projectId;
     try {
-      await this.api.updateGlossaryTerm(this.projectId, t.id, { translations: t.translations });
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to save translation'); }
+      await this.api.updateGlossaryTerm(pid, t.id, { translations: t.translations });
+    } catch (e) { if(this.current(scope))this.error.set(e instanceof Error ? e.message : 'Failed to save translation'); }
   }
 
   async remove(t: GlossaryTermItem) {
+    if(this.destroyed)return;
+    const scope=this.projectGeneration,pid=this.projectId;
     try {
-      await this.api.deleteGlossaryTerm(this.projectId, t.id);
-      await this.fetch();
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to delete term'); }
+      await this.api.deleteGlossaryTerm(pid, t.id);
+      if(this.current(scope))await this.fetch();
+    } catch (e) { if(this.current(scope))this.error.set(e instanceof Error ? e.message : 'Failed to delete term'); }
   }
 }

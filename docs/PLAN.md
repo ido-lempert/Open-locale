@@ -668,3 +668,10 @@ explicitretry with latestread/destroyfence. Threeunits/web226/13 and actualPG/Ch
 create->failedread->heldretry/recovery5checks, review0316. Draft/mutationerror retained
 onretry. NoAPI/schema/coverage/defaultOFF change; projectroute/metadata/mutation
 lifecycle remain separatework, notclaimedfixed.
+
+## Continuation251 - Glossary project visit fence
+Reusedroute subscribesprojectparams, resetsterms/locales/draft and fences list/locale
+metadata byvisit/destroy, including A->B->A. Existingmutation callbacks pinoriginal
+project/visit toavoid crossvisit effects. Sevenunits/web233/13, actualoldAPIbytesrace/
+glossarybrowser8, review0317. NoAPI/schema/coverage/defaultOFF change. Mutationpending/
+rawcurrenterrors stillseparate; oldwritemayfinishoriginalproject, notcancellation.
