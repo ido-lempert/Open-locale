@@ -696,3 +696,9 @@ and guardssame-rowduplicate/save-delete conflict. Fixedfailure retains editedtex
 Fourunits/web245/13, actualblur/held/rejectedPATCH/glossarybrowser17, review0320. NoAPI/
 schema/coverage/defaultOFF change; notserverconcurrency/idempotency/cancellation.
 Othermutationrefetch canstillreplaceunsavededits; broaderdraftretention separate.
+
+## Continuation255 - Glossary actual save route fence
+Held actual successfulPATCH persistsoriginalproject withoutcurrentread/draft/error/
+pendingchange afterroute reuse; heldfailedPATCH cannotpublisholderror/rawdetail or
+clearcurrentdraft. Two checks/glossarybrowser19, review0321. Test-only/noAPI/schema/
+coverage/defaultOFF change; notcancellation/idempotency/concurrency/unboundedretry.
