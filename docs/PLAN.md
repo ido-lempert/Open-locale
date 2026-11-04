@@ -655,3 +655,9 @@ and visit/destroyfence prevent oldcallbacks touchingnewvisit. Fixedfailure guida
 and freshserverread preserve uncertainoutcomes without rawdetail. Sixunits/web223/12,
 actualheld/rejectedDELETE/Tasksbrowser21, review0314. NoAPI/schema/coverage/defaultOFF
 change; oldrequest mayfinishoriginalproject, notcancellation/idempotency/autoretry.
+
+## Continuation249 - Repeated-visit delete failure browser proof
+Held actual DELETE from firstvisit rejected after A->B->A cannot showerror/refetch/
+change currentdraft/list/pending; persistedtask intact/rawdetail absent. Two checks,
+Tasksbrowser21->23, review0315. Test-only/noapplication/API/schema/coverage/defaultOFF
+change; boundedobservation, notcancellation/idempotency/genericserveratomicity.
