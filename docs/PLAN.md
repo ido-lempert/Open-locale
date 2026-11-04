@@ -772,3 +772,8 @@ Explicitrefresh guardspending/destroywhilelocale-changefetchremainslatest-reques
 Twounits/web272/13 andactualheldGET/pointerrepeat/singleGET/noMetadata QAbrowser15,
 review0332. Existingdisabledbuttonbehaviorretained; noAPI/schema/coverage/defaultOFF
 change ornewQAcapability/cancellation/allreaddeduplicationclaim.
+
+## Continuation267 - Repeated-visit QA metadata failure proof
+ActualheldfirstAmetadata503afterA->B->A cannotclearcurrentheoptions/selection/findings/
+countorpublisholderror/retry/loading/rawdetail. QAbrowser17/review0333; test-only,
+noapplication/API/schema/coverage/defaultOFF change/cancellationclaim.
