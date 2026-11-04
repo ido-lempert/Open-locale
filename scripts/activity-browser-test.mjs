@@ -73,6 +73,13 @@ try {
     check(`actual ${action} incomplete persisted snapshot cannot break valid feed rendering`,await page.$$eval('.activity-row',rows=>rows.length===2&&rows.some(r=>r.textContent.includes('member → admin, locales all → he')))&&!diagnostics.some(d=>/TypeError|Cannot read properties/.test(d)));
   }
   await page.screenshot({path:'/downloads/activity-incomplete-snapshot-full.png',fullPage:true});
+  await prisma.activityEvent.createMany({data:[
+    {projectId:project.id,actorId:owner.user.id,action:'task.updated',detail:{title:'Malformed task snapshot',changes:'private-bogus-change'}},
+    {projectId:project.id,actorId:owner.user.id,action:'task.updated',detail:{title:'Mixed task snapshot',changes:{invalid:{from:{private:'private-object-value'},to:['valid',42]},status:{from:'OPEN',to:'DONE'},lockKeys:{from:false,to:true}}}}
+  ]});
+  await page.select('[aria-label="Filter by action"]','task.updated');await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');
+  check('actual task change snapshots omit malformed details but preserve valid neighbors',await page.$$eval('.activity-row',rows=>rows.length===2&&rows.some(r=>r.textContent.includes('Mixed task snapshot - status: OPEN → DONE; lockKeys: false → true'))&&rows.some(r=>r.textContent.includes('Malformed task snapshot'))&&!rows.some(r=>/private-bogus|private-object|invalid:|undefined|\[object Object\]/.test(r.textContent))));
+  await page.screenshot({path:'/downloads/activity-task-change-shapes-full.png',fullPage:true});
   let actorReads=0,feedReads=0;await page.setRequestInterception(true);
   const failActors=req=>{const path=new URL(req.url()).pathname;if(path===`/api/projects/${project.id}/activity`)feedReads++;if(path===`/api/projects/${project.id}/members`){actorReads++;return req.respond({status:503,contentType:'application/json',body:JSON.stringify({message:'private-actor-error'})});}return req.continue();};page.on('request',failActors);
   // A same-project route reload triggers the real metadata read independently.

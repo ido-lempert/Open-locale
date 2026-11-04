@@ -587,3 +587,9 @@ snapshots rather than throwing during feed rendering. Valid summaries unchanged;
 three units/web192/11 and actual persisted malformed+valid rows/activitybrowser20,
 review0303. NoAPI/query/schema/coverage/defaultOFF change; other detail formats
 not covered by this bounded hardening.
+
+## Continuation238 - Task Activity change shapes
+Task update detail now validates map/pairs and existing string/null/boolean/string-
+array values rather than coercing malformed snapshots into bogus summaries. Valid
+neighbor changes survive; three units/web195/11/activitybrowser21, review0304.
+NoAPI/query/schema/coverage/defaultOFF change; not all audit detailformats hardened.

@@ -200,11 +200,18 @@ export class ActivityComponent implements OnInit, OnDestroy {
         return `"${d['name']}" (was ${String(d['role']).toLowerCase()}, ${d['members']} member(s)${unassigned ? `, ${unassigned} task(s) unassigned` : ''})`;
       }
       case 'task.updated': {
-        const changes = (d['changes'] ?? {}) as Record<string, { from?: unknown; to?: unknown }>;
-        const fmt = (v: unknown): string => v === null || v === undefined ? 'none'
-          : Array.isArray(v) ? (v.length ? (v as unknown[]).join(', ') : 'none') : String(v);
-        const parts = Object.entries(changes).map(([k, c]) => `${k}: ${fmt(c?.from)} → ${fmt(c?.to)}`);
-        return `${String(d['title'] ?? '')}${parts.length ? ' - ' + parts.join('; ') : ''}`;
+        const title = typeof d['title']==='string' ? d['title'] : '';
+        const changes=d['changes'];
+        if(!changes||typeof changes!=='object'||Array.isArray(changes))return title;
+        const valid=(value:unknown)=>value===null||typeof value==='string'||typeof value==='boolean'||(Array.isArray(value)&&value.every(item=>typeof item==='string'));
+        const fmt=(value:unknown):string=>value===null?'none':Array.isArray(value)?(value.length?value.join(', '):'none'):String(value);
+        const parts:string[]=[];
+        for(const [field,change] of Object.entries(changes)) {
+          if(!change||typeof change!=='object'||Array.isArray(change))continue;
+          const pair=change as Record<string,unknown>;
+          if(valid(pair['from'])&&valid(pair['to']))parts.push(`${field}: ${fmt(pair['from'])} → ${fmt(pair['to'])}`);
+        }
+        return `${title}${parts.length ? (title ? ' - ' : '') + parts.join('; ') : ''}`;
       }
       case 'group.member.added':
       case 'group.member.removed':
