@@ -709,3 +709,9 @@ pendingduplicateguard and visit/destroyfence. Retrymetadataonly retainsdraft/ter
 Twounits/web247/13, actualfailed/held/recoveredGET/glossarybrowser22, review0322.
 NoAPI/schema/mutation/coverage/defaultOFF change. Automationbind andsyncbrowsertimeout
 attempts pluscleanfinalruns recorded separately.
+
+## Continuation257 - Glossary repeated-visit locale failure proof
+Held failedmetadataGET afterA->B->A cannotclearworkingcolumns/table/draft orpublish
+old error/retry/loading. Rawmarker absent/narrowfit/runtimeclean. Twochecks/glossary
+browser24, review0323. Test-only/noapplication/API/schema/coverage/defaultOFF change;
+boundedobservation, notcancellation/unboundedretry.
