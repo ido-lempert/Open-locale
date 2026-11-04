@@ -794,3 +794,8 @@ Acceptedfetch cancelskeytimer, so immediateaction/actorchange consumescombinedqu
 withoutlaterduplicateread. Twounits/web274/13/actualquery Activitybrowser26/review0336.
 NoAPI/schema/coverage/defaultOFF change/alldeduplicationclaim. Fixtureexpectationand
 SAMLbind/temporaryPG55542verification chronologyrecorded.
+
+## Continuation271 - Filtered Activity empty guidance
+Filteredempty saysnomatchingeventsratherthannohistory; unfilteredempty retainsprior
+text. Oneunit/web275/13 andactualtwo-state Activitybrowser28/review0337. NoAPI/schema/
+coverage/defaultOFF change/historyscopeclaim. Publicationtooltransportissuesrecorded.

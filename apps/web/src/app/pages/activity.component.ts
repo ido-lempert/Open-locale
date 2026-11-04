@@ -85,7 +85,7 @@ function roleSnapshot(value: unknown): value is { role: string; allowedLocales: 
             <time class="muted">{{ ev.createdAt | date:'short' }}</time>
           </li>
         } @empty {
-          @if (!loading() && !error()) { <li class="muted" name="activityEmpty">No activity yet</li> }
+          @if (!loading() && !error()) { <li class="muted" name="activityEmpty">{{ hasFilters() ? 'No activity matches these filters' : 'No activity yet' }}</li> }
         }
       </ul>
       @if (nextCursor() && !error()) {
@@ -151,6 +151,8 @@ export class ActivityComponent implements OnInit, OnDestroy {
     if (this.keyTimer) clearTimeout(this.keyTimer);
     this.keyTimer = setTimeout(() => void this.fetch(true), 250);
   }
+
+  hasFilters() { return !!(this.actionFilter()||this.actorFilter()||this.keyFilter().trim()); }
 
   label(action: string) { return ACTION_LABELS[action] ?? action; }
 

@@ -54,3 +54,7 @@ describe('activity task change shapes',()=>{
 describe('activity immediate filter consumes pending key debounce',()=>{
  for(const field of ['action','actor'])it(`${field} change cancels delayed duplicate key read`,async()=>{jest.useFakeTimers();try{const api={listActivity:jest.fn().mockResolvedValue({items:[],nextCursor:null})},c=make(api);c.projectId='project';c.onKeyInput(' Fresh ');if(field==='action')c.setFilter('task.created');else c.setActor('owner');await Promise.resolve();jest.advanceTimersByTime(300);await Promise.resolve();expect(api.listActivity).toHaveBeenCalledTimes(1);expect(api.listActivity.mock.calls[0][1]).toMatchObject({key:'Fresh',...(field==='action'?{action:'task.created'}:{actorId:'owner'})});expect(c.loading()).toBe(false);c.ngOnDestroy();}finally{jest.useRealTimers();}});
 });
+
+describe('activity filtered empty guidance',()=>{
+ it('distinguishes action actor and meaningful key filters from unfiltered or whitespace key',()=>{const c=make({});expect(c.hasFilters()).toBe(false);c.keyFilter.set('  ');expect(c.hasFilters()).toBe(false);c.actionFilter.set('task.created');expect(c.hasFilters()).toBe(true);c.actionFilter.set('');c.actorFilter.set('owner');expect(c.hasFilters()).toBe(true);c.actorFilter.set('');c.keyFilter.set(' title ');expect(c.hasFilters()).toBe(true);});
+});
