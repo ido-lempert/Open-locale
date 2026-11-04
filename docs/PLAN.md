@@ -766,3 +766,9 @@ andactualheldPOST/PATCH/DELETEnoGETproof/tasksbrowser29, review0331. NoAPI/schem
 coverage/defaultOFF change; notfilterread/allmutationrefetchserialization/concurrency.
 Twoisolatedsyncbrowser120s interruptions andfreshresumed239/inner0/outer0 recorded;
 priorcompletedchecksretainedonunchangedsource.
+
+## Continuation266 - QA explicit refresh method guard
+Explicitrefresh guardspending/destroywhilelocale-changefetchremainslatest-request-wins.
+Twounits/web272/13 andactualheldGET/pointerrepeat/singleGET/noMetadata QAbrowser15,
+review0332. Existingdisabledbuttonbehaviorretained; noAPI/schema/coverage/defaultOFF
+change ornewQAcapability/cancellation/allreaddeduplicationclaim.

@@ -19,3 +19,8 @@ describe('QA locale discovery',()=>{
  it('older locale success cannot replace newer result or finish loading',async()=>{const old=deferred(),next=deferred(),c=make({getProject:jest.fn().mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise)});const a=c.loadLocales(),b=c.loadLocales();old.resolve({baseLocale:'en',locales:[{code:'he'}]});await a;expect(c.targetLocales()).toEqual([]);expect(c.localesLoading()).toBe(true);next.resolve({baseLocale:'en',locales:[{code:'fr'}]});await b;expect(c.targetLocales()).toEqual(['fr']);expect(c.localesLoading()).toBe(false);});
  it('late locale error cannot replace successful retry',async()=>{const old=deferred(),c=make({getProject:jest.fn().mockReturnValueOnce(old.promise).mockResolvedValueOnce({baseLocale:'en',locales:[]})});const a=c.loadLocales();await c.loadLocales();old.reject(new Error('old'));await a;expect(c.localesError()).toBe(false);});
 });
+
+describe('QA explicit refresh guard',()=>{
+ it('reads selected locale without metadata and suppresses pending repeats',async()=>{const wait=deferred(),api={runQa:jest.fn().mockReturnValue(wait.promise),getProject:jest.fn()},c=make(api);c.projectId='project';c.loading.set(false);c.locale.set('he');c.refresh();c.refresh();expect(api.runQa.mock.calls).toEqual([['project','he']]);expect(c.loading()).toBe(true);expect(api.getProject).not.toHaveBeenCalled();wait.resolve({issues:[]});await Promise.resolve();expect(c.loading()).toBe(false);});
+ it('suppresses refresh after destroy even with cleared loading state',()=>{const api={runQa:jest.fn()},c=make(api);c.ngOnDestroy();c.loading.set(false);c.refresh();expect(api.runQa).not.toHaveBeenCalled();});
+});

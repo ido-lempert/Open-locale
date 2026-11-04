@@ -22,7 +22,7 @@ import { ApiService, Project, QaIssue } from '../api.service';
           <option value="">all target locales</option>
           @for (l of targetLocales(); track l) { <option [value]="l">{{ l }}</option> }
         </select>
-        @if (!error()) { <button type="button" name="refreshQa" [disabled]="loading()" (click)="void fetch()">Run checks again</button> }
+        @if (!error()) { <button type="button" name="refreshQa" [disabled]="loading()" (click)="refresh()">Run checks again</button> }
         @if (!loading() && !error()) { <span class="muted" name="qaCount">{{ issues().length }} issue{{ issues().length === 1 ? '' : 's' }}</span> }
       </div>
       @if (loading()) { <p role="status" name="qaLoading">Loading QA checks...</p> }
@@ -81,6 +81,8 @@ export class QaComponent implements OnInit, OnDestroy {
     finally {if(current())this.localesLoading.set(false);}
   }
   ngOnDestroy() { this.destroyed=true;++this.generation;++this.projectGeneration;this.subscription?.unsubscribe(); }
+
+  refresh() { if(!this.loading())void this.fetch(); }
 
   async fetch() {
     if(this.destroyed)return;
