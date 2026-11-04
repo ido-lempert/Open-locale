@@ -727,3 +727,10 @@ Currentunchangedrow rendersconfirmedservermap and usesit forunchangedblurcompari
 not paddedsubmittedbytes. Visit/destroy/rowidentity guard preservesneweredit/refetch.
 Twounits/web251/13, actualtrimmedPATCH/norepeatblur/glossarybrowser27, review0325.
 NoAPI/schema/coverage/defaultOFF change; notcrossclientconflict/concurrencyguarantee.
+
+## Continuation260 - Keep newer glossary create draft
+Capture submittedform snapshot; successfulPOST clears onlyunchanged wholeform, retaining
+newerterm/notes/checkbox typedwhilepending. Threeunits/web254/13, actualheldPOST/edit/
+release/persistedsnapshot/glossarybrowser29, review0326. NoAPI/schema/coverage/defaultOFF
+change; notserveridempotency/concurrency/cancellation. Incompletecombinedverification
+calls/stalesocketretries andcleanisolatedreruns recorded separately.

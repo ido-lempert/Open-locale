@@ -119,15 +119,19 @@ export class GlossaryComponent implements OnInit, OnDestroy {
     const term = this.term().trim();
     if (!term||this.destroyed||this.creating()) return;
     const scope=this.projectGeneration,pid=this.projectId;
+    const draft={term:this.term(),notes:this.notes(),doNotTranslate:this.doNotTranslate()};
     this.creating.set(true);this.error.set('');
     try {
       await this.api.createGlossaryTerm(pid, {
         term,
-        ...(this.notes().trim() ? { notes: this.notes().trim() } : {}),
-        doNotTranslate: this.doNotTranslate(),
+        ...(draft.notes.trim() ? { notes: draft.notes.trim() } : {}),
+        doNotTranslate: draft.doNotTranslate,
       });
       if(!this.current(scope))return;
-      this.term.set(''); this.notes.set(''); this.doNotTranslate.set(false);
+      // Inputs stay editable while the request is pending. Clear only its draft.
+      if(this.term()===draft.term&&this.notes()===draft.notes&&this.doNotTranslate()===draft.doNotTranslate){
+        this.term.set(''); this.notes.set(''); this.doNotTranslate.set(false);
+      }
       await this.fetch();
     } catch { if(this.current(scope))this.error.set('Adding term failed. Check the glossary before trying again.'); }
     finally {if(this.current(scope))this.creating.set(false);}
