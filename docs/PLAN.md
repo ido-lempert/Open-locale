@@ -1111,3 +1111,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Selected-read/key fences with inline error/retry, close/reload/destroy invalidation; no false empty failure or raw service error. Returned thread updates count, missing reply target cleared.
 - Confirmed post/delete refresh only unchanged pane, shared in-flight mutation guard, newer draft preserved, no full editor reload. No definitive failed-mutation/exactly-once reconciliation claim.
 - Browser13 proves held A->B read/closed response/error/retry, held original POST after B selection preserving new B draft, original A persistence, normal post/delete and genuinely uncommitted translation draft retained (actual PUT held and DB unchanged). Unit8/five reviews0386; coverage/defaultOFF/external acceptance unchanged.
+
+### Continuation 321 - Current editor list reads
+- Latest-generation list result/error/finally only; search keystroke invalidates before debounce, destroy suppresses late writes. Retained grid inert during pending/error, explicit previous-grid guidance and manual retry, no false empty.
+- Readonly local-value/plural copy text outside inert grid on failure before destructive retry replacement; not an export or saved-data claim. Current successful list still replaces cells, no save-vs-reload draft reconciliation.
+- Actual held feature/main responses/search debounce/failed read/retry/navigation browser9, unit6; five reviews0387. Coverage/defaultOFF/external acceptance unchanged.

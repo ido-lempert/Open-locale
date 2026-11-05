@@ -109,10 +109,14 @@ interface CellState {
         </section>
         @if (notice()) { <p class="notice">{{ notice() }}</p> }
         @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
-        @if (keys().length === 0) {
+        @if (keysLoading()) { <p class="muted" role="status" name="keysLoading">Loading keys. The previous grid may remain below, read-only until the current read succeeds.</p> }
+        @else if (keysError()) { <p class="error" role="alert" name="keysError">Keys unavailable. The previous grid may remain below, read-only. Retry replaces it with the current server result; keep any unsaved work first.</p><button type="button" name="retryKeys" (click)="reload()">Retry keys</button>
+          @if (keys().length) { <details><summary>Copy retained grid values before retry</summary><p class="muted">Local displayed values only, not confirmed saved data or an import file. Includes plural forms. Select and copy this text before retry.</p><textarea name="retainedKeyDrafts" aria-label="Retained grid values" readonly rows="8" style="width:100%;box-sizing:border-box" [value]="retainedGridValues()"></textarea></details> }
+        }
+        @if (!keysLoading() && !keysError() && keys().length === 0) {
           <p class="muted empty">No keys yet. Add one above - for example <code>home.title</code>.</p>
         }
-        <table class="grid">
+        <table class="grid" [attr.inert]="keysLoading() || keysError() ? '' : null" [attr.aria-busy]="keysLoading()">
           <thead><tr><th>Key</th>@for (l of p.locales; track l.code) { <th>{{ l.code }}</th> }<th></th></tr></thead>
           <tbody>
             @for (k of keys(); track k.id) {
@@ -316,6 +320,9 @@ interface CellState {
 export class EditorComponent implements OnInit, OnDestroy {
   project = signal<Project | null>(null);
   keys = signal<Key[]>([]);
+  keysLoading = signal(false);
+  keysError = signal(false);
+  private keysGeneration = 0;
   cells = new Map<string, WritableSignal<CellState>>();
   search = signal(''); newKey = signal(''); newLocale = signal(''); ioLocale = signal('en'); bulkStatus = signal('REVIEWED');
   branch = signal('main'); branches = signal<BranchInfo[]>([]); newBranch = signal('');
@@ -369,19 +376,28 @@ export class EditorComponent implements OnInit, OnDestroy {
   }
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
   onSearch() {
+    if (this.destroyed) return;
+    ++this.keysGeneration; this.keysLoading.set(true); this.keysError.set(false);
+    this.clearHistory(); this.clearShots(); this.clearComments();
     if (this.searchTimer) clearTimeout(this.searchTimer);
     this.searchTimer = setTimeout(() => void this.reload(), 250);
   }
   async reload() {
+    if (this.destroyed) return;
+    if (this.searchTimer) { clearTimeout(this.searchTimer); this.searchTimer = null; }
+    const generation = ++this.keysGeneration, projectId = this.projectId;
+    const current = () => !this.destroyed && generation === this.keysGeneration;
+    this.keysLoading.set(true); this.keysError.set(false);
     this.clearHistory(); this.clearShots(); this.clearComments();
     try {
-      const keys = await this.api.listKeys(this.projectId, {
+      const keys = await this.api.listKeys(projectId, {
         search: this.search() || undefined,
         tag: this.filterTag() || undefined,
         status: this.filterStatus() || undefined,
         locale: this.filterStatus() ? this.ioLocale() : undefined,
         branch: this.branch(),
       });
+      if (!current()) return;
       this.keys.set(keys);
       this.cells.clear();
       for (const k of keys) for (const t of k.translations) {
@@ -390,7 +406,14 @@ export class EditorComponent implements OnInit, OnDestroy {
             forms: { ...(t.pluralForms ?? {}) }, savedForms: { ...(t.pluralForms ?? {}) },
             mtScore: t.mtScore ?? null, mtProvider: t.mtProvider ?? null }));
       }
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load keys'); }
+    } catch { if (current()) this.keysError.set(true); }
+    finally { if (current()) this.keysLoading.set(false); }
+  }
+  retainedGridValues() {
+    return JSON.stringify(this.keys().map(key => ({ key: key.name, values: (this.project()?.locales ?? []).map(locale => {
+      const cell = this.cells.get(`${key.id}:${locale.code}`)?.();
+      return { locale: locale.code, value: cell?.value ?? '', pluralForms: cell?.forms ?? {} };
+    }) })), null, 2);
   }
   cell(keyId: string, locale: string): WritableSignal<CellState> {
     let s = this.cells.get(`${keyId}:${locale}`);
@@ -662,7 +685,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     finally { if(current())this.historyLoading.set(false); }
   }
   ngOnDestroy() {
-    this.destroyed=true; ++this.historyGeneration; this.clearShots(); this.clearComments();
+    this.destroyed=true; ++this.keysGeneration; ++this.historyGeneration; this.clearShots(); this.clearComments();
     if(this.searchTimer)clearTimeout(this.searchTimer);
   }
   async addKey() {
