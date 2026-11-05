@@ -19,7 +19,7 @@ import { ApiService, SnapshotMeta } from '../api.service';
       <form class="snapshot-create" (ngSubmit)="create($event)">
         <input aria-label="Snapshot label" [(ngModel)]="label" name="label"
                placeholder="Label, e.g. before release 1.4" maxlength="200" />
-        <button type="submit" [disabled]="creating()">Take snapshot</button>
+        <button type="submit" [disabled]="creating() || restoring()">Take snapshot</button>
       </form>
       @if (listError()) { <p class="error" role="alert" name="snapshotListError">Snapshots unavailable. No snapshots are shown. Retry this read or reload the page.</p><button type="button" name="retrySnapshotList" (click)="void reload()">Retry snapshots</button> }
       @if (loading()) { <p role="status" name="snapshotListLoading">Loading snapshots...</p> }
@@ -30,7 +30,7 @@ import { ApiService, SnapshotMeta } from '../api.service';
             @if (s.automatic) { <span class="auto-badge">auto</span> }
             <span class="muted">{{ s.keyCount }} keys, {{ s.translationCount }} translations</span>
             <time class="muted">{{ s.createdAt | date:'short' }}</time>
-            <button class="restore" (click)="restore(s)" [disabled]="restoring()">Restore</button>
+            <button class="restore" (click)="restore(s)" [disabled]="restoring() || creating()">Restore</button>
           </li>
         } @empty {
           <li class="muted" name="snapshotListEmpty">No snapshots yet</li>
@@ -87,7 +87,7 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
   async create(event: Event) {
     event.preventDefault();
     const label = this.label.trim();
-    if (!label || this.destroyed || this.creating()) return;
+    if (!label || this.destroyed || this.creating() || this.restoring()) return;
     const draft=this.label,scope=this.projectGeneration,projectId=this.projectId;
     this.creating.set(true);
     this.error.set('');this.notice.set('');
@@ -106,7 +106,7 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
   }
 
   async restore(s: SnapshotMeta) {
-    if (this.destroyed || this.restoring()) return;
+    if (this.destroyed || this.restoring() || this.creating()) return;
     if (!confirm(
       `Restore the project to "${s.label}"?\n\n` +
       `- Keys and translations return to the snapshot state.\n` +

@@ -867,3 +867,10 @@ snapshotbrowser19/review0348. No cancellation/API/schema/coverage/defaultOFF cha
 ActualheldcapturePOSTsuccessafterA->B->A persistsoldsubmittedlabelbutcannotclearnextdraft/
 refetchlist/publishstalenotice/error. Snapshotbrowser21/review0349; test-only,
 noapplication/API/schema/coverage/defaultOFF/cancellationchange.
+
+## Continuation284 - Snapshot mutual pending mutation guard
+Capture/restore buttons and entry guards exclude opposite pending action on current
+visit, before confirmation/submission. Twounits/web298/14/actualheldPOSTclicks
+snapshotbrowser23/review0350; release reenables both and preserves current draft.
+Not server/cross-tab/old-visit locking or cancellation. NoAPI/schema/coverage/defaultOFF
+change. Sync239/native244total242unique remain explicitly staged, not uninterrupted.
