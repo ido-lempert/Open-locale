@@ -22,6 +22,7 @@ import { ApiService, SnapshotMeta } from '../api.service';
         <button type="submit" [disabled]="creating() || restoring()">Take snapshot</button>
       </form>
       @if (listError()) { <p class="error" role="alert" name="snapshotListError">Snapshots unavailable. No snapshots are shown. Retry this read or reload the page.</p><button type="button" name="retrySnapshotList" (click)="void reload()">Retry snapshots</button> }
+      @if (!listError()) { <button type="button" name="refreshSnapshots" [disabled]="loading() || creating() || restoring()" (click)="refresh()">Refresh snapshots</button> }
       @if (loading()) { <p role="status" name="snapshotListLoading">Loading snapshots...</p> }
       @if (!loading() && !listError()) { <ul class="snapshot-list">
         @for (s of items(); track s.id) {
@@ -68,6 +69,11 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
   }
   private current(scope:number) { return !this.destroyed&&scope===this.projectGeneration; }
   ngOnDestroy() { this.destroyed=true;++this.readGeneration;++this.projectGeneration;this.routeSub?.unsubscribe(); }
+
+  refresh() {
+    if(this.loading() || this.creating() || this.restoring())return;
+    void this.reload();
+  }
 
   async reload() {
     if(this.destroyed)return;

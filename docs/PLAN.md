@@ -880,3 +880,10 @@ ActualheldrestorePOSTsuccessafterA->B->A removesunique post-baselinekey onserver
 refetch/currentdraft/list/control/notice/error overwrite. Snapshotbrowser25/review0351;
 test-only, noapplication/API/schema/coverage/defaultOFF/cancellationchange.
 Sync239/native244total242unique remain explicitly staged, not uninterrupted.
+
+## Continuation286 - Explicit snapshot list refresh
+Read-only refresh uses fenced reload and rejects pending list/capture/restore;
+preservesdraft/mutationfeedback. Fourunits/web302/14/actualheldGETduplicateclick
+snapshotbrowser27/review0352. Latestautomaticrestore snapshot appears on refresh.
+Noautomaticreconciliation/mutationretry/API/schema/coverage/defaultOFF change.
+Sync239/native244total242unique remain explicitly staged, not uninterrupted.

@@ -115,6 +115,27 @@ try {
   check('old restore success leaves repeated-visit controls enabled without stale notice error or runtime failure',new URL(page.url()).pathname===`${P}/snapshots`&&!await page.$eval('.snapshot-create button',e=>e.disabled)&&await page.$$eval('.restore',es=>es.length>0&&es.every(e=>!e.disabled))&&!(await page.$('.notice'))&&!(await page.$('[role=alert]'))&&!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));
   page.off('request',watchOldRestore);page.off('request',holdOldRestore);await page.setRequestInterception(false);
   await page.screenshot({path:'/downloads/snapshots-repeat-visit-restore-success-full.png',fullPage:true});
+
+  const refreshServerRows=await call(`${P}/snapshots`,null,token);
+  let refreshHeld=false,releaseRefresh,refreshReads=0,refreshPosts=0;
+  const refreshGate=new Promise(r=>releaseRefresh=r);
+  await page.setRequestInterception(true);
+  const holdRefresh=async req=>{
+    const path=new URL(req.url()).pathname;
+    if(req.method()==='POST'&&path.startsWith(`/api${P}/snapshots`))refreshPosts++;
+    if(req.method()==='GET'&&path===`/api${P}/snapshots`){refreshReads++;refreshHeld=true;await refreshGate;}
+    return req.continue();
+  };
+  page.on('request',holdRefresh);await page.click('[name=refreshSnapshots]');
+  for(let n=0;n<100&&!refreshHeld;n++)await new Promise(r=>setTimeout(r,20));
+  if(!refreshHeld)throw new Error('snapshot refresh not held');
+  await page.waitForSelector('[name=snapshotListLoading]');await page.click('[name=refreshSnapshots]');
+  await new Promise(r=>setTimeout(r,100));
+  check('explicit held refresh reads once and hides stale restore rows without mutation or draft loss',refreshReads===1&&refreshPosts===0&&await page.$eval('[name=refreshSnapshots]',e=>e.disabled)&&!(await page.$('.snapshot-list'))&&!(await page.$('[name=snapshotListEmpty]'))&&await page.$eval('[name=label]',e=>e.value==='Newer repeated restore draft'));
+  releaseRefresh();await page.waitForFunction(n=>!document.querySelector('[name=snapshotListLoading]')&&document.querySelectorAll('.snapshot-row').length===n,{},refreshServerRows.length);
+  check('actual refresh reveals latest automatic snapshot and retains current draft without stale feedback',refreshReads===1&&refreshPosts===0&&await page.$eval('.snapshot-list',e=>e.textContent.includes('before restore of Newer repeated capture draft'))&&await page.$eval('[name=label]',e=>e.value==='Newer repeated restore draft')&&!await page.$eval('[name=refreshSnapshots]',e=>e.disabled)&&!(await page.$('.notice'))&&!(await page.$('[role=alert]'))&&!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));
+  page.off('request',holdRefresh);await page.setRequestInterception(false);
+  await page.screenshot({path:'/downloads/snapshots-explicit-refresh-full.png',fullPage:true});
   console.log(failures?'SNAPSHOT BROWSER CHECKS FAILED':'ALL SNAPSHOT BROWSER CHECKS PASSED');process.exitCode=failures?1:0;
 } catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
