@@ -119,6 +119,20 @@ try {
   const tupleVersionsAfter=await prisma.translation.findMany({where:{projectId:cp},orderBy:{keyId:'asc'},select:{keyId:true,localeCode:true,version:true,value:true}});
   check('unchanged colliding tuple restore adds no translation history or version changes',repeatPaired.status===201&&repeatPaired.json.valuesChanged===0&&repeatPaired.json.keysRemoved===0&&historyCountBefore===await prisma.translationHistory.count({where:{keyId:{in:[keyA.json.id,activeSecond]}}})&&tupleVersionsBefore.length===2&&JSON.stringify(tupleVersionsBefore)===JSON.stringify(tupleVersionsAfter));
 
+  const metadataA=await call(`/projects/${cp}/keys/${keyA.json.id}`,{jwt,method:'PATCH',body:{description:'first metadata',maxLength:17}});
+  const tagsA=await call(`/projects/${cp}/keys/${keyA.json.id}/tags`,{jwt,method:'PATCH',body:{tags:['first-tag']}});
+  const metadataSnap=await call(`/projects/${cp}/snapshots`,{jwt,method:'POST',body:{label:'tuple metadata'}});
+  const mutateMetadataA=await call(`/projects/${cp}/keys/${keyA.json.id}`,{jwt,method:'PATCH',body:{description:'changed first',maxLength:91}});
+  const mutateTagsA=await call(`/projects/${cp}/keys/${keyA.json.id}/tags`,{jwt,method:'PATCH',body:{tags:['changed-first']}});
+  const mutateMetadataB=await call(`/projects/${cp}/keys/${activeSecond}`,{jwt,method:'PATCH',body:{description:'changed second',maxLength:92}});
+  const mutateTagsB=await call(`/projects/${cp}/keys/${activeSecond}/tags`,{jwt,method:'PATCH',body:{tags:['changed-second']}});
+  const metadataBefore=await prisma.key.findMany({where:{projectId:cp},orderBy:{id:'asc'}});
+  check('tuple metadata fixture and distinct mutations persist before restore',metadataA.status===200&&tagsA.status===200&&metadataSnap.status===201&&[mutateMetadataA,mutateTagsA,mutateMetadataB,mutateTagsB].every(r=>r.status===200)&&metadataBefore.length===2&&metadataBefore.find(k=>k.id===keyA.json.id)?.description==='changed first'&&metadataBefore.find(k=>k.id===keyA.json.id)?.maxLength===91&&JSON.stringify(metadataBefore.find(k=>k.id===keyA.json.id)?.tags)===JSON.stringify(['changed-first'])&&metadataBefore.find(k=>k.id===activeSecond)?.description==='changed second'&&metadataBefore.find(k=>k.id===activeSecond)?.maxLength===92&&JSON.stringify(metadataBefore.find(k=>k.id===activeSecond)?.tags)===JSON.stringify(['changed-second']));
+  const metadataRestore=await call(`/projects/${cp}/snapshots/${metadataSnap.json.id}/restore`,{jwt,method:'POST'});
+  const metadataAfter=await prisma.key.findMany({where:{projectId:cp},orderBy:{id:'asc'}});
+  const restoredMetaA=metadataAfter.find(k=>k.id===keyA.json.id),restoredMetaB=metadataAfter.find(k=>k.id===activeSecond);
+  check('restore recovers each colliding tuple key metadata including null and empty fields',metadataRestore.status===201&&metadataAfter.length===2&&restoredMetaA.description==='first metadata'&&restoredMetaA.maxLength===17&&JSON.stringify(restoredMetaA.tags)===JSON.stringify(['first-tag'])&&restoredMetaB.description===''&&restoredMetaB.maxLength===null&&restoredMetaB.tags.length===0);
+
   // Seed two keys with translations.
   await call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { entries: { 'a.one': 'one', 'a.two': 'two' } } });
   await call(`/projects/${pid}/import/he`, { jwt, method: 'POST', body: { entries: { 'a.one': 'אחד', 'a.two': 'שניים' } } });

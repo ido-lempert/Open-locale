@@ -1024,3 +1024,10 @@ List/prune bothcreatedAtDESC,idDESC; UUIDtiebreaker stable, notchronology. Actua
 importequal-timestampknownIDfixture pre-fix51PASS2FAIL; fixedsnapshots51->53/review0373.
 NoAPIshape/schema/UIlayout/coverage/defaultOFF change; nopruneatomicityclaim.
 Sync239/native244242unique remainexplicitlystaged, notuninterrupted.
+
+## Continuation308 - Tuple-scoped key metadata recovery proof
+Distinctdescription/maxLength/tagscapturedacrosscollidingbranch/keytuples; realPATCH
+mutatesboth, restore recoversownfieldsincludingemptydescription/tags/nullmaxLength.
+Everymutatedfieldverifiedbefore restore. Snapshots53->55/review0374; test-only/noAPI/
+schema/UI/coverage/defaultOFF change. Noallmetadata/pluralclaim.
+Sync239/native244242unique remainexplicitlystaged, notuninterrupted.
