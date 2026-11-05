@@ -349,6 +349,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
               <li>
                 <span>{{ o.branch }} <span class="muted">v{{ o.version }}</span></span>
                 <span class="muted">{{ o.locales.join(', ') }} - {{ o.translations }} translations - {{ o.createdAt | date:'medium' }}</span>
+                @for (locale of o.locales; track locale) { <a [routerLink]="['/projects',projectId,'ota',o.version,locale]" [queryParams]="{branch:o.branch}">Inspect {{locale}}</a> }
               </li>
             }
             @if (!otaPubs().length) { <li class="muted">No publications yet.</li> }

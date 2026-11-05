@@ -846,3 +846,13 @@ was recorded at the top level or for a target locale; other records say **outcom
 not confirmed**, not success. Raw errors and notification messages are omitted.
 This best-effort feed is not a complete run history or receiver receipt, and it
 does not offer retries or enable a worker.
+
+### Inspect retained OTA publications
+In project settings, use **Inspect** beside a publication locale to view that
+retained branch/version/locale. This is published content, not live editor values;
+empty and unreviewed translations can be present. Local pages render 50 values at
+a time, but the full bundle is downloaded. Refresh reads again without publishing.
+Up to 25 versions are kept per branch. A branch deleted and recreated may reuse a
+version number, so the link is not a permanent archive identifier. This view does
+not verify a client received the bundle, check its integrity digest, or add CDN or
+native mobile delivery.

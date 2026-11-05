@@ -1059,3 +1059,12 @@ no raw error/notification message. Settings links existing Activity; caveat avoi
 complete-history/delivery claims. Web313/15 (+4), activitybrowser28->36 real task/
 failedassignee plus separatelyseededpartial fixture. Review0378; no API/schema/
 worker/coverage change. Sync239/native244242unique explicitlySTAGED verified0.
+
+## Continuation313 - Retained OTA bundle inspection
+Settings per-publication locale links open read-only existing version/locale/branch
+lookup; explicit retention/unreviewed/not-live/no-client-receipt caveats. Literal
+values/empty marker, dated zone and50row local render pages, fixed read errors and
+route/query/destroy fences. Web318/16 (+5), actualbrowser17; review0379 includes
+fixture failure chronology. No serverpagination/integrity/CDN/nativeacceptance or
+permanent-archive-link claim. Coverage/defaultOFF unchanged. Sync239/native244/
+242unique explicitlySTAGED final0.

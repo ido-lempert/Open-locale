@@ -84,6 +84,7 @@ export interface MtPretranslateResult {
   scored: number; scoreAvg: number | null; scoreMin: number | null; scoreMax: number | null;
 }
 export interface OtaPublicationInfo { id: string; version: number; branch: string; createdAt: string; locales: string[]; translations: number; }
+export interface OtaBundle { project:string; branch:string; locale:string; version:number; publishedAt:string; translations:Record<string,string>; }
 export interface WebhookDeliveryInfo { id:string; event:string; httpStatus:number|null; success:boolean; attempts:number; durationMs:number; createdAt:string; }
 export interface WebhookInfo { id: string; url: string; events: string[]; active: boolean; createdAt: string; }
 
@@ -360,6 +361,9 @@ export class ApiService {
   }
   pretranslate(projectId: string, providerId: string, locale: string, branch?: string) {
     return this.request<MtPretranslateResult>(`/projects/${projectId}/mt/pretranslate`, { method: 'POST', body: JSON.stringify({ providerId, locale, ...(branch ? { branch } : {}) }) });
+  }
+  getOtaBundle(projectId:string,branch:string,version:string,locale:string) {
+    return this.request<OtaBundle>(`/projects/${encodeURIComponent(projectId)}/ota/${encodeURIComponent(version)}/${encodeURIComponent(locale)}?branch=${encodeURIComponent(branch)}`);
   }
   listOtaPublications(projectId: string) {
     return this.request<OtaPublicationInfo[]>(`/projects/${projectId}/ota`);
