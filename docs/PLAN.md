@@ -991,3 +991,10 @@ one-timefixturesecret; alteredbytes/wrongsecretnegatives; signedevent/countersma
 successfulHTTPrestoreandcommittedkeycount. Snapshots43->45/review0368; test-only/
 noAPI/schema/UI/coverage/defaultOFF change. Noexactlyonce/deliveryguaranteeclaim.
 Sync239/native244242unique remainexplicitlystaged, notuninterrupted.
+
+## Continuation303 - Exact concurrent import/restore state proof
+ReplacepermissiveracekeypredicatewithexactEnglish/Hebrewexportmapsforbothserial
+orders; negativesrejectextra/missing/wrongEnglish/wrongHebrewfixtures. Snapshots45->46/
+review0369; test-only/noAPI/schema/UI/coverage/defaultOFF change. Interruptedbatch
+preservedcompletedlegs; stalePG55464socketavoidedwithchecked55574supportedoverride.
+Sync239/native244242unique remainexplicitlystaged, notuninterrupted.

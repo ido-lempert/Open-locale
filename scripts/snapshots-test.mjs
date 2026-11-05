@@ -245,8 +245,11 @@ try {
   check('concurrent import+restore both succeed', impRes.status === 201 && resRes.status === 201,
     `${impRes.status}/${resRes.status}`);
   const raceAfter = await flat();
-  const raceConsistent = raceAfter['race.key'] === 'raced' || !('race.key' in raceAfter);
-  check('post-race state matches one serial order', raceConsistent);
+  const raceHeAfter=await flatHe();
+  const exactFlat=(actual,expected)=>Object.keys(actual).length===Object.keys(expected).length&&Object.entries(expected).every(([key,value])=>Object.hasOwn(actual,key)&&actual[key]===value);
+  const serialRaceState=(en,he)=>exactFlat(he,{'a.one':'אחד','a.two':'שניים'})&&(exactFlat(en,{'a.one':'one','a.two':'two'})||exactFlat(en,{'a.one':'one','a.two':'two','race.key':'raced'}));
+  check('serial race predicate rejects unrelated missing and wrong-value fixtures',!serialRaceState({'a.one':'one','a.two':'two','unrelated':'residue'},{'a.one':'אחד','a.two':'שניים'})&&!serialRaceState({'a.one':'one'},{'a.one':'אחד','a.two':'שניים'})&&!serialRaceState({'a.one':'one','a.two':'wrong','race.key':'raced'},{'a.one':'אחד','a.two':'שניים'})&&!serialRaceState({'a.one':'one','a.two':'two'},{'a.one':'אחד','a.two':'wrong'}));
+  check('post-race state matches one serial order', serialRaceState(raceAfter,raceHeAfter),JSON.stringify({en:raceAfter,he:raceHeAfter}));
 
   // Unknown snapshot -> 404.
   const missing = await call(`/projects/${pid}/snapshots/00000000-0000-0000-0000-000000000000/restore`, { jwt, method: 'POST' });
