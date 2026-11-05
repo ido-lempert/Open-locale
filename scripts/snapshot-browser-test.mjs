@@ -185,6 +185,13 @@ try {
   check('special-character snapshot label stays text and canceled named restore submits nothing',accessibleDialog.includes(accessibleLabel)&&accessibleRestoreCalls===0&&await page.$eval('.snapshot-row',(row,label)=>row.querySelector('.restore')?.getAttribute('aria-label')==='Restore snapshot '+label&&row.querySelector('.snapshot-label')?.textContent===label&&!row.querySelector('.snapshot-label b'),accessibleLabel)&&await page.$eval('[name=label]',e=>e.value==='Newer repeated restore draft')&&!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));
   page.off('request',watchAccessible);
   await page.screenshot({path:'/downloads/snapshots-named-restore-actions-full.png',fullPage:true});
+
+  const longLabel='L'.repeat(200);await call(`${P}/snapshots`,{label:longLabel},token);
+  await page.setViewport({width:360,height:900});await page.click('[name=refreshSnapshots]');
+  await page.waitForFunction(label=>document.querySelector('.snapshot-label')?.textContent===label,{},longLabel);
+  check('maximum unbroken snapshot label stays complete with named restore inside narrow viewport',await page.$eval('.snapshot-row',(row,label)=>{const text=row.querySelector('.snapshot-label'),button=row.querySelector('.restore');return text?.textContent===label&&button?.getAttribute('aria-label')==='Restore snapshot '+label&&text.getBoundingClientRect().left>=0&&text.getBoundingClientRect().right<=innerWidth&&button.getBoundingClientRect().right<=innerWidth;},longLabel)&&await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  check('long label layout retains draft and available refresh restore without runtime failure',await page.$eval('[name=label]',e=>e.value==='Newer repeated restore draft')&&!await page.$eval('.restore',e=>e.disabled)&&!await page.$eval('[name=refreshSnapshots]',e=>e.disabled)&&!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));
+  await page.screenshot({path:'/downloads/snapshots-long-label-narrow-full.png',fullPage:true});
   console.log(failures?'SNAPSHOT BROWSER CHECKS FAILED':'ALL SNAPSHOT BROWSER CHECKS PASSED');process.exitCode=failures?1:0;
 } catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {

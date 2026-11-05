@@ -911,3 +911,9 @@ Restore aria-label includesrow snapshotlabel; compactvisibletext/confirmationunc
 Actualeveryrow/specialcharacterliteral/canceleddialog/noPOST snapshotbrowser36/review0356;
 web304/14 unchanged. NoAPI/schema/coverage/defaultOFF change/accessibilitycertification.
 Sync239/native244total242unique remain explicitly staged, not uninterrupted.
+
+## Continuation291 - Long snapshot label wrap
+Scopedflexlabel wrap/minwidth/maxwidth keepsactual200char unbrokenlabel complete and
+Restoreinside360px/nohorizontaloverflow. Prefixtest37PASS1FAIL, finalsnapshotbrowser38/
+review0357; web304/14unchanged. NoAPI/schema/coverage/defaultOFF change/broadresponsiveclaim.
+Sync239/native244total242unique remain explicitly staged, not uninterrupted.
