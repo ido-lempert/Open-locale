@@ -899,3 +899,9 @@ Disablecapture forblank/whitespace, matchingexistingmethodguard; aria-busy separ
 pending frominvalidlabel. Twounits/web304/14/actualblankclicks/validrecovery
 snapshotbrowser31/review0354. NoAPI/schema/coverage/defaultOFF change.
 Sync239/native244total242unique remain explicitly staged, not uninterrupted.
+
+## Continuation289 - Snapshot mutation live statuses
+Visible role=status capture/restore pending text usesexistingflags throughfollowupread.
+ActualheldPOSTcapture-only/restore-only/settledabsence snapshotbrowser34/review0355;
+web304/14 unchanged. NoAPI/schema/coverage/defaultOFF/cancellationchange.
+Sync239/native244total242unique remain explicitly staged, not uninterrupted.

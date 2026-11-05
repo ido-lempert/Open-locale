@@ -15,6 +15,8 @@ import { ApiService, SnapshotMeta } from '../api.service';
     </header>
     <main>
       @if (error(); as e) { <p class="error" role="alert">{{ e }}</p> }
+      @if (creating()) { <p role="status" name="snapshotCreating">Capturing snapshot...</p> }
+      @if (restoring()) { <p role="status" name="snapshotRestoring">Restoring snapshot...</p> }
       @if (notice(); as n) { <p class="notice" role="status">{{ n }}</p> }
       <form class="snapshot-create" (ngSubmit)="create($event)">
         <input aria-label="Snapshot label" [(ngModel)]="label" name="label"
