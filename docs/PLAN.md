@@ -984,3 +984,10 @@ snapshot/key/translation/history/restoreauditrows andexportunchanged. Finallycle
 thenexistingauditfailure/successchecksprovecontinuation. Snapshots42->43/review0367;
 test-only/noAPI/schema/UI/coverage/defaultOFF change. Nogeneralpruningatomicityclaim.
 Sync239/native244242unique remainexplicitlystaged, notuninterrupted.
+
+## Continuation302 - Restore webhook signature proof
+Strengthenexistingsignedwebhookcheck withactualreceiverheader/exactbodyHMACusing
+one-timefixturesecret; alteredbytes/wrongsecretnegatives; signedevent/countersmatch
+successfulHTTPrestoreandcommittedkeycount. Snapshots43->45/review0368; test-only/
+noAPI/schema/UI/coverage/defaultOFF change. Noexactlyonce/deliveryguaranteeclaim.
+Sync239/native244242unique remainexplicitlystaged, notuninterrupted.

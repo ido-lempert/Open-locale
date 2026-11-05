@@ -3,6 +3,7 @@
 // snapshots, and scope checks. Run: node scripts/snapshots-test.mjs
 import { execFileSync, spawn } from 'node:child_process';
 import { createServer } from 'node:http';
+import { createHmac } from 'node:crypto';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -29,7 +30,7 @@ const received = [];
 const receiver = createServer((req, res) => {
   let body = '';
   req.on('data', (c) => (body += c));
-  req.on('end', () => { received.push({ event: req.headers['x-openlocale-event'], body }); res.writeHead(200); res.end(); });
+  req.on('end', () => { received.push({ event: req.headers['x-openlocale-event'], signature: req.headers['x-openlocale-signature'], body }); res.writeHead(200); res.end(); });
 });
 await new Promise((r) => receiver.listen(HOOK_PORT, '127.0.0.1', r));
 
@@ -207,14 +208,19 @@ try {
     restoreAuto.status === 201 && Object.keys(enAfterAuto).length === 0, JSON.stringify(enAfterAuto));
 
   // Restore emits a project.restored webhook (after commit, fire-and-forget).
-  await call(`/projects/${pid}/webhooks`, { jwt, method: 'POST', body: { url: `http://127.0.0.1:${HOOK_PORT}/hook`, events: ['project.restored'] } });
-  await call(`/projects/${pid}/snapshots/${snapId}/restore`, { jwt, method: 'POST' });
+  const restoreHook=await call(`/projects/${pid}/webhooks`, { jwt, method: 'POST', body: { url: `http://127.0.0.1:${HOOK_PORT}/hook`, events: ['project.restored'] } });
+  const webhookRestore=await call(`/projects/${pid}/snapshots/${snapId}/restore`, { jwt, method: 'POST' });
   let hookHit;
   for (let i = 0; i < 20 && !hookHit; i++) {
     await new Promise((r) => setTimeout(r, 250));
     hookHit = received.find((e) => e.event === 'project.restored');
   }
-  check('restore delivers a signed project.restored webhook', !!hookHit && JSON.parse(hookHit.body).snapshotId === snapId, hookHit?.body ?? 'none');
+  const verifiesRestoreSignature=(body,secret,signature)=>typeof secret==='string'&&signature==='sha256='+createHmac('sha256',secret).update(body).digest('hex');
+  check('restore delivers a signed project.restored webhook', restoreHook.status===201&&webhookRestore.status===201&&!!hookHit&&JSON.parse(hookHit.body).snapshotId===snapId&&verifiesRestoreSignature(hookHit.body,restoreHook.json.secret,hookHit.signature));
+  check('restore signature verification rejects altered bytes and wrong secret',!!hookHit&&!verifiesRestoreSignature(hookHit.body+' ',restoreHook.json.secret,hookHit.signature)&&!verifiesRestoreSignature(hookHit.body,restoreHook.json.secret+'wrong',hookHit.signature));
+  const restorePayload=hookHit?JSON.parse(hookHit.body):{};
+  check('signed restore payload counters match committed HTTP result',restorePayload.event==='project.restored'&&restorePayload.keysRemoved===webhookRestore.json.keysRemoved&&restorePayload.valuesChanged===webhookRestore.json.valuesChanged&&webhookRestore.json.valuesChanged===4&&Object.keys(await flat()).length===2);
+
 
   // Pre-restore safety capture: a mistaken restore is itself recoverable.
   // Current state is empty (first-auto restore above). Mutate, restore the
