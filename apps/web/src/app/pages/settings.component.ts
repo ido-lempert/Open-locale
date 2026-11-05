@@ -201,6 +201,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
         </section>
         <section class="panel">
           <h2>Automations</h2>
+          <p><a [routerLink]="['/projects',projectId,'activity']" name="automationActivityLink">Review recorded runs in Activity</a> <span class="muted">Choose "ran automation" in the action filter. This is not a complete run history or delivery receipt.</span></p>
           <p class="muted">Rules fire only on the whitelisted triggers - a new key, or a base-locale write on the main branch - and only do the whitelisted actions: fill empty cells with pseudo TEST DATA, create a task, or notify this project's registered webhooks (signed delivery to the URLs admins set up in the Webhooks panel - a rule itself cannot send anywhere else). Only project admins can create rules, and creating a rule delegates YOUR authority to it: any member's edit can trigger it, but the rule acts as you, with your CURRENT permissions re-checked on every run - not as the editor who triggered it. If you are demoted, lose a locale grant, or leave the project, the run narrows or fails visibly in the activity log and the triggering edit is unaffected. Runs are best-effort and in-process: no durable queue and no retry, and a write committed while the server restarts does not replay.</p>
           <ul class="locale-list">
             @for (r of autoRules(); track r.id) {

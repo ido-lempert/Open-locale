@@ -838,3 +838,11 @@ local timezone. Use **Refresh deliveries** to read again. Payloads, signing secr
 and raw transport errors are not displayed. A successful HTTP response does not
 prove receiver-side processing. There is no resend action, continuous watch or
 full-history view; this UI does not enable the repository effects worker.
+
+### Recorded automation activity
+The Automations panel links to project Activity. Choose **ran automation** to see
+recorded rule names and known action types. **Recorded error** means an error field
+was recorded at the top level or for a target locale; other records say **outcome
+not confirmed**, not success. Raw errors and notification messages are omitted.
+This best-effort feed is not a complete run history or receiver receipt, and it
+does not offer retries or enable a worker.

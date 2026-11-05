@@ -74,6 +74,7 @@ function roleSnapshot(value: unknown): value is { role: string; allowedLocales: 
       @if (error(); as e) { <p class="error" role="alert">{{ e }}</p><button type="button" name="retryActivity" (click)="retry()">Retry activity</button> }
       @if (loading()) { <p role="status" name="activityLoading">Loading activity...</p> }
       @if (!error()) { <button type="button" name="refreshActivity" [disabled]="loading()" (click)="refresh()">Refresh activity</button> }
+      @if (actionFilter() === 'automation.run' || hasAutomationEntries()) { <p class="muted" name="automationActivityScope">Automation activity is best-effort, not a complete run history. Recorded errors may cover only part of a run. A recorded run does not confirm delivery or receiver processing. Raw error details and notification messages are not shown here.</p> }
       <ul class="activity-list">
         @for (ev of items(); track ev.id) {
           <li class="activity-row">
@@ -156,9 +157,22 @@ export class ActivityComponent implements OnInit, OnDestroy {
 
   label(action: string) { return ACTION_LABELS[action] ?? action; }
 
+  hasAutomationEntries() { return this.items().some(ev => ev.action === 'automation.run'); }
+
   detailText(ev: ActivityEntry): string {
     const d = ev.detail ?? {};
     switch (ev.action) {
+      case 'automation.run': {
+        const record=(v:unknown):v is Record<string,unknown> => !!v&&typeof v==='object'&&!Array.isArray(v);
+        if(!record(d))return 'Run detail unavailable';
+        const actions:Record<string,string>={pretranslate:'fill empty cells with test data','task.create':'create task',notify:'notify project webhooks'};
+        const rule=typeof d['rule']==='string'&&d['rule'].trim()?d['rule']:'unavailable';
+        const action=typeof d['action']==='string'&&Object.prototype.hasOwnProperty.call(actions,d['action'])?actions[d['action']]:'unavailable';
+        const hasError=(v:Record<string,unknown>)=>Object.prototype.hasOwnProperty.call(v,'error');
+        const results=d['results'];
+        const error=hasError(d)||(record(results)&&Object.values(results).some(v=>record(v)&&hasError(v)));
+        return `Rule: ${rule}; action: ${action}; ${error?'recorded error':'recorded run (outcome not confirmed)'}`;
+      }
       case 'task.created':
       case 'task.deleted':
         return typeof d['title']==='string' ? d['title'] : '';

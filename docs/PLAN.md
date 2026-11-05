@@ -1051,3 +1051,11 @@ No payloads/secrets/rawerrors/resend/worker enablement. Read generation/destroy 
 Web309/15 (+5), actualbrowser16; review0377 includes interim failure chronology.
 Coverage22FULL/7PARTIAL/1MISSING unchanged, no external acceptance. Sync239 and
 native244/242unique final verified STAGED, never canonical uninterrupted success.
+
+## Continuation312 - Safe automation activity identity
+Existing automation.run feed now shows rule/known action and recorded error or
+explicitly unconfirmed run. Top-level/locale error presence, malformed-safe fields,
+no raw error/notification message. Settings links existing Activity; caveat avoids
+complete-history/delivery claims. Web313/15 (+4), activitybrowser28->36 real task/
+failedassignee plus separatelyseededpartial fixture. Review0378; no API/schema/
+worker/coverage change. Sync239/native244242unique explicitlySTAGED verified0.
