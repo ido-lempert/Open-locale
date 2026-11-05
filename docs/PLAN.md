@@ -1106,3 +1106,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Selected-read fences for list/blob stages, atomic image/list publish, fixed failure/retry and owned blob revocation on replacement/close/reload/destroy/partial failure/late completion.
 - Confirmed upload/delete refresh only still-selected pane and adjust count, no full editor reload that discards unrelated translation drafts. No API/authorization change or definitive mutation-failure recovery claim.
 - Unit6 and actual local-browser10 checks include held A->B list, held blob/close, authenticated stored image retry and route-away revocation. Five reviews0385; coverage22FULL7PARTIAL1MISSING/defaultOFF/external acceptance unchanged.
+
+### Continuation 320 - Safe selected comment threads
+- Selected-read/key fences with inline error/retry, close/reload/destroy invalidation; no false empty failure or raw service error. Returned thread updates count, missing reply target cleared.
+- Confirmed post/delete refresh only unchanged pane, shared in-flight mutation guard, newer draft preserved, no full editor reload. No definitive failed-mutation/exactly-once reconciliation claim.
+- Browser13 proves held A->B read/closed response/error/retry, held original POST after B selection preserving new B draft, original A persistence, normal post/delete and genuinely uncommitted translation draft retained (actual PUT held and DB unchanged). Unit8/five reviews0386; coverage/defaultOFF/external acceptance unchanged.

@@ -223,9 +223,10 @@ interface CellState {
               }
               @if (commentsFor() === k.id) {
                 <tr class="history-row"><td [attr.colspan]="2 + p.locales.length">
-                  @if (commentsLoading()) { <p class="muted">Loading comments…</p> }
+                  @if (commentsLoading()) { <p class="muted" role="status" name="commentsLoading">Loading comments...</p> }
+                  @else if (commentsError()) { <p class="error" role="alert" name="commentsError">Comments unavailable. No thread is shown.</p><button type="button" name="retryComments" (click)="readComments(k)">Retry comments</button> }
                   @else {
-                    @if (comments().length === 0) { <p class="muted">No comments yet.</p> }
+                    @if (comments().length === 0) { <p class="muted" name="commentsEmpty">No comments yet.</p> }
                     <ul class="history-list">
                       @for (cm of rootComments(); track cm.id) {
                         <li>
@@ -235,7 +236,7 @@ interface CellState {
                           --> }</span>
                           <span class="muted">{{ cm.author?.displayName ?? 'unknown' }} · {{ cm.createdAt | date:'short' }}</span>
                           <button [attr.aria-label]="'Reply to comment'" (click)="replyTo.set(cm.id)">reply</button>
-                          <button class="danger" [attr.aria-label]="'Delete comment'" (click)="deleteComment(k, cm.id)">&times;</button>
+                          <button class="danger" [attr.aria-label]="'Delete comment'" [disabled]="commentsSaving()" (click)="deleteComment(k, cm.id)">&times;</button>
                           @if (repliesOf(cm.id).length > 0) {
                             <ul class="history-list replies">
                               @for (rp of repliesOf(cm.id); track rp.id) {
@@ -245,7 +246,7 @@ interface CellState {
                                     -->@if (seg.mention) { <span class="mention">{{ seg.text }}</span> } @else { <span>{{ seg.text }}</span> }<!--
                                   --> }</span>
                                   <span class="muted">{{ rp.author?.displayName ?? 'unknown' }} · {{ rp.createdAt | date:'short' }}</span>
-                                  <button class="danger" [attr.aria-label]="'Delete comment'" (click)="deleteComment(k, rp.id)">&times;</button>
+                                  <button class="danger" [attr.aria-label]="'Delete comment'" [disabled]="commentsSaving()" (click)="deleteComment(k, rp.id)">&times;</button>
                                 </li>
                               }
                             </ul>
@@ -263,7 +264,7 @@ interface CellState {
                         <option value="">all languages</option>
                         @for (l of p.locales; track l.code) { <option [value]="l.code">{{ l.code }}</option> }
                       </select>
-                      <button type="submit">Post</button>
+                      <button type="submit" [disabled]="commentsSaving()">{{ commentsSaving() ? 'Posting or deleting...' : 'Post' }}</button>
                     </form>
                   }
                 </td></tr>
@@ -341,6 +342,9 @@ export class EditorComponent implements OnInit, OnDestroy {
   commentLocale = signal('');
   replyTo = signal<string | null>(null);
   commentsLoading = signal(false);
+  commentsError = signal(false);
+  commentsSaving = signal(false);
+  private commentsGeneration = 0;
   historyEntries = signal<(HistoryEntry & { locale: string })[]>([]);
   historyLoading = signal(false);
   historyError = signal(false);
@@ -369,7 +373,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     this.searchTimer = setTimeout(() => void this.reload(), 250);
   }
   async reload() {
-    this.clearHistory(); this.clearShots();
+    this.clearHistory(); this.clearShots(); this.clearComments();
     try {
       const keys = await this.api.listKeys(this.projectId, {
         search: this.search() || undefined,
@@ -476,14 +480,32 @@ export class EditorComponent implements OnInit, OnDestroy {
       await this.reload();
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to save tags'); }
   }
+  private clearComments() {
+    ++this.commentsGeneration; this.commentsFor.set(null); this.comments.set([]);
+    this.commentsLoading.set(false); this.commentsError.set(false); this.replyTo.set(null);
+  }
   async toggleComments(k: Key) {
-    if (this.commentsFor() === k.id) { this.commentsFor.set(null); return; }
-    this.commentsFor.set(k.id); this.commentsLoading.set(true); this.comments.set([]);
+    if (this.destroyed) return;
+    if (this.commentsFor() === k.id) { this.clearComments(); return; }
+    this.commentsFor.set(k.id);
     this.commentDraft.set(''); this.commentLocale.set(''); this.replyTo.set(null);
+    await this.readComments(k);
+  }
+  async readComments(k: Key) {
+    if (this.destroyed || this.commentsFor() !== k.id) return;
+    const generation = ++this.commentsGeneration, projectId = this.projectId, keyId = k.id;
+    const current = () => !this.destroyed && generation === this.commentsGeneration && this.commentsFor() === keyId;
+    this.commentsLoading.set(true); this.commentsError.set(false); this.comments.set([]);
     try {
-      this.comments.set(await this.api.listComments(this.projectId, k.id));
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load comments'); }
-    finally { this.commentsLoading.set(false); }
+      const list = await this.api.listComments(projectId, keyId);
+      if (current()) {
+        this.comments.set(list);
+        this.keys.update(keys => keys.map(key => key.id === keyId && key._count
+          ? { ...key, _count: { ...key._count, comments: list.length } } : key));
+        if (this.replyTo() && !list.some(c => c.id === this.replyTo())) this.replyTo.set(null);
+      }
+    } catch { if (current()) this.commentsError.set(true); }
+    finally { if (current()) this.commentsLoading.set(false); }
   }
   // One-level threads: roots render flat; replies nest under their parent.
   rootComments() { return this.comments().filter((c) => !c.parentId); }
@@ -507,15 +529,20 @@ export class EditorComponent implements OnInit, OnDestroy {
     return segs.length ? segs : [{ text: body, mention: false }];
   }
   async addComment(k: Key) {
-    const body = this.commentDraft().trim();
-    if (!body) return;
+    const draft = this.commentDraft(), body = draft.trim(), locale = this.commentLocale(), reply = this.replyTo();
+    if (!body || this.commentsSaving() || this.destroyed || this.commentsFor() !== k.id) return;
+    const generation = this.commentsGeneration;
+    this.commentsSaving.set(true);
     try {
-      await this.api.addComment(this.projectId, k.id, body, this.commentLocale() || undefined, this.replyTo() ?? undefined);
-      await this.reload();
-      this.comments.set(await this.api.listComments(this.projectId, k.id));
-      this.commentDraft.set('');
-      this.replyTo.set(null);
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to add comment'); }
+      await this.api.addComment(this.projectId, k.id, body, locale || undefined, reply ?? undefined);
+      if (!this.destroyed && generation === this.commentsGeneration && this.commentsFor() === k.id) {
+        if (this.commentDraft() === draft && this.commentLocale() === locale && this.replyTo() === reply) {
+          this.commentDraft.set(''); this.replyTo.set(null);
+        }
+        await this.readComments(k);
+      }
+    } catch { if (!this.destroyed && generation === this.commentsGeneration && this.commentsFor() === k.id) this.error.set('Comment result could not be confirmed. Check the thread before posting again.'); }
+    finally { if (!this.destroyed) this.commentsSaving.set(false); }
   }
   // Translation memory: only for empty cells with a base-locale source.
   // Applying is an explicit click and saves through the normal path - the
@@ -600,11 +627,14 @@ export class EditorComponent implements OnInit, OnDestroy {
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to delete screenshot'); }
   }
   async deleteComment(k: Key, commentId: string) {
+    if (this.commentsSaving() || this.destroyed || this.commentsFor() !== k.id) return;
+    const generation = this.commentsGeneration;
+    this.commentsSaving.set(true);
     try {
       await this.api.deleteComment(this.projectId, k.id, commentId);
-      await this.reload();
-      this.comments.set(await this.api.listComments(this.projectId, k.id));
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to delete comment'); }
+      if (!this.destroyed && generation === this.commentsGeneration && this.commentsFor() === k.id) await this.readComments(k);
+    } catch { if (!this.destroyed && generation === this.commentsGeneration && this.commentsFor() === k.id) this.error.set('Comment deletion result could not be confirmed. Check the thread before deleting again.'); }
+    finally { if (!this.destroyed) this.commentsSaving.set(false); }
   }
   private clearHistory() {
     ++this.historyGeneration; this.historyFor.set(null); this.historyEntries.set([]);
@@ -632,7 +662,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     finally { if(current())this.historyLoading.set(false); }
   }
   ngOnDestroy() {
-    this.destroyed=true; ++this.historyGeneration; this.clearShots();
+    this.destroyed=true; ++this.historyGeneration; this.clearShots(); this.clearComments();
     if(this.searchTimer)clearTimeout(this.searchTimer);
   }
   async addKey() {
