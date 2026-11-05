@@ -929,3 +929,9 @@ Actualserverrestore removesuniquekey butbrowser503; currentlist/draft/error reta
 explicitGETrevealsautomaticpre-restoresnapshotwithoutresubmission/clearingerror.
 Snapshotbrowser42/review0359; test-only/noapp/API/schema/coverage/defaultOFF change.
 Sync239/native244total242unique remain explicitly staged, not uninterrupted.
+
+## Continuation294 - First snapshot capture proof
+Actualsnapshotfreeproject emptyread thenfirstPOST persists1row/replacesemptyguidance/
+showsnotice/clearsunchangeddraft/namedrestoreenabled. Snapshotbrowser44/review0360;
+test-only/noapp/API/schema/coverage/defaultOFF change. Sync239/native244total242unique
+remain explicitly staged, not uninterrupted.

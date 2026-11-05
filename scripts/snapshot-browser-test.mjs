@@ -247,6 +247,20 @@ try {
   check('explicit refresh exposes automatic snapshot after committed uncertain restore without resubmission',uncertainRestorePosts===1&&uncertainRestoreReads===1&&await page.$eval('[name=label]',e=>e.value==='Persisted despite lost capture response')&&await page.$eval('[role=alert]',e=>e.textContent==='Restoring snapshot failed. Check the project before trying again.')&&!(await page.$('[name=snapshotListError]'))&&!(await page.$('.notice'))&&!(await page.$('[name=snapshotRestoring]'))&&!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));
   page.off('request',loseRestoreResponse);await page.setRequestInterception(false);
   await page.screenshot({path:'/downloads/snapshots-committed-uncertain-restore-full.png',fullPage:true});
+
+  const emptyProject=await call('/projects',{name:'First snapshot project',slug:'first-snapshot-project',locales:['en']},token);
+  const emptyP=`/projects/${emptyProject.id}`;
+  await route(emptyProject.id);await page.waitForSelector('[name=snapshotListEmpty]');
+  check('actual snapshot-free project shows empty read state without stale rows feedback or pending status',await page.$eval('[name=snapshotListEmpty]',e=>e.textContent==='No snapshots yet')&&!(await page.$('.snapshot-row'))&&!(await page.$('.restore'))&&!(await page.$('[role=alert]'))&&!(await page.$('.notice'))&&!(await page.$('[name=snapshotListLoading]'))&&!(await page.$('[name=snapshotCreating]'))&&await page.$eval('[name=label]',e=>e.value==='')&&await page.$eval('.snapshot-create button',e=>e.disabled)&&!await page.$eval('[name=refreshSnapshots]',e=>e.disabled));
+  let firstCaptures=0;
+  const watchFirstCapture=req=>{if(req.method()==='POST'&&new URL(req.url()).pathname===`/api${emptyP}/snapshots`)firstCaptures++;};
+  page.on('request',watchFirstCapture);await page.type('[name=label]','First manual snapshot');
+  await page.click('.snapshot-create button');
+  await page.waitForFunction(()=>document.querySelector('.snapshot-label')?.textContent==='First manual snapshot'&&!document.querySelector('[name=snapshotListLoading]')&&document.querySelector('.notice')?.textContent==='Snapshot captured');
+  const firstServerRows=await call(`${emptyP}/snapshots`,null,token);
+  check('actual first capture replaces empty state with persisted row and clears unchanged draft',firstCaptures===1&&firstServerRows.length===1&&firstServerRows[0].label==='First manual snapshot'&&await page.$$eval('.snapshot-row',rows=>rows.length===1)&&!(await page.$('[name=snapshotListEmpty]'))&&await page.$eval('[name=label]',e=>e.value==='')&&await page.$eval('.snapshot-create button',e=>e.disabled&&e.getAttribute('aria-busy')==='false')&&await page.$eval('.restore',e=>!e.disabled&&e.getAttribute('aria-label')==='Restore snapshot First manual snapshot')&&!(await page.$('[role=alert]'))&&!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));
+  page.off('request',watchFirstCapture);
+  await page.screenshot({path:'/downloads/snapshots-first-capture-full.png',fullPage:true});
   console.log(failures?'SNAPSHOT BROWSER CHECKS FAILED':'ALL SNAPSHOT BROWSER CHECKS PASSED');process.exitCode=failures?1:0;
 } catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
