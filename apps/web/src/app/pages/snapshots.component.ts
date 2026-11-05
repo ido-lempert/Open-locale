@@ -97,7 +97,7 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
   }
 
   async restore(s: SnapshotMeta) {
-    if (this.restoring()) return;
+    if (this.destroyed || this.restoring()) return;
     if (!confirm(
       `Restore the project to "${s.label}"?\n\n` +
       `- Keys and translations return to the snapshot state.\n` +
@@ -109,12 +109,14 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
     this.error.set('');this.notice.set('');
     try {
       const r = await this.api.restoreSnapshot(this.projectId, s.id);
+      if(this.destroyed)return;
       this.notice.set(`Restored: ${r.valuesChanged} value(s) recovered, ${r.keysRemoved} key(s) removed`);
       await this.reload();
     } catch {
+      if(this.destroyed)return;
       this.error.set('Restoring snapshot failed. Check the project before trying again.');
     } finally {
-      this.restoring.set(false);
+      if(!this.destroyed)this.restoring.set(false);
     }
   }
 }

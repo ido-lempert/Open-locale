@@ -851,3 +851,9 @@ retain label/current list. Twounits/web288/14/actualconfirmheld503 snapshotbrows
 Review0346. Native second twoisolated120s interruptions128/123checks/no finalexit;
 publication held one normal wake, then second128/0 completed/checkpointremoved;
 first116/0 retained, combined244total242unique explicitly staged.
+
+## Continuation281 - Snapshot restore destruction fence
+Destroyedcomponent suppressesfreshrestore/confirmation andlate successnotice/refetch/
+error/finalflag updates. Threeunits/web291/14/actualconfirmedheldPOSTleave
+snapshotbrowser17/review0347. Serverrestore stillcompletes; editorloadedview stays
+untilreload, no cancellation/live-refreshclaim. Samecomponentreuse unchanged.
