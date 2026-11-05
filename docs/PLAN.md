@@ -1082,3 +1082,10 @@ matched/total, clear/page reset, no-match vs emptypublication guidance. Querycap
 route resets/refreshpreserves, no additional networkread. Web322/16 (+3), OTA browser
 19->25; review0381. No API/schema/worker/coverage change, fullbundle stillfetched.
 Sync239/native244242unique explicitlySTAGED verified0.
+
+## Continuation316 - Secondary route code splitting
+15 guardedsecondary routes lazy-load14 modules; entry/callback screens unchanged.
+Productioninitial598.82->405.86kB underunchanged500budget, nottotaldownloadclaim.
+Web338/17 (+16 routecases), actualproductionbrowser16; review0382 includes saml/
+nativetimeout + checkedalternateport retrychronology.52 boundedlegsfinal0;
+sync239/native244242unique explicitlySTAGED final0. Coverage/defaultOFFunchanged.

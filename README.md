@@ -863,3 +863,11 @@ currently downloaded locale, ignoring case and preserving whitespace. It makes n
 new API requests. Clear restores all values; changing publication scope clears the
 search. Paging is local to the matches. Search does not cover other publications
 or locales, and no matches does not mean the publication itself is empty.
+
+### Web build delivery
+Secondary screens load as separate route chunks; login, callbacks, project list
+and editor remain in the entry bundle. The production initial build is405.86kB
+in this slice, below the unchanged500kB warning budget. This does not reduce all
+visited-screen downloads by the same amount. Deploy the entire build together,
+and retain old hashed assets long enough for already-open clients to navigate.
+Automatic recovery from a removed stale chunk is not implemented.

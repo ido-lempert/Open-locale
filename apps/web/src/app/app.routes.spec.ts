@@ -1,0 +1,7 @@
+import { appRoutes } from './app.routes';
+import { authGuard } from './auth.guard';
+describe('secondary screen lazy routes',()=>{
+ const paths=['account/identities','account/link-saml','account/link-oidc','projects/:id/sync/targets','projects/:id/sync/history','projects/:id/sync','projects/:id/webhooks/:hookId/deliveries','projects/:id/ota/:version/:locale','projects/:id/settings','projects/:id/activity','projects/:id/tasks','projects/:id/glossary','projects/:id/qa','projects/:id/snapshots','projects/:id/reports'];
+ for(const path of paths)it(`loads ${path} lazily without removing auth guard`,async()=>{const route=appRoutes.find(r=>r.path===path)!;expect(route.component).toBeUndefined();expect(route.canActivate).toEqual([authGuard]);expect(typeof route.loadComponent).toBe('function');const component=await(route.loadComponent as ()=>Promise<any>)();expect(component).toBeTruthy();expect(typeof component).toBe('function');});
+ it('keeps entry screens eager and preserves SAML provider data and fallback',()=>{for(const path of ['auth/saml/callback','auth/oidc/callback','login','projects','projects/:id']){const route=appRoutes.find(r=>r.path===path)!;expect(route.component).toBeTruthy();expect(route.loadComponent).toBeUndefined();}expect(appRoutes.find(r=>r.path==='account/link-saml')?.data).toEqual({provider:'saml'});expect(appRoutes.at(-1)).toMatchObject({path:'**',redirectTo:'projects'});});
+});

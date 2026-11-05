@@ -14,7 +14,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 
-const PG_PORT = 55476, API_PORT = 3000, MOCK_PORT = 5556;
+const PG_PORT = process.env.SAML_TEST_PG_PORT ? Number(process.env.SAML_TEST_PG_PORT) : 55476, API_PORT = 3000, MOCK_PORT = 5556;
+if (!Number.isInteger(PG_PORT) || PG_PORT < 1024 || PG_PORT > 65535) throw new Error('Invalid SAML database port');
 const API = `http://127.0.0.1:${API_PORT}/api`;
 const MOCK = `http://127.0.0.1:${MOCK_PORT}`;
 const IDP_ENTITY_ID = `${MOCK}/idp`;
