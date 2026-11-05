@@ -870,4 +870,6 @@ and editor remain in the entry bundle. The production initial build is405.86kB
 in this slice, below the unchanged500kB warning budget. This does not reduce all
 visited-screen downloads by the same amount. Deploy the entire build together,
 and retain old hashed assets long enough for already-open clients to navigate.
-Automatic recovery from a removed stale chunk is not implemented.
+Navigation errors show fixed guidance to preserve unsaved work before refreshing
+or choosing another link. The app never automatically reloads. This is feedback,
+not automatic retry or recovery from a removed stale chunk.

@@ -1089,3 +1089,10 @@ Productioninitial598.82->405.86kB underunchanged500budget, nottotaldownloadclaim
 Web338/17 (+16 routecases), actualproductionbrowser16; review0382 includes saml/
 nativetimeout + checkedalternateport retrychronology.52 boundedlegsfinal0;
 sync239/native244242unique explicitlySTAGED final0. Coverage/defaultOFFunchanged.
+
+## Continuation317 - Safe lazy-navigation feedback
+Navigation-ID-fenced pending/error/cancel feedback with fixed messages, no rawURL/
+error or automaticreload. Actual chunkfailure preserves settingsdraft; finalviewport
+banner visible at390px. Web340/17 (+2)/productionbrowser16->22; review0383 includes
+inline-offscreen designcorrection and OTAfixture8PASS timeout twice/final25 recovery.
+NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0.
