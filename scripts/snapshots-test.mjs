@@ -363,6 +363,23 @@ try {
   const expectedTiedIds=tiedIds.slice(3).reverse();
   check('automatic retention uses same descending id tie order as list',tiedImport.status===201&&tiedRetained.status===200&&tiedRetained.json.length===25&&!tiedIds.includes(tiedRetained.json[0].id)&&JSON.stringify(tiedRetained.json.slice(1).map(s=>s.id))===JSON.stringify(expectedTiedIds));
 
+  const legacyProject=await call('/projects',{jwt,method:'POST',body:{name:'Legacy snapshot',slug:`legacy-${Date.now()}`,baseLocale:'en',locales:['en']}});
+  const lp=legacyProject.json.id;
+  const legacyBranch=await call(`/projects/${lp}/branches`,{jwt,method:'POST',body:{name:'old-feature'}});
+  const legacyMain=await call(`/projects/${lp}/keys`,{jwt,method:'POST',body:{name:'shared',isPlural:true}});
+  const legacyOther=await call(`/projects/${lp}/keys`,{jwt,method:'POST',body:{name:'shared',branch:'old-feature'}});
+  const legacyForms={one:'live singular',other:'live plural'};
+  const legacyMainValue=await call(`/projects/${lp}/keys/${legacyMain.json.id}/translations`,{jwt,method:'PUT',body:{locale:'en',value:'live changed',pluralForms:legacyForms}});
+  const legacyOtherValue=await call(`/projects/${lp}/keys/${legacyOther.json.id}/translations`,{jwt,method:'PUT',body:{locale:'en',value:'other branch'}});
+  const legacySnapshot=await prisma.snapshot.create({data:{projectId:lp,label:'pre-branch payload',keys:[{name:'shared',description:'legacy metadata',isPlural:true,maxLength:null,tags:[]}],translations:[{keyName:'shared',localeCode:'en',value:'legacy original',status:'TRANSLATED'}]}});
+  check('legacy snapshot fixture has omitted branch and plural fields with distinct live branches',legacyProject.status===201&&legacyBranch.status===201&&legacyMain.status===201&&legacyOther.status===201&&legacyMainValue.status===200&&legacyOtherValue.status===200&&!Object.hasOwn(legacySnapshot.keys[0],'branch')&&!Object.hasOwn(legacySnapshot.translations[0],'branch')&&!Object.hasOwn(legacySnapshot.translations[0],'pluralForms'));
+  const legacyRestore=await call(`/projects/${lp}/snapshots/${legacySnapshot.id}/restore`,{jwt,method:'POST'});
+  const legacyMainAfter=await call(`/projects/${lp}/keys`,{jwt});
+  const legacyOtherAfter=await call(`/projects/${lp}/keys?branch=old-feature`,{jwt});
+  const legacyTranslation=await prisma.translation.findUnique({where:{keyId_localeCode:{keyId:legacyMain.json.id,localeCode:'en'}}});
+  check('pre-branch snapshot restores main and removes same-named other-branch key',legacyRestore.status===201&&legacyRestore.json.keysRemoved===1&&legacyMainAfter.status===200&&legacyMainAfter.json.length===1&&legacyMainAfter.json[0].id===legacyMain.json.id&&legacyMainAfter.json[0].description==='legacy metadata'&&legacyOtherAfter.status===200&&legacyOtherAfter.json.length===0&&legacyTranslation.value==='legacy original'&&legacyTranslation.status==='TRANSLATED');
+  check('legacy omitted pluralForms preserves surviving translation forms',JSON.stringify(legacyTranslation.pluralForms)===JSON.stringify(legacyForms));
+
   // Scope: read-only token reads but cannot create/restore.
   const roTok = (await call('/auth/tokens', { jwt, method: 'POST', body: { name: 'ro', scopes: ['read'] } })).json.token;
   check('read-only token lists snapshots', (await call(`/projects/${pid}/snapshots`, { apiKey: roTok })).status === 200);

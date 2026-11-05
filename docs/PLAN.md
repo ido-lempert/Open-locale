@@ -1037,3 +1037,9 @@ Prior200journalsettles, receiver503fortwoattempts; restore201/exactbaselineexpor
 remaincommitted, failedjournal503/attempts2andtwoactualsignedhits. Finallyreceiver200.
 Snapshots55->58/review0375; test-only/noAPI/schema/UI/coverage/defaultOFF change.
 Nogeneralguaranteeddelivery/exactlyonceclaim. Sync239/native244242unique staged.
+
+## Continuation310 - Legacy snapshot branch/plural compatibility proof
+Storedpre-branchJSONomitsbranch/pluralForms; actualrestoretargetssurvivingmainID,
+restoresmetadata/value/status, removessame-namedfeaturekey, preserveslivepluralforms.
+Snapshots58->61/review0376; test-only/noAPI/schema/UI/coverage/defaultOFF change.
+Noalllegacyformat/recreatedformsclaim. Sync239/native244242unique explicitlystaged.
