@@ -78,19 +78,21 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
   async create(event: Event) {
     event.preventDefault();
     const label = this.label.trim();
-    if (!label || this.creating()) return;
+    if (!label || this.destroyed || this.creating()) return;
     const draft=this.label;
     this.creating.set(true);
     this.error.set('');this.notice.set('');
     try {
       await this.api.createSnapshot(this.projectId, label);
+      if(this.destroyed)return;
       if(this.label===draft)this.label = '';
       this.notice.set('Snapshot captured');
       await this.reload();
     } catch {
+      if(this.destroyed)return;
       this.error.set('Capturing snapshot failed. Your label is kept here. Check snapshots before trying again.');
     } finally {
-      this.creating.set(false);
+      if(!this.destroyed)this.creating.set(false);
     }
   }
 

@@ -833,3 +833,9 @@ Fixed uncertain-outcome capture error keeps draft/current list without raw serve
 text; new attempt clears stale success notice. Oneunit/web283/14/actualheld503POST
 snapshotbrowser9/review0343. NoAPI/schema/restoreerror/routeReuse/coverage/defaultOFF
 change. Staged sync95+144=239unique, native116+128 remain explicitly staged.
+
+## Continuation278 - Snapshot capture destruction fence
+Destroyedcomponent suppressescapture submission/late success notice/draftclear/refetch/
+latefailure/error/finalflag updates. Threeunits/web286/14/actualheldPOSTleave
+snapshotbrowser11/review0344. Servercapture stillcompletes; no cancellation claim.
+SamecomponentrouteReuse/restore/coverage/defaultOFF unchanged.
