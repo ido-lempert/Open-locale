@@ -1031,3 +1031,9 @@ mutatesboth, restore recoversownfieldsincludingemptydescription/tags/nullmaxLeng
 Everymutatedfieldverifiedbefore restore. Snapshots53->55/review0374; test-only/noAPI/
 schema/UI/coverage/defaultOFF change. Noallmetadata/pluralclaim.
 Sync239/native244242unique remainexplicitlystaged, notuninterrupted.
+
+## Continuation309 - Restore receiver failure proof
+Prior200journalsettles, receiver503fortwoattempts; restore201/exactbaselineexport
+remaincommitted, failedjournal503/attempts2andtwoactualsignedhits. Finallyreceiver200.
+Snapshots55->58/review0375; test-only/noAPI/schema/UI/coverage/defaultOFF change.
+Nogeneralguaranteeddelivery/exactlyonceclaim. Sync239/native244242unique staged.

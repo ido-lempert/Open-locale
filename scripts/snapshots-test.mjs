@@ -27,10 +27,11 @@ async function call(path, { jwt, apiKey, method = 'GET', body } = {}) {
 }
 
 const received = [];
+let receiverStatus=200;
 const receiver = createServer((req, res) => {
   let body = '';
   req.on('data', (c) => (body += c));
-  req.on('end', () => { received.push({ event: req.headers['x-openlocale-event'], signature: req.headers['x-openlocale-signature'], body }); res.writeHead(200); res.end(); });
+  req.on('end', () => { received.push({ event: req.headers['x-openlocale-event'], signature: req.headers['x-openlocale-signature'], body }); res.writeHead(receiverStatus); res.end(); });
 });
 await new Promise((r) => receiver.listen(HOOK_PORT, '127.0.0.1', r));
 
@@ -235,6 +236,27 @@ try {
   const restorePayload=hookHit?JSON.parse(hookHit.body):{};
   check('signed restore payload counters match committed HTTP result',restorePayload.event==='project.restored'&&restorePayload.keysRemoved===webhookRestore.json.keysRemoved&&restorePayload.valuesChanged===webhookRestore.json.valuesChanged&&webhookRestore.json.valuesChanged===4&&Object.keys(await flat()).length===2);
 
+
+  // Receiver failures must not roll back the already committed restore.
+  // Wait for the preceding successful delivery to settle before switching mode.
+  for(let i=0;i<40&&await prisma.webhookDelivery.count({where:{webhookId:restoreHook.json.id}})===0;i++) await new Promise(r=>setTimeout(r,50));
+  const deliveryIdsBeforeFailure=(await prisma.webhookDelivery.findMany({where:{webhookId:restoreHook.json.id},select:{id:true}})).map(d=>d.id);
+  check('successful restore delivery journal settles before receiver failure fixture',deliveryIdsBeforeFailure.length===1&&await prisma.webhookDelivery.count({where:{webhookId:restoreHook.json.id,success:true,httpStatus:200,attempts:1}})===1);
+  const receiverFailureImport=await call(`/projects/${pid}/import/en`,{jwt,method:'POST',body:{entries:{'receiver.failure':'must disappear'}}});
+  const failureBefore=await flat();
+  const receivedBeforeFailure=received.length;
+  let failingRestore,failedDelivery;
+  receiverStatus=503;
+  try {
+    failingRestore=await call(`/projects/${pid}/snapshots/${snapId}/restore`,{jwt,method:'POST'});
+    for(let i=0;i<60&&!failedDelivery;i++) {
+      failedDelivery=await prisma.webhookDelivery.findFirst({where:{webhookId:restoreHook.json.id,id:{notIn:deliveryIdsBeforeFailure}}});
+      if(!failedDelivery) await new Promise(r=>setTimeout(r,100));
+    }
+  } finally {receiverStatus=200;}
+  const afterReceiverFailure=await flat();
+  check('restore remains committed after two receiver503 attempts',receiverFailureImport.status===201&&failureBefore['receiver.failure']==='must disappear'&&failingRestore.status===201&&failingRestore.json.keysRemoved===1&&Object.keys(afterReceiverFailure).length===2&&afterReceiverFailure['a.one']==='one'&&afterReceiverFailure['a.two']==='two');
+  check('restore delivery failure is bounded and journaled without rollback',!!failedDelivery&&!failedDelivery.success&&failedDelivery.httpStatus===503&&failedDelivery.attempts===2&&received.length===receivedBeforeFailure+2&&received.slice(receivedBeforeFailure).every(hit=>verifiesRestoreSignature(hit.body,restoreHook.json.secret,hit.signature)&&JSON.parse(hit.body).snapshotId===snapId));
 
   // Pre-restore safety capture: a mistaken restore is itself recoverable.
   // Current state is empty (first-auto restore above). Mutate, restore the
