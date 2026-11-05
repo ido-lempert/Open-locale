@@ -1018,3 +1018,9 @@ Dated27automatic+oldermanualfixture, realimportkeepsnewest24seededIDs+newcapture
 deletesoldest3; oldmanualfullrow/otherprojectfullsnapshotrowsunchanged. Snapshots49->51/
 review0372; test-only/noAPI/schema/UI/coverage/defaultOFF change. Distinctdatesonly,
 notiepolicy/pruningatomicityclaim. Sync239/native244242unique explicitlystaged.
+
+## Continuation307 - Deterministic snapshot timestamp ties
+List/prune bothcreatedAtDESC,idDESC; UUIDtiebreaker stable, notchronology. ActualGET/
+importequal-timestampknownIDfixture pre-fix51PASS2FAIL; fixedsnapshots51->53/review0373.
+NoAPIshape/schema/UIlayout/coverage/defaultOFF change; nopruneatomicityclaim.
+Sync239/native244242unique remainexplicitlystaged, notuninterrupted.

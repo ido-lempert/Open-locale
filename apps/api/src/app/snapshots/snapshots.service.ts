@@ -94,7 +94,8 @@ export class SnapshotsService {
     const snap = await this.capture(projectId, label, true, actorId);
     const stale = await this.prisma.snapshot.findMany({
       where: { projectId, automatic: true },
-      orderBy: { createdAt: 'desc' },
+      // UUID is a stable tie-breaker, not a claim about creation chronology.
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       skip: AUTO_SNAPSHOT_KEEP,
       select: { id: true },
     });
@@ -108,7 +109,8 @@ export class SnapshotsService {
     await this.projects.getFor(userId, projectId);
     const rows = await this.prisma.snapshot.findMany({
       where: { projectId },
-      orderBy: { createdAt: 'desc' },
+      // UUID is a stable tie-breaker, not a claim about creation chronology.
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
     return rows.map((r) => this.meta(r));
   }

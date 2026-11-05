@@ -316,6 +316,17 @@ try {
   check('retention keeps exactly newest25 automatic snapshots including current capture',retentionProject.status===201&&retentionImport.status===201&&retainedAutomatic.length===25&&newlyCaptured.length===1&&retainedAutomatic.filter(s=>expectedRetained.has(s.id)).length===24&&seededAutomatic.slice(0,3).every(s=>!retainedRows.some(row=>row.id===s.id))&&newlyCaptured[0].label==='before import en'&&newlyCaptured[0].keys.length===0);
   check('retention preserves old manual bytes and other project snapshots',retainedRows.length===26&&JSON.stringify(retainedRows.find(s=>s.id===oldManual.id))===JSON.stringify(oldManual)&&JSON.stringify(otherSnapshotsBefore)===JSON.stringify(await prisma.snapshot.findMany({where:{projectId:pid},orderBy:{id:'asc'}})));
 
+  const tiedProject=await call('/projects',{jwt,method:'POST',body:{name:'Tied retention',slug:`tied-${Date.now()}`,baseLocale:'en',locales:['en']}});
+  const tp=tiedProject.json.id;
+  const tiedIds=Array.from({length:27},(_,i)=>`70000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`);
+  for(const id of tiedIds) await prisma.snapshot.create({data:{id,projectId:tp,label:'tied automatic',automatic:true,keys:[],translations:[],createdAt:new Date('2020-01-01T00:00:00Z')}});
+  const tiedList=await call(`/projects/${tp}/snapshots`,{jwt});
+  check('snapshot list breaks equal timestamps by descending id',tiedProject.status===201&&tiedList.status===200&&JSON.stringify(tiedList.json.map(s=>s.id))===JSON.stringify([...tiedIds].reverse()));
+  const tiedImport=await call(`/projects/${tp}/import/en`,{jwt,method:'POST',body:{entries:{tied:'value'}}});
+  const tiedRetained=await call(`/projects/${tp}/snapshots`,{jwt});
+  const expectedTiedIds=tiedIds.slice(3).reverse();
+  check('automatic retention uses same descending id tie order as list',tiedImport.status===201&&tiedRetained.status===200&&tiedRetained.json.length===25&&!tiedIds.includes(tiedRetained.json[0].id)&&JSON.stringify(tiedRetained.json.slice(1).map(s=>s.id))===JSON.stringify(expectedTiedIds));
+
   // Scope: read-only token reads but cannot create/restore.
   const roTok = (await call('/auth/tokens', { jwt, method: 'POST', body: { name: 'ro', scopes: ['read'] } })).json.token;
   check('read-only token lists snapshots', (await call(`/projects/${pid}/snapshots`, { apiKey: roTok })).status === 200);
