@@ -172,6 +172,19 @@ try {
   page.off('request',watchExplicitRetry);
   await page.screenshot({path:'/downloads/snapshots-explicit-refresh-retry-full.png',fullPage:true});
   check('settled snapshot mutations remove both pending live statuses',!(await page.$('[name=snapshotCreating]'))&&!(await page.$('[name=snapshotRestoring]')));
+
+  const accessibleLabel='Accessible "quoted" <b>snapshot</b> & label';
+  await call(`${P}/snapshots`,{label:accessibleLabel},token);
+  await page.click('[name=refreshSnapshots]');
+  await page.waitForFunction(label=>[...document.querySelectorAll('.snapshot-label')].some(e=>e.textContent===label),{},accessibleLabel);
+  check('each actual restore action names its snapshot while visible text stays compact',await page.$$eval('.snapshot-row',rows=>rows.length>1&&rows.every(row=>{const b=row.querySelector('.restore');return b?.getAttribute('aria-label')==='Restore snapshot '+row.querySelector('.snapshot-label')?.textContent&&b?.textContent==='Restore';})));
+  let accessibleRestoreCalls=0,accessibleDialog='';
+  const watchAccessible=req=>{if(req.method()==='POST'&&new URL(req.url()).pathname.endsWith('/restore'))accessibleRestoreCalls++;};
+  page.on('request',watchAccessible);page.once('dialog',async d=>{accessibleDialog=d.message();await d.dismiss();});
+  await page.click('.restore');await new Promise(r=>setTimeout(r,100));
+  check('special-character snapshot label stays text and canceled named restore submits nothing',accessibleDialog.includes(accessibleLabel)&&accessibleRestoreCalls===0&&await page.$eval('.snapshot-row',(row,label)=>row.querySelector('.restore')?.getAttribute('aria-label')==='Restore snapshot '+label&&row.querySelector('.snapshot-label')?.textContent===label&&!row.querySelector('.snapshot-label b'),accessibleLabel)&&await page.$eval('[name=label]',e=>e.value==='Newer repeated restore draft')&&!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));
+  page.off('request',watchAccessible);
+  await page.screenshot({path:'/downloads/snapshots-named-restore-actions-full.png',fullPage:true});
   console.log(failures?'SNAPSHOT BROWSER CHECKS FAILED':'ALL SNAPSHOT BROWSER CHECKS PASSED');process.exitCode=failures?1:0;
 } catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {

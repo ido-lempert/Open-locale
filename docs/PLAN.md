@@ -905,3 +905,9 @@ Visible role=status capture/restore pending text usesexistingflags throughfollow
 ActualheldPOSTcapture-only/restore-only/settledabsence snapshotbrowser34/review0355;
 web304/14 unchanged. NoAPI/schema/coverage/defaultOFF/cancellationchange.
 Sync239/native244total242unique remain explicitly staged, not uninterrupted.
+
+## Continuation290 - Named snapshot restore actions
+Restore aria-label includesrow snapshotlabel; compactvisibletext/confirmationunchanged.
+Actualeveryrow/specialcharacterliteral/canceleddialog/noPOST snapshotbrowser36/review0356;
+web304/14 unchanged. NoAPI/schema/coverage/defaultOFF change/accessibilitycertification.
+Sync239/native244total242unique remain explicitly staged, not uninterrupted.

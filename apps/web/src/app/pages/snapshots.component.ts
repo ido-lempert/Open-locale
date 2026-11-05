@@ -33,7 +33,7 @@ import { ApiService, SnapshotMeta } from '../api.service';
             @if (s.automatic) { <span class="auto-badge">auto</span> }
             <span class="muted">{{ s.keyCount }} keys, {{ s.translationCount }} translations</span>
             <time class="muted">{{ s.createdAt | date:'short' }}</time>
-            <button class="restore" (click)="restore(s)" [disabled]="restoring() || creating()">Restore</button>
+            <button class="restore" [attr.aria-label]="'Restore snapshot ' + s.label" (click)="restore(s)" [disabled]="restoring() || creating()">Restore</button>
           </li>
         } @empty {
           <li class="muted" name="snapshotListEmpty">No snapshots yet</li>
