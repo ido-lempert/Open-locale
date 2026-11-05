@@ -60,7 +60,8 @@
     "test:editor-history-browser": "node scripts/editor-history-browser-test.mjs",
     "test:editor-shots-browser": "node scripts/editor-shots-browser-test.mjs",
     "test:editor-comments-browser": "node scripts/editor-comments-browser-test.mjs",
-    "test:editor-keys-browser": "node scripts/editor-keys-browser-test.mjs"
+    "test:editor-keys-browser": "node scripts/editor-keys-browser-test.mjs",
+    "test:editor-tm-browser": "node scripts/editor-tm-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

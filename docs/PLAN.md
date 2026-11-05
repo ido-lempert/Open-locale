@@ -1116,3 +1116,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Latest-generation list result/error/finally only; search keystroke invalidates before debounce, destroy suppresses late writes. Retained grid inert during pending/error, explicit previous-grid guidance and manual retry, no false empty.
 - Readonly local-value/plural copy text outside inert grid on failure before destructive retry replacement; not an export or saved-data claim. Current successful list still replaces cells, no save-vs-reload draft reconciliation.
 - Actual held feature/main responses/search debounce/failed read/retry/navigation browser9, unit6; five reviews0387. Coverage/defaultOFF/external acceptance unchanged.
+
+### Continuation 322 - Fresh translation-memory choices
+- Clear stale options before each read, generation/source/empty-target fences; any cell edit/list change/destroy invalidates. Apply only current offered option against unchanged source/empty target.
+- Pending/fixed failure/manual retry and keyboard/click application. Actual same-cell held responses, edit-before-response, real memory retry and keyboard apply persisted unverified; unit7/browser8/five reviews0388.
+- No API/provider/worker change or coverage promotion. Existing project-route reuse/list-save recovery and plural-memory semantics unchanged.

@@ -159,11 +159,13 @@ interface CellState {
                         }
                       </div>
                     }
+                    @if (suggestFor() === k.id + ':' + l.code && tmLoading()) { <p class="muted" role="status" name="tmLoading">Looking in translation memory...</p> }
+                    @if (suggestFor() === k.id + ':' + l.code && tmError()) { <p class="error" role="alert" name="tmError">Translation memory unavailable.</p><button type="button" name="retryTm" (click)="onCellFocus(k, l.code)">Retry memory</button> }
                     @if (suggestFor() === k.id + ':' + l.code && suggestions().length > 0) {
                       <div class="tm-suggest">
                         @for (sg of suggestions(); track sg.targetText) {
                           <button type="button" class="tm-pick"
-                            (mousedown)="applySuggestion(k, l.code, sg.targetText); $event.preventDefault()">
+                            (mousedown)="$event.preventDefault()" (click)="applySuggestion(k, l.code, sg.targetText)">
                             <span [attr.dir]="isRtl(l.code) ? 'rtl' : 'ltr'">{{ sg.targetText }}</span>
                             <span class="muted">memory {{ Math.round(sg.score * 100) }}%</span>
                           </button>
@@ -336,6 +338,10 @@ export class EditorComponent implements OnInit, OnDestroy {
   historyFor = signal<string | null>(null);
   suggestFor = signal<string | null>(null);
   suggestions = signal<TmSuggestion[]>([]);
+  tmLoading = signal(false);
+  tmError = signal(false);
+  private tmGeneration = 0;
+  private tmSource = '';
   Math = Math;
   shotsFor = signal<string | null>(null);
   shots = signal<ScreenshotMeta[]>([]);
@@ -378,7 +384,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   onSearch() {
     if (this.destroyed) return;
     ++this.keysGeneration; this.keysLoading.set(true); this.keysError.set(false);
-    this.clearHistory(); this.clearShots(); this.clearComments();
+    this.clearHistory(); this.clearShots(); this.clearComments(); this.clearTm();
     if (this.searchTimer) clearTimeout(this.searchTimer);
     this.searchTimer = setTimeout(() => void this.reload(), 250);
   }
@@ -388,7 +394,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     const generation = ++this.keysGeneration, projectId = this.projectId;
     const current = () => !this.destroyed && generation === this.keysGeneration;
     this.keysLoading.set(true); this.keysError.set(false);
-    this.clearHistory(); this.clearShots(); this.clearComments();
+    this.clearHistory(); this.clearShots(); this.clearComments(); this.clearTm();
     try {
       const keys = await this.api.listKeys(projectId, {
         search: this.search() || undefined,
@@ -424,9 +430,11 @@ export class EditorComponent implements OnInit, OnDestroy {
     return s;
   }
   edit(k: Key, locale: string, value: string) {
+    this.clearTm();
     this.cell(k.id, locale).update((c) => ({ ...c, value }));
   }
   editForm(k: Key, locale: string, category: string, value: string) {
+    this.clearTm();
     this.cell(k.id, locale).update((c) => ({ ...c, forms: { ...c.forms, [category]: value } }));
   }
   pluralCategories(locale: string): string[] { return pluralCategories(locale); }
@@ -570,24 +578,35 @@ export class EditorComponent implements OnInit, OnDestroy {
   // Translation memory: only for empty cells with a base-locale source.
   // Applying is an explicit click and saves through the normal path - the
   // cell stays unverified until a human reviews it.
+  private clearTm() {
+    ++this.tmGeneration; this.suggestFor.set(null); this.suggestions.set([]);
+    this.tmLoading.set(false); this.tmError.set(false); this.tmSource = '';
+  }
   async onCellFocus(k: Key, locale: string) {
+    this.clearTm();
+    if (this.destroyed || this.keysLoading() || this.keysError()) return;
     const base = this.project()?.baseLocale;
-    if (!base || locale === base || this.cell(k.id, locale)().value.trim()) {
-      this.suggestFor.set(null); this.suggestions.set([]);
-      return;
-    }
+    if (!base || locale === base || this.cell(k.id, locale)().value.trim()) return;
     const source = this.cell(k.id, base)().value.trim();
-    if (!source) { this.suggestFor.set(null); this.suggestions.set([]); return; }
-    const id = `${k.id}:${locale}`;
-    this.suggestFor.set(id);
+    if (!source) return;
+    const id = `${k.id}:${locale}`, generation = this.tmGeneration;
+    const current = () => !this.destroyed && generation === this.tmGeneration && this.suggestFor() === id
+      && this.cell(k.id, base)().value.trim() === source && !this.cell(k.id, locale)().value.trim();
+    this.suggestFor.set(id); this.tmSource = source; this.tmLoading.set(true);
     try {
       const res = await this.api.suggestTm(this.projectId, locale, source);
-      if (this.suggestFor() === id) this.suggestions.set(res.suggestions.slice(0, 3));
-    } catch { if (this.suggestFor() === id) this.suggestions.set([]); }
+      if (current()) this.suggestions.set(res.suggestions.slice(0, 3));
+    } catch { if (current()) this.tmError.set(true); }
+    finally { if (current()) this.tmLoading.set(false); }
   }
   async applySuggestion(k: Key, locale: string, text: string) {
-    this.cell(k.id, locale).update((c) => ({ ...c, value: text }));
-    this.suggestFor.set(null); this.suggestions.set([]);
+    const base = this.project()?.baseLocale;
+    if (this.destroyed || this.keysLoading() || this.keysError() || !base || locale === base
+      || this.suggestFor() !== `${k.id}:${locale}` || this.tmLoading() || this.tmError()
+      || !this.suggestions().some(s => s.targetText === text)
+      || this.cell(k.id, base)().value.trim() !== this.tmSource || this.cell(k.id, locale)().value.trim()) return;
+    this.cell(k.id, locale).update(c => ({ ...c, value: text }));
+    this.clearTm();
     await this.save(k, locale, true);
   }
   private revokeShots(urls: Record<string, string>) {
@@ -685,7 +704,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     finally { if(current())this.historyLoading.set(false); }
   }
   ngOnDestroy() {
-    this.destroyed=true; ++this.keysGeneration; ++this.historyGeneration; this.clearShots(); this.clearComments();
+    this.destroyed=true; ++this.keysGeneration; ++this.historyGeneration; this.clearShots(); this.clearComments(); this.clearTm();
     if(this.searchTimer)clearTimeout(this.searchTimer);
   }
   async addKey() {
