@@ -887,3 +887,9 @@ preservesdraft/mutationfeedback. Fourunits/web302/14/actualheldGETduplicateclick
 snapshotbrowser27/review0352. Latestautomaticrestore snapshot appears on refresh.
 Noautomaticreconciliation/mutationretry/API/schema/coverage/defaultOFF change.
 Sync239/native244total242unique remain explicitly staged, not uninterrupted.
+
+## Continuation287 - Explicit snapshot refresh failure/retry proof
+Actualcapture503/read503/retryGET retain draft and separate uncertainmutationerror,
+hide stale rows onfailure, restorecurrentrows onretry without anotherPOST/rawdetail.
+Snapshotbrowser29/review0353; test-only/noapp/API/schema/coverage/defaultOFF change.
+Sync239/native244total242unique remain explicitly staged, not uninterrupted.

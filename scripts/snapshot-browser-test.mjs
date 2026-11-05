@@ -136,6 +136,27 @@ try {
   check('actual refresh reveals latest automatic snapshot and retains current draft without stale feedback',refreshReads===1&&refreshPosts===0&&await page.$eval('.snapshot-list',e=>e.textContent.includes('before restore of Newer repeated capture draft'))&&await page.$eval('[name=label]',e=>e.value==='Newer repeated restore draft')&&!await page.$eval('[name=refreshSnapshots]',e=>e.disabled)&&!(await page.$('.notice'))&&!(await page.$('[role=alert]'))&&!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));
   page.off('request',holdRefresh);await page.setRequestInterception(false);
   await page.screenshot({path:'/downloads/snapshots-explicit-refresh-full.png',fullPage:true});
+
+  // An uncertain capture outcome remains distinct from a failed explicit read.
+  let explicitReads=0,explicitPosts=0;
+  await page.setRequestInterception(true);
+  const failExplicit=req=>{
+    const path=new URL(req.url()).pathname;
+    if(req.method()==='POST'&&path===`/api${P}/snapshots`){explicitPosts++;return req.respond({status:503,contentType:'application/json',body:JSON.stringify({message:'private-explicit-capture'})});}
+    if(req.method()==='GET'&&path===`/api${P}/snapshots`){explicitReads++;return req.respond({status:503,contentType:'application/json',body:JSON.stringify({message:'private-explicit-list'})});}
+    return req.continue();
+  };
+  page.on('request',failExplicit);await page.click('.snapshot-create button');
+  await page.waitForFunction(()=>document.querySelector('[role=alert]')?.textContent==='Capturing snapshot failed. Your label is kept here. Check snapshots before trying again.'&&!document.querySelector('.snapshot-create button')?.disabled);
+  await page.click('[name=refreshSnapshots]');await page.waitForSelector('[name=retrySnapshotList]');
+  check('failed explicit refresh hides stale rows with separate list and mutation errors and preserved draft',explicitPosts===1&&explicitReads===1&&await page.$eval('[name=label]',e=>e.value==='Newer repeated restore draft')&&!(await page.$('.snapshot-list'))&&!(await page.$('.restore'))&&!(await page.$('[name=snapshotListEmpty]'))&&!(await page.$('[name=refreshSnapshots]'))&&await page.$$eval('[role=alert]',es=>es.length===2&&es.some(e=>e.textContent==='Capturing snapshot failed. Your label is kept here. Check snapshots before trying again.')&&es.some(e=>e.textContent==='Snapshots unavailable. No snapshots are shown. Retry this read or reload the page.'))&&!(await page.content()).includes('private-explicit-'));
+  page.off('request',failExplicit);await page.setRequestInterception(false);
+  const watchExplicitRetry=req=>{const path=new URL(req.url()).pathname;if(req.method()==='GET'&&path===`/api${P}/snapshots`)explicitReads++;if(req.method()==='POST'&&path.startsWith(`/api${P}/snapshots`))explicitPosts++;};
+  page.on('request',watchExplicitRetry);await page.click('[name=retrySnapshotList]');
+  await page.waitForFunction(n=>!document.querySelector('[name=snapshotListLoading]')&&document.querySelectorAll('.snapshot-row').length===n,{},refreshServerRows.length);
+  check('retry after failed explicit refresh only reads and restores rows without clearing uncertain capture guidance',explicitReads===2&&explicitPosts===1&&await page.$eval('[name=label]',e=>e.value==='Newer repeated restore draft')&&await page.$eval('.snapshot-list',e=>e.textContent.includes('before restore of Newer repeated capture draft'))&&!(await page.$('[name=snapshotListError]'))&&!(await page.$('[name=retrySnapshotList]'))&&await page.$$eval('[role=alert]',es=>es.length===1&&es[0].textContent==='Capturing snapshot failed. Your label is kept here. Check snapshots before trying again.')&&!await page.$eval('[name=refreshSnapshots]',e=>e.disabled)&&!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));
+  page.off('request',watchExplicitRetry);
+  await page.screenshot({path:'/downloads/snapshots-explicit-refresh-retry-full.png',fullPage:true});
   console.log(failures?'SNAPSHOT BROWSER CHECKS FAILED':'ALL SNAPSHOT BROWSER CHECKS PASSED');process.exitCode=failures?1:0;
 } catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
