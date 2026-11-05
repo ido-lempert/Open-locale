@@ -829,3 +829,12 @@ Client archived-review display also requires literal available=true,a string val
 and at most32768UTF8bytes before storing value/extracting recovery bindings. Empty
 and exact boundary values work;malformed/oversized responses stay unavailable. This
 is not a network preparse bound or memory erasure. See review0247.
+
+### Webhook delivery journal
+Project admins can open **Delivery journal** beside a webhook in project settings.
+It is a read-only snapshot of up to 50 recent delivery records, with event, HTTP
+status (or unavailable), attempt count, duration and timestamp in the browser's
+local timezone. Use **Refresh deliveries** to read again. Payloads, signing secrets
+and raw transport errors are not displayed. A successful HTTP response does not
+prove receiver-side processing. There is no resend action, continuous watch or
+full-history view; this UI does not enable the repository effects worker.

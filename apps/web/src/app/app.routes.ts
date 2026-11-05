@@ -1,3 +1,4 @@
+import { WebhookDeliveriesComponent } from './pages/webhook-deliveries.component';
 import { RepositoryTargetsComponent } from './pages/repository-targets.component';
 import { IdentitiesComponent } from './pages/identities.component';
 import { IdentityLinkComponent } from './pages/identity-link.component';
@@ -30,6 +31,7 @@ export const appRoutes: Routes = [
   { path: 'projects/:id/sync/targets', component: RepositoryTargetsComponent, canActivate: [authGuard] },
   { path: 'projects/:id/sync/history', component: SyncHistoryComponent, canActivate: [authGuard] },
   { path: 'projects/:id/sync', component: SyncPreviewComponent, canActivate: [authGuard] },
+  { path: 'projects/:id/webhooks/:hookId/deliveries', component: WebhookDeliveriesComponent, canActivate: [authGuard] },
   { path: 'projects/:id/settings', component: SettingsComponent, canActivate: [authGuard] },
   { path: 'projects/:id/activity', component: ActivityComponent, canActivate: [authGuard] },
   { path: 'projects/:id/tasks', component: TasksComponent, canActivate: [authGuard] },

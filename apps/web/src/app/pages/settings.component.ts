@@ -101,6 +101,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                     <button class="danger" (click)="removeHook(h.id)">Yes, delete</button>
                     <button (click)="confirmingHook.set(null)">Cancel</button>
                   } @else {
+                    <a [routerLink]="['/projects',projectId,'webhooks',h.id,'deliveries']">Delivery journal</a>
                     <button (click)="toggleHook(h)">{{ h.active ? 'Disable' : 'Enable' }}</button>
                     <button class="danger" (click)="confirmingHook.set(h.id)">Delete</button>
                   }

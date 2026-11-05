@@ -84,6 +84,7 @@ export interface MtPretranslateResult {
   scored: number; scoreAvg: number | null; scoreMin: number | null; scoreMax: number | null;
 }
 export interface OtaPublicationInfo { id: string; version: number; branch: string; createdAt: string; locales: string[]; translations: number; }
+export interface WebhookDeliveryInfo { id:string; event:string; httpStatus:number|null; success:boolean; attempts:number; durationMs:number; createdAt:string; }
 export interface WebhookInfo { id: string; url: string; events: string[]; active: boolean; createdAt: string; }
 
 export interface BranchInfo { id: string; name: string; createdAt: string; _count?: { keys: number }; }
@@ -365,6 +366,9 @@ export class ApiService {
   }
   publishOta(projectId: string, branch?: string) {
     return this.request<OtaPublicationInfo>(`/projects/${projectId}/ota/publish`, { method: 'POST', body: JSON.stringify(branch ? { branch } : {}) });
+  }
+  listWebhookDeliveries(projectId:string,hookId:string) {
+    return this.request<WebhookDeliveryInfo[]>(`/projects/${projectId}/webhooks/${hookId}/deliveries`);
   }
   listWebhooks(projectId: string) {
     return this.request<WebhookInfo[]>(`/projects/${projectId}/webhooks`);

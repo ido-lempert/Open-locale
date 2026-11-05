@@ -1043,3 +1043,11 @@ Storedpre-branchJSONomitsbranch/pluralForms; actualrestoretargetssurvivingmainID
 restoresmetadata/value/status, removessame-namedfeaturekey, preserveslivepluralforms.
 Snapshots58->61/review0376; test-only/noAPI/schema/UI/coverage/defaultOFF change.
 Noalllegacyformat/recreatedformsclaim. Sync239/native244242unique explicitlystaged.
+
+## Continuation311 - Admin read-only webhook delivery journal
+Dedicated scoped route linked from settings admin rows; existing latest50 read,
+status/event/HTTP/attempts/duration/time+zone, hook ID, refresh/loading/empty/safeerror.
+No payloads/secrets/rawerrors/resend/worker enablement. Read generation/destroy fences.
+Web309/15 (+5), actualbrowser16; review0377 includes interim failure chronology.
+Coverage22FULL/7PARTIAL/1MISSING unchanged, no external acceptance. Sync239 and
+native244/242unique final verified STAGED, never canonical uninterrupted success.
