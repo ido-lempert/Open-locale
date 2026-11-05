@@ -192,6 +192,33 @@ try {
   check('maximum unbroken snapshot label stays complete with named restore inside narrow viewport',await page.$eval('.snapshot-row',(row,label)=>{const text=row.querySelector('.snapshot-label'),button=row.querySelector('.restore');return text?.textContent===label&&button?.getAttribute('aria-label')==='Restore snapshot '+label&&text.getBoundingClientRect().left>=0&&text.getBoundingClientRect().right<=innerWidth&&button.getBoundingClientRect().right<=innerWidth;},longLabel)&&await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   check('long label layout retains draft and available refresh restore without runtime failure',await page.$eval('[name=label]',e=>e.value==='Newer repeated restore draft')&&!await page.$eval('.restore',e=>e.disabled)&&!await page.$eval('[name=refreshSnapshots]',e=>e.disabled)&&!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));
   await page.screenshot({path:'/downloads/snapshots-long-label-narrow-full.png',fullPage:true});
+
+  await page.setViewport({width:480,height:900});
+  await page.$eval('[name=label]',e=>{e.value='';e.dispatchEvent(new Event('input',{bubbles:true}));});
+  await page.type('[name=label]','Persisted despite lost capture response');
+  let uncertainPosts=0,uncertainReads=0,persistedUncertain;
+  await page.setRequestInterception(true);
+  const loseCaptureResponse=async req=>{
+    if(req.method()==='POST'&&new URL(req.url()).pathname===`/api${P}/snapshots`){
+      uncertainPosts++;
+      const server=await fetch(req.url(),{method:'POST',headers:req.headers(),body:req.postData()});
+      if(!server.ok)throw new Error(`uncertain fixture server capture: ${server.status}`);
+      persistedUncertain=await server.json();
+      return req.respond({status:503,contentType:'application/json',body:JSON.stringify({message:'private-lost-capture-response'})});
+    }
+    if(req.method()==='GET'&&new URL(req.url()).pathname===`/api${P}/snapshots`)uncertainReads++;
+    return req.continue();
+  };
+  const beforeUncertainList=await page.$eval('.snapshot-list',e=>e.textContent);
+  page.on('request',loseCaptureResponse);const uncertainResponse=page.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname===`/api${P}/snapshots`);await page.click('.snapshot-create button');await(await uncertainResponse).json();
+  await page.waitForFunction(()=>document.querySelector('.snapshot-create button')?.getAttribute('aria-busy')==='false'&&document.querySelector('[role=alert]')?.textContent==='Capturing snapshot failed. Your label is kept here. Check snapshots before trying again.');
+  const uncertainServerRows=await call(`${P}/snapshots`,null,token);
+  check('lost capture response keeps uncertain guidance and draft even though real server snapshot persisted',uncertainPosts===1&&uncertainReads===0&&persistedUncertain?.label==='Persisted despite lost capture response'&&uncertainServerRows.some(row=>row.id===persistedUncertain.id)&&await page.$eval('.snapshot-list',(e,text)=>e.textContent===text,beforeUncertainList)&&await page.$eval('[name=label]',e=>e.value==='Persisted despite lost capture response')&&!(await page.content()).includes('private-lost-capture-response')&&!(await page.$('.notice')));
+  await page.click('[name=refreshSnapshots]');
+  await page.waitForFunction(()=>document.querySelector('.snapshot-label')?.textContent==='Persisted despite lost capture response'&&!document.querySelector('[name=snapshotListLoading]'));
+  check('explicit refresh discovers committed uncertain capture without resubmission or clearing draft and error',uncertainPosts===1&&uncertainReads===1&&await page.$eval('[name=label]',e=>e.value==='Persisted despite lost capture response')&&await page.$eval('[role=alert]',e=>e.textContent==='Capturing snapshot failed. Your label is kept here. Check snapshots before trying again.')&&!(await page.$('[name=snapshotListError]'))&&!(await page.$('.notice'))&&!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));
+  page.off('request',loseCaptureResponse);await page.setRequestInterception(false);
+  await page.screenshot({path:'/downloads/snapshots-committed-uncertain-capture-full.png',fullPage:true});
   console.log(failures?'SNAPSHOT BROWSER CHECKS FAILED':'ALL SNAPSHOT BROWSER CHECKS PASSED');process.exitCode=failures?1:0;
 } catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
