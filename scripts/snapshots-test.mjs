@@ -65,6 +65,20 @@ try {
   check('injected capture audit failure returns HTTP500',failedCapture.status===500);
   check('failed capture audit rolls back snapshot and audit rows',await prisma.snapshot.count({where:{projectId:pid}})===snapshotsBeforeAuditFailure&&await prisma.activityEvent.count({where:{projectId:pid,action:'snapshot.created'}})===auditsBeforeFailure&&await prisma.snapshot.count({where:{projectId:pid,label:failedLabel}})===0);
 
+  const insertFailureLabel='snapshot-insert-retry';
+  const beforeInsertSnapshots=await prisma.snapshot.count({where:{projectId:pid}});
+  const beforeInsertAudits=await prisma.activityEvent.count({where:{projectId:pid,action:'snapshot.created'}});
+  await prisma.$executeRawUnsafe(`CREATE FUNCTION reject_snapshot_insert() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.label = 'snapshot-insert-retry' THEN RAISE EXCEPTION 'fixture snapshot insert failure'; END IF; RETURN NEW; END $$`);
+  await prisma.$executeRawUnsafe(`CREATE TRIGGER reject_snapshot_insert BEFORE INSERT ON snapshots FOR EACH ROW EXECUTE FUNCTION reject_snapshot_insert()`);
+  let failedInsert;
+  try {failedInsert=await call(`/projects/${pid}/snapshots`,{jwt,method:'POST',body:{label:insertFailureLabel}});}
+  finally {await prisma.$executeRawUnsafe('DROP TRIGGER reject_snapshot_insert ON snapshots');await prisma.$executeRawUnsafe('DROP FUNCTION reject_snapshot_insert()');}
+  check('snapshot insert rejection returns500 without snapshot or audit residue',failedInsert.status===500&&await prisma.snapshot.count({where:{projectId:pid}})===beforeInsertSnapshots&&await prisma.activityEvent.count({where:{projectId:pid,action:'snapshot.created'}})===beforeInsertAudits);
+  const insertRetry=await call(`/projects/${pid}/snapshots`,{jwt,method:'POST',body:{label:insertFailureLabel}});
+  const retryRows=await prisma.snapshot.findMany({where:{projectId:pid,label:insertFailureLabel}});
+  const retryAudits=await prisma.activityEvent.findMany({where:{projectId:pid,action:'snapshot.created'}});
+  check('same-label retry after insert failure commits exactly one snapshot with matching audit identity',insertRetry.status===201&&retryRows.length===1&&retryRows[0].id===insertRetry.json.id&&retryAudits.length===beforeInsertAudits+1&&retryAudits.filter(row=>row.detail?.snapshotId===insertRetry.json.id&&row.detail?.label===insertFailureLabel).length===1);
+
   // Seed two keys with translations.
   await call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { entries: { 'a.one': 'one', 'a.two': 'two' } } });
   await call(`/projects/${pid}/import/he`, { jwt, method: 'POST', body: { entries: { 'a.one': 'אחד', 'a.two': 'שניים' } } });

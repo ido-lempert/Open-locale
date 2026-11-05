@@ -949,3 +949,10 @@ leftsnapshot(31PASS1FAIL); final32checks provebothcountsunchanged/nofailedlabelr
 Review0362; noAPI/schema/UI/coverage/defaultOFF change. Automaticpaths unchanged;
 no serializablecapture/automaticpruning/fullrestoreatomicityclaim. Sync239/native244
 242unique explicitlystaged; nativeport55534startupconflict resolvedusing55554.
+
+## Continuation297 - Snapshot insert failure and same-label recovery
+RealPGsnapshotINSERTrejection500 leavesnapshot/auditcountsunchanged; afterfinally
+cleanup same-label201 persists1snapshotandmatchingID/labelaudit. Snapshots32->34/
+review0363; test-only/noAPI/schema/UI/coverage/defaultOFF change. Complements296
+withoutserializable/automaticcaptureprune/fullrestoreatomicityclaim. Sync239/native244
+242unique remainexplicitlystaged, notuninterrupted.
