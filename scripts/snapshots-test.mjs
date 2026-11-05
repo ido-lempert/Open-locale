@@ -153,6 +153,23 @@ try {
   check('mutation precondition rejects unchanged fixture state', !mutationsApplied(200,200,201,{'a.one':'one','a.two':'two'},{'a.one':'one','a.two':'two'}));
   check('mutations applied before restore with successful HTTP writes', mutationsApplied(changed.status,deleted.status,added.status,beforeDelete,beforeRestore), JSON.stringify({statuses:[changed.status,deleted.status,added.status],beforeDelete,beforeRestore}));
 
+  const restoreRows=async()=>({
+    keys:await prisma.key.findMany({where:{projectId:pid},orderBy:{id:'asc'}}),
+    translations:await prisma.translation.findMany({where:{projectId:pid},orderBy:[{keyId:'asc'},{localeCode:'asc'}]}),
+    history:await prisma.translationHistory.findMany({where:{translation:{projectId:pid}},orderBy:{id:'asc'}}),
+    audits:await prisma.activityEvent.findMany({where:{projectId:pid,action:'snapshot.restored'},orderBy:{id:'asc'}}),
+  });
+  const beforeRestoreFailure=await restoreRows();
+  const snapshotsBeforeRestoreFailure=await prisma.snapshot.findMany({where:{projectId:pid},select:{id:true}});
+  await prisma.$executeRawUnsafe(`CREATE FUNCTION reject_restore_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action = 'snapshot.restored' THEN RAISE EXCEPTION 'fixture restore audit failure'; END IF; RETURN NEW; END $$`);
+  await prisma.$executeRawUnsafe(`CREATE TRIGGER reject_restore_audit BEFORE INSERT ON activity_events FOR EACH ROW EXECUTE FUNCTION reject_restore_audit()`);
+  let failedRestore;
+  try {failedRestore=await call(`/projects/${pid}/snapshots/${snapId}/restore`,{jwt,method:'POST'});}
+  finally {await prisma.$executeRawUnsafe('DROP TRIGGER reject_restore_audit ON activity_events');await prisma.$executeRawUnsafe('DROP FUNCTION reject_restore_audit()');}
+  check('restore audit rejection returns500 and rolls back key translation history and audit writes',failedRestore.status===500&&JSON.stringify(beforeRestoreFailure)===JSON.stringify(await restoreRows())&&JSON.stringify(await flat())===JSON.stringify(beforeRestore));
+  const newSafety=await prisma.snapshot.findMany({where:{projectId:pid,id:{notIn:snapshotsBeforeRestoreFailure.map(s=>s.id)}}});
+  check('failed restore retains its separately committed pre-restore safety snapshot',newSafety.length===1&&newSafety[0].automatic&&newSafety[0].label==='before restore of v1 baseline'&&newSafety[0].keys.length===2&&newSafety[0].keys.some(k=>k.name==='b.new')&&!newSafety[0].keys.some(k=>k.name==='a.two'));
+
   // Restore the baseline.
   const restore = await call(`/projects/${pid}/snapshots/${snapId}/restore`, { jwt, method: 'POST' });
   check('restore returns recovery summary', restore.status === 201 && restore.json.restored === true, JSON.stringify(restore.json));

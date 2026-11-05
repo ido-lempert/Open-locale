@@ -970,3 +970,10 @@ Repeatedunchangedrestore reports0changed/removed andpreservesbothtranslationvers
 values/historycount. Snapshots38->40/review0365; test-only/noAPI/schema/UI/coverage/
 defaultOFF change. Audits/safetycapture stilloccur, nogeneralretryidempotencyclaim.
 Sync239/native244242unique remainexplicitlystaged, notuninterrupted.
+
+## Continuation300 - Restore audit failure rollback proof
+RealPGrestoreauditrejection500 preservescompleteorderedkey/translation/history/
+restoreauditrows andcurrentexport. Exactly1newautomaticpre-restoresafetysnapshot
+remainsseparatelycommitted. Triggercleanupthenexistingsuccessrestoreprovesrecovery.
+Snapshots40->42/review0366; test-only/noAPI/schema/UI/coverage/defaultOFF change.
+Nofulloperation/pruningatomicityclaim; sync239/native244242unique explicitlystaged.
