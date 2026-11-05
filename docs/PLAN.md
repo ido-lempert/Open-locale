@@ -1101,3 +1101,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Fence history by selected read generation; close/reopen, list reload and destroy invalidate outstanding results. Fixed inline failed-read state and manual retry, never false empty success or raw service error.
 - Browser held A then selected B, released A without settling B; close pending read, error/retry against actual API, route-away late response. New unit cases include old rejection and reload/destroy/mismatched retry.
 - No API/schema/worker change; editor-wide list/save concurrency and reused project-route lifecycle are not claimed fixed. Historical values remain existing literal text output. Coverage22 FULL /7 PARTIAL /1 MISSING and external acceptance limits unchanged.
+
+### Continuation 319 - Safe screenshot context reads
+- Selected-read fences for list/blob stages, atomic image/list publish, fixed failure/retry and owned blob revocation on replacement/close/reload/destroy/partial failure/late completion.
+- Confirmed upload/delete refresh only still-selected pane and adjust count, no full editor reload that discards unrelated translation drafts. No API/authorization change or definitive mutation-failure recovery claim.
+- Unit6 and actual local-browser10 checks include held A->B list, held blob/close, authenticated stored image retry and route-away revocation. Five reviews0385; coverage22FULL7PARTIAL1MISSING/defaultOFF/external acceptance unchanged.

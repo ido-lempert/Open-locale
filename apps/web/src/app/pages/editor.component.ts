@@ -201,9 +201,10 @@ interface CellState {
               </tr>
               @if (shotsFor() === k.id) {
                 <tr class="history-row shots-row"><td [attr.colspan]="2 + p.locales.length">
-                  @if (shotsLoading()) { <p class="muted">Loading screenshots…</p> }
+                  @if (shotsLoading()) { <p class="muted" role="status" name="shotsLoading">Loading screenshots...</p> }
+                  @else if (shotsError()) { <p class="error" role="alert" name="shotsError">Screenshots unavailable. No images are shown.</p><button type="button" name="retryShots" (click)="readShots(k)">Retry screenshots</button> }
                   @else {
-                    @if (shots().length === 0) { <p class="muted">No screenshots yet. Add one to give translators visual context.</p> }
+                    @if (shots().length === 0) { <p class="muted" name="shotsEmpty">No screenshots yet. Add one to give translators visual context.</p> }
                     <ul class="shots-list">
                       @for (sh of shots(); track sh.id) {
                         <li>
@@ -332,6 +333,8 @@ export class EditorComponent implements OnInit, OnDestroy {
   shots = signal<ScreenshotMeta[]>([]);
   shotUrls = signal<Record<string, string>>({});
   shotsLoading = signal(false);
+  shotsError = signal(false);
+  private shotsGeneration = 0;
   commentsFor = signal<string | null>(null);
   comments = signal<CommentEntry[]>([]);
   commentDraft = signal('');
@@ -366,7 +369,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     this.searchTimer = setTimeout(() => void this.reload(), 250);
   }
   async reload() {
-    this.clearHistory();
+    this.clearHistory(); this.clearShots();
     try {
       const keys = await this.api.listKeys(this.projectId, {
         search: this.search() || undefined,
@@ -537,36 +540,63 @@ export class EditorComponent implements OnInit, OnDestroy {
     this.suggestFor.set(null); this.suggestions.set([]);
     await this.save(k, locale, true);
   }
+  private revokeShots(urls: Record<string, string>) {
+    for (const url of Object.values(urls)) URL.revokeObjectURL(url);
+  }
+  private clearShots() {
+    ++this.shotsGeneration; this.shotsFor.set(null); this.shotsLoading.set(false); this.shotsError.set(false);
+    this.revokeShots(this.shotUrls()); this.shotUrls.set({}); this.shots.set([]);
+  }
   async toggleShots(k: Key) {
-    if (this.shotsFor() === k.id) { this.shotsFor.set(null); return; }
-    this.shotsFor.set(k.id); this.shotsLoading.set(true); this.shots.set([]); this.shotUrls.set({});
+    if (this.destroyed) return;
+    if (this.shotsFor() === k.id) { this.clearShots(); return; }
+    this.shotsFor.set(k.id);
+    await this.readShots(k);
+  }
+  async readShots(k: Key) {
+    if (this.destroyed || this.shotsFor() !== k.id) return;
+    const generation = ++this.shotsGeneration, projectId = this.projectId, keyId = k.id;
+    const current = () => !this.destroyed && generation === this.shotsGeneration && this.shotsFor() === keyId;
+    this.revokeShots(this.shotUrls()); this.shotUrls.set({}); this.shots.set([]);
+    this.shotsLoading.set(true); this.shotsError.set(false);
+    const urls: Record<string, string> = {};
+    let published = false;
     try {
-      const list = await this.api.listScreenshots(this.projectId, k.id);
-      this.shots.set(list);
-      const urls: Record<string, string> = {};
-      for (const sh of list) urls[sh.id] = await this.api.screenshotUrl(this.projectId, k.id, sh.id);
-      this.shotUrls.set(urls);
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load screenshots'); }
-    finally { this.shotsLoading.set(false); }
+      const list = await this.api.listScreenshots(projectId, keyId);
+      if (!current()) return;
+      for (const sh of list) {
+        urls[sh.id] = await this.api.screenshotUrl(projectId, keyId, sh.id);
+        if (!current()) return;
+      }
+      this.shots.set(list); this.shotUrls.set(urls); published = true;
+    } catch { if (current()) this.shotsError.set(true); }
+    finally {
+      if (!published) this.revokeShots(urls);
+      if (current()) this.shotsLoading.set(false);
+    }
+  }
+  private updateShotCount(keyId: string, delta: number) {
+    this.keys.update(keys => keys.map(key => key.id === keyId && key._count
+      ? { ...key, _count: { ...key._count, screenshots: Math.max(0, (key._count.screenshots ?? 0) + delta) } } : key));
   }
   async uploadShot(k: Key, ev: Event) {
     const input = ev.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
+    const generation = this.shotsGeneration;
     try {
       await this.api.uploadScreenshot(this.projectId, k.id, file);
-      await this.reload();
-      this.shotsFor.set(null);
-      await this.toggleShots(k);
+      if (!this.destroyed) this.updateShotCount(k.id, 1);
+      if (!this.destroyed && generation === this.shotsGeneration && this.shotsFor() === k.id) await this.readShots(k);
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to upload screenshot'); }
     finally { input.value = ''; }
   }
   async deleteShot(k: Key, shotId: string) {
+    const generation = this.shotsGeneration;
     try {
       await this.api.deleteScreenshot(this.projectId, k.id, shotId);
-      await this.reload();
-      this.shotsFor.set(null);
-      await this.toggleShots(k);
+      if (!this.destroyed) this.updateShotCount(k.id, -1);
+      if (!this.destroyed && generation === this.shotsGeneration && this.shotsFor() === k.id) await this.readShots(k);
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to delete screenshot'); }
   }
   async deleteComment(k: Key, commentId: string) {
@@ -602,7 +632,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     finally { if(current())this.historyLoading.set(false); }
   }
   ngOnDestroy() {
-    this.destroyed=true; ++this.historyGeneration;
+    this.destroyed=true; ++this.historyGeneration; this.clearShots();
     if(this.searchTimer)clearTimeout(this.searchTimer);
   }
   async addKey() {

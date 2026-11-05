@@ -875,3 +875,4 @@ or choosing another link. The app never automatically reloads. This is feedback,
 not automatic retry or recovery from a removed stale chunk.
 
 Editor key history now keeps pending/error/empty states distinct, with a manual retry. Old history reads cannot overwrite a later selected key or reopen a closed pane; list reload and leaving the editor invalidate that pane. This does not add history mutation, cancellation, or editor-wide draft/list race recovery.
+Screenshot context now waits for all authenticated image reads before publishing the pane, keeps failed reads distinct from an empty list, and offers manual retry. Closing/replacing/leaving the pane releases its owned blob URLs. Confirmed screenshot uploads/deletes refresh only a still-selected pane instead of reloading all translation drafts. Requests are not canceled, and concurrent editor mutations are not an exactly-once recovery workflow.
