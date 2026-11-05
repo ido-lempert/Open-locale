@@ -942,3 +942,10 @@ changedvalue/deletedkey/addedkey/exactshape plusnegativeunchangedfixture. Initia
 1FAIL exposedfixturedefects; finalsnapshots30/review0361. Test-only/noapp/API/schema/
 coverage/defaultOFF change. Manualcapture transactionboundary investigation remains.
 Sync239/native244total242unique explicitly staged, not uninterrupted.
+
+## Continuation296 - Manual snapshot/audit rollback boundary
+Manualcapture keyread/snapshotwrite useaudittxclient. RealPGaudittrigger500 pre-fix
+leftsnapshot(31PASS1FAIL); final32checks provebothcountsunchanged/nofailedlabelrow.
+Review0362; noAPI/schema/UI/coverage/defaultOFF change. Automaticpaths unchanged;
+no serializablecapture/automaticpruning/fullrestoreatomicityclaim. Sync239/native244
+242unique explicitlystaged; nativeport55534startupconflict resolvedusing55554.

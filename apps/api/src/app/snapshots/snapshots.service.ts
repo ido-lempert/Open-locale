@@ -47,8 +47,8 @@ export class SnapshotsService {
     private readonly tasks: TasksService,
   ) {}
 
-  private async capture(projectId: string, label: string, automatic: boolean, actorId: string | null) {
-    const keys = await this.prisma.key.findMany({
+  private async capture(projectId: string, label: string, automatic: boolean, actorId: string | null, db: Prisma.TransactionClient = this.prisma) {
+    const keys = await db.key.findMany({
       where: { projectId },
       include: { translations: true, branch: { select: { name: true } } },
       orderBy: { name: 'asc' },
@@ -62,7 +62,7 @@ export class SnapshotsService {
         keyName: k.name, branch: k.branch.name, localeCode: t.localeCode, value: t.value, status: t.status,
         pluralForms: t.pluralForms ?? null,
       })));
-    return this.prisma.snapshot.create({
+    return db.snapshot.create({
       data: {
         projectId, label, automatic,
         keys: snapKeys as unknown as Prisma.InputJsonValue,
@@ -75,7 +75,7 @@ export class SnapshotsService {
   async create(userId: string, projectId: string, label: string) {
     await this.projects.getFor(userId, projectId);
     const snapshot = await this.prisma.$transaction(async (tx) => {
-      const snap = await this.capture(projectId, label, false, userId);
+      const snap = await this.capture(projectId, label, false, userId, tx);
       await this.activity.record(tx, {
         projectId, actorId: userId, action: 'snapshot.created',
         detail: { snapshotId: snap.id, label },

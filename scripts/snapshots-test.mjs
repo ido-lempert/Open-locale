@@ -4,6 +4,7 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import EmbeddedPostgres from 'embedded-postgres';
+import { PrismaClient } from '@prisma/client';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -34,7 +35,7 @@ await new Promise((r) => receiver.listen(HOOK_PORT, '127.0.0.1', r));
 
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-snap-'));
 const pg = new EmbeddedPostgres({ databaseDir: dataDir, user: 'postgres', password: 'postgres', port: PG_PORT, persistent: false });
-let api;
+let api, prisma;
 try {
   await pg.initialise(); await pg.start(); await pg.createDatabase('openlocale_snap');
   const url = `postgresql://postgres:postgres@localhost:${PG_PORT}/openlocale_snap`;
@@ -51,6 +52,18 @@ try {
 
   const jwt = (await call('/auth/signup', { method: 'POST', body: { email: `s${Date.now()}@t.dev`, password: 'pass1234', displayName: 'S' } })).json.accessToken;
   const pid = (await call('/projects', { jwt, method: 'POST', body: { name: 'Snap', slug: `snap-${Date.now()}`, baseLocale: 'en', locales: ['en', 'he'] } })).json.id;
+
+  prisma = new PrismaClient({datasources:{db:{url}}});
+  const failedLabel='audit-rollback-capture';
+  const snapshotsBeforeAuditFailure=await prisma.snapshot.count({where:{projectId:pid}});
+  const auditsBeforeFailure=await prisma.activityEvent.count({where:{projectId:pid,action:'snapshot.created'}});
+  await prisma.$executeRawUnsafe(`CREATE FUNCTION reject_snapshot_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action = 'snapshot.created' THEN RAISE EXCEPTION 'fixture snapshot audit failure'; END IF; RETURN NEW; END $$`);
+  await prisma.$executeRawUnsafe(`CREATE TRIGGER reject_snapshot_audit BEFORE INSERT ON activity_events FOR EACH ROW EXECUTE FUNCTION reject_snapshot_audit()`);
+  let failedCapture;
+  try {failedCapture=await call(`/projects/${pid}/snapshots`,{jwt,method:'POST',body:{label:failedLabel}});}
+  finally {await prisma.$executeRawUnsafe('DROP TRIGGER reject_snapshot_audit ON activity_events');await prisma.$executeRawUnsafe('DROP FUNCTION reject_snapshot_audit()');}
+  check('injected capture audit failure returns HTTP500',failedCapture.status===500);
+  check('failed capture audit rolls back snapshot and audit rows',await prisma.snapshot.count({where:{projectId:pid}})===snapshotsBeforeAuditFailure&&await prisma.activityEvent.count({where:{projectId:pid,action:'snapshot.created'}})===auditsBeforeFailure&&await prisma.snapshot.count({where:{projectId:pid,label:failedLabel}})===0);
 
   // Seed two keys with translations.
   await call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { entries: { 'a.one': 'one', 'a.two': 'two' } } });
@@ -198,6 +211,7 @@ try {
 } finally {
   receiver.close();
   if (api) api.kill('SIGTERM');
+  await prisma?.$disconnect();
   await pg.stop();
   rmSync(dataDir, { recursive: true, force: true });
 }
