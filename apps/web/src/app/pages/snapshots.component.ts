@@ -19,7 +19,7 @@ import { ApiService, SnapshotMeta } from '../api.service';
       <form class="snapshot-create" (ngSubmit)="create($event)">
         <input aria-label="Snapshot label" [(ngModel)]="label" name="label"
                placeholder="Label, e.g. before release 1.4" maxlength="200" />
-        <button type="submit" [disabled]="creating() || restoring()">Take snapshot</button>
+        <button type="submit" [disabled]="creating() || restoring() || !label.trim()" [attr.aria-busy]="creating() || restoring()">Take snapshot</button>
       </form>
       @if (listError()) { <p class="error" role="alert" name="snapshotListError">Snapshots unavailable. No snapshots are shown. Retry this read or reload the page.</p><button type="button" name="retrySnapshotList" (click)="void reload()">Retry snapshots</button> }
       @if (!listError()) { <button type="button" name="refreshSnapshots" [disabled]="loading() || creating() || restoring()" (click)="refresh()">Refresh snapshots</button> }

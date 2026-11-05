@@ -47,3 +47,7 @@ describe('snapshot explicit list refresh',()=>{
  it('refresh reads current list without clearing draft or mutation feedback',async()=>{const wait=deferred(),api={listSnapshots:jest.fn().mockReturnValue(wait.promise)},c=make(api);c.projectId='p';c.loading.set(false);c.label='Keep draft';c.error.set('Mutation uncertain');c.notice.set('Prior notice');c.items.set([{id:'old'}] as never);c.refresh();expect(api.listSnapshots).toHaveBeenCalledWith('p');expect(c.loading()).toBe(true);expect(c.items()).toEqual([]);wait.resolve([{id:'fresh'}]);for(let n=0;n<4;n++)await Promise.resolve();expect(c.items()[0].id).toBe('fresh');expect(c.label).toBe('Keep draft');expect(c.error()).toBe('Mutation uncertain');expect(c.notice()).toBe('Prior notice');expect(c.loading()).toBe(false);});
  for(const flag of ['loading','creating','restoring'] as const)it(`refresh suppressed while ${flag}`,()=>{const api={listSnapshots:jest.fn()},c=make(api);c.loading.set(false);c[flag].set(true);c.refresh();expect(api.listSnapshots).not.toHaveBeenCalled();});
 });
+
+describe('snapshot blank label guard',()=>{
+ for(const label of ['', '   \t'])it(`blank label ${JSON.stringify(label)} cannot submit or clear feedback`,async()=>{const api={createSnapshot:jest.fn()},c=make(api);c.label=label;c.notice.set('Keep notice');c.error.set('Keep error');await c.create({preventDefault:()=>{}} as Event);expect(api.createSnapshot).not.toHaveBeenCalled();expect(c.creating()).toBe(false);expect(c.notice()).toBe('Keep notice');expect(c.error()).toBe('Keep error');expect(c.label).toBe(label);});
+});
