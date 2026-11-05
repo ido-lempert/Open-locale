@@ -1005,3 +1005,10 @@ automaticcapturecounts exactlybase/base+1/base+2. Negativesrejectwrong/missing/e
 stateandshifted/shortcountseries. Snapshots46->48/review0370; test-only/noAPI/schema/
 UI/coverage/defaultOFF change. Sync239/native244242unique explicitlystaged; nogeneral
 concurrencyclaim. Separateverificationbatches andcheckedmerge55574avoid303issues.
+
+## Continuation305 - Persisted concurrent snapshot payload proof
+Exactly3newautomaticIDs excludedfrompre-requestIDs; actualJSONpreservesbaselineEnglish
+bytesplus0/1/2correctracingvalueswithnestedsubsets/exactkeycounts/names. Sortbycount,
+notambiguouscreationtimestamps. Snapshots48->49/review0371; test-only/noAPI/schema/UI/
+coverage/defaultOFF change. Noallfield/locale/generalserializationclaim.
+Sync239/native244242unique remainexplicitlystaged, notuninterrupted.

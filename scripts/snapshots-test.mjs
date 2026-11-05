@@ -272,6 +272,7 @@ try {
   // Concurrency: serialized imports -> each auto snapshot is an authoritative,
   // strictly-growing pre-import state (sorted by creation, counts increase).
   const before = (await flat());
+  const snapshotIdsBeforeConcurrent=(await prisma.snapshot.findMany({where:{projectId:pid},select:{id:true}})).map(s=>s.id);
   const concRes = await Promise.all([0, 1, 2].map((i) =>
     call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { entries: { [`conc.k${i}`]: `c${i}` } } })));
   const after = await flat();
@@ -288,6 +289,18 @@ try {
   check('concurrent auto snapshots capture strictly-growing states',
     exactCaptureCounts(counts,base),
     `counts=${counts.join(',')} base=${base}`);
+
+  const newConcurrentSnapshots=await prisma.snapshot.findMany({where:{projectId:pid,automatic:true,id:{notIn:snapshotIdsBeforeConcurrent}}});
+  const racingValues={'conc.k0':'c0','conc.k1':'c1','conc.k2':'c2'};
+  const capturedEnglish=newConcurrentSnapshots.map(s=>({snapshot:s,flat:Object.fromEntries(s.translations.filter(t=>t.localeCode==='en'&&(t.branch??'main')==='main').map(t=>[t.keyName,t.value]))})).sort((a,b)=>a.snapshot.keys.length-b.snapshot.keys.length);
+  let previousRacing=[];
+  const validCapturePayloads=capturedEnglish.length===3&&capturedEnglish.every(({snapshot,flat:captured},index)=>{
+    const racing=Object.keys(captured).filter(key=>Object.hasOwn(racingValues,key));
+    const expected={...before,...Object.fromEntries(racing.map(key=>[key,racingValues[key]]))};
+    const valid=racing.length===index&&previousRacing.every(key=>racing.includes(key))&&exactFlat(captured,expected)&&snapshot.keys.length===Object.keys(expected).length&&snapshot.keys.every(key=>(key.branch??'main')==='main'&&Object.hasOwn(expected,key.name));
+    previousRacing=racing;return valid;
+  });
+  check('persisted concurrent safety snapshots contain exact growing pre-import values',validCapturePayloads);
 
   // Scope: read-only token reads but cannot create/restore.
   const roTok = (await call('/auth/tokens', { jwt, method: 'POST', body: { name: 'ro', scopes: ['read'] } })).json.token;
