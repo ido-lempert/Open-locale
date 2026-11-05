@@ -84,6 +84,37 @@ try {
   let mutualCaptureHeld=false,releaseMutualCapture,mutualRestoreCalls=0,mutualDialogs=0;const mutualCaptureGate=new Promise(r=>releaseMutualCapture=r);await page.setRequestInterception(true);const holdMutualCapture=async req=>{const path=new URL(req.url()).pathname;if(req.method()==='POST'&&path.endsWith('/restore'))mutualRestoreCalls++;if(req.method()==='POST'&&path===`/api${P}/snapshots`){mutualCaptureHeld=true;await mutualCaptureGate;}return req.continue();};const watchMutualDialog=async d=>{mutualDialogs++;await d.dismiss();};page.on('dialog',watchMutualDialog);page.on('request',holdMutualCapture);await page.click('.snapshot-create button');for(let n=0;n<100&&!mutualCaptureHeld;n++)await new Promise(r=>setTimeout(r,20));if(!mutualCaptureHeld)throw new Error('mutual capture not held');await page.waitForFunction(()=>[...document.querySelectorAll('.restore')].every(e=>e.disabled));await page.click('.restore');await new Promise(r=>setTimeout(r,100));
   check('actual pending capture disables restore clicks before dialog or POST',mutualRestoreCalls===0&&mutualDialogs===0&&await page.$$eval('.restore',es=>es.length>0&&es.every(e=>e.disabled))&&await page.$eval('.snapshot-create button',e=>e.disabled));releaseMutualCapture();await page.waitForFunction(()=>!document.querySelector('.snapshot-create button')?.disabled&&!document.querySelector('[name=snapshotListLoading]'));page.off('dialog',watchMutualDialog);page.off('request',holdMutualCapture);await page.setRequestInterception(false);await page.type('[name=label]','Draft during restore');let mutualRestoreHeld=false,releaseMutualRestore,mutualCaptureCalls=0;const mutualRestoreGate=new Promise(r=>releaseMutualRestore=r);await page.setRequestInterception(true);const holdMutualRestore=async req=>{const path=new URL(req.url()).pathname;if(req.method()==='POST'&&path===`/api${P}/snapshots`)mutualCaptureCalls++;if(req.method()==='POST'&&path.endsWith('/restore')){mutualRestoreHeld=true;await mutualRestoreGate;return req.respond({status:503,contentType:'application/json',body:JSON.stringify({message:'private-mutual-restore'})});}return req.continue();};page.on('request',holdMutualRestore);page.once('dialog',d=>d.accept());await page.click('.restore');for(let n=0;n<100&&!mutualRestoreHeld;n++)await new Promise(r=>setTimeout(r,20));if(!mutualRestoreHeld)throw new Error('mutual restore not held');await page.waitForFunction(()=>document.querySelector('.snapshot-create button')?.disabled);await page.click('.snapshot-create button');await new Promise(r=>setTimeout(r,100));
   check('actual pending restore disables capture click without extra POST or lost draft',mutualCaptureCalls===0&&await page.$eval('.snapshot-create button',e=>e.disabled)&&await page.$eval('[name=label]',e=>e.value==='Draft during restore'));releaseMutualRestore();await page.waitForSelector('[role=alert]');await page.waitForFunction(()=>!document.querySelector('.snapshot-create button')?.disabled&&[...document.querySelectorAll('.restore')].every(e=>!e.disabled));page.off('request',holdMutualRestore);await page.setRequestInterception(false);await page.screenshot({path:'/downloads/snapshots-mutual-pending-released-full.png',fullPage:true});
+
+  // Restore from the first A visit completes only after A -> B -> A.
+  await call(`${P}/keys`,{name:'after-repeat-restore-baseline'},token);
+  let oldRestoreHeld=false,releaseOldRestore;
+  const oldRestoreGate=new Promise(r=>releaseOldRestore=r);
+  await page.setRequestInterception(true);
+  const holdOldRestore=async req=>{
+    const path=new URL(req.url()).pathname;
+    if(req.method()==='POST'&&path.startsWith(`/api${P}/snapshots/`)&&path.endsWith('/restore')){
+      oldRestoreHeld=true;await oldRestoreGate;
+    }
+    return req.continue();
+  };
+  page.on('request',holdOldRestore);page.once('dialog',d=>d.accept());await page.click('.restore');
+  for(let n=0;n<100&&!oldRestoreHeld;n++)await new Promise(r=>setTimeout(r,20));
+  if(!oldRestoreHeld)throw new Error('old successful restore not held');
+  await route(next.id);await page.waitForFunction(()=>document.querySelector('.snapshot-list')?.textContent.includes('Next project snapshot'));
+  await route(project.id);await page.waitForFunction(()=>document.querySelector('.snapshot-list')?.textContent.includes('Newer repeated capture draft'));
+  await page.type('[name=label]','Newer repeated restore draft');
+  const oldRestoreCurrentList=await page.$eval('.snapshot-list',e=>e.textContent);
+  let oldRestoreReads=0;
+  const watchOldRestore=req=>{if(req.method()==='GET'&&new URL(req.url()).pathname===`/api${P}/snapshots`)oldRestoreReads++;};
+  page.on('request',watchOldRestore);
+  const oldRestoreResponse=page.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname.endsWith('/restore'));
+  releaseOldRestore();const oldRestoreBody=await(await oldRestoreResponse).json();
+  await new Promise(r=>setTimeout(r,200));
+  const oldRestoreExport=await call(`${P}/export/en?flat=true`,null,token);
+  check('old successful restore persists server removal without refetching or replacing repeated-visit draft and list',oldRestoreBody.restored===true&&oldRestoreBody.keysRemoved===1&&!('after-repeat-restore-baseline' in oldRestoreExport)&&oldRestoreReads===0&&await page.$eval('[name=label]',e=>e.value==='Newer repeated restore draft')&&await page.$eval('.snapshot-list',(e,text)=>e.textContent===text,oldRestoreCurrentList));
+  check('old restore success leaves repeated-visit controls enabled without stale notice error or runtime failure',new URL(page.url()).pathname===`${P}/snapshots`&&!await page.$eval('.snapshot-create button',e=>e.disabled)&&await page.$$eval('.restore',es=>es.length>0&&es.every(e=>!e.disabled))&&!(await page.$('.notice'))&&!(await page.$('[role=alert]'))&&!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));
+  page.off('request',watchOldRestore);page.off('request',holdOldRestore);await page.setRequestInterception(false);
+  await page.screenshot({path:'/downloads/snapshots-repeat-visit-restore-success-full.png',fullPage:true});
   console.log(failures?'SNAPSHOT BROWSER CHECKS FAILED':'ALL SNAPSHOT BROWSER CHECKS PASSED');process.exitCode=failures?1:0;
 } catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {

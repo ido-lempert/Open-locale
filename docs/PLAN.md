@@ -874,3 +874,9 @@ visit, before confirmation/submission. Twounits/web298/14/actualheldPOSTclicks
 snapshotbrowser23/review0350; release reenables both and preserves current draft.
 Not server/cross-tab/old-visit locking or cancellation. NoAPI/schema/coverage/defaultOFF
 change. Sync239/native244total242unique remain explicitly staged, not uninterrupted.
+
+## Continuation285 - Snapshot repeated-visit restore success proof
+ActualheldrestorePOSTsuccessafterA->B->A removesunique post-baselinekey onserverwithout
+refetch/currentdraft/list/control/notice/error overwrite. Snapshotbrowser25/review0351;
+test-only, noapplication/API/schema/coverage/defaultOFF/cancellationchange.
+Sync239/native244total242unique remain explicitly staged, not uninterrupted.
