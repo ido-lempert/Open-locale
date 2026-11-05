@@ -106,13 +106,13 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
       `- A snapshot of the current state is taken first, so this restore is itself recoverable.`,
     )) return;
     this.restoring.set(true);
-    this.error.set('');
+    this.error.set('');this.notice.set('');
     try {
       const r = await this.api.restoreSnapshot(this.projectId, s.id);
       this.notice.set(`Restored: ${r.valuesChanged} value(s) recovered, ${r.keysRemoved} key(s) removed`);
       await this.reload();
-    } catch (e) {
-      this.error.set(e instanceof Error ? e.message : 'Restore failed');
+    } catch {
+      this.error.set('Restoring snapshot failed. Check the project before trying again.');
     } finally {
       this.restoring.set(false);
     }

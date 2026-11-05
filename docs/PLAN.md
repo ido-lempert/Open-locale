@@ -844,3 +844,10 @@ SamecomponentrouteReuse/restore/coverage/defaultOFF unchanged.
 ActualheldPOST503afterBackdestroyscomponent cannotpublishcaptureerror/rawdetail/listread
 orreplacecurrenteditor. Snapshotbrowser13/review0345; test-only. Fixtureeditor-load
 race/fixrecorded. Noapplication/API/schema/coverage/defaultOFF/cancellationchange.
+
+## Continuation280 - Snapshot restore failure guidance
+Fixed uncertain-outcome restore error, clear stale success on confirmed restore;
+retain label/current list. Twounits/web288/14/actualconfirmheld503 snapshotbrowser15.
+Review0346. Native second twoisolated120s interruptions128/123checks/no finalexit;
+publication held one normal wake, then second128/0 completed/checkpointremoved;
+first116/0 retained, combined244total242unique explicitly staged.
