@@ -1012,3 +1012,9 @@ bytesplus0/1/2correctracingvalueswithnestedsubsets/exactkeycounts/names. Sortbyc
 notambiguouscreationtimestamps. Snapshots48->49/review0371; test-only/noAPI/schema/UI/
 coverage/defaultOFF change. Noallfield/locale/generalserializationclaim.
 Sync239/native244242unique remainexplicitlystaged, notuninterrupted.
+
+## Continuation306 - Snapshot retention order/isolation proof
+Dated27automatic+oldermanualfixture, realimportkeepsnewest24seededIDs+newcapture,
+deletesoldest3; oldmanualfullrow/otherprojectfullsnapshotrowsunchanged. Snapshots49->51/
+review0372; test-only/noAPI/schema/UI/coverage/defaultOFF change. Distinctdatesonly,
+notiepolicy/pruningatomicityclaim. Sync239/native244242unique explicitlystaged.
