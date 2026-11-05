@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnInit, signal, WritableSignal } from '@angular/core';
+import { Component, OnDestroy, OnInit, signal, WritableSignal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { hintsForTarget, GlossaryHint } from '../glossary-match';
@@ -269,8 +269,9 @@ interface CellState {
               }
               @if (historyFor() === k.id) {
                 <tr class="history-row"><td [attr.colspan]="2 + p.locales.length">
-                  @if (historyLoading()) { <p class="muted">Loading history…</p> }
-                  @else if (historyEntries().length === 0) { <p class="muted">No changes recorded yet.</p> }
+                  @if (historyLoading()) { <p class="muted" role="status" name="historyLoading">Loading history...</p> }
+                  @else if (historyError()) { <p class="error" role="alert" name="historyError">History unavailable. No changes are shown. Retry this read.</p><button type="button" name="retryHistory" (click)="readHistory(k)">Retry history</button> }
+                  @else if (historyEntries().length === 0) { <p class="muted" name="historyEmpty">No changes recorded yet.</p> }
                   @else {
                     <ul class="history-list">
                       @for (h of historyEntries(); track h.id) {
@@ -310,7 +311,7 @@ interface CellState {
     }
   `,
 })
-export class EditorComponent implements OnInit {
+export class EditorComponent implements OnInit, OnDestroy {
   project = signal<Project | null>(null);
   keys = signal<Key[]>([]);
   cells = new Map<string, WritableSignal<CellState>>();
@@ -339,6 +340,9 @@ export class EditorComponent implements OnInit {
   commentsLoading = signal(false);
   historyEntries = signal<(HistoryEntry & { locale: string })[]>([]);
   historyLoading = signal(false);
+  historyError = signal(false);
+  private historyGeneration = 0;
+  private destroyed = false;
   readonly baseStatuses = ['UNVERIFIED', 'TRANSLATED', 'REVIEWED'];
   get statuses(): string[] { return [...this.baseStatuses, ...(this.project()?.customStatuses ?? [])]; }
   notice = signal(''); error = signal('');
@@ -362,6 +366,7 @@ export class EditorComponent implements OnInit {
     this.searchTimer = setTimeout(() => void this.reload(), 250);
   }
   async reload() {
+    this.clearHistory();
     try {
       const keys = await this.api.listKeys(this.projectId, {
         search: this.search() || undefined,
@@ -571,20 +576,34 @@ export class EditorComponent implements OnInit {
       this.comments.set(await this.api.listComments(this.projectId, k.id));
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to delete comment'); }
   }
+  private clearHistory() {
+    ++this.historyGeneration; this.historyFor.set(null); this.historyEntries.set([]);
+    this.historyError.set(false); this.historyLoading.set(false);
+  }
   async toggleHistory(k: Key) {
-    if (this.historyFor() === k.id) { this.historyFor.set(null); return; }
-    this.historyFor.set(k.id); this.historyLoading.set(true); this.historyEntries.set([]);
+    if(this.destroyed)return;
+    if (this.historyFor() === k.id) {
+      this.clearHistory(); return;
+    }
+    this.historyFor.set(k.id);
+    await this.readHistory(k);
+  }
+  async readHistory(k: Key) {
+    if(this.destroyed||this.historyFor()!==k.id)return;
+    const generation=++this.historyGeneration,projectId=this.projectId,keyId=k.id;
+    const current=()=>!this.destroyed&&generation===this.historyGeneration&&this.historyFor()===keyId;
+    this.historyLoading.set(true); this.historyEntries.set([]); this.historyError.set(false);
     try {
       const locales = this.project()?.locales ?? [];
-      const all = await Promise.all(
-        locales.map(async (l) =>
-          (await this.api.getHistory(this.projectId, k.id, l.code)).map((h) => ({ ...h, locale: l.code }))),
-      );
-      this.historyEntries.set(
-        all.flat().sort((x, y) => new Date(y.createdAt).getTime() - new Date(x.createdAt).getTime()).slice(0, 50),
-      );
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load history'); }
-    finally { this.historyLoading.set(false); }
+      const all = await Promise.all(locales.map(async l =>
+        (await this.api.getHistory(projectId, keyId, l.code)).map(h => ({ ...h, locale:l.code }))));
+      if(current())this.historyEntries.set(all.flat().sort((x,y)=>new Date(y.createdAt).getTime()-new Date(x.createdAt).getTime()).slice(0,50));
+    } catch { if(current())this.historyError.set(true); }
+    finally { if(current())this.historyLoading.set(false); }
+  }
+  ngOnDestroy() {
+    this.destroyed=true; ++this.historyGeneration;
+    if(this.searchTimer)clearTimeout(this.searchTimer);
   }
   async addKey() {
     const submitted = this.newKey();

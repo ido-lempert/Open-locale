@@ -873,3 +873,5 @@ and retain old hashed assets long enough for already-open clients to navigate.
 Navigation errors show fixed guidance to preserve unsaved work before refreshing
 or choosing another link. The app never automatically reloads. This is feedback,
 not automatic retry or recovery from a removed stale chunk.
+
+Editor key history now keeps pending/error/empty states distinct, with a manual retry. Old history reads cannot overwrite a later selected key or reopen a closed pane; list reload and leaving the editor invalidate that pane. This does not add history mutation, cancellation, or editor-wide draft/list race recovery.
