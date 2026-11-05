@@ -79,6 +79,36 @@ try {
   const retryAudits=await prisma.activityEvent.findMany({where:{projectId:pid,action:'snapshot.created'}});
   check('same-label retry after insert failure commits exactly one snapshot with matching audit identity',insertRetry.status===201&&retryRows.length===1&&retryRows[0].id===insertRetry.json.id&&retryAudits.length===beforeInsertAudits+1&&retryAudits.filter(row=>row.detail?.snapshotId===insertRetry.json.id&&row.detail?.label===insertFailureLabel).length===1);
 
+  // Valid branch/key pairs must never alias when their concatenations match.
+  const collisionProject=await call('/projects',{jwt,method:'POST',body:{name:'Tuple identity',slug:`tuple-${Date.now()}`,baseLocale:'en',locales:['en']}});
+  const cp=collisionProject.json.id;
+  const branchA=await call(`/projects/${cp}/branches`,{jwt,method:'POST',body:{name:'a'}});
+  const branchAB=await call(`/projects/${cp}/branches`,{jwt,method:'POST',body:{name:'ab'}});
+  const keyA=await call(`/projects/${cp}/keys`,{jwt,method:'POST',body:{branch:'a',name:'bc'}});
+  const valueA=await call(`/projects/${cp}/keys/${keyA.json.id}/translations`,{jwt,method:'PUT',body:{locale:'en',value:'first-original'}});
+  const single=await call(`/projects/${cp}/snapshots`,{jwt,method:'POST',body:{label:'single tuple'}});
+  const keyAB=await call(`/projects/${cp}/keys`,{jwt,method:'POST',body:{branch:'ab',name:'c'}});
+  const valueAB=await call(`/projects/${cp}/keys/${keyAB.json.id}/translations`,{jwt,method:'PUT',body:{locale:'en',value:'second-original'}});
+  check('colliding tuple fixture writes succeed with distinct branch/key ids',collisionProject.status===201&&branchA.status===201&&branchAB.status===201&&keyA.status===201&&keyAB.status===201&&keyA.json.id!==keyAB.json.id&&valueA.status===200&&valueAB.status===200&&single.status===201);
+  const singleRestore=await call(`/projects/${cp}/snapshots/${single.json.id}/restore`,{jwt,method:'POST'});
+  const remainingAB=await call(`/projects/${cp}/keys?branch=ab`,{jwt});
+  check('restore removes post-snapshot key despite concatenated branch/key collision',singleRestore.status===201&&singleRestore.json.keysRemoved===1&&remainingAB.status===200&&remainingAB.json.length===0);
+  // Isolate the paired-value assertion even if the preceding deletion check fails.
+  for(const leftover of remainingAB.json) await call(`/projects/${cp}/keys/${leftover.id}`,{jwt,method:'DELETE'});
+  const secondKey=await call(`/projects/${cp}/keys`,{jwt,method:'POST',body:{branch:'ab',name:'c'}});
+  const secondValue=secondKey.status===201?await call(`/projects/${cp}/keys/${secondKey.json.id}/translations`,{jwt,method:'PUT',body:{locale:'en',value:'second-original'}}):{status:0};
+  const paired=await call(`/projects/${cp}/snapshots`,{jwt,method:'POST',body:{label:'paired tuples'}});
+  const changeA=await call(`/projects/${cp}/keys/${keyA.json.id}/translations`,{jwt,method:'PUT',body:{locale:'en',value:'first-changed'}});
+  const activeSecond=secondKey.status===201?secondKey.json.id:keyAB.json.id;
+  const changeAB=await call(`/projects/${cp}/keys/${activeSecond}/translations`,{jwt,method:'PUT',body:{locale:'en',value:'second-changed'}});
+  const changedA=await call(`/projects/${cp}/export/en?flat=true&branch=a`,{jwt});
+  const changedAB=await call(`/projects/${cp}/export/en?flat=true&branch=ab`,{jwt});
+  const pairedRestore=await call(`/projects/${cp}/snapshots/${paired.json.id}/restore`,{jwt,method:'POST'});
+  const restoredA=await call(`/projects/${cp}/export/en?flat=true&branch=a`,{jwt});
+  const restoredAB=await call(`/projects/${cp}/export/en?flat=true&branch=ab`,{jwt});
+  check('paired tuple snapshot and discriminating mutations succeed',secondKey.status===201&&secondValue.status===200&&paired.status===201&&paired.json.keyCount===2&&changeA.status===200&&changeAB.status===200&&changedA.status===200&&changedAB.status===200&&changedA.json.bc==='first-changed'&&changedAB.json.c==='second-changed');
+  check('restore keeps both colliding tuple translations distinct',pairedRestore.status===201&&pairedRestore.json.valuesChanged===2&&restoredA.status===200&&restoredAB.status===200&&restoredA.json.bc==='first-original'&&restoredAB.json.c==='second-original');
+
   // Seed two keys with translations.
   await call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { entries: { 'a.one': 'one', 'a.two': 'two' } } });
   await call(`/projects/${pid}/import/he`, { jwt, method: 'POST', body: { entries: { 'a.one': 'אחד', 'a.two': 'שניים' } } });

@@ -31,6 +31,9 @@ interface SnapshotTranslation {
 // window and prune the rest. Manual snapshots are never auto-pruned.
 const AUTO_SNAPSHOT_KEEP = 25;
 
+// Tuple encoding preserves branch/key boundaries, including colliding concatenations.
+const snapshotIdentity = (branch: string, name: string): string => JSON.stringify([branch, name]);
+
 // Canonical comparison for pluralForms read back from jsonb vs a snapshot
 // payload (key order differs between the two).
 const canonPlural = (v: unknown): string =>
@@ -149,15 +152,15 @@ export class SnapshotsService {
     const snapTranslations = snapshot.translations as unknown as SnapshotTranslation[];
     // Keys are identified per branch: (branch, name). Pre-branch snapshots
     // have no branch on their keys and restore into 'main'.
-    const keepKeys = new Set(snapKeys.map((k) => `${k.branch ?? 'main'}${k.name}`));
+    const keepKeys = new Set(snapKeys.map((k) => snapshotIdentity(k.branch ?? 'main', k.name)));
 
     const result = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.key.findMany({ where: { projectId }, include: { translations: true, branch: { select: { name: true } } } });
-      const byName = new Map(existing.map((k) => [`${k.branch.name}${k.name}`, k]));
+      const byName = new Map(existing.map((k) => [snapshotIdentity(k.branch.name, k.name), k]));
       let keysRemoved = 0;
       let valuesChanged = 0;
 
-      const toDelete = existing.filter((key) => !keepKeys.has(`${key.branch.name}${key.name}`)).map((key) => key.id);
+      const toDelete = existing.filter((key) => !keepKeys.has(snapshotIdentity(key.branch.name, key.name))).map((key) => key.id);
       // Task key locks are checked BEFORE anything is deleted or written:
       // a denial rolls the whole restore back atomically, before data loss,
       // not after.
@@ -187,11 +190,11 @@ export class SnapshotsService {
       }
       // Re-read ids: upserts above may have created the keys we translate now.
       const current = await tx.key.findMany({ where: { projectId }, include: { branch: { select: { name: true } } } });
-      const idByName = new Map(current.map((k) => [`${k.branch.name}${k.name}`, k.id]));
+      const idByName = new Map(current.map((k) => [snapshotIdentity(k.branch.name, k.name), k.id]));
       for (const st of snapTranslations) {
-        const keyId = idByName.get(`${st.branch ?? 'main'}${st.keyName}`);
+        const keyId = idByName.get(snapshotIdentity(st.branch ?? 'main', st.keyName));
         if (!keyId) continue; // translation for a key not in the snapshot: ignore defensively
-        const before = byName.get(`${st.branch ?? 'main'}${st.keyName}`)?.translations.find((t) => t.localeCode === st.localeCode);
+        const before = byName.get(snapshotIdentity(st.branch ?? 'main', st.keyName))?.translations.find((t) => t.localeCode === st.localeCode);
         // Old snapshots carry no pluralForms field: restore then leaves the
         // column untouched (no silent NULL-ing of live data). New snapshots
         // always carry it (null or object) and restore it exactly.

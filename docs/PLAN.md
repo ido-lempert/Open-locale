@@ -956,3 +956,10 @@ cleanup same-label201 persists1snapshotandmatchingID/labelaudit. Snapshots32->34
 review0363; test-only/noAPI/schema/UI/coverage/defaultOFF change. Complements296
 withoutserializable/automaticcaptureprune/fullrestoreatomicityclaim. Sync239/native244
 242unique remainexplicitlystaged, notuninterrupted.
+
+## Continuation298 - Snapshot restore branch/key tuple identity
+Replace sixambiguous branch+keyconcatenations withJSONtupleidentity inrestorekeep/
+priorstate/currentIDlookups. Valid(a,bc)/(ab,c) realfixture: originalAPI36PASS2FAIL;
+fixedsnapshots34->38 provespost-snapshotcollisiondeleted/bothoriginalvaluesrestored.
+Review0364; noAPI/schema/UI/coverage/defaultOFF change. Sync239/native244242unique
+remainexplicitlystaged, notuninterrupted. No broadercapture/pruneatomicityclaim.
