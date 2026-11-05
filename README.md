@@ -858,3 +858,8 @@ branch-name/version lookup and show a warning; use a fresh Inspect link to pin i
 Pins do not extend retention or provide permanent archival storage. This view does
 not verify a client received the bundle, check its integrity digest, or add CDN or
 native mobile delivery.
+The inspection search finds literal substrings in published keys or values in the
+currently downloaded locale, ignoring case and preserving whitespace. It makes no
+new API requests. Clear restores all values; changing publication scope clears the
+search. Paging is local to the matches. Search does not cover other publications
+or locales, and no matches does not mean the publication itself is empty.

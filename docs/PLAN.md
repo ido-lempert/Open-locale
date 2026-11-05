@@ -1075,3 +1075,10 @@ optional identity equality guard before body/304. Stale oldpin404 after same-nam
 branchrecreation/v1reuse, newpin readsnewbytes; legacyunpinned compatible/warned.
 OTA36->46/browser17->19/web319/16; review0380. No payload/schema/worker/acceptance
 change. Pins do not extend retention. Sync239/native244242unique explicitlySTAGED0.
+
+## Continuation315 - Local retained-bundle search
+Case-insensitive literal substring key/value search on already downloaded locale;
+matched/total, clear/page reset, no-match vs emptypublication guidance. Querycap200,
+route resets/refreshpreserves, no additional networkread. Web322/16 (+3), OTA browser
+19->25; review0381. No API/schema/worker/coverage change, fullbundle stillfetched.
+Sync239/native244242unique explicitlySTAGED verified0.

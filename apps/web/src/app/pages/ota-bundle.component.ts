@@ -1,11 +1,12 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { combineLatest, Subscription } from 'rxjs';
 import { ApiService, OtaBundle } from '../api.service';
 
 @Component({
- selector:'ol-ota-bundle',imports:[RouterLink,DatePipe],
+ selector:'ol-ota-bundle',imports:[RouterLink,DatePipe,FormsModule],
  styles:[`.bundle-scope,.bundle-key,.bundle-value{overflow-wrap:anywhere}.bundle-list{list-style:none;padding:0}.bundle-row{padding:1rem 0;border-bottom:1px solid #ddd}.bundle-value{white-space:pre-wrap;margin:.5rem 0}.bundle-pages{display:flex;gap:.75rem;align-items:center;flex-wrap:wrap}`],
  template:`
  <header class="bar"><a [routerLink]="['/projects',projectId,'settings']">&larr; Settings</a><h1>OTA bundle</h1></header>
@@ -18,22 +19,28 @@ import { ApiService, OtaBundle } from '../api.service';
    @if(error()){<p role="alert" class="error">Bundle unavailable. Project membership and a retained publication are required. No translation values are shown. Try refreshing.</p>}
    @if(bundle();as b){
      <p class="bundle-scope muted">Project: {{b.project}}; published <time [attr.datetime]="b.publishedAt">{{b.publishedAt|date:'medium'}} {{b.publishedAt|date:'z'}}</time>. {{rows().length}} translation values. Showing {{visibleRows().length}} on page {{page()+1}} of {{pageCount()}}.</p>
+     <label>Find in published keys or values <input type="search" name="bundleSearch" maxlength="200" [ngModel]="query()" (ngModelChange)="search($event)" /></label>
+     <button type="button" name="clearBundleSearch" [disabled]="!query()" (click)="search('')">Clear search</button>
+     <p class="muted" role="status" name="bundleMatches">{{filteredRows().length}} of {{rows().length}} values match. Search is a literal, case-insensitive substring in this downloaded locale only.</p>
      <nav class="bundle-pages" aria-label="Bundle pages"><button type="button" name="previousBundlePage" [disabled]="page()===0" (click)="changePage(-1)">Previous</button><span>{{page()+1}} / {{pageCount()}}</span><button type="button" name="nextBundlePage" [disabled]="page()+1>=pageCount()" (click)="changePage(1)">Next</button></nav>
      <ul class="bundle-list" aria-live="polite">
        @for(row of visibleRows();track row[0]){<li class="bundle-row"><code class="bundle-key">{{row[0]}}</code><pre class="bundle-value">{{row[1]}}</pre>@if(row[1]===''){<span class="muted">Empty value</span>}</li>}
-       @empty{<li class="muted" name="bundleEmpty">No translation values in this published locale.</li>}
+       @empty{<li class="muted" name="bundleEmpty">{{query() ? 'No published keys or values match this search.' : 'No translation values in this published locale.'}}</li>}
      </ul>
    }
  </main>`,
 })
 export class OtaBundleComponent implements OnInit,OnDestroy{
  publicationId:string|undefined;projectId='';branch='main';version='';locale='';bundle=signal<OtaBundle|null>(null);rows=signal<[string,string][]>([]);page=signal(0);loading=signal(false);error=signal(false);
+ query=signal('');
+ filteredRows=computed(()=>{const query=this.query().toLowerCase();return query?this.rows().filter(([key,value])=>key.toLowerCase().includes(query)||value.toLowerCase().includes(query)):this.rows();});
  private generation=0;private destroyed=false;private sub?:Subscription;
  constructor(private readonly route:ActivatedRoute,private readonly api:ApiService){}
  ngOnInit(){this.sub=combineLatest([this.route.paramMap,this.route.queryParamMap]).subscribe(([p,q])=>this.visit(p.get('id')??'',q.get('branch')??'main',p.get('version')??'',p.get('locale')??'',q.get('publicationId')??undefined));}
- visit(projectId:string,branch:string,version:string,locale:string,publicationId?:string){if(this.destroyed)return;this.projectId=projectId;this.branch=branch;this.version=version;this.locale=locale;this.publicationId=publicationId;void this.reload();}
- visibleRows(){return this.rows().slice(this.page()*50,(this.page()+1)*50);}
- pageCount(){return Math.max(1,Math.ceil(this.rows().length/50));}
+ visit(projectId:string,branch:string,version:string,locale:string,publicationId?:string){if(this.destroyed)return;this.projectId=projectId;this.branch=branch;this.version=version;this.locale=locale;this.publicationId=publicationId;this.query.set('');void this.reload();}
+ search(query:string){if(this.destroyed)return;this.query.set(query.slice(0,200));this.page.set(0);}
+ visibleRows(){return this.filteredRows().slice(this.page()*50,(this.page()+1)*50);}
+ pageCount(){return Math.max(1,Math.ceil(this.filteredRows().length/50));}
  changePage(delta:number){this.page.set(Math.max(0,Math.min(this.pageCount()-1,this.page()+delta)));}
  refresh(){if(!this.loading())void this.reload();}
  async reload(){
