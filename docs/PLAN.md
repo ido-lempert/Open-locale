@@ -977,3 +977,10 @@ restoreauditrows andcurrentexport. Exactly1newautomaticpre-restoresafetysnapshot
 remainsseparatelycommitted. Triggercleanupthenexistingsuccessrestoreprovesrecovery.
 Snapshots40->42/review0366; test-only/noAPI/schema/UI/coverage/defaultOFF change.
 Nofulloperation/pruningatomicityclaim; sync239/native244242unique explicitlystaged.
+
+## Continuation301 - Restore safety capture failure proof
+RealPGautomaticpre-restoresnapshotINSERTrejection500 abortsrestorewithcomplete
+snapshot/key/translation/history/restoreauditrows andexportunchanged. Finallycleanup
+thenexistingauditfailure/successchecksprovecontinuation. Snapshots42->43/review0367;
+test-only/noAPI/schema/UI/coverage/defaultOFF change. Nogeneralpruningatomicityclaim.
+Sync239/native244242unique remainexplicitlystaged, notuninterrupted.

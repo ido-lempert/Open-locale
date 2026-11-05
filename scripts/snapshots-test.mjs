@@ -159,6 +159,15 @@ try {
     history:await prisma.translationHistory.findMany({where:{translation:{projectId:pid}},orderBy:{id:'asc'}}),
     audits:await prisma.activityEvent.findMany({where:{projectId:pid,action:'snapshot.restored'},orderBy:{id:'asc'}}),
   });
+  const rowsBeforeSafetyFailure=await restoreRows();
+  const snapshotsBeforeSafetyFailure=await prisma.snapshot.findMany({where:{projectId:pid},orderBy:{id:'asc'}});
+  await prisma.$executeRawUnsafe(`CREATE FUNCTION reject_restore_safety() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.automatic AND NEW.label = 'before restore of v1 baseline' THEN RAISE EXCEPTION 'fixture restore safety capture failure'; END IF; RETURN NEW; END $$`);
+  await prisma.$executeRawUnsafe(`CREATE TRIGGER reject_restore_safety BEFORE INSERT ON snapshots FOR EACH ROW EXECUTE FUNCTION reject_restore_safety()`);
+  let failedSafety;
+  try {failedSafety=await call(`/projects/${pid}/snapshots/${snapId}/restore`,{jwt,method:'POST'});}
+  finally {await prisma.$executeRawUnsafe('DROP TRIGGER reject_restore_safety ON snapshots');await prisma.$executeRawUnsafe('DROP FUNCTION reject_restore_safety()');}
+  check('safety capture rejection aborts restore without changing persisted data or snapshots',failedSafety.status===500&&JSON.stringify(rowsBeforeSafetyFailure)===JSON.stringify(await restoreRows())&&JSON.stringify(snapshotsBeforeSafetyFailure)===JSON.stringify(await prisma.snapshot.findMany({where:{projectId:pid},orderBy:{id:'asc'}}))&&JSON.stringify(await flat())===JSON.stringify(beforeRestore));
+
   const beforeRestoreFailure=await restoreRows();
   const snapshotsBeforeRestoreFailure=await prisma.snapshot.findMany({where:{projectId:pid},select:{id:true}});
   await prisma.$executeRawUnsafe(`CREATE FUNCTION reject_restore_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action = 'snapshot.restored' THEN RAISE EXCEPTION 'fixture restore audit failure'; END IF; RETURN NEW; END $$`);
