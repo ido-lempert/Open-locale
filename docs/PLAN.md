@@ -862,3 +862,8 @@ untilreload, no cancellation/live-refreshclaim. Samecomponentreuse unchanged.
 Subscribe/reset project route; list/readgeneration andcapture/restorevisitgeneration
 fence old completions including A->B->A. Fiveunits/web296/14/actualheldfirstArestore503
 snapshotbrowser19/review0348. No cancellation/API/schema/coverage/defaultOFF change.
+
+## Continuation283 - Snapshot repeated-visit capture success proof
+ActualheldcapturePOSTsuccessafterA->B->A persistsoldsubmittedlabelbutcannotclearnextdraft/
+refetchlist/publishstalenotice/error. Snapshotbrowser21/review0349; test-only,
+noapplication/API/schema/coverage/defaultOFF/cancellationchange.
