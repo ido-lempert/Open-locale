@@ -219,6 +219,34 @@ try {
   check('explicit refresh discovers committed uncertain capture without resubmission or clearing draft and error',uncertainPosts===1&&uncertainReads===1&&await page.$eval('[name=label]',e=>e.value==='Persisted despite lost capture response')&&await page.$eval('[role=alert]',e=>e.textContent==='Capturing snapshot failed. Your label is kept here. Check snapshots before trying again.')&&!(await page.$('[name=snapshotListError]'))&&!(await page.$('.notice'))&&!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));
   page.off('request',loseCaptureResponse);await page.setRequestInterception(false);
   await page.screenshot({path:'/downloads/snapshots-committed-uncertain-capture-full.png',fullPage:true});
+
+  await call(`${P}/keys`,{name:'after-uncertain-restore-baseline'},token);
+  let uncertainRestorePosts=0,uncertainRestoreReads=0,committedRestore;
+  await page.setRequestInterception(true);
+  const loseRestoreResponse=async req=>{
+    const path=new URL(req.url()).pathname;
+    if(req.method()==='POST'&&path.startsWith(`/api${P}/snapshots/`)&&path.endsWith('/restore')){
+      uncertainRestorePosts++;
+      const server=await fetch(req.url(),{method:'POST',headers:req.headers(),body:req.postData()});
+      if(!server.ok)throw new Error(`uncertain fixture server restore: ${server.status}`);
+      committedRestore=await server.json();
+      return req.respond({status:503,contentType:'application/json',body:JSON.stringify({message:'private-lost-restore-response'})});
+    }
+    if(req.method()==='GET'&&path===`/api${P}/snapshots`)uncertainRestoreReads++;
+    return req.continue();
+  };
+  const beforeUncertainRestoreList=await page.$eval('.snapshot-list',e=>e.textContent);
+  page.on('request',loseRestoreResponse);page.once('dialog',d=>d.accept());
+  const lostRestoreResponse=page.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname.endsWith('/restore'));
+  await page.click('.restore');await(await lostRestoreResponse).json();
+  await page.waitForFunction(()=>document.querySelector('.snapshot-create button')?.getAttribute('aria-busy')==='false'&&document.querySelector('[role=alert]')?.textContent==='Restoring snapshot failed. Check the project before trying again.');
+  const uncertainRestoreExport=await call(`${P}/export/en?flat=true`,null,token);
+  check('lost restore response keeps uncertain guidance and current list despite committed server removal',uncertainRestorePosts===1&&uncertainRestoreReads===0&&committedRestore?.restored===true&&committedRestore.keysRemoved===1&&!('after-uncertain-restore-baseline' in uncertainRestoreExport)&&await page.$eval('.snapshot-list',(e,text)=>e.textContent===text,beforeUncertainRestoreList)&&await page.$eval('[name=label]',e=>e.value==='Persisted despite lost capture response')&&!(await page.content()).includes('private-lost-restore-response')&&!(await page.$('.notice')));
+  await page.click('[name=refreshSnapshots]');
+  await page.waitForFunction(()=>document.querySelector('.snapshot-label')?.textContent==='before restore of Persisted despite lost capture response'&&!document.querySelector('[name=snapshotListLoading]'));
+  check('explicit refresh exposes automatic snapshot after committed uncertain restore without resubmission',uncertainRestorePosts===1&&uncertainRestoreReads===1&&await page.$eval('[name=label]',e=>e.value==='Persisted despite lost capture response')&&await page.$eval('[role=alert]',e=>e.textContent==='Restoring snapshot failed. Check the project before trying again.')&&!(await page.$('[name=snapshotListError]'))&&!(await page.$('.notice'))&&!(await page.$('[name=snapshotRestoring]'))&&!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));
+  page.off('request',loseRestoreResponse);await page.setRequestInterception(false);
+  await page.screenshot({path:'/downloads/snapshots-committed-uncertain-restore-full.png',fullPage:true});
   console.log(failures?'SNAPSHOT BROWSER CHECKS FAILED':'ALL SNAPSHOT BROWSER CHECKS PASSED');process.exitCode=failures?1:0;
 } catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {

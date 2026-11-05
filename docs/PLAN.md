@@ -923,3 +923,9 @@ Actualservercapture commitsbutbrowser503; draft/error/currentlist retained; expl
 reveals persistedid/labelwithoutresubmission. Snapshotbrowser40/review0358; initial
 fixture39PASS1FAIL corrected byawaitingactualPOSTresponse. Test-only/noapp/API/schema/
 coverage/defaultOFF change. Sync239/native244total242unique explicitly staged.
+
+## Continuation293 - Committed uncertain restore proof
+Actualserverrestore removesuniquekey butbrowser503; currentlist/draft/error retained;
+explicitGETrevealsautomaticpre-restoresnapshotwithoutresubmission/clearingerror.
+Snapshotbrowser42/review0359; test-only/noapp/API/schema/coverage/defaultOFF change.
+Sync239/native244total242unique remain explicitly staged, not uninterrupted.
