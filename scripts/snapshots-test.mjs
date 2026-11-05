@@ -109,6 +109,15 @@ try {
   check('paired tuple snapshot and discriminating mutations succeed',secondKey.status===201&&secondValue.status===200&&paired.status===201&&paired.json.keyCount===2&&changeA.status===200&&changeAB.status===200&&changedA.status===200&&changedAB.status===200&&changedA.json.bc==='first-changed'&&changedAB.json.c==='second-changed');
   check('restore keeps both colliding tuple translations distinct',pairedRestore.status===201&&pairedRestore.json.valuesChanged===2&&restoredA.status===200&&restoredAB.status===200&&restoredA.json.bc==='first-original'&&restoredAB.json.c==='second-original');
 
+  const tupleHistoryA=await call(`/projects/${cp}/keys/${keyA.json.id}/translations/en/history`,{jwt});
+  const tupleHistoryAB=await call(`/projects/${cp}/keys/${activeSecond}/translations/en/history`,{jwt});
+  check('colliding tuple restore history records each branch previous value',tupleHistoryA.status===200&&tupleHistoryAB.status===200&&tupleHistoryA.json.filter(h=>h.value==='first-original'&&h.previousValue==='first-changed').length===1&&tupleHistoryAB.json.filter(h=>h.value==='second-original'&&h.previousValue==='second-changed').length===1&&!tupleHistoryA.json.some(h=>h.previousValue==='second-changed')&&!tupleHistoryAB.json.some(h=>h.previousValue==='first-changed'));
+  const tupleVersionsBefore=await prisma.translation.findMany({where:{projectId:cp},orderBy:{keyId:'asc'},select:{keyId:true,localeCode:true,version:true,value:true}});
+  const historyCountBefore=await prisma.translationHistory.count({where:{keyId:{in:[keyA.json.id,activeSecond]}}});
+  const repeatPaired=await call(`/projects/${cp}/snapshots/${paired.json.id}/restore`,{jwt,method:'POST'});
+  const tupleVersionsAfter=await prisma.translation.findMany({where:{projectId:cp},orderBy:{keyId:'asc'},select:{keyId:true,localeCode:true,version:true,value:true}});
+  check('unchanged colliding tuple restore adds no translation history or version changes',repeatPaired.status===201&&repeatPaired.json.valuesChanged===0&&repeatPaired.json.keysRemoved===0&&historyCountBefore===await prisma.translationHistory.count({where:{keyId:{in:[keyA.json.id,activeSecond]}}})&&tupleVersionsBefore.length===2&&JSON.stringify(tupleVersionsBefore)===JSON.stringify(tupleVersionsAfter));
+
   // Seed two keys with translations.
   await call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { entries: { 'a.one': 'one', 'a.two': 'two' } } });
   await call(`/projects/${pid}/import/he`, { jwt, method: 'POST', body: { entries: { 'a.one': 'אחד', 'a.two': 'שניים' } } });

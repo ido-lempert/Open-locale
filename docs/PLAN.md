@@ -963,3 +963,10 @@ priorstate/currentIDlookups. Valid(a,bc)/(ab,c) realfixture: originalAPI36PASS2F
 fixedsnapshots34->38 provespost-snapshotcollisiondeleted/bothoriginalvaluesrestored.
 Review0364; noAPI/schema/UI/coverage/defaultOFF change. Sync239/native244242unique
 remainexplicitlystaged, notuninterrupted. No broadercapture/pruneatomicityclaim.
+
+## Continuation299 - Tuple-scoped restore history/no-op proof
+Collidingbranch/keytuplehistory retainsownpreviousvalue, neverotherbranchvalue.
+Repeatedunchangedrestore reports0changed/removed andpreservesbothtranslationversions/
+values/historycount. Snapshots38->40/review0365; test-only/noAPI/schema/UI/coverage/
+defaultOFF change. Audits/safetycapture stilloccur, nogeneralretryidempotencyclaim.
+Sync239/native244242unique remainexplicitlystaged, notuninterrupted.
