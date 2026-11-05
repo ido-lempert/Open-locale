@@ -857,3 +857,8 @@ Destroyedcomponent suppressesfreshrestore/confirmation andlate successnotice/ref
 error/finalflag updates. Threeunits/web291/14/actualconfirmedheldPOSTleave
 snapshotbrowser17/review0347. Serverrestore stillcompletes; editorloadedview stays
 untilreload, no cancellation/live-refreshclaim. Samecomponentreuse unchanged.
+
+## Continuation282 - Snapshot project visit scope
+Subscribe/reset project route; list/readgeneration andcapture/restorevisitgeneration
+fence old completions including A->B->A. Fiveunits/web296/14/actualheldfirstArestore503
+snapshotbrowser19/review0348. No cancellation/API/schema/coverage/defaultOFF change.

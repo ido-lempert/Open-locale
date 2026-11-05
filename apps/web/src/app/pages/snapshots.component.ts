@@ -1,5 +1,6 @@
 import { DatePipe } from '@angular/common';
 import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiService, SnapshotMeta } from '../api.service';
@@ -44,6 +45,8 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
   label = '';
   listError = signal(false);
   private readGeneration=0;
+  private projectGeneration=0;
+  private routeSub?:Subscription;
   private destroyed=false;
   loading = signal(true);
   creating = signal(false);
@@ -54,11 +57,17 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
   constructor(private readonly route: ActivatedRoute, private readonly api: ApiService) {}
 
   ngOnInit() {
-    this.projectId = this.route.snapshot.paramMap.get('id') ?? '';
-    this.reload();
+    this.routeSub=this.route.paramMap.subscribe(pm=>this.initForProject(pm.get('id')??''));
   }
 
-  ngOnDestroy() { this.destroyed=true;++this.readGeneration; }
+  private initForProject(id:string) {
+    if(this.destroyed)return;
+    ++this.projectGeneration;++this.readGeneration;this.projectId=id;
+    this.items.set([]);this.label='';this.listError.set(false);this.error.set('');this.notice.set('');
+    this.creating.set(false);this.restoring.set(false);void this.reload();
+  }
+  private current(scope:number) { return !this.destroyed&&scope===this.projectGeneration; }
+  ngOnDestroy() { this.destroyed=true;++this.readGeneration;++this.projectGeneration;this.routeSub?.unsubscribe(); }
 
   async reload() {
     if(this.destroyed)return;
@@ -79,20 +88,20 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
     event.preventDefault();
     const label = this.label.trim();
     if (!label || this.destroyed || this.creating()) return;
-    const draft=this.label;
+    const draft=this.label,scope=this.projectGeneration,projectId=this.projectId;
     this.creating.set(true);
     this.error.set('');this.notice.set('');
     try {
-      await this.api.createSnapshot(this.projectId, label);
-      if(this.destroyed)return;
+      await this.api.createSnapshot(projectId, label);
+      if(!this.current(scope))return;
       if(this.label===draft)this.label = '';
       this.notice.set('Snapshot captured');
       await this.reload();
     } catch {
-      if(this.destroyed)return;
+      if(!this.current(scope))return;
       this.error.set('Capturing snapshot failed. Your label is kept here. Check snapshots before trying again.');
     } finally {
-      if(!this.destroyed)this.creating.set(false);
+      if(this.current(scope))this.creating.set(false);
     }
   }
 
@@ -105,18 +114,19 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
       `- Keys deleted after this snapshot come back, but their old comments and screenshot links are not recovered.\n` +
       `- A snapshot of the current state is taken first, so this restore is itself recoverable.`,
     )) return;
+    const scope=this.projectGeneration,projectId=this.projectId;
     this.restoring.set(true);
     this.error.set('');this.notice.set('');
     try {
-      const r = await this.api.restoreSnapshot(this.projectId, s.id);
-      if(this.destroyed)return;
+      const r = await this.api.restoreSnapshot(projectId, s.id);
+      if(!this.current(scope))return;
       this.notice.set(`Restored: ${r.valuesChanged} value(s) recovered, ${r.keysRemoved} key(s) removed`);
       await this.reload();
     } catch {
-      if(this.destroyed)return;
+      if(!this.current(scope))return;
       this.error.set('Restoring snapshot failed. Check the project before trying again.');
     } finally {
-      if(!this.destroyed)this.restoring.set(false);
+      if(this.current(scope))this.restoring.set(false);
     }
   }
 }
