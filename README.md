@@ -852,7 +852,9 @@ In project settings, use **Inspect** beside a publication locale to view that
 retained branch/version/locale. This is published content, not live editor values;
 empty and unreviewed translations can be present. Local pages render 50 values at
 a time, but the full bundle is downloaded. Refresh reads again without publishing.
-Up to 25 versions are kept per branch. A branch deleted and recreated may reuse a
-version number, so the link is not a permanent archive identifier. This view does
+Up to 25 versions are kept per branch. New Inspect links pin the publication UUID and fail if that retained publication
+is gone, even if branch recreation reuses the version. Legacy unpinned links keep
+branch-name/version lookup and show a warning; use a fresh Inspect link to pin it.
+Pins do not extend retention or provide permanent archival storage. This view does
 not verify a client received the bundle, check its integrity digest, or add CDN or
 native mobile delivery.

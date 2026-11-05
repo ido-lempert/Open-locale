@@ -117,6 +117,18 @@ try {
   const list = (await call(`/projects/${pid}/ota`, { jwt })).json;
   check('list shows main v1+v2 and feat v1 with counts', list.length === 3 && list.every((x) => x.translations >= 1 && x.locales.length >= 1), JSON.stringify(list.map((x) => `${x.branch}@${x.version}`)));
 
+  const pinnedPath=`/projects/${pid}/ota/1/he?branch=feat&publicationId=${pf.id}`;
+  const pinned=await call(pinnedPath,{jwt});check('publication pin reads exact existing scoped bundle',pinned.status===200&&pinned.json.translations['app.title']==='ברנץ');
+  check('matching pin preserves conditional304',(await call(pinnedPath,{jwt,headers:{'If-None-Match':pinned.etag}})).status===304);
+  for(const identity of [p1.id,'invalid','',`${pf.id}x`])check(`mismatched publication pin rejects before304 (${identity===p1.id?'other branch':identity||'empty'})`,(await call(`/projects/${pid}/ota/1/he?branch=feat&publicationId=${identity}`,{jwt,headers:{'If-None-Match':pinned.etag}})).status===404);
+  const ephemeral=(await call(`/projects/${pid}/branches`,{jwt,method:'POST',body:{name:'pin-race'}})).json;
+  await call(`/projects/${pid}/import/he?branch=pin-race`,{jwt,method:'POST',body:{entries:{identity:'Original'}}});const original=(await call(`/projects/${pid}/ota/publish`,{jwt,method:'POST',body:{branch:'pin-race'}})).json;
+  await call(`/projects/${pid}/branches/${ephemeral.id}`,{jwt,method:'DELETE'});await call(`/projects/${pid}/branches`,{jwt,method:'POST',body:{name:'pin-race'}});await call(`/projects/${pid}/import/he?branch=pin-race`,{jwt,method:'POST',body:{entries:{identity:'Replacement'}}});const replacement=(await call(`/projects/${pid}/ota/publish`,{jwt,method:'POST',body:{branch:'pin-race'}})).json;
+  check('recreated branch reusesv1 but different publication identity',original.version===1&&replacement.version===1&&original.id!==replacement.id);
+  check('old pin404 cannot select recreated branchv1',(await call(`/projects/${pid}/ota/1/he?branch=pin-race&publicationId=${original.id}`,{jwt})).status===404);
+  const newPinned=await call(`/projects/${pid}/ota/1/he?branch=pin-race&publicationId=${replacement.id}`,{jwt});check('replacement pin reads new retained bytes',newPinned.status===200&&newPinned.json.translations.identity==='Replacement');
+  check('legacy unpinned version read remains replacement-compatible',(await call(`/projects/${pid}/ota/1/he?branch=pin-race`,{jwt})).json.translations.identity==='Replacement');
+
   // Validator uniqueness: same version+locale on another project or branch
   // must produce a different ETag (no false 304 across projects/branches).
   const pid3 = (await call('/projects', { jwt, method: 'POST', body: { name: 'Ota3', slug: `ota3-${Date.now()}`, baseLocale: 'en', locales: ['en', 'he'] } })).json.id;

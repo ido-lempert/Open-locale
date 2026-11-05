@@ -362,8 +362,8 @@ export class ApiService {
   pretranslate(projectId: string, providerId: string, locale: string, branch?: string) {
     return this.request<MtPretranslateResult>(`/projects/${projectId}/mt/pretranslate`, { method: 'POST', body: JSON.stringify({ providerId, locale, ...(branch ? { branch } : {}) }) });
   }
-  getOtaBundle(projectId:string,branch:string,version:string,locale:string) {
-    return this.request<OtaBundle>(`/projects/${encodeURIComponent(projectId)}/ota/${encodeURIComponent(version)}/${encodeURIComponent(locale)}?branch=${encodeURIComponent(branch)}`);
+  getOtaBundle(projectId:string,branch:string,version:string,locale:string,publicationId?:string) {
+    return this.request<OtaBundle>(`/projects/${encodeURIComponent(projectId)}/ota/${encodeURIComponent(version)}/${encodeURIComponent(locale)}?branch=${encodeURIComponent(branch)}${publicationId!==undefined?`&publicationId=${encodeURIComponent(publicationId)}`:''}`);
   }
   listOtaPublications(projectId: string) {
     return this.request<OtaPublicationInfo[]>(`/projects/${projectId}/ota`);

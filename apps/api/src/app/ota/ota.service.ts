@@ -82,7 +82,7 @@ export class OtaService {
 
   // Returns the bundle plus its caching validators. Callers translate a null
   // row into 404 and handle If-None-Match against etag.
-  async bundle(userId: string, projectId: string, opts: { branch?: string; locale: string; version?: number }) {
+  async bundle(userId: string, projectId: string, opts: { branch?: string; locale: string; version?: number; publicationId?: string }) {
     await this.projects.getFor(userId, projectId);
     const project = await this.projects.getFor(userId, projectId);
     if (!project.locales.some((l) => l.code === opts.locale)) {
@@ -98,7 +98,7 @@ export class OtaService {
           where: { projectId, branchId: branch.id }, orderBy: { version: 'desc' },
           include: { branch: { select: { name: true } } },
         });
-    if (!row) throw new NotFoundException('No OTA publication for this branch yet');
+    if (!row || (opts.publicationId !== undefined && row.id !== opts.publicationId)) throw new NotFoundException('OTA publication unavailable');
     const payload = row.payload as Record<string, Record<string, string>>;
     // The validator must name the exact immutable thing: same v1/he on another
     // project or branch, or identical content re-published after a branch

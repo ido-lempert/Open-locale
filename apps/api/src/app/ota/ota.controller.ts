@@ -37,9 +37,10 @@ export class OtaController {
   async latest(
     @CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string,
     @Query('locale') locale: string, @Query('branch') branch: string | undefined,
+    @Query('publicationId') publicationId: string | undefined,
     @Req() req: { headers: Record<string, string | undefined> }, @Res({ passthrough: true }) res: Response,
   ) {
-    return this.respond(this.ota, user, projectId, { locale, branch }, req, res);
+    return this.respond(this.ota, user, projectId, { locale, branch, publicationId }, req, res);
   }
 
   @Get(':version/:locale')
@@ -48,14 +49,15 @@ export class OtaController {
     @CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string,
     @Param('version', ParseIntPipe) version: number, @Param('locale') locale: string,
     @Query('branch') branch: string | undefined,
+    @Query('publicationId') publicationId: string | undefined,
     @Req() req: { headers: Record<string, string | undefined> }, @Res({ passthrough: true }) res: Response,
   ) {
-    return this.respond(this.ota, user, projectId, { locale, branch, version }, req, res);
+    return this.respond(this.ota, user, projectId, { locale, branch, version, publicationId }, req, res);
   }
 
   private async respond(
     ota: OtaService, user: AuthPrincipal, projectId: string,
-    opts: { locale?: string; branch?: string; version?: number },
+    opts: { locale?: string; branch?: string; version?: number; publicationId?: string },
     req: { headers: Record<string, string | undefined> }, res: Response,
   ) {
     if (!opts.locale) throw new NotFoundException('locale query parameter is required');
