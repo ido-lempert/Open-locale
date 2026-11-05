@@ -839,3 +839,8 @@ Destroyedcomponent suppressescapture submission/late success notice/draftclear/r
 latefailure/error/finalflag updates. Threeunits/web286/14/actualheldPOSTleave
 snapshotbrowser11/review0344. Servercapture stillcompletes; no cancellation claim.
 SamecomponentrouteReuse/restore/coverage/defaultOFF unchanged.
+
+## Continuation279 - Snapshot capture late failure proof
+ActualheldPOST503afterBackdestroyscomponent cannotpublishcaptureerror/rawdetail/listread
+orreplacecurrenteditor. Snapshotbrowser13/review0345; test-only. Fixtureeditor-load
+race/fixrecorded. Noapplication/API/schema/coverage/defaultOFF/cancellationchange.
