@@ -998,3 +998,10 @@ orders; negativesrejectextra/missing/wrongEnglish/wrongHebrewfixtures. Snapshots
 review0369; test-only/noAPI/schema/UI/coverage/defaultOFF change. Interruptedbatch
 preservedcompletedlegs; stalePG55464socketavoidedwithchecked55574supportedoverride.
 Sync239/native244242unique remainexplicitlystaged, notuninterrupted.
+
+## Continuation304 - Exact concurrent import/capture predicates
+Allconcurrentimports201/exactcompleteexportpreservesbaselineandthreeexpectedvalues;
+automaticcapturecounts exactlybase/base+1/base+2. Negativesrejectwrong/missing/extra
+stateandshifted/shortcountseries. Snapshots46->48/review0370; test-only/noAPI/schema/
+UI/coverage/defaultOFF change. Sync239/native244242unique explicitlystaged; nogeneral
+concurrencyclaim. Separateverificationbatches andcheckedmerge55574avoid303issues.

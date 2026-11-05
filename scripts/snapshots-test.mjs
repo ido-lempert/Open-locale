@@ -275,14 +275,18 @@ try {
   const concRes = await Promise.all([0, 1, 2].map((i) =>
     call(`/projects/${pid}/import/en`, { jwt, method: 'POST', body: { entries: { [`conc.k${i}`]: `c${i}` } } })));
   const after = await flat();
-  check('concurrent imports all applied', ['conc.k0', 'conc.k1', 'conc.k2'].every((k) => k in after));
+  const expectedConcurrent={...before,'conc.k0':'c0','conc.k1':'c1','conc.k2':'c2'};
+  check('concurrent import predicate rejects wrong missing and extra values',!exactFlat({...expectedConcurrent,'conc.k0':'wrong'},expectedConcurrent)&&!exactFlat(before,expectedConcurrent)&&!exactFlat({...expectedConcurrent,extra:'residue'},expectedConcurrent));
+  check('concurrent imports all applied', concRes.every(r=>r.status===201)&&exactFlat(after,expectedConcurrent));
   const concSnaps = (await call(`/projects/${pid}/snapshots`, { jwt })).json
     .filter((x) => x.automatic)
     .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
   const base = Object.keys(before).length;
   const counts = concSnaps.slice(-3).map((x) => x.keyCount);
+  const exactCaptureCounts=(values,start)=>values.length===3&&values.every((value,index)=>value===start+index);
+  check('concurrent snapshot predicate rejects skipped initial state',!exactCaptureCounts([base+1,base+2,base+3],base)&&!exactCaptureCounts([base,base+1],base));
   check('concurrent auto snapshots capture strictly-growing states',
-    counts[0] >= base && counts[1] === counts[0] + 1 && counts[2] === counts[1] + 1,
+    exactCaptureCounts(counts,base),
     `counts=${counts.join(',')} base=${base}`);
 
   // Scope: read-only token reads but cannot create/restore.
