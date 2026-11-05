@@ -935,3 +935,10 @@ Actualsnapshotfreeproject emptyread thenfirstPOST persists1row/replacesemptyguid
 showsnotice/clearsunchangeddraft/namedrestoreenabled. Snapshotbrowser44/review0360;
 test-only/noapp/API/schema/coverage/defaultOFF change. Sync239/native244total242unique
 remain explicitly staged, not uninterrupted.
+
+## Continuation295 - Discriminating snapshot mutation precondition
+Removedvacuous||true; currenttranslationDTO/explicitblanktranslation/HTTPstatuses/
+changedvalue/deletedkey/addedkey/exactshape plusnegativeunchangedfixture. Initial28PASS
+1FAIL exposedfixturedefects; finalsnapshots30/review0361. Test-only/noapp/API/schema/
+coverage/defaultOFF change. Manualcapture transactionboundary investigation remains.
+Sync239/native244total242unique explicitly staged, not uninterrupted.

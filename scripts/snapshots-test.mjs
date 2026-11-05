@@ -72,10 +72,20 @@ try {
 
   // Mutate: change a value, delete a key, add a key.
   const keyTwo = (await call(`/projects/${pid}/keys`, { jwt })).json.find((k) => k.name === 'a.two');
-  await call(`/projects/${pid}/keys/${keyTwo.id}/translations`, { jwt, method: 'PUT', body: { translations: { en: 'TWO-CHANGED' } } });
-  await call(`/projects/${pid}/keys/${keyTwo.id}`, { jwt, method: 'DELETE' });
-  await call(`/projects/${pid}/keys`, { jwt, method: 'POST', body: { name: 'b.new' } });
-  check('mutations applied', (await flat())['b.new'] === '' || true); // presence checked post-restore below
+  const changed = await call(`/projects/${pid}/keys/${keyTwo.id}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value: 'TWO-CHANGED' } });
+  const beforeDelete = await flat();
+  const deleted = await call(`/projects/${pid}/keys/${keyTwo.id}`, { jwt, method: 'DELETE' });
+  const added = await call(`/projects/${pid}/keys`, { jwt, method: 'POST', body: { name: 'b.new' } });
+  const addedValue = await call(`/projects/${pid}/keys/${added.json.id}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value: '' } });
+  check('added key blank translation persisted before restore', addedValue.status === 200);
+  const beforeRestore = await flat();
+  const mutationsApplied = (changeStatus, deleteStatus, addStatus, changedState, finalState) =>
+    changeStatus === 200 && deleteStatus === 200 && addStatus === 201 &&
+    changedState['a.two'] === 'TWO-CHANGED' && finalState['a.one'] === 'one' &&
+    !('a.two' in finalState) && Object.hasOwn(finalState, 'b.new') && finalState['b.new'] === '' &&
+    Object.keys(finalState).length === 2;
+  check('mutation precondition rejects unchanged fixture state', !mutationsApplied(200,200,201,{'a.one':'one','a.two':'two'},{'a.one':'one','a.two':'two'}));
+  check('mutations applied before restore with successful HTTP writes', mutationsApplied(changed.status,deleted.status,added.status,beforeDelete,beforeRestore), JSON.stringify({statuses:[changed.status,deleted.status,added.status],beforeDelete,beforeRestore}));
 
   // Restore the baseline.
   const restore = await call(`/projects/${pid}/snapshots/${snapId}/restore`, { jwt, method: 'POST' });
