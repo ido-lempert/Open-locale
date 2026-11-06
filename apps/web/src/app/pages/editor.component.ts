@@ -63,7 +63,8 @@ interface CellState {
               <select aria-label="Bulk set status" [ngModel]="bulkStatus()" (ngModelChange)="bulkStatus.set($event)" name="bulkStatus">
                 @for (st of statuses; track st) { <option [value]="st">{{ st.toLowerCase() }}</option> }
               </select>
-              <button (click)="bulkMark()">Mark all</button>
+              <button name="bulkMark" [disabled]="!canBulkReview() || bulkReviewPending()" (click)="bulkMark()">{{ bulkReviewPending() ? 'Reviewing...' : 'Mark all' }}</button>
+              @if (!canBulkReview()) { <span name="bulkReviewBlocked" class="muted">Bulk review unavailable. Save local drafts and wait for pending work, or copy retained values before reloading an unconfirmed result.</span> }
             </span>
           }
           <form class="inline" (ngSubmit)="addKey()">
@@ -335,6 +336,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   private keysGeneration = 0;
   cells = new Map<string, WritableSignal<CellState>>();
   search = signal(''); newKey = signal(''); newLocale = signal(''); ioLocale = signal('en'); bulkStatus = signal('REVIEWED');
+  bulkReviewPending = signal(false);
   branch = signal('main'); branches = signal<BranchInfo[]>([]); newBranch = signal('');
   mergePreview = signal<{ branchId: string; from: string; lines: string[]; previewAt: string } | null>(null); ioFormat = signal<'json' | 'csv' | 'android' | 'ios' | 'stringsdict' | 'po' | 'pot' | 'xliff' | 'properties' | 'arb' | 'yaml' | 'resx'>('json');
   ioFormatTouched = signal(false);
@@ -470,12 +472,12 @@ export class EditorComponent implements OnInit, OnDestroy {
   }
   canSaveDraft(k: Key, locale: string) {
     const c = this.cell(k.id, locale)();
-    return !this.destroyed && !this.keysLoading() && !this.keysError() && this.cellDirty(k, locale)
+    return !this.destroyed && !this.bulkReviewPending() && !this.keysLoading() && !this.keysError() && this.cellDirty(k, locale)
       && c.status !== 'saving' && !c.reviewing && !c.needsReload;
   }
   async save(k: Key, locale: string, force = false) {
     // Inert is a UI affordance, not a write boundary. Reject retained-grid events.
-    if (this.destroyed || this.keysLoading() || this.keysError()) return;
+    if (this.destroyed || this.keysLoading() || this.keysError() || this.bulkReviewPending()) return;
     const sig = this.cell(k.id, locale);
     const c = sig();
     if (!force && c.value === c.saved && this.sameForms(c.forms, c.savedForms)) return;
@@ -523,7 +525,7 @@ export class EditorComponent implements OnInit, OnDestroy {
 
   canReview(k: Key, locale: string) {
     const c = this.cell(k.id, locale)();
-    return !this.destroyed && !this.keysLoading() && !this.keysError() && !c.needsReload
+    return !this.destroyed && !this.bulkReviewPending() && !this.keysLoading() && !this.keysError() && !c.needsReload
       && !c.reviewing && c.status !== 'saving' && c.value === c.saved
       && this.sameForms(c.forms, c.savedForms) && c.version !== undefined && c.version > 0 && !!c.rowId;
   }
@@ -836,21 +838,49 @@ export class EditorComponent implements OnInit, OnDestroy {
   // selects in the selected locale. Previews the exact affected count first;
   // the server re-checks status/value at write time, so rows edited between
   // preview and confirm are excluded. Empty translations are never marked.
+  canBulkReview() {
+    return !this.destroyed && !this.keysLoading() && !this.keysError()
+      && ![...this.cells.values()].some(sig => {
+        const c = sig();
+        return c.needsReload || c.reviewing || c.status === 'saving'
+          || c.value !== c.saved || !this.sameForms(c.forms, c.savedForms);
+      });
+  }
   async bulkMark() {
-    this.error.set('');
+    if (!this.canBulkReview() || this.bulkReviewPending()) return;
+    this.bulkReviewPending.set(true); this.error.set('');
     const scope = { locale: this.ioLocale(), status: this.bulkStatus(), from: this.filterStatus() || undefined, search: this.search() || undefined, tag: this.filterTag() || undefined, branch: this.branch() };
+    const generation = this.keysGeneration;
+    const current = () => this.canBulkReview() && generation === this.keysGeneration
+      && scope.locale === this.ioLocale() && scope.status === this.bulkStatus()
+      && scope.from === (this.filterStatus() || undefined) && scope.search === (this.search() || undefined)
+      && scope.tag === (this.filterTag() || undefined) && scope.branch === this.branch();
     try {
       const preview = await this.api.bulkSetStatus(this.projectId, { ...scope, dryRun: true });
+      if (!current()) return;
       const bits = [];
       if (scope.from) bits.push(`currently ${scope.from.toLowerCase()}`);
       if (scope.search) bits.push(`keys matching "${scope.search}"`);
       if (scope.tag) bits.push(`tagged ${scope.tag}`);
       const scopeText = bits.length ? ` (${bits.join(', ')})` : '';
-      if (!confirm(`Mark up to ${preview.matched} translations in ${scope.locale} on branch ${scope.branch}${scopeText} as ${scope.status.toLowerCase()}?\nOnly branch ${scope.branch} is touched. Empty translations are skipped, and anything saved after this preview is excluded.`)) return;
+      if (!confirm(`Mark up to ${preview.matched} translations in ${scope.locale} on branch ${scope.branch}${scopeText} as ${scope.status.toLowerCase()}?\nOnly branch ${scope.branch} is touched. Empty translations are skipped, and anything saved after this preview is excluded.`) || !current()) return;
       const res = await this.api.bulkSetStatus(this.projectId, { ...scope, notChangedSince: preview.previewAt ?? undefined });
+      // A new draft or scope while the write was pending must not be reloaded away.
+      if (!current()) {
+        if (!this.destroyed) {
+          for (const sig of this.cells.values()) sig.update(c => ({ ...c, status: 'error', needsReload: true, errorMsg: 'Copy local values and reload after the bulk review result.' }));
+          this.notice.set('Bulk review returned after local work or scope changed. Local values were kept. Copy them and reload current server values before more changes.');
+        }
+        return;
+      }
       this.notice.set(`Marked ${res.updated} translations in ${scope.locale} as ${scope.status.toLowerCase()}.`);
       await this.reload();
-    } catch (err) { this.error.set(err instanceof Error ? err.message : 'Bulk update failed'); }
+    } catch { if (!this.destroyed) {
+      for (const sig of this.cells.values()) sig.update(c => ({ ...c, status: 'error', needsReload: true, errorMsg: 'Copy local values and reload after the bulk review result.' }));
+      this.prepareSaveReload();
+      this.error.set('Bulk review could not be confirmed. Copy retained values and reload before trying again.');
+    } }
+    finally { if (!this.destroyed) this.bulkReviewPending.set(false); }
   }
   async bundleFile(event: Event) {
     const input = event.target as HTMLInputElement;

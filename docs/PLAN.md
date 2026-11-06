@@ -1150,3 +1150,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Content save rejects pending/failed key reads before cell access, including force path; local plain/plural drafts untouched, no absent cell creation. Ready conditional save unchanged.
 - Unit6/browser keys9->11 actual held GET/failed read, deliberately dispatched input+blur despite inert, zero PUT/DB unchanged. Negative control removing guard produces exactly2 boundary FAILs, restored final11PASS0.
 - Five reviews0394; no API/schema/worker/coverage promotion. Save-browser one read-after-render race10PASS1FAIL fixed exact current-value wait/final11. Sync239/native244242unique explicitlySTAGED final0.
+
+### Continuation 329 - Bulk review respects local work
+- Guard dirty/pending/unknown cells and grid before preview; recheck readiness/scope/list generation before confirm/write; one pending bulk operation, pauses cell saves/reviews.
+- New draft/scope during submitted write prevents destructive reload; mark local cells error/reload-required with copy control. Unknown result blocks blind replay. Unit14/browser7 real held preview/write and persisted status/text.
+- Five reviews0395; error-feedback layout corrected after pixel inspection. No API/schema/worker/coverage promotion. Sync239/native244242unique explicitlySTAGED final0.
