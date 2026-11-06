@@ -1179,3 +1179,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Confirmed locale metadata append/no project or grid reload, pending guard, raw newer-input retention, duplicate locale suppression, project-bootstrap generation/destroy fences. Fixed unknown feedback and no auto replay.
 - Unit9/browser5 real held translation PUT+locale POST proves persisted fr/DB Original/newer de/local draft retained/no project or key GET; existing-fr response no duplicate column; fixed failure/no replay. Final desktop pixels inspected.
 - Five reviews0400. API265/31 web459/32 builds0 initial428.13kB; syncSTAGED95+144239unique/nativeSTAGED116+128244total242unique inner/outer0. No API/schema/worker/coverage promotion.
+
+### Continuation 335 - Targeted key deletion
+- Confirmed same-generation removal/no grid reload; unrelated cell signals/drafts preserved. Per-key pending/inert/scoped fixed error; dirty/pending/unknown target and pending tags/bulk guard. Unknown delete blocks blind replay until explicit list read.
+- Review added content/review/tag and bulk boundaries for pending/unknown deletion. Unit17/browser4 held unrelated PUT+DELETE prove persisted deletion/DB Original/draft retained/no list GET/duplicate guard/fixed failure. Desktop pixels inspected.
+- Five reviews0401. API265/31 web476/33 builds0; syncSTAGED95+144239unique/nativeSTAGED116+128244total242unique inner/outer0. No API/schema/worker/coverage promotion or server delete CAS claim.

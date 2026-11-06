@@ -132,7 +132,7 @@ interface CellState {
           <thead><tr><th>Key</th>@for (l of p.locales; track l.code) { <th>{{ l.code }}</th> }<th></th></tr></thead>
           <tbody>
             @for (k of keys(); track k.id) {
-              <tr>
+              <tr [attr.inert]="keyDeleting().includes(k.id) ? '' : null">
                 <td class="key"><code>{{ k.name }}</code>
                   <span class="tags">
                     @for (t of k.tags; track t) { <span class="tag-chip">{{ t }}</span> }
@@ -222,8 +222,9 @@ interface CellState {
                     }
                   </td>
                 }
-                <td><button class="danger" [attr.aria-label]="'Delete key ' + k.name" title="Delete key" (click)="removeKey(k)">&times;</button></td>
+                <td><button class="danger" [attr.aria-label]="'Delete key ' + k.name" title="Delete key (save local drafts and wait for pending work first)" [disabled]="!canRemoveKey(k)" (click)="removeKey(k)">&times;</button></td>
               </tr>
+              @if (keyDeleting().includes(k.id) || keyDeleteErrorFor().includes(k.id)) { <tr><td [attr.colspan]="2 + p.locales.length">@if (keyDeleting().includes(k.id)) { <span role="status" name="keyDeleting">Deleting key "{{ k.name }}"...</span> } @else { <span class="error" role="alert" name="keyDeleteError">Deletion of key "{{ k.name }}" could not be confirmed. Copy local values and reload before trying again.</span> }</td></tr> }
               @if (shotsFor() === k.id) {
                 <tr class="history-row shots-row"><td [attr.colspan]="2 + p.locales.length">
                   @if (shotsLoading()) { <p class="muted" role="status" name="shotsLoading">Loading screenshots...</p> }
@@ -347,6 +348,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   cells = new Map<string, WritableSignal<CellState>>();
   search = signal(''); newKey = signal(''); newLocale = signal(''); ioLocale = signal('en'); bulkStatus = signal('REVIEWED');
   bulkReviewPending = signal(false);
+  keyDeleting = signal<string[]>([]); keyDeleteErrorFor = signal<string[]>([]);
   localeCreating = signal(false); localeCreateError = signal(false);
   keyCreating = signal(false); keyCreateError = signal(false); keyCreateBranch = signal('');
   branchCreating = signal(false); branchListLoading = signal(false); branchListError = signal(false);
@@ -434,7 +436,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     const generation = ++this.keysGeneration, projectId = this.projectId;
     const current = () => !this.destroyed && generation === this.keysGeneration;
     this.keysLoading.set(true); this.keysError.set(false);
-    this.tagEditFor.set(null); this.tagsErrorFor.set([]);
+    this.tagEditFor.set(null); this.tagsErrorFor.set([]); this.keyDeleteErrorFor.set([]);
     this.clearHistory(); this.clearShots(); this.clearComments(); this.clearTm();
     try {
       const keys = await this.api.listKeys(projectId, {
@@ -495,12 +497,12 @@ export class EditorComponent implements OnInit, OnDestroy {
   }
   canSaveDraft(k: Key, locale: string) {
     const c = this.cell(k.id, locale)();
-    return !this.destroyed && !this.bulkReviewPending() && !this.keysLoading() && !this.keysError() && this.cellDirty(k, locale)
+    return !this.destroyed && !this.keyDeleting().includes(k.id) && !this.keyDeleteErrorFor().includes(k.id) && !this.bulkReviewPending() && !this.keysLoading() && !this.keysError() && this.cellDirty(k, locale)
       && c.status !== 'saving' && !c.reviewing && !c.needsReload;
   }
   async save(k: Key, locale: string, force = false) {
     // Inert is a UI affordance, not a write boundary. Reject retained-grid events.
-    if (this.destroyed || this.keysLoading() || this.keysError() || this.bulkReviewPending()) return;
+    if (this.destroyed || this.keysLoading() || this.keysError() || this.bulkReviewPending() || this.keyDeleting().includes(k.id) || this.keyDeleteErrorFor().includes(k.id)) return;
     const sig = this.cell(k.id, locale);
     const c = sig();
     if (!force && c.value === c.saved && this.sameForms(c.forms, c.savedForms)) return;
@@ -548,7 +550,7 @@ export class EditorComponent implements OnInit, OnDestroy {
 
   canReview(k: Key, locale: string) {
     const c = this.cell(k.id, locale)();
-    return !this.destroyed && !this.bulkReviewPending() && !this.keysLoading() && !this.keysError() && !c.needsReload
+    return !this.destroyed && !this.keyDeleting().includes(k.id) && !this.keyDeleteErrorFor().includes(k.id) && !this.bulkReviewPending() && !this.keysLoading() && !this.keysError() && !c.needsReload
       && !c.reviewing && c.status !== 'saving' && c.value === c.saved
       && this.sameForms(c.forms, c.savedForms) && c.version !== undefined && c.version > 0 && !!c.rowId;
   }
@@ -565,12 +567,12 @@ export class EditorComponent implements OnInit, OnDestroy {
     } finally { sig.update(cur => ({ ...cur, reviewing: false })); }
   }
   openTagEdit(k: Key) {
-    if (this.destroyed || this.keysLoading() || this.keysError() || this.tagsSaving().includes(k.id)) return;
+    if (this.destroyed || this.keysLoading() || this.keysError() || this.tagsSaving().includes(k.id) || this.keyDeleting().includes(k.id) || this.keyDeleteErrorFor().includes(k.id)) return;
     this.tagEditFor.set(k.id);
     this.tagDraft.set(k.tags.join(', '));
   }
   async saveTags(k: Key) {
-    if (this.destroyed || this.keysLoading() || this.keysError() || this.tagsSaving().includes(k.id) || this.tagEditFor() !== k.id) return;
+    if (this.destroyed || this.keysLoading() || this.keysError() || this.tagsSaving().includes(k.id) || this.tagEditFor() !== k.id || this.keyDeleting().includes(k.id) || this.keyDeleteErrorFor().includes(k.id)) return;
     const tags = this.tagDraft().split(',').map((t) => t.trim()).filter(Boolean);
     const generation = this.keysGeneration, projectId = this.projectId;
     const current = () => !this.destroyed && generation === this.keysGeneration;
@@ -798,9 +800,31 @@ export class EditorComponent implements OnInit, OnDestroy {
     } catch { if (!this.destroyed) this.keyCreateError.set(true); }
     finally { if (!this.destroyed) this.keyCreating.set(false); }
   }
+  canRemoveKey(k: Key) {
+    return !this.destroyed && !this.keysLoading() && !this.keysError() && !this.bulkReviewPending()
+      && !this.keyDeleting().includes(k.id) && !this.keyDeleteErrorFor().includes(k.id)
+      && !this.tagsSaving().includes(k.id) && this.keys().some(key => key.id === k.id)
+      && ![...this.cells.entries()].some(([id,sig]) => { const c = sig(); return id.startsWith(`${k.id}:`)
+        && (c.needsReload || c.reviewing || c.status === 'saving' || c.value !== c.saved || !this.sameForms(c.forms,c.savedForms)); });
+  }
   async removeKey(k: Key) {
-    try { await this.api.deleteKey(this.projectId, k.id); await this.reload(); }
-    catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+    if (!this.canRemoveKey(k)) return;
+    const generation = this.keysGeneration;
+    const current = () => !this.destroyed && generation === this.keysGeneration;
+    this.keyDeleting.update(ids => [...ids,k.id]);
+    try {
+      await this.api.deleteKey(this.projectId, k.id);
+      if (!current()) return;
+      this.keys.update(keys => keys.filter(key => key.id !== k.id));
+      for (const id of this.cells.keys()) if (id.startsWith(`${k.id}:`)) this.cells.delete(id);
+      if (this.historyFor() === k.id) this.clearHistory();
+      if (this.shotsFor() === k.id) this.clearShots();
+      if (this.commentsFor() === k.id) this.clearComments();
+      if (this.tagEditFor() === k.id) this.tagEditFor.set(null);
+      this.clearTm();
+      this.notice.set(`Key "${k.name}" was deleted. Other local translation values were kept.`);
+    } catch { if (current()) this.keyDeleteErrorFor.update(ids => [...ids,k.id]); }
+    finally { if (!this.destroyed) this.keyDeleting.update(ids => ids.filter(id => id !== k.id)); }
   }
   async addLocale() {
     const submitted = this.newLocale(), code = submitted.trim();
@@ -898,7 +922,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   // the server re-checks status/value at write time, so rows edited between
   // preview and confirm are excluded. Empty translations are never marked.
   canBulkReview() {
-    return !this.destroyed && !this.keysLoading() && !this.keysError()
+    return !this.destroyed && !this.keysLoading() && !this.keysError() && !this.keyDeleting().length && !this.keyDeleteErrorFor().length
       && ![...this.cells.values()].some(sig => {
         const c = sig();
         return c.needsReload || c.reviewing || c.status === 'saving'
