@@ -1160,3 +1160,7 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Filter-aware no-match guidance identifies branch and possible other keys; explicit Clear key filters clears search/tag/status only, preserving branch and locale. Unfiltered empty names branch, not whole project.
 - Unit8/keys browser11->14 real no-match/clear current feature/empty branch; desktop pixels inspected. Five reviews0396. No API/schema/worker/coverage promotion.
 - Review browser12PASS1FAIL render-readiness first reload fixed exact current-value wait/final13; sync239/native244242unique explicitlySTAGED final0.
+
+### Continuation 331 - Targeted editor tag updates
+- Confirmed returned tags update key metadata only, preserving translation cell drafts. Same-key pending guard/fixed scoped errors, old list generation/destroy cannot publish. Active tag filter retains row with explicit rerun guidance.
+- Unit6/browser5 real held translation PUT/DB unchanged and normalized tag PATCH/no list GET. Error placement corrected through pixel inspection. Final refreshed-runtime nativeSTAGED116+128244total242unique inner/outer0; prior host-duration interruptions preserved in review0397.

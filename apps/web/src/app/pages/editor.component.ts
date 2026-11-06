@@ -134,19 +134,21 @@ interface CellState {
                   <span class="tags">
                     @for (t of k.tags; track t) { <span class="tag-chip">{{ t }}</span> }
                     @if (tagEditFor() === k.id) {
-                      <input class="tag-edit" aria-label="Edit tags (comma separated)"
+                      <input class="tag-edit" aria-label="Edit tags (comma separated)" [disabled]="tagsSaving().includes(k.id)"
                         [ngModel]="tagDraft()" (ngModelChange)="tagDraft.set($event)"
                         (blur)="saveTags(k)" (keydown.enter)="saveTags(k)" />
                     } @else {
-                      <button class="tags-toggle" (click)="openTagEdit(k)">tags</button>
+                      <button class="tags-toggle" [disabled]="tagsSaving().includes(k.id)" (click)="openTagEdit(k)">tags</button>
                     }
+                    @if (tagsSaving().includes(k.id)) { <span class="muted" role="status" name="tagsSaving">Saving tags...</span> }
+
                   </span>
                   <button class="history-toggle" [attr.aria-expanded]="historyFor() === k.id"
                     (click)="toggleHistory(k)">history</button>
                   <button class="comments-toggle" [attr.aria-expanded]="commentsFor() === k.id"
                     (click)="toggleComments(k)">comments{{ k._count?.comments ? ' (' + k._count.comments + ')' : '' }}</button>
                   <button class="shots-toggle" [attr.aria-expanded]="shotsFor() === k.id"
-                    (click)="toggleShots(k)">shots{{ k._count?.screenshots ? ' (' + k._count.screenshots + ')' : '' }}</button></td>
+                    (click)="toggleShots(k)">shots{{ k._count?.screenshots ? ' (' + k._count.screenshots + ')' : '' }}</button>@if (tagsErrorFor().includes(k.id)) { <p class="cell-error-reason" role="alert" name="tagsError" style="white-space:normal;max-width:18rem">Tag result unconfirmed. Check current server tags before trying again.</p> }</td>
                 @for (l of p.locales; track l.code) {
                   <td [attr.data-locale]="l.code">
                     <textarea rows="1" [attr.dir]="isRtl(l.code) ? 'rtl' : 'ltr'"
@@ -350,6 +352,8 @@ export class EditorComponent implements OnInit, OnDestroy {
   filterTag = signal(''); filterStatus = signal<'' | TranslationStatus>('');
   tagEditFor = signal<string | null>(null);
   tagDraft = signal('');
+  tagsSaving = signal<string[]>([]);
+  tagsErrorFor = signal<string[]>([]);
   historyFor = signal<string | null>(null);
   suggestFor = signal<string | null>(null);
   suggestions = signal<TmSuggestion[]>([]);
@@ -423,6 +427,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     const generation = ++this.keysGeneration, projectId = this.projectId;
     const current = () => !this.destroyed && generation === this.keysGeneration;
     this.keysLoading.set(true); this.keysError.set(false);
+    this.tagEditFor.set(null); this.tagsErrorFor.set([]);
     this.clearHistory(); this.clearShots(); this.clearComments(); this.clearTm();
     try {
       const keys = await this.api.listKeys(projectId, {
@@ -553,17 +558,26 @@ export class EditorComponent implements OnInit, OnDestroy {
     } finally { sig.update(cur => ({ ...cur, reviewing: false })); }
   }
   openTagEdit(k: Key) {
+    if (this.destroyed || this.keysLoading() || this.keysError() || this.tagsSaving().includes(k.id)) return;
     this.tagEditFor.set(k.id);
     this.tagDraft.set(k.tags.join(', '));
   }
   async saveTags(k: Key) {
-    if (this.tagEditFor() !== k.id) return;
+    if (this.destroyed || this.keysLoading() || this.keysError() || this.tagsSaving().includes(k.id) || this.tagEditFor() !== k.id) return;
     const tags = this.tagDraft().split(',').map((t) => t.trim()).filter(Boolean);
+    const generation = this.keysGeneration, projectId = this.projectId;
+    const current = () => !this.destroyed && generation === this.keysGeneration;
     this.tagEditFor.set(null);
+    this.tagsSaving.update(ids => [...ids, k.id]);
+    this.tagsErrorFor.update(ids => ids.filter(id => id !== k.id));
     try {
-      await this.api.setTags(this.projectId, k.id, tags);
-      await this.reload();
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to save tags'); }
+      const updated = await this.api.setTags(projectId, k.id, tags);
+      if (!current()) return;
+      this.keys.update(keys => keys.map(key => key.id === k.id ? { ...key, tags: [...updated.tags] } : key));
+      if (this.filterTag()) this.notice.set('Tags saved. The current grid is retained to keep local drafts. Run the filter again to refresh matching rows.');
+      // Do not replace cells or silently remove a row from an active tag filter.
+    } catch { if (current()) this.tagsErrorFor.update(ids => [...ids, k.id]); }
+    finally { if (!this.destroyed) this.tagsSaving.update(ids => ids.filter(id => id !== k.id)); }
   }
   private clearComments() {
     ++this.commentsGeneration; this.commentsFor.set(null); this.comments.set([]);
