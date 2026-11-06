@@ -25,7 +25,7 @@ interface CellState {
   template: `
     <header class="bar">
       <a routerLink="/projects" class="back">&larr; Projects</a>
-      <h1>{{ project()?.name ?? 'Loading…' }}</h1>
+      <h1>{{ project()?.name ?? (projectError() ? 'Project unavailable' : 'Loading…') }}</h1>
       <a [routerLink]="['/projects', projectId, 'qa']" class="qa-link">QA</a>
       <a [routerLink]="['/projects', projectId, 'reports']" class="reports-link">Progress</a>
       <a [routerLink]="['/projects', projectId, 'glossary']" class="glossary-link">Glossary</a>
@@ -37,6 +37,8 @@ interface CellState {
       <span class="muted">{{ keys().length }} keys</span>
     </header>
     <main>
+      @if (projectLoading()) { <p class="muted" role="status" name="projectLoading">Loading project and branches.</p> }
+      @else if (projectError()) { <p class="error" role="alert" name="projectError">Project unavailable. Check your access or connection, then retry.</p><button type="button" name="retryProject" (click)="loadProject()">Retry project</button> }
       @if (project(); as p) {
         <section class="toolbar">
           <select aria-label="Branch" [ngModel]="branch()" (ngModelChange)="switchBranch($event)" name="branch">
@@ -373,18 +375,32 @@ export class EditorComponent implements OnInit, OnDestroy {
   get statuses(): string[] { return [...this.baseStatuses, ...(this.project()?.customStatuses ?? [])]; }
   notice = signal(''); error = signal('');
   projectId = '';
+  projectLoading = signal(true);
+  projectError = signal(false);
+  private projectGeneration = 0;
 
   constructor(private api: ApiService, route: ActivatedRoute) {
     this.projectId = route.snapshot.paramMap.get('id') ?? '';
   }
-  async ngOnInit() {
+  async ngOnInit() { await this.loadProject(); }
+  async loadProject() {
+    if (this.destroyed) return;
+    const generation = ++this.projectGeneration, projectId = this.projectId;
+    const current = () => !this.destroyed && generation === this.projectGeneration;
+    this.projectLoading.set(true); this.projectError.set(false);
+    this.project.set(null); this.branches.set([]); this.glossary.set([]);
     try {
-      const p = await this.api.getProject(this.projectId);
-      this.project.set(p); this.ioLocale.set(p.baseLocale);
-      this.branches.set(await this.api.listBranches(this.projectId));
-      this.api.listGlossary(this.projectId).then((g) => this.glossary.set(g)).catch(() => this.glossary.set([]));
+      // Publish required metadata together, never a partially usable editor.
+      const [project, branches] = await Promise.all([
+        this.api.getProject(projectId), this.api.listBranches(projectId),
+      ]);
+      if (!current()) return;
+      this.project.set(project); this.ioLocale.set(project.baseLocale); this.branches.set(branches);
+      this.api.listGlossary(projectId).then(g => { if (current()) this.glossary.set(g); })
+        .catch(() => { if (current()) this.glossary.set([]); });
       await this.reload();
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load project'); }
+    } catch { if (current()) this.projectError.set(true); }
+    finally { if (current()) this.projectLoading.set(false); }
   }
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
   onSearch() {
@@ -727,7 +743,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     finally { if(current())this.historyLoading.set(false); }
   }
   ngOnDestroy() {
-    this.destroyed=true; ++this.keysGeneration; ++this.historyGeneration; this.clearShots(); this.clearComments(); this.clearTm();
+    this.destroyed=true; ++this.projectGeneration; ++this.keysGeneration; ++this.historyGeneration; this.clearShots(); this.clearComments(); this.clearTm();
     if(this.searchTimer)clearTimeout(this.searchTimer);
   }
   async addKey() {

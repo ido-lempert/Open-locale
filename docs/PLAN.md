@@ -1135,3 +1135,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 ### Continuation 325 - Explicit current-cell draft save
 - Dirty plain/plural values get explicit Save draft using existing conditional content path; disabled pending review/content, needs-reload or unusable grid. Pending review explains newer typed text stays local.
 - Actual held PATCH -> type/blur -> release proves zero automatic PUT and DB unchanged until explicit Save draft sends1/content becomes unverified. Unit2/browser4/five reviews0391; coverage/defaultOFF/external acceptance unchanged.
+
+### Continuation 326 - Recoverable editor project opening
+- Fixed initial loading/error/manual retry, atomic required project+branch publish; optional glossary non-blocking with bootstrap generation/destroy fences. No raw backend failure in bootstrap UI.
+- Unit7/browser7; held retry/error and real recovery, failed branch hides partial toolbar/grid, route-away late response. Design correction removes misleading Loading heading after failure.
+- No API/schema/worker/coverage promotion or project-id route-reuse claim. Five reviews0392. Sync239/native244242unique explicitlySTAGED final0.
