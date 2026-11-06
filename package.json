@@ -62,7 +62,8 @@
     "test:editor-comments-browser": "node scripts/editor-comments-browser-test.mjs",
     "test:editor-keys-browser": "node scripts/editor-keys-browser-test.mjs",
     "test:editor-tm-browser": "node scripts/editor-tm-browser-test.mjs",
-    "test:editor-save-version-browser": "node scripts/editor-save-version-browser-test.mjs"
+    "test:editor-save-version-browser": "node scripts/editor-save-version-browser-test.mjs",
+    "test:editor-review-version-browser": "node scripts/editor-review-version-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

@@ -598,9 +598,9 @@ export class ApiService {
   bulkSetStatus(projectId: string, input: { locale: string; status: string; from?: string; search?: string; tag?: string; branch?: string; dryRun?: boolean; notChangedSince?: string }) {
     return this.request<{ matched: number; updated: number; previewAt: string | null }>(`/projects/${projectId}/review/bulk-status`, { method: 'POST', body: JSON.stringify(input) });
   }
-  setStatus(projectId: string, keyId: string, locale: string, status: TranslationStatus) {
+  setStatus(projectId: string, keyId: string, locale: string, status: TranslationStatus, expectedVersion?: number, expectedRowId?: string) {
     return this.request<Translation>(`/projects/${projectId}/keys/${keyId}/translations/${locale}/status`, {
-      method: 'PATCH', body: JSON.stringify({ status }),
+      method: 'PATCH', body: JSON.stringify({ status, ...(expectedVersion !== undefined ? { expectedVersion } : {}), ...(expectedRowId !== undefined ? { expectedRowId } : {}) }),
     });
   }
   getHistory(projectId: string, keyId: string, locale: string) {

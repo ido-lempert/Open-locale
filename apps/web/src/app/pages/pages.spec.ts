@@ -77,7 +77,7 @@ describe('EditorComponent input preservation', () => {
 });
 
 describe('EditorComponent save/status ordering', () => {
-  it('a review chosen mid-save is not clobbered by the late save response', async () => {
+  it('a review attempted mid-save is blocked rather than automatically resent', async () => {
     let resolveUpsert: (v: unknown) => void = () => undefined;
     const setStatusCalls: string[] = [];
     const mock = {
@@ -117,9 +117,9 @@ describe('EditorComponent save/status ordering', () => {
     await comp.setReview(key, 'en', 'REVIEWED');
     resolveUpsert({ keyId: 'k1', localeCode: 'en', value: 'hi!', status: 'UNVERIFIED' });
     await saving;
-    expect(comp.cell('k1', 'en')().review).toBe('REVIEWED');
+    expect(comp.cell('k1', 'en')().review).toBe('UNVERIFIED');
     // The review was re-sent after the save landed so server state matches.
-    expect(setStatusCalls).toEqual(['REVIEWED', 'REVIEWED']);
+    expect(setStatusCalls).toEqual([]);
   });
 });
 

@@ -23,7 +23,7 @@ export class TranslationsController {
 
   @Patch('keys/:keyId/translations/:locale/status')
   setStatus(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('keyId') keyId: string, @Param('locale') locale: string, @Body() dto: SetStatusDto) {
-    return this.translations.setStatus(user.userId, projectId, keyId, locale, dto.status);
+    return this.translations.setStatus(user.userId, projectId, keyId, locale, dto.status, dto.expectedVersion, dto.expectedRowId);
   }
 
   @Get('keys/:keyId/translations/:locale/history')

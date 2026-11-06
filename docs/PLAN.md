@@ -1126,3 +1126,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Editor retains version/immutable rowId and sends existing API conditional text/form write fields; absent row is create-only0. Confirmed writes advance baseline; status response advances only when returned content/forms match baseline.
 - Failed/unknown response retains draft and blocks blind blur/force replay until explicit copy/list reload; missing identity fails closed. No definitive rejection/reconciliation or status-write concurrency guarantee.
 - Real two-editor browser11 verifies newer-version conflict, same-version recreated-row identity rejection, explicit reload recovery and create-only target. Unit5/five reviews0389. Native lock fixture updated for intentional safe-reload behavior, failures/full chronology recorded. Coverage/external/defaultOFF unchanged.
+
+### Continuation 324 - Conditional review writes
+- Optional status expectedVersion/expectedRowId validated under row lock in same status/history transaction; legacy clients remain compatible. Audit uses locked current wording.
+- Editor sends loaded baseline, blocks unsaved/pending/absent-row review, no automatic post-save resend. Failed/unknown result uses copy/reload flow. Unit4/browser13 plus prior coverage; five reviews0390.
+- No schema/worker/external acceptance change, no bulk-review CAS or idempotent reconciliation claim.

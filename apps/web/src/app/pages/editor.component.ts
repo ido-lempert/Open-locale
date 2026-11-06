@@ -11,7 +11,7 @@ interface CellState {
   value: string; saved: string;
   // Per-CLDR-category text for plural keys; {} for plain keys.
   forms: Record<string, string>; savedForms: Record<string, string>;
-  version?: number; rowId?: string; needsReload?: boolean;
+  version?: number; rowId?: string; needsReload?: boolean; reviewing?: boolean;
   status: 'idle' | 'saving' | 'saved' | 'error';
   errorMsg: string;
   review: TranslationStatus;
@@ -175,7 +175,7 @@ interface CellState {
                     }
                     <div class="cell-foot">
                       <select class="review" [class]="'review review-' + cell(k.id, l.code)().review.toLowerCase()"
-                        [ngModel]="cell(k.id, l.code)().review"
+                        [disabled]="!canReview(k, l.code)" [ngModel]="cell(k.id, l.code)().review"
                         (ngModelChange)="setReview(k, l.code, $event)"
                         [attr.aria-label]="'Review status for ' + k.name + ' in ' + l.code">
                         @for (st of statuses; track st) { <option [value]="st">{{ st.toLowerCase() }}</option> }
@@ -447,11 +447,10 @@ export class EditorComponent implements OnInit, OnDestroy {
     const sig = this.cell(k.id, locale);
     const c = sig();
     if (!force && c.value === c.saved && this.sameForms(c.forms, c.savedForms)) return;
-    if (this.destroyed || c.status === 'saving' || c.needsReload) return;
+    if (this.destroyed || c.status === 'saving' || c.reviewing || c.needsReload) return;
     if (c.version === undefined || (c.version > 0 && !c.rowId)) {
       sig.update(cur => ({ ...cur, status: 'error', needsReload: true, errorMsg: 'Loaded row identity is unavailable. Copy local values and reload before saving.' })); return;
     }
-    const reviewAtSend = c.review;
     // Plural keys send the merge of the server's last-known forms with this
     // browser's category edits: categories a different ICU build stored but
     // this browser does not know survive the save (see plural-forms.ts).
@@ -462,19 +461,12 @@ export class EditorComponent implements OnInit, OnDestroy {
     try {
       const res = await this.api.upsertTranslation(this.projectId, k.id, locale, c.value, formsAtSend, c.version, c.rowId);
       const latest = sig();
-      const newerReview = latest.review !== reviewAtSend;
-      // A review the user chose while the save was in flight wins over the
-      // (older) save response, and is re-sent so the server ends consistent.
       sig.set({ version: res.version, rowId: res.rowId, value: latest.value, saved: c.value, errorMsg: '',
         forms: latest.forms, savedForms: formsAtSend ?? latest.savedForms,
         status: latest.value === c.value && this.sameForms(latest.forms, c.forms) ? 'saved' : 'idle',
         // The server clears MT provenance on a human write; mirror that here.
         mtScore: null, mtProvider: null,
-        review: newerReview ? latest.review : (res.status ?? 'UNVERIFIED') });
-      if (newerReview) {
-        const st = await this.api.setStatus(this.projectId, k.id, locale, latest.review);
-        sig.update((cur) => ({ ...cur, review: st.status, ...(st.value === cur.saved && this.sameForms(st.pluralForms ?? {}, cur.savedForms) ? { version: st.version, rowId: st.rowId } : {}) }));
-      }
+        review: res.status ?? 'UNVERIFIED' });
     } catch (e) {
       // A failed response may follow a committed write. Never blindly replay.
       sig.update(cur => ({ ...cur, status: 'error', needsReload: true,
@@ -497,12 +489,23 @@ export class EditorComponent implements OnInit, OnDestroy {
     return hintsForTarget(source, targetLocale, this.glossary());
   }
 
+  canReview(k: Key, locale: string) {
+    const c = this.cell(k.id, locale)();
+    return !this.destroyed && !this.keysLoading() && !this.keysError() && !c.needsReload
+      && !c.reviewing && c.status !== 'saving' && c.value === c.saved
+      && this.sameForms(c.forms, c.savedForms) && c.version !== undefined && c.version > 0 && !!c.rowId;
+  }
   async setReview(k: Key, locale: string, status: TranslationStatus) {
-    const sig = this.cell(k.id, locale);
+    if (!this.canReview(k, locale)) return;
+    const sig = this.cell(k.id, locale), c = sig();
+    sig.update(cur => ({ ...cur, reviewing: true }));
     try {
-      const res = await this.api.setStatus(this.projectId, k.id, locale, status);
-      sig.update((c) => ({ ...c, review: res.status, ...(res.value === c.saved && this.sameForms(res.pluralForms ?? {}, c.savedForms) && c.status !== 'saving' && !c.needsReload ? { version: res.version, rowId: res.rowId } : {}) }));
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to set status'); }
+      const res = await this.api.setStatus(this.projectId, k.id, locale, status, c.version, c.rowId);
+      sig.update(cur => ({ ...cur, review: res.status, version: res.version, rowId: res.rowId }));
+    } catch {
+      sig.update(cur => ({ ...cur, status: 'error', needsReload: true,
+        errorMsg: 'Review result could not be confirmed. Copy retained values and reload before another change.' }));
+    } finally { sig.update(cur => ({ ...cur, reviewing: false })); }
   }
   openTagEdit(k: Key) {
     this.tagEditFor.set(k.id);

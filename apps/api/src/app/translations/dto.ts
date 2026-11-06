@@ -67,6 +67,10 @@ export class ImportJsonDto {
 }
 
 export class SetStatusDto {
+  @IsOptional() @IsInt() @Min(0)
+  expectedVersion?: number;
+  @IsOptional() @IsUUID()
+  expectedRowId?: string;
   // Validated against base statuses + project customStatuses in the service.
   @IsString()
   @IsNotEmpty()

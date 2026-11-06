@@ -246,19 +246,23 @@ export class TranslationsService {
     });
   }
 
-  async setStatus(userId: string, projectId: string, keyId: string, locale: string, status: string) {
+  async setStatus(userId: string, projectId: string, keyId: string, locale: string, status: string, expectedVersion?: number, expectedRowId?: string) {
     await this.projects.assertLocaleWrite(userId, projectId, [locale]);
     const project = await this.projects.getFor(userId, projectId);
     this.assertKnownStatus(project, status);
-    const existing = await this.prisma.translation.findUnique({
-      where: { keyId_localeCode: { keyId, localeCode: locale } },
-      include: { key: { select: { name: true } } },
-    });
-    if (!existing || existing.projectId !== projectId) {
-      throw new NotFoundException('Translation not found');
-    }
+    const key = await this.prisma.key.findFirst({ where: { id: keyId, projectId }, select: { name: true } });
+    if (!key) throw new NotFoundException('Translation not found');
     return this.prisma.$transaction(async (tx) => {
       await this.tasks.assertKeysEditable(tx, userId, projectId, [keyId]);
+      const rows = await tx.$queryRaw<{ value: string; status: string; version: number; rowId: string }[]>`
+        SELECT "value", "status", "version", "rowId" FROM "translations"
+        WHERE "keyId" = ${keyId}::uuid AND "localeCode" = ${locale} FOR UPDATE`;
+      const existing = rows[0];
+      if (!existing) throw new NotFoundException('Translation not found');
+      if ((expectedVersion !== undefined && existing.version !== expectedVersion)
+        || (expectedRowId !== undefined && existing.rowId !== expectedRowId)) {
+        throw new ConflictException('This translation changed since it was loaded. Reload before reviewing.');
+      }
       const translation = await tx.translation.update({
         where: { keyId_localeCode: { keyId, localeCode: locale } },
         // Status changes bump the value-conflict token too: an in-context
@@ -273,7 +277,7 @@ export class TranslationsService {
         });
         await this.activity.record(tx, {
           projectId, actorId: userId, action: 'translation.status',
-          keyName: existing.key.name, localeCode: locale,
+          keyName: key.name, localeCode: locale,
           detail: { from: existing.status, to: status },
         });
       }
