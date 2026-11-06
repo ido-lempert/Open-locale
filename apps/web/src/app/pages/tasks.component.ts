@@ -30,6 +30,13 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
       @if (error(); as e) { <p class="error" role="alert">{{ e }}</p> }
       <section class="panel">
         <h2>New task</h2>
+        <p class="muted">Assignees, groups and lockable keys load independently. A failed option read does not mean none exist.</p>
+        @if (membersLoading()) { <p role="status" name="taskMembersLoading">Loading assignee options...</p> }
+        @if (membersError()) { <p role="alert" class="error" name="taskMembersError">Assignee options unavailable.</p><button type="button" name="retryTaskMembers" [disabled]="membersLoading()" (click)="void loadMembers()">Retry assignee options</button> }
+        @if (groupsLoading()) { <p role="status" name="taskGroupsLoading">Loading group options...</p> }
+        @if (groupsError()) { <p role="alert" class="error" name="taskGroupsError">Group options unavailable.</p><button type="button" name="retryTaskGroups" [disabled]="groupsLoading()" (click)="void loadGroups()">Retry group options</button> }
+        @if (keysLoading()) { <p role="status" name="taskKeysLoading">Loading lockable key options...</p> }
+        @if (keysError()) { <p role="alert" class="error" name="taskKeysError">Lockable key options unavailable.</p><button type="button" name="retryTaskKeys" [disabled]="keysLoading()" (click)="void loadKeys()">Retry lockable key options</button> }
         <form class="task-form" [attr.aria-busy]="creating()" (ngSubmit)="create()">
           <input aria-label="Task title" placeholder="e.g. Translate checkout to Hebrew" maxlength="200"
             [ngModel]="title()" (ngModelChange)="title.set($event)" name="taskTitle" required />
@@ -108,6 +115,10 @@ export class TasksComponent implements OnInit, OnDestroy {
   members = signal<MemberInfo[]>([]);
   groups = signal<GroupInfo[]>([]);
   keys = signal<Key[]>([]);
+  membersLoading=signal(false);membersError=signal(false);
+  groupsLoading=signal(false);groupsError=signal(false);
+  keysLoading=signal(false);keysError=signal(false);
+  private membersGeneration=0;private groupsGeneration=0;private keysGeneration=0;
   selectedKeyIds = signal<string[]>([]);
   lockKeys = signal(false);
   statusFilter = signal('');
@@ -148,7 +159,7 @@ export class TasksComponent implements OnInit, OnDestroy {
 
   private initForProject(pid: string) {
     if(this.destroyed)return;
-    const scope=++this.projectGeneration;
+    ++this.projectGeneration;
     this.projectId = pid;
     this.fetchSeq++; // invalidate every in-flight fetch from the previous project
     ++this.mutationEpoch;this.actionUnknown.set(false);this.error.set('');this.createNotice.set('');this.actionNotice.set('');this.creating.set(false);this.updatingIds.set([]);this.deletingIds.set([]);
@@ -167,15 +178,36 @@ export class TasksComponent implements OnInit, OnDestroy {
       }
     } catch { /* corrupt or unavailable storage: fall back to defaults */ }
     void this.fetch();
-    void this.api.listMembers(pid)
-      .then((m) => { if (!this.destroyed && scope === this.projectGeneration) this.members.set(m); })
-      .catch(() => { if (!this.destroyed && scope === this.projectGeneration) this.members.set([]); });
-    void this.api.listGroups(pid)
-      .then((g) => { if (!this.destroyed && scope === this.projectGeneration) this.groups.set(g); })
-      .catch(() => { if (!this.destroyed && scope === this.projectGeneration) this.groups.set([]); });
-    void this.api.listKeys(pid)
-      .then((k) => { if (!this.destroyed && scope === this.projectGeneration) this.keys.set(k); })
-      .catch(() => { if (!this.destroyed && scope === this.projectGeneration) this.keys.set([]); });
+    this.membersLoading.set(false);this.groupsLoading.set(false);this.keysLoading.set(false);
+    void this.loadMembers();void this.loadGroups();void this.loadKeys();
+  }
+
+  async loadMembers() {
+    if(this.destroyed||this.membersLoading())return;
+    const scope=this.projectGeneration,generation=++this.membersGeneration,pid=this.projectId;
+    const current=()=>!this.destroyed&&scope===this.projectGeneration&&generation===this.membersGeneration;
+    this.membersLoading.set(true);this.membersError.set(false);
+    try {const rows=await this.api.listMembers(pid);if(current())this.members.set(rows);}
+    catch {if(current())this.membersError.set(true);}
+    finally {if(current())this.membersLoading.set(false);}
+  }
+  async loadGroups() {
+    if(this.destroyed||this.groupsLoading())return;
+    const scope=this.projectGeneration,generation=++this.groupsGeneration,pid=this.projectId;
+    const current=()=>!this.destroyed&&scope===this.projectGeneration&&generation===this.groupsGeneration;
+    this.groupsLoading.set(true);this.groupsError.set(false);
+    try {const rows=await this.api.listGroups(pid);if(current())this.groups.set(rows);}
+    catch {if(current())this.groupsError.set(true);}
+    finally {if(current())this.groupsLoading.set(false);}
+  }
+  async loadKeys() {
+    if(this.destroyed||this.keysLoading())return;
+    const scope=this.projectGeneration,generation=++this.keysGeneration,pid=this.projectId;
+    const current=()=>!this.destroyed&&scope===this.projectGeneration&&generation===this.keysGeneration;
+    this.keysLoading.set(true);this.keysError.set(false);
+    try {const rows=await this.api.listKeys(pid);if(current())this.keys.set(rows);}
+    catch {if(current())this.keysError.set(true);}
+    finally {if(current())this.keysLoading.set(false);}
   }
 
   setFilter(status: string) {
