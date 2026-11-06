@@ -69,7 +69,8 @@
     "test:projects-reads-browser": "node scripts/projects-reads-browser-test.mjs",
     "test:editor-bulk-guard-browser": "node scripts/editor-bulk-guard-browser-test.mjs",
     "test:editor-tags-browser": "node scripts/editor-tags-browser-test.mjs",
-    "test:editor-branches-browser": "node scripts/editor-branches-browser-test.mjs"
+    "test:editor-branches-browser": "node scripts/editor-branches-browser-test.mjs",
+    "test:editor-key-create-browser": "node scripts/editor-key-create-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

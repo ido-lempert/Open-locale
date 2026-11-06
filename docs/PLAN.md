@@ -1169,3 +1169,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Guard pending create, preserve newer name input, keep current branch/grid; confirmed create independent of branch-list refresh failure, fixed scoped error/manual list-only retry. Latest branch-list generation/destroy fences.
 - Unit6/browser4 with real held POST, duplicate guard, newer draft, failed list and retry persisted branch/no extra POST or key GET. Parent spotted ambiguous duplicated-word notice for branch named created; quoted name/was-created copy plus exact full text assertions, recaptured final pixels.
 - Native first116/second127PASS1FAIL was obsolete notice expectation after copy change; updated exact final notice, fresh staged116+128244total242unique final0. SyncSTAGED95+144239unique0, not canonical uninterrupted claims. Five reviews0398; no API/schema/worker/coverage promotion.
+
+### Continuation 333 - Targeted key creation
+- Confirmed returned-key insertion only into current unfiltered usable grid; no existing cell replacement or list reload. Pending guard/newer name retention/fixed scope-captured error/destroy fence. Filtered or changed-grid create remains confirmed with copy-first find guidance.
+- Unit12/browser5 real held translation PUT+key POST, persisted new key/DB Original/no list GET, pending duplicate/name retention, fixed failure, filtered no-injection. Designer review cleared stale prior success notice on a new attempt and captured failed branch explicitly.
+- API265/31 web450/31 builds0; syncSTAGED95+144239unique0 nativeSTAGED116+128244total242unique0. Five reviews0399; no API/schema/worker/coverage promotion. Sync-preview fixture added optional PG port after default bind conflict;644 final0 on55608.

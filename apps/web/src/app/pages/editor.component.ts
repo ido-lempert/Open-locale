@@ -70,8 +70,9 @@ interface CellState {
           }
           <form class="inline" (ngSubmit)="addKey()">
             <input placeholder="new.key.name" aria-label="New key name" [ngModel]="newKey()" (ngModelChange)="newKey.set($event)" name="newKey" required />
-            <button type="submit">Add key</button>
+            <button type="submit" name="addKey" [disabled]="keyCreating()">{{ keyCreating() ? 'Creating key...' : 'Add key' }}</button>
           </form>
+          @if (keyCreateError()) { <span class="error" name="keyCreateError" role="alert">Key creation could not be confirmed on branch "{{ keyCreateBranch() }}". Check that branch before trying again.</span> }
           <form class="inline" (ngSubmit)="addLocale()">
             <input placeholder="locale (e.g. fr)" aria-label="New locale code" [ngModel]="newLocale()" (ngModelChange)="newLocale.set($event)" name="newLocale" required maxlength="10" />
             <button type="submit">Add locale</button>
@@ -345,6 +346,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   cells = new Map<string, WritableSignal<CellState>>();
   search = signal(''); newKey = signal(''); newLocale = signal(''); ioLocale = signal('en'); bulkStatus = signal('REVIEWED');
   bulkReviewPending = signal(false);
+  keyCreating = signal(false); keyCreateError = signal(false); keyCreateBranch = signal('');
   branchCreating = signal(false); branchListLoading = signal(false); branchListError = signal(false);
   private branchListGeneration = 0;
   branch = signal('main'); branches = signal<BranchInfo[]>([]); newBranch = signal('');
@@ -780,11 +782,19 @@ export class EditorComponent implements OnInit, OnDestroy {
   }
   async addKey() {
     const submitted = this.newKey();
+    if (!submitted.trim() || this.destroyed || this.keyCreating()) return;
+    const branch = this.branch(), generation = this.keysGeneration;
+    this.keyCreating.set(true); this.keyCreateError.set(false); this.keyCreateBranch.set(branch); this.notice.set('');
     try {
-      await this.api.createKey(this.projectId, { name: submitted, branch: this.branch() });
+      const key = await this.api.createKey(this.projectId, { name: submitted, branch });
+      if (this.destroyed) return;
       if (this.newKey() === submitted) this.newKey.set('');
-      await this.reload();
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+      const insert = generation === this.keysGeneration && branch === this.branch()
+        && !this.keysLoading() && !this.keysError() && !this.hasKeyFilters();
+      if (insert) this.keys.update(keys => keys.some(k => k.id === key.id) ? keys : [...keys, key].sort((a,b) => a.name.localeCompare(b.name)));
+      this.notice.set(`Key "${key.name}" was created on branch "${branch}".${insert ? ' Existing local translation values were kept.' : ' The current grid was kept. Copy any local drafts before clearing key filters or reloading that branch to find it.'}`);
+    } catch { if (!this.destroyed) this.keyCreateError.set(true); }
+    finally { if (!this.destroyed) this.keyCreating.set(false); }
   }
   async removeKey(k: Key) {
     try { await this.api.deleteKey(this.projectId, k.id); await this.reload(); }
