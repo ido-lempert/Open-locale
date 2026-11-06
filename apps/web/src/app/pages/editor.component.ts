@@ -258,6 +258,8 @@ interface CellState {
               }
               @if (commentsFor() === k.id) {
                 <tr class="history-row"><td [attr.colspan]="2 + p.locales.length">
+                  @if (commentsSaving()) { <p class="muted" role="status" name="commentsPending">Comment change pending. Closing this thread does not cancel it.</p> }
+                  @if (commentsMutationError().includes(k.id)) { <p class="error" role="alert" name="commentsMutationError">Comment change could not be confirmed. Keep your draft and check current comments before another change.</p><button name="checkCurrentComments" [disabled]="commentsSaving() || commentsLoading()" (click)="readComments(k)">Check current comments</button> }
                   @if (commentsLoading()) { <p class="muted" role="status" name="commentsLoading">Loading comments...</p> }
                   @else if (commentsError()) { <p class="error" role="alert" name="commentsError">Comments unavailable. No thread is shown.</p><button type="button" name="retryComments" (click)="readComments(k)">Retry comments</button> }
                   @else {
@@ -271,7 +273,7 @@ interface CellState {
                           --> }</span>
                           <span class="muted">{{ cm.author?.displayName ?? 'unknown' }} · {{ cm.createdAt | date:'short' }}</span>
                           <button [attr.aria-label]="'Reply to comment'" (click)="replyTo.set(cm.id)">reply</button>
-                          <button class="danger" [attr.aria-label]="'Delete comment'" [disabled]="commentsSaving()" (click)="deleteComment(k, cm.id)">&times;</button>
+                          <button class="danger" [attr.aria-label]="'Delete comment'" [disabled]="commentsSaving() || commentsMutationError().includes(k.id)" (click)="deleteComment(k, cm.id)">&times;</button>
                           @if (repliesOf(cm.id).length > 0) {
                             <ul class="history-list replies">
                               @for (rp of repliesOf(cm.id); track rp.id) {
@@ -281,7 +283,7 @@ interface CellState {
                                     -->@if (seg.mention) { <span class="mention">{{ seg.text }}</span> } @else { <span>{{ seg.text }}</span> }<!--
                                   --> }</span>
                                   <span class="muted">{{ rp.author?.displayName ?? 'unknown' }} · {{ rp.createdAt | date:'short' }}</span>
-                                  <button class="danger" [attr.aria-label]="'Delete comment'" [disabled]="commentsSaving()" (click)="deleteComment(k, rp.id)">&times;</button>
+                                  <button class="danger" [attr.aria-label]="'Delete comment'" [disabled]="commentsSaving() || commentsMutationError().includes(k.id)" (click)="deleteComment(k, rp.id)">&times;</button>
                                 </li>
                               }
                             </ul>
@@ -299,7 +301,7 @@ interface CellState {
                         <option value="">all languages</option>
                         @for (l of p.locales; track l.code) { <option [value]="l.code">{{ l.code }}</option> }
                       </select>
-                      <button type="submit" [disabled]="commentsSaving()">{{ commentsSaving() ? 'Posting or deleting...' : 'Post' }}</button>
+                      <button type="submit" [disabled]="commentsSaving() || commentsMutationError().includes(k.id)">{{ commentsSaving() ? 'Posting or deleting...' : 'Post' }}</button>
                     </form>
                   }
                 </td></tr>
@@ -401,7 +403,8 @@ export class EditorComponent implements OnInit, OnDestroy {
   replyTo = signal<string | null>(null);
   commentsLoading = signal(false);
   commentsError = signal(false);
-  commentsSaving = signal(false);
+  commentsSaving = signal(false); commentsMutationError = signal<string[]>([]);
+  private commentsMutationEpoch = new Map<string, number>();
   private commentsGeneration = 0;
   historyEntries = signal<(HistoryEntry & { locale: string })[]>([]);
   historyLoading = signal(false);
@@ -621,11 +624,13 @@ export class EditorComponent implements OnInit, OnDestroy {
     if (this.destroyed || this.commentsFor() !== k.id) return;
     const generation = ++this.commentsGeneration, projectId = this.projectId, keyId = k.id;
     const current = () => !this.destroyed && generation === this.commentsGeneration && this.commentsFor() === keyId;
+    const mutationEpoch = this.commentsMutationEpoch.get(keyId) ?? 0;
     this.commentsLoading.set(true); this.commentsError.set(false); this.comments.set([]);
     try {
       const list = await this.api.listComments(projectId, keyId);
       if (current()) {
         this.comments.set(list);
+        if (!this.commentsSaving() && mutationEpoch === (this.commentsMutationEpoch.get(keyId) ?? 0)) this.commentsMutationError.update(ids => ids.filter(id => id !== keyId));
         this.keys.update(keys => keys.map(key => key.id === keyId && key._count
           ? { ...key, _count: { ...key._count, comments: list.length } } : key));
         if (this.replyTo() && !list.some(c => c.id === this.replyTo())) this.replyTo.set(null);
@@ -654,21 +659,29 @@ export class EditorComponent implements OnInit, OnDestroy {
     if (last < body.length) segs.push({ text: body.slice(last), mention: false });
     return segs.length ? segs : [{ text: body, mention: false }];
   }
+  private canChangeComments(k: Key) {
+    return !this.destroyed && !this.commentsSaving() && this.commentsFor() === k.id
+      && !this.commentsLoading() && !this.commentsError() && !this.commentsMutationError().includes(k.id)
+      && !this.keysLoading() && !this.keysError() && !this.keyDeleting().includes(k.id) && !this.keyDeleteErrorFor().includes(k.id);
+  }
   async addComment(k: Key) {
     const draft = this.commentDraft(), body = draft.trim(), locale = this.commentLocale(), reply = this.replyTo();
-    if (!body || this.commentsSaving() || this.destroyed || this.commentsFor() !== k.id) return;
+    if (!body || !this.canChangeComments(k) || (reply && !this.comments().some(c => c.id === reply && !c.parentId))) return;
+    await this.changeComments(k, () => this.api.addComment(this.projectId, k.id, body, locale || undefined, reply ?? undefined), () => {
+      if (this.commentDraft() === draft && this.commentLocale() === locale && this.replyTo() === reply) { this.commentDraft.set(''); this.replyTo.set(null); }
+    });
+  }
+  private async changeComments(k: Key, write: () => Promise<unknown>, onConfirmed?: () => void) {
     const generation = this.commentsGeneration;
+    this.commentsMutationEpoch.set(k.id, (this.commentsMutationEpoch.get(k.id) ?? 0) + 1);
     this.commentsSaving.set(true);
-    try {
-      await this.api.addComment(this.projectId, k.id, body, locale || undefined, reply ?? undefined);
-      if (!this.destroyed && generation === this.commentsGeneration && this.commentsFor() === k.id) {
-        if (this.commentDraft() === draft && this.commentLocale() === locale && this.replyTo() === reply) {
-          this.commentDraft.set(''); this.replyTo.set(null);
-        }
-        await this.readComments(k);
-      }
-    } catch { if (!this.destroyed && generation === this.commentsGeneration && this.commentsFor() === k.id) this.error.set('Comment result could not be confirmed. Check the thread before posting again.'); }
-    finally { if (!this.destroyed) this.commentsSaving.set(false); }
+    let confirmed = false;
+    try { await write(); confirmed = true; }
+    catch { if (!this.destroyed) this.commentsMutationError.update(ids => ids.includes(k.id) ? ids : [...ids,k.id]); }
+    finally { if (!this.destroyed) { this.commentsMutationEpoch.set(k.id, (this.commentsMutationEpoch.get(k.id) ?? 0) + 1); this.commentsSaving.set(false); } }
+    if (confirmed && !this.destroyed && generation === this.commentsGeneration && this.commentsFor() === k.id) {
+      onConfirmed?.(); await this.readComments(k);
+    }
   }
   // Translation memory: only for empty cells with a base-locale source.
   // Applying is an explicit click and saves through the normal path - the
@@ -778,14 +791,8 @@ export class EditorComponent implements OnInit, OnDestroy {
     if (confirmed && !this.destroyed && generation === this.shotsGeneration && this.shotsFor() === k.id) await this.readShots(k);
   }
   async deleteComment(k: Key, commentId: string) {
-    if (this.commentsSaving() || this.destroyed || this.commentsFor() !== k.id) return;
-    const generation = this.commentsGeneration;
-    this.commentsSaving.set(true);
-    try {
-      await this.api.deleteComment(this.projectId, k.id, commentId);
-      if (!this.destroyed && generation === this.commentsGeneration && this.commentsFor() === k.id) await this.readComments(k);
-    } catch { if (!this.destroyed && generation === this.commentsGeneration && this.commentsFor() === k.id) this.error.set('Comment deletion result could not be confirmed. Check the thread before deleting again.'); }
-    finally { if (!this.destroyed) this.commentsSaving.set(false); }
+    if (!this.canChangeComments(k) || !this.comments().some(c => c.id === commentId)) return;
+    await this.changeComments(k, () => this.api.deleteComment(this.projectId, k.id, commentId));
   }
   private clearHistory() {
     ++this.historyGeneration; this.historyFor.set(null); this.historyEntries.set([]);
@@ -836,7 +843,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   canRemoveKey(k: Key) {
     return !this.destroyed && !this.keysLoading() && !this.keysError() && !this.bulkReviewPending()
       && !this.keyDeleting().includes(k.id) && !this.keyDeleteErrorFor().includes(k.id)
-      && !this.tagsSaving().includes(k.id) && !this.shotsMutating().includes(k.id) && !this.shotsMutationError().includes(k.id) && this.keys().some(key => key.id === k.id)
+      && !this.commentsSaving() && !this.commentsMutationError().includes(k.id) && !this.tagsSaving().includes(k.id) && !this.shotsMutating().includes(k.id) && !this.shotsMutationError().includes(k.id) && this.keys().some(key => key.id === k.id)
       && ![...this.cells.entries()].some(([id,sig]) => { const c = sig(); return id.startsWith(`${k.id}:`)
         && (c.needsReload || c.reviewing || c.status === 'saving' || c.value !== c.saved || !this.sameForms(c.forms,c.savedForms)); });
   }
