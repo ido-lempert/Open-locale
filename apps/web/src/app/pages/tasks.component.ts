@@ -68,7 +68,7 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
               <strong>{{ t.title }}</strong>
               @if (t.description) { <span class="muted">{{ t.description }}</span> }
               <span class="muted">waits on:
-                <select [disabled]="rowPending(t.id)" class="depends-select" [attr.aria-label]="'Depends on for ' + t.title" [ngModel]="t.dependsOn?.id ?? ''"
+                <select [disabled]="!rowReady(t)" class="depends-select" [attr.aria-label]="'Depends on for ' + t.title" [ngModel]="t.dependsOn?.id ?? ''"
                   (change)="update(t, { dependsOnId: $any($event.target).value || null }, $any($event.target), t.dependsOn?.id ?? '')">
                   <option value="">no predecessor</option>
                   @for (p of tasks(); track p.id) { @if (p.id !== t.id) { <option [value]="p.id">{{ p.title }} ({{ p.status.toLowerCase().replace('_', ' ') }})</option> } }
@@ -76,13 +76,13 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
               </span>
               @if (t.lockKeys && t.keys.length) { <span class="muted lock-chip">locks {{ t.keys.length }} key(s): {{ lockedNames(t) }}</span> }
             </div>
-            <select [disabled]="rowPending(t.id)" [attr.aria-label]="'Status for ' + t.title" [ngModel]="t.status"
+            <select [disabled]="!rowReady(t)" [attr.aria-label]="'Status for ' + t.title" [ngModel]="t.status"
               (change)="update(t, { status: $any($event.target).value }, $any($event.target), t.status)">
               <option value="OPEN">open</option>
               <option value="IN_PROGRESS">in progress</option>
               <option value="DONE">done</option>
             </select>
-            <select [disabled]="rowPending(t.id)" [attr.aria-label]="'Assignee for ' + t.title" [ngModel]="assigneeValue(t)"
+            <select [disabled]="!rowReady(t)" [attr.aria-label]="'Assignee for ' + t.title" [ngModel]="assigneeValue(t)"
               (change)="update(t, assigneePatch($any($event.target).value), $any($event.target), assigneeValue(t))">
               <option value="">unassigned</option>
               @for (m of members(); track m.id) { <option [value]="m.id">{{ m.displayName }}</option> }
@@ -91,7 +91,7 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
             @if (t.dueDate) { <time class="muted">due {{ t.dueDate | date:'mediumDate' }}</time> }
             @if (updatingIds().includes(t.id)) { <span role="status" name="taskUpdating">Updating task...</span> }
             @if (deletingIds().includes(t.id)) { <span role="status" name="taskDeleting">Deleting task...</span> }
-            <button [disabled]="rowPending(t.id)" class="danger" [attr.aria-label]="'Delete task ' + t.title" (click)="remove(t)">&times;</button>
+            <button [disabled]="!rowReady(t)" class="danger" [attr.aria-label]="'Delete task ' + t.title" (click)="remove(t)">&times;</button>
           </li>
         } @empty {
           @if (!loading() && !listError()) { <li class="muted" name="taskListEmpty">{{ hasFilters() ? 'No tasks match these filters' : 'No tasks yet' }}</li> }
@@ -267,8 +267,10 @@ export class TasksComponent implements OnInit, OnDestroy {
 
   rowPending(id:string) { return this.updatingIds().includes(id)||this.deletingIds().includes(id); }
 
+  rowReady(t: TaskItem) { return !this.destroyed&&!this.loading()&&!this.listError()&&!this.rowPending(t.id)&&this.tasks().some(row=>row===t); }
+
   async update(t: TaskItem, patch: Record<string, unknown>, el?: HTMLSelectElement, revertValue?: string) {
-    if(this.destroyed||this.rowPending(t.id))return;
+    if(!this.rowReady(t)){if(!this.destroyed&&el&&revertValue!==undefined)el.value=revertValue;return;}
     const scope=this.projectGeneration,projectId=this.projectId;
     const current=()=>!this.destroyed&&scope===this.projectGeneration;
     this.updatingIds.update(ids=>[...ids,t.id]);this.error.set('');
@@ -287,7 +289,7 @@ export class TasksComponent implements OnInit, OnDestroy {
   }
 
   async remove(t: TaskItem) {
-    if(this.destroyed||this.rowPending(t.id))return;
+    if(!this.rowReady(t))return;
     const scope=this.projectGeneration,projectId=this.projectId;
     const current=()=>!this.destroyed&&scope===this.projectGeneration;
     this.deletingIds.update(ids=>[...ids,t.id]);this.error.set('');
