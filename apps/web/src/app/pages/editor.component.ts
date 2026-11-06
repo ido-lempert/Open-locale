@@ -75,8 +75,9 @@ interface CellState {
           @if (keyCreateError()) { <span class="error" name="keyCreateError" role="alert">Key creation could not be confirmed on branch "{{ keyCreateBranch() }}". Check that branch before trying again.</span> }
           <form class="inline" (ngSubmit)="addLocale()">
             <input placeholder="locale (e.g. fr)" aria-label="New locale code" [ngModel]="newLocale()" (ngModelChange)="newLocale.set($event)" name="newLocale" required maxlength="10" />
-            <button type="submit">Add locale</button>
+            <button type="submit" name="addLocale" [disabled]="localeCreating()">{{ localeCreating() ? 'Adding locale...' : 'Add locale' }}</button>
           </form>
+          @if (localeCreateError()) { <span class="error" role="alert" name="localeCreateError">Locale addition could not be confirmed. Check project settings before trying again.</span> }
           <select [ngModel]="ioFormat()" (ngModelChange)="onFormatPick($event)" name="ioFormat" aria-label="Import/export format">
             <option value="json">JSON</option>
             <option value="csv">CSV (spreadsheet-safe)</option>
@@ -346,6 +347,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   cells = new Map<string, WritableSignal<CellState>>();
   search = signal(''); newKey = signal(''); newLocale = signal(''); ioLocale = signal('en'); bulkStatus = signal('REVIEWED');
   bulkReviewPending = signal(false);
+  localeCreating = signal(false); localeCreateError = signal(false);
   keyCreating = signal(false); keyCreateError = signal(false); keyCreateBranch = signal('');
   branchCreating = signal(false); branchListLoading = signal(false); branchListError = signal(false);
   private branchListGeneration = 0;
@@ -801,13 +803,21 @@ export class EditorComponent implements OnInit, OnDestroy {
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
   }
   async addLocale() {
-    const submitted = this.newLocale().trim();
+    const submitted = this.newLocale(), code = submitted.trim();
+    if (!code || this.destroyed || this.localeCreating()) return;
+    const generation = this.projectGeneration;
+    this.localeCreating.set(true); this.localeCreateError.set(false); this.notice.set('');
     try {
-      await this.api.addLocale(this.projectId, submitted);
-      if (this.newLocale().trim() === submitted) this.newLocale.set('');
-      this.project.set(await this.api.getProject(this.projectId));
-      await this.reload();
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+      const locale = await this.api.addLocale(this.projectId, code);
+      if (this.destroyed) return;
+      if (this.newLocale() === submitted) this.newLocale.set('');
+      const current = generation === this.projectGeneration && !!this.project()
+        && !this.projectLoading() && !this.projectError();
+      if (current) this.project.update(project => project && !project.locales.some(l => l.code === locale.code)
+        ? { ...project, locales: [...project.locales, locale] } : project);
+      this.notice.set(`Locale "${locale.code}" is available on this project.${current ? ' Existing local translation values were kept.' : ' The current editor was kept. Reopen project settings to see current locales.'}`);
+    } catch { if (!this.destroyed) this.localeCreateError.set(true); }
+    finally { if (!this.destroyed) this.localeCreating.set(false); }
   }
   async exportJson() {
     try {

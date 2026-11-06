@@ -1174,3 +1174,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Confirmed returned-key insertion only into current unfiltered usable grid; no existing cell replacement or list reload. Pending guard/newer name retention/fixed scope-captured error/destroy fence. Filtered or changed-grid create remains confirmed with copy-first find guidance.
 - Unit12/browser5 real held translation PUT+key POST, persisted new key/DB Original/no list GET, pending duplicate/name retention, fixed failure, filtered no-injection. Designer review cleared stale prior success notice on a new attempt and captured failed branch explicitly.
 - API265/31 web450/31 builds0; syncSTAGED95+144239unique0 nativeSTAGED116+128244total242unique0. Five reviews0399; no API/schema/worker/coverage promotion. Sync-preview fixture added optional PG port after default bind conflict;644 final0 on55608.
+
+### Continuation 334 - Targeted locale addition
+- Confirmed locale metadata append/no project or grid reload, pending guard, raw newer-input retention, duplicate locale suppression, project-bootstrap generation/destroy fences. Fixed unknown feedback and no auto replay.
+- Unit9/browser5 real held translation PUT+locale POST proves persisted fr/DB Original/newer de/local draft retained/no project or key GET; existing-fr response no duplicate column; fixed failure/no replay. Final desktop pixels inspected.
+- Five reviews0400. API265/31 web459/32 builds0 initial428.13kB; syncSTAGED95+144239unique/nativeSTAGED116+128244total242unique inner/outer0. No API/schema/worker/coverage promotion.
