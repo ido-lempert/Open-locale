@@ -2,7 +2,7 @@ import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { ApiService, Project, QaIssue } from '../api.service';
+import { ApiService, BranchInfo, Project, QaIssue } from '../api.service';
 
 @Component({
   selector: 'ol-qa',
@@ -12,8 +12,15 @@ import { ApiService, Project, QaIssue } from '../api.service';
     <header class="bar">
       <a [routerLink]="['/projects', projectId]" class="back">&larr; Editor</a>
       <h1>QA checks</h1>
+      <select aria-label="QA branch" name="qaBranch" [attr.aria-busy]="branchesLoading()" [ngModel]="branch()" (ngModelChange)="branch.set($event); void fetch()">
+        @if (!branches().length) { <option value="main">main</option> }
+        @for (b of branches(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }
+      </select>
     </header>
     <main [attr.aria-busy]="loading()">
+      <p class="muted" name="qaBranchScope">Checks cover saved translations on branch {{ branch() }} only. To fix findings, open Editor and select this branch.</p>
+      @if (branchesLoading()) { <p role="status" name="qaBranchesLoading">Loading branch options. Main checks load independently.</p> }
+      @if (branchesError()) { <p role="alert" class="error" name="qaBranchesError">Branch options unavailable. Current checks remain available.</p><button type="button" name="retryQaBranches" (click)="void loadBranches()">Retry branch options</button> }
       @if (error(); as e) { <p class="error" role="alert">{{ e }}</p><button type="button" name="retryQa" (click)="void fetch()">Retry QA checks</button> }
       @if (localesLoading()) { <p role="status" name="qaLocalesLoading">Loading locale filter options. Checks load independently.</p> }
       @if (localesError()) { <p class="error" role="alert" name="qaLocalesError">Locale filter options unavailable. Checks remain available.</p><button type="button" name="retryQaLocales" (click)="void loadLocales()">Retry locale options</button> }
@@ -32,7 +39,7 @@ import { ApiService, Project, QaIssue } from '../api.service';
         <tbody>
           @for (i of issues(); track $index) {
             <tr>
-              <td><a class="qa-key" [routerLink]="['/projects', projectId]">{{ i.key }}</a></td>
+              <td>@if (branch() === 'main') { <a class="qa-key" [routerLink]="['/projects', projectId]">{{ i.key }}</a> } @else { <code>{{ i.key }}</code> }</td>
               <td><code>{{ i.locale }}</code></td>
               <td><span [class]="'qa-badge qa-' + i.type">{{ label(i.type) }}</span></td>
               <td class="muted">{{ i.detail }}</td>
@@ -50,6 +57,8 @@ export class QaComponent implements OnInit, OnDestroy {
   issues = signal<QaIssue[]>([]);
   targetLocales = signal<string[]>([]);
   locale = signal('');
+  branch=signal('main');branches=signal<BranchInfo[]>([]);branchesLoading=signal(false);branchesError=signal(false);
+  private branchGeneration=0;
   localesLoading=signal(false);
   localesError=signal(false);
   private localeGeneration=0;
@@ -68,8 +77,17 @@ export class QaComponent implements OnInit, OnDestroy {
   }
   async loadProject(projectId:string) {
     if(this.destroyed)return;
-    ++this.projectGeneration;this.projectId=projectId;this.locale.set('');this.targetLocales.set([]);
-    await Promise.all([this.loadLocales(),this.fetch()]);
+    ++this.projectGeneration;this.projectId=projectId;this.locale.set('');this.targetLocales.set([]);this.branch.set('main');this.branches.set([]);
+    await Promise.all([this.loadLocales(),this.loadBranches(),this.fetch()]);
+  }
+  async loadBranches() {
+    if(this.destroyed)return;
+    const scope=this.projectGeneration,generation=++this.branchGeneration,projectId=this.projectId;
+    const current=()=>!this.destroyed&&scope===this.projectGeneration&&generation===this.branchGeneration;
+    this.branchesLoading.set(true);this.branchesError.set(false);
+    try { const branches=await this.api.listBranches(projectId);if(current())this.branches.set(branches); }
+    catch {if(current())this.branchesError.set(true);}
+    finally {if(current())this.branchesLoading.set(false);}
   }
   async loadLocales() {
     if(this.destroyed)return;
@@ -86,17 +104,17 @@ export class QaComponent implements OnInit, OnDestroy {
 
   async fetch() {
     if(this.destroyed)return;
-    const generation=++this.generation,scope=this.projectGeneration,projectId=this.projectId,locale=this.locale()||undefined;
+    const generation=++this.generation,scope=this.projectGeneration,projectId=this.projectId,locale=this.locale()||undefined,branch=this.branch();
     const current=()=>!this.destroyed&&scope===this.projectGeneration&&generation===this.generation;
     this.loading.set(true);this.error.set('');this.issues.set([]);
     try {
-      const res=await this.api.runQa(projectId,locale);
+      const res=await this.api.runQa(projectId,locale,branch);
       if(current())this.issues.set(res.issues);
     } catch { if(current())this.error.set('QA checks unavailable. No findings are shown. Retry checks or reload this page.'); }
     finally { if(current())this.loading.set(false); }
   }
 
-  emptyLabel() { return this.locale() ? 'No QA issues found for ' + this.locale() : 'No QA issues found'; }
+  emptyLabel() { return (this.locale() ? 'No QA issues found for ' + this.locale() : 'No QA issues found') + ' on branch ' + this.branch(); }
 
   label(type: QaIssue['type']): string {
     switch (type) {

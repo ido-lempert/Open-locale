@@ -510,8 +510,9 @@ export class ApiService {
     return this.request<{ keysCreated: number; translationsUpserted: number; unchangedSkipped: number; failed: number; failures?: string[] }>(
       `/projects/${projectId}/import/${locale}${q ? `?${q}` : ''}`, { method: 'POST', body: JSON.stringify(payload) });
   }
-  runQa(projectId: string, locale?: string) {
-    return this.request<{ issues: QaIssue[] }>(`/projects/${projectId}/qa${locale ? `?locale=${locale}` : ''}`);
+  runQa(projectId: string, locale?: string, branch?: string) {
+    const query=new URLSearchParams();if(locale)query.set('locale',locale);if(branch)query.set('branch',branch);
+    return this.request<{ issues: QaIssue[] }>(`/projects/${projectId}/qa${query.size ? '?'+query.toString() : ''}`);
   }
   listGlossary(projectId: string) {
     return this.request<GlossaryTermItem[]>(`/projects/${projectId}/glossary`);
