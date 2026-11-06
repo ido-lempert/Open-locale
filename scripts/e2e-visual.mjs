@@ -691,14 +691,20 @@ try {
     return t.includes('Bundle import (PO (gettext), main)') && t.includes('he:') && t.includes('unchanged') && t.includes('independently');
   }, { timeout: 10000 }).then(() => true).catch(() => false);
   check('bundle import via UI summarizes every locale with partial-outcome wording', bundleNotice);
-  // Hostile upload: a CRC-tampered zip is rejected with the reason shown.
+  // Hostile upload: server rejects CRC tampering; UI uses fixed unknown guidance.
   const badZip = Buffer.from(bundleBuf);
   badZip[30 + 'en.po'.length] ^= 0xff;
   writeFileSync('/tmp/e2e-bundle-bad.zip', badZip);
   const badUpInput = await page.$('input[name=bundleFile]');
   await badUpInput.uploadFile('/tmp/e2e-bundle-bad.zip');
-  const badNotice = await page.waitForFunction(() => (document.querySelector('p.error')?.textContent || '').includes('CRC mismatch'), { timeout: 10000 }).then(() => true).catch(() => false);
-  check('CRC-tampered bundle upload rejected with the reason shown', badNotice);
+  const badNotice = await page.waitForFunction(() => (document.querySelector('p.error')?.textContent || '').includes('Bundle import result could not be confirmed'), { timeout: 10000 }).then(() => true).catch(() => false);
+  const crcToken = await page.evaluate(()=>localStorage.getItem('ol_token'));
+  const crcResponse = await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/import-bundle/po`,{method:'POST',headers:{Authorization:`Bearer ${crcToken}`,'Content-Type':'application/zip'},body:badZip});
+  const crcBody = await crcResponse.json();
+  check('CRC-tampered bundle rejected server-side with fixed unknown-result UI', badNotice && crcResponse.status===400 && String(crcBody.message).includes('CRC mismatch'));
+  await page.click('[name=retryKeys]');
+  await page.waitForFunction(()=>!document.querySelector('[name=keysLoading]')&&!document.querySelector('[name=keysError]'));
+
   // The store-only and partial/no-rollback restrictions are visible, not
   // only a tooltip.
   const bundleNoteShown = await page.evaluate(() => {

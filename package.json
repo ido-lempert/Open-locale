@@ -75,7 +75,8 @@
     "test:editor-key-delete-browser": "node scripts/editor-key-delete-browser-test.mjs",
     "test:editor-merge-browser": "node scripts/editor-merge-browser-test.mjs",
     "test:editor-import-scope-browser": "node scripts/editor-import-scope-browser-test.mjs",
-    "test:editor-import-drafts-browser": "node scripts/editor-import-drafts-browser-test.mjs"
+    "test:editor-import-drafts-browser": "node scripts/editor-import-drafts-browser-test.mjs",
+    "test:editor-bundle-scope-browser": "node scripts/editor-bundle-scope-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

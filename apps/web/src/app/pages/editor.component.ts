@@ -99,7 +99,7 @@ interface CellState {
           <button (click)="exportTmxFile()" title="Download the translation memory for the selected locale as TMX 1.4 (export-only)">Export TM (TMX)</button>
           <label class="import">Import {{ formatLabel() }} <input type="file" name="importFile" [disabled]="importPending()" accept=".json,.csv,.xml,.strings,.stringsdict,.po,.pot,.xlf,.xliff,.properties,.arb,.yaml,.yml,.resx" (change)="importFile($event)" hidden /></label>
           <label class="import">Preview import <input type="file" name="previewFile" [disabled]="importPending()" accept=".json,.csv,.xml,.strings,.stringsdict,.po,.pot,.xlf,.xliff,.properties,.arb,.yaml,.yml,.resx" (change)="previewFile($event)" hidden /></label>
-          <label class="import" title="Upload a store-only zip from Export all (.zip); compressed zips from other tools are rejected. Each locale imports independently: skipped entries and failed locales are reported, not rolled back.">Import bundle (.zip) <input type="file" name="bundleFile" accept=".zip" (change)="bundleFile($event)" hidden /></label>
+          <label class="import" title="Upload a store-only zip from Export all (.zip); compressed zips from other tools are rejected. Each locale imports independently: skipped entries and failed locales are reported, not rolled back.">Import bundle (.zip) <input type="file" name="bundleFile" [disabled]="importPending()" accept=".zip" (change)="bundleFile($event)" hidden /></label>
           <div class="muted csv-note">.zip bundles: store-only archives from Export all (.zip) only - compressed zips are rejected. Each locale imports independently; skipped entries and failed locales are reported, not rolled back.</div>
           @if (ioFormat() === 'csv') {
             <div class="muted csv-note">CSV exports are spreadsheet-safe: values starting with formula characters get a protective prefix, so re-importing a safe export keeps those prefixes and changes stored values. For a lossless roundtrip use the API with <code>mode=raw</code>.</div>
@@ -982,20 +982,32 @@ export class EditorComponent implements OnInit, OnDestroy {
     finally { if (!this.destroyed) this.bulkReviewPending.set(false); }
   }
   async bundleFile(event: Event) {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
+    const input = event.target as HTMLInputElement, file = input.files?.[0];
     input.value = '';
-    if (!file) return;
-    this.notice.set(''); this.error.set('');
+    if (!file || this.destroyed || this.importPending()) return;
+    this.cancelImportPick(); this.notice.set(''); this.error.set('');
+    if (!this.canBulkReview() || this.bulkReviewPending()) {
+      this.error.set('Bundle import unavailable while local translation work is unsaved, pending or unconfirmed. Save drafts or copy retained values before reloading.'); return;
+    }
+    const scope: ImportScope = { generation: this.importGeneration, keysGeneration: this.keysGeneration, branch: this.branch(), locale: this.ioLocale(), format: this.ioFormat() };
+    this.importPending.set(true); this.importWritePending.set(true);
     try {
-      const res = await this.api.importBundle(this.projectId, this.ioFormat(), file, this.branch());
-      const parts = res.imported.map((r) => `${r.locale}: ${r.keysCreated} created, ${r.translationsUpserted} updated, ${r.unchangedSkipped} unchanged${r.failed ? `, ${r.failed} failed` : ''}`);
-      const skips = res.skipped.map((x) => `skipped ${x.name} (${x.reason})`);
-      const fails = res.failedLocales.map((x) => `${x.locale} failed (${x.error})`);
+      const res = await this.api.importBundle(this.projectId, scope.format, file, scope.branch);
+      if (!this.importScopeCurrent(scope)) return;
+      const parts = res.imported.map(r => `${r.locale}: ${r.keysCreated} created, ${r.translationsUpserted} updated, ${r.unchangedSkipped} unchanged${r.failed ? `, ${r.failed} failed` : ''}`);
+      const skips = res.skipped.map(x => `skipped ${x.name} (${x.reason})`);
+      const fails = res.failedLocales.map(x => `${x.locale} failed (${x.error})`);
       const summary = [...parts, ...skips, ...fails].join('; ');
-      this.notice.set(`Bundle import (${this.formatLabel()}, ${res.branch}): ${summary || 'no entries'}. Each locale imported independently - skipped/failed entries above were not rolled back.`);
-      await this.reload();
-    } catch (err) { this.error.set(err instanceof Error ? err.message : 'Bundle import failed'); }
+      this.notice.set(`Bundle import (${this.labelFor(scope.format)}, ${res.branch}): ${summary || 'no entries'}. Each locale imported independently - skipped/failed entries above were not rolled back.`);
+      if (!this.canBulkReview() || this.bulkReviewPending()) {
+        this.prepareSaveReload();
+        this.notice.update(message => `${message} Local values were kept. Copy retained values and reload current server values before more changes.`);
+      } else await this.reload();
+    } catch { if (this.importScopeCurrent(scope)) {
+      this.prepareSaveReload();
+      this.error.set('Bundle import result could not be confirmed. Some locales may have changed. Copy retained values and check current server values before trying again.');
+    } }
+    finally { if (!this.destroyed) { this.importPending.set(false); this.importWritePending.set(false); } }
   }
   async exportBundleFile() {
     const fmt = this.ioFormat();
