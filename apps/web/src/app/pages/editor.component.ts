@@ -7,6 +7,8 @@ import { detectImportFormat, IoFormat } from '../import-format';
 import { mergeFormsForSave, pluralCategories } from '../plural-forms';
 import { ApiService, BranchInfo, ScreenshotMeta, TmSuggestion, GlossaryTermItem, CommentEntry, HistoryEntry, Key, Project, TranslationStatus } from '../api.service';
 
+interface ImportScope { generation: number; keysGeneration: number; branch: string; locale: string; format: IoFormat; }
+
 interface CellState {
   value: string; saved: string;
   // Per-CLDR-category text for plural keys; {} for plain keys.
@@ -95,22 +97,23 @@ interface CellState {
           <button (click)="exportFile()">Export {{ formatLabel() }}</button>
           <button (click)="exportBundleFile()" title="Download every locale as one zip in the selected format">Export all (.zip)</button>
           <button (click)="exportTmxFile()" title="Download the translation memory for the selected locale as TMX 1.4 (export-only)">Export TM (TMX)</button>
-          <label class="import">Import {{ formatLabel() }} <input type="file" name="importFile" accept=".json,.csv,.xml,.strings,.stringsdict,.po,.pot,.xlf,.xliff,.properties,.arb,.yaml,.yml,.resx" (change)="importFile($event)" hidden /></label>
-          <label class="import">Preview import <input type="file" name="previewFile" accept=".json,.csv,.xml,.strings,.stringsdict,.po,.pot,.xlf,.xliff,.properties,.arb,.yaml,.yml,.resx" (change)="previewFile($event)" hidden /></label>
+          <label class="import">Import {{ formatLabel() }} <input type="file" name="importFile" [disabled]="importPending()" accept=".json,.csv,.xml,.strings,.stringsdict,.po,.pot,.xlf,.xliff,.properties,.arb,.yaml,.yml,.resx" (change)="importFile($event)" hidden /></label>
+          <label class="import">Preview import <input type="file" name="previewFile" [disabled]="importPending()" accept=".json,.csv,.xml,.strings,.stringsdict,.po,.pot,.xlf,.xliff,.properties,.arb,.yaml,.yml,.resx" (change)="previewFile($event)" hidden /></label>
           <label class="import" title="Upload a store-only zip from Export all (.zip); compressed zips from other tools are rejected. Each locale imports independently: skipped entries and failed locales are reported, not rolled back.">Import bundle (.zip) <input type="file" name="bundleFile" accept=".zip" (change)="bundleFile($event)" hidden /></label>
           <div class="muted csv-note">.zip bundles: store-only archives from Export all (.zip) only - compressed zips are rejected. Each locale imports independently; skipped entries and failed locales are reported, not rolled back.</div>
           @if (ioFormat() === 'csv') {
             <div class="muted csv-note">CSV exports are spreadsheet-safe: values starting with formula characters get a protective prefix, so re-importing a safe export keeps those prefixes and changes stored values. For a lossless roundtrip use the API with <code>mode=raw</code>.</div>
           }
+          @if (importPending()) { <span role="status" name="importPending">Import request pending. Changing scope does not cancel a request already sent.</span> }
           @if (importConflict(); as c) {
             <div class="import-conflict" role="alert">
               <span>{{ c.filename }} has a .{{ c.ext }} extension, which usually means {{ labelFor(c.detected) }}, but the format is set to {{ labelFor(c.current) }}. Nothing was imported yet.</span>
               <button type="button" (click)="resolveImportConflict(true)">{{ c.dryRun ? 'Preview as' : 'Import as' }} {{ labelFor(c.detected) }}</button>
               <button type="button" (click)="resolveImportConflict(false)">{{ c.dryRun ? 'Preview as' : 'Keep' }} {{ labelFor(c.current) }}</button>
-              <button type="button" (click)="importConflict.set(null)">Cancel</button>
+              <button type="button" (click)="cancelImportPick()">Cancel</button>
             </div>
           }
-          <select [ngModel]="ioLocale()" (ngModelChange)="ioLocale.set($event)" name="ioLocale" aria-label="Import/export locale">
+          <select [ngModel]="ioLocale()" (ngModelChange)="onIoLocalePick($event)" name="ioLocale" aria-label="Import/export locale">
             @for (l of p.locales; track l.code) { <option [value]="l.code">{{ l.code }}</option> }
           </select>
         </section>
@@ -358,7 +361,8 @@ export class EditorComponent implements OnInit, OnDestroy {
   private mergeGeneration = 0; private mergePreviewKeysGeneration = -1;
   mergePreview = signal<{ branchId: string; from: string; lines: string[]; previewAt: string } | null>(null); ioFormat = signal<'json' | 'csv' | 'android' | 'ios' | 'stringsdict' | 'po' | 'pot' | 'xliff' | 'properties' | 'arb' | 'yaml' | 'resx'>('json');
   ioFormatTouched = signal(false);
-  importConflict = signal<{ filename: string; ext: string; detected: IoFormat; current: IoFormat; text: string; dryRun: boolean } | null>(null);
+  importPending = signal(false); private importGeneration = 0;
+  importConflict = signal<{ scope: ImportScope; filename: string; ext: string; detected: IoFormat; current: IoFormat; text: string; dryRun: boolean } | null>(null);
   glossary = signal<GlossaryTermItem[]>([]);
   filterTag = signal(''); filterStatus = signal<'' | TranslationStatus>('');
   tagEditFor = signal<string | null>(null);
@@ -435,7 +439,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   async reload() {
     if (this.destroyed) return;
     if (this.searchTimer) { clearTimeout(this.searchTimer); this.searchTimer = null; }
-    this.cancelMerge();
+    this.cancelMerge(); this.cancelImportPick();
     const generation = ++this.keysGeneration, projectId = this.projectId;
     const current = () => !this.destroyed && generation === this.keysGeneration;
     this.keysLoading.set(true); this.keysError.set(false);
@@ -784,7 +788,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     finally { if(current())this.historyLoading.set(false); }
   }
   ngOnDestroy() {
-    this.destroyed=true; ++this.mergeGeneration; ++this.branchListGeneration; ++this.projectGeneration; ++this.keysGeneration; ++this.historyGeneration; this.clearShots(); this.clearComments(); this.clearTm();
+    this.destroyed=true; ++this.importGeneration; ++this.mergeGeneration; ++this.branchListGeneration; ++this.projectGeneration; ++this.keysGeneration; ++this.historyGeneration; this.clearShots(); this.clearComments(); this.clearTm();
     if(this.searchTimer)clearTimeout(this.searchTimer);
   }
   async addKey() {
@@ -1048,9 +1052,8 @@ export class EditorComponent implements OnInit, OnDestroy {
     return this.labelFor(this.ioFormat());
   }
   onFormatPick(fmt: IoFormat) {
-    this.ioFormat.set(fmt);
+    this.cancelImportPick(); this.ioFormat.set(fmt);
     this.ioFormatTouched.set(true);
-    this.importConflict.set(null);
   }
   async importFile(event: Event) {
     return this.handleFile(event, false);
@@ -1058,55 +1061,56 @@ export class EditorComponent implements OnInit, OnDestroy {
   async previewFile(event: Event) {
     return this.handleFile(event, true);
   }
+  cancelImportPick() { ++this.importGeneration; this.importConflict.set(null); }
+  onIoLocalePick(locale: string) { this.cancelImportPick(); this.ioLocale.set(locale); }
+  private importScopeCurrent(scope: ImportScope) {
+    return !this.destroyed && scope.generation === this.importGeneration && scope.keysGeneration === this.keysGeneration
+      && scope.branch === this.branch() && scope.locale === this.ioLocale() && scope.format === this.ioFormat();
+  }
   private async handleFile(event: Event, dryRun: boolean) {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-    // A new pick supersedes any earlier result AND any open conflict prompt:
-    // never let a stale notice or a banner for a different file sit next to
-    // this pick's outcome, and never let a banner's mode outlive its file.
-    this.notice.set('');
-    this.error.set('');
-    this.importConflict.set(null);
-    const text = await file.text();
+    const input = event.target as HTMLInputElement, file = input.files?.[0];
     input.value = '';
-    // Extension detection never overrides a deliberate format choice. A
-    // conflict is presented for an explicit decision before anything is
-    // imported; an unknown extension always keeps the current selection.
+    if (!file || this.destroyed || this.importPending()) return;
+    this.cancelImportPick(); this.notice.set(''); this.error.set('');
+    const scope: ImportScope = { generation: this.importGeneration, keysGeneration: this.keysGeneration, branch: this.branch(), locale: this.ioLocale(), format: this.ioFormat() };
+    let text: string;
+    try { text = await file.text(); }
+    catch { if (this.importScopeCurrent(scope)) this.error.set('File could not be read. Pick it again to try again.'); return; }
+    if (!this.importScopeCurrent(scope)) return;
     const detected = detectImportFormat(file.name);
-    if (detected && detected !== this.ioFormat()) {
+    if (detected && detected !== scope.format) {
       if (this.ioFormatTouched()) {
-        this.importConflict.set({ filename: file.name, ext: file.name.split('.').pop() ?? '', detected, current: this.ioFormat(), text, dryRun });
+        this.importConflict.set({ scope, filename: file.name, ext: file.name.split('.').pop() ?? '', detected, current: scope.format, text, dryRun });
         return;
       }
-      this.ioFormat.set(detected);
+      this.ioFormat.set(detected); scope.format = detected;
     }
-    await this.runImport(text, dryRun);
+    await this.runImport(text, dryRun, scope);
   }
   async resolveImportConflict(useDetected: boolean) {
     const c = this.importConflict();
-    if (!c) return;
-    this.importConflict.set(null);
-    this.notice.set('');
-    this.error.set('');
-    if (useDetected) {
-      this.ioFormat.set(c.detected);
-      this.ioFormatTouched.set(true); // an explicit click on the banner choice
-    }
-    await this.runImport(c.text, c.dryRun);
+    if (!c || this.importPending() || !this.importScopeCurrent(c.scope)) { this.importConflict.set(null); return; }
+    this.importConflict.set(null); this.notice.set(''); this.error.set('');
+    const scope = { ...c.scope };
+    if (useDetected) { this.ioFormat.set(c.detected); scope.format = c.detected; this.ioFormatTouched.set(true); }
+    await this.runImport(c.text, c.dryRun, scope);
   }
-  private async runImport(text: string, dryRun: boolean) {
-    const fmt = this.ioFormat();
+  private async runImport(text: string, dryRun: boolean, scope: ImportScope) {
+    if (this.importPending() || !this.importScopeCurrent(scope)) return;
+    const fmt = scope.format;
+    this.importPending.set(true);
     try {
       const payload = fmt === 'json' ? { entries: JSON.parse(text) }
         : fmt === 'csv' ? { csv: text }
         : fmt === 'android' ? { xml: text } : fmt === 'po' ? { po: text } : fmt === 'pot' ? { pot: text } : fmt === 'xliff' ? { xliff: text } : fmt === 'properties' ? { properties: text } : fmt === 'arb' ? { arb: text } : fmt === 'yaml' ? { yaml: text } : fmt === 'resx' ? { resx: text } : fmt === 'stringsdict' ? { stringsdict: text } : { strings: text };
-      const res = await this.api.importPayload(this.projectId, this.ioLocale(), payload, this.branch(), dryRun);
+      const res = await this.api.importPayload(this.projectId, scope.locale, payload, scope.branch, dryRun);
+      if (!this.importScopeCurrent(scope)) return;
       this.error.set('');
       this.notice.set(dryRun
-        ? `Preview only - nothing imported: would create ${res.keysCreated} keys, update ${res.translationsUpserted} translations, ${res.unchangedSkipped} unchanged${res.failed ? `, ${res.failed} would fail: ${(res.failures ?? []).join('; ')}` : ''} (${this.formatLabel()}, ${this.ioLocale()}).`
-        : `Imported ${res.keysCreated} keys, ${res.translationsUpserted} translations (${this.formatLabel()}, ${this.ioLocale()}).`);
+        ? `Preview only - nothing imported: would create ${res.keysCreated} keys, update ${res.translationsUpserted} translations, ${res.unchangedSkipped} unchanged${res.failed ? `, ${res.failed} would fail: ${(res.failures ?? []).join('; ')}` : ''} (${this.labelFor(fmt)}, ${scope.locale}, branch ${scope.branch}).`
+        : `Imported ${res.keysCreated} keys, ${res.translationsUpserted} translations (${this.labelFor(fmt)}, ${scope.locale}, branch ${scope.branch}).`);
       if (!dryRun) await this.reload();
-    } catch (err) { this.notice.set(''); this.error.set(err instanceof Error ? err.message : `${dryRun ? 'Preview' : 'Import'} failed: invalid ${this.formatLabel()}`); }
+    } catch { if (this.importScopeCurrent(scope)) { this.notice.set(''); this.error.set(dryRun ? 'Import preview unavailable. Check the file and connection before trying again.' : 'Import result could not be confirmed. Check current server values before trying again.'); } }
+    finally { if (!this.destroyed) this.importPending.set(false); }
   }
 }

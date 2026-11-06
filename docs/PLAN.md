@@ -1189,3 +1189,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Preview captures branch/list generation, invalidated on reload/branch change/cancel/destroy. Pending preview/write guards, fixed errors, no post-merge source-grid reload. Explicit saved-server-values-only modal/copy-first opening-main guidance.
 - Unit13/browser5 real old-preview branch switch; held source PUT+merge POST, duplicate confirm/cancel guard, main saved Feature/source local draft retained/no key GET. Browser endpoint matcher abort then disabled-render readiness4PASS1FAIL corrected/final5.
 - Five reviews0402. API265/31 web489/34 builds0; syncSTAGED95+144239unique/nativeSTAGED116+128244total242unique inner/outer0. No merge API/schema/worker/coverage promotion.
+
+### Continuation 337 - Captured single-file import scope
+- File pick captures branch/locale/format/list generation before async bytes; newer pick/scope/list change/destroy invalidates older read/conflict/result. Pending guard, fixed errors, no late changed-scope feedback/reload.
+- Unit12/browser5 delayed bytes+locale switch zero requests, conflict clears on locale change, held sent import stays EN after HE selection/persists only EN/no late key GET. Desktop pixels inspected. Bundle/general draft reconciliation unchanged.
+- Five reviews0403. API265/31 web501/35 builds0; syncSTAGED95+144239unique/nativeSTAGED116+128244total242unique inner/outer0. No API/schema/worker/coverage promotion.
