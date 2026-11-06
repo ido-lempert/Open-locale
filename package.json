@@ -32,6 +32,7 @@
     "test:branches": "node scripts/branches-test.mjs",
     "test:merge-concurrency": "node scripts/merge-concurrency-test.mjs",
     "test:ota": "node scripts/ota-test.mjs",
+    "test:reports-refresh-browser": "node scripts/reports-refresh-browser-test.mjs",
     "test:reports": "node scripts/reports-test.mjs",
     "test:incontext": "node scripts/incontext-test.mjs",
     "test:incontext-edit": "node scripts/incontext-edit-test.mjs",

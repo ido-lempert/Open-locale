@@ -20,6 +20,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
       @if (branchListLoading()) { <p role="status" name="branchListLoading">Loading branch list. Main reports are available independently.</p> }
       @if (branchListError()) { <p class="error" role="alert" name="branchListError">Branch list unavailable. Retry loading branches or reload this page.</p><button type="button" name="retryBranches" (click)="void loadBranches()">Retry branch list</button> }
       @if (error(); as e) { <p class="error" role="alert" name="branchReportError">{{ e }}</p><button type="button" name="retryBranchReports" (click)="void fetch()">Retry branch reports</button> }
+      @if (!error()) { <button type="button" name="refreshBranchReports" [disabled]="branchLoading()" (click)="refreshBranch()">Refresh branch reports</button> }
       @if (branchLoading()) { <p role="status" name="branchReportLoading">Loading progress and quality reports for {{ branch() }}...</p> }
       @if (report(); as r) {
         <p class="muted">{{ r.totalKeys }} keys on {{ r.branch }}. A key counts as translated when its value is not empty; status counts cover non-empty values only.</p>
@@ -79,6 +80,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
       <p class="muted" name="projectDashboardScope">Usage and tasks cover the whole project. The branch selector filters progress and quality only.</p>
       <h2>Usage <span class="muted">last {{ usage()?.days ?? usageDays() }} days</span></h2>
       <label>Usage window <select name="usageDays" aria-label="Usage window" [ngModel]="usageDays()" (ngModelChange)="usageDays.set(+$event); void loadUsage()"><option [ngValue]="7">7 days</option><option [ngValue]="30">30 days</option><option [ngValue]="90">90 days</option></select></label>
+      @if (!usageError()) { <button type="button" name="refreshUsageReport" [disabled]="usageLoading()" (click)="refreshUsage()">Refresh usage</button> }
       @if (usageLoading()) { <p role="status" name="usageLoading">Loading usage report...</p> }
       @if (usageError()) { <p class="error" role="alert" name="usageReportError">Usage report unavailable. No usage figures are shown. Retry the selected window or reload this page.</p><button type="button" name="retryUsage" (click)="void loadUsage()">Retry usage</button> }
       @if (usage(); as u) {
@@ -97,6 +99,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
       }
 
       <h2>Tasks</h2>
+      @if (!taskReportError()) { <button type="button" name="refreshTaskReport" [disabled]="tasksLoading()" (click)="refreshTasks()">Refresh task report</button> }
       @if (tasksLoading()) { <p role="status" name="tasksLoading">Loading task report...</p> }
       @if (taskReportError()) { <p class="error" role="alert" name="taskReportError">Task report unavailable. No task figures are shown. Retry tasks or reload this page.</p><button type="button" name="retryTasks" (click)="void loadTasks()">Retry tasks</button> }
       @if (taskReport(); as t) {
@@ -170,6 +173,10 @@ export class ReportsComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() { this.destroyed=true;++this.generation;++this.projectGeneration;this.subscription?.unsubscribe(); }
+
+  refreshBranch() { if(!this.destroyed&&!this.branchLoading())void this.fetch(); }
+  refreshUsage() { if(!this.destroyed&&!this.usageLoading())void this.loadUsage(); }
+  refreshTasks() { if(!this.destroyed&&!this.tasksLoading())void this.loadTasks(); }
 
   async fetch() {
     if(this.destroyed)return;

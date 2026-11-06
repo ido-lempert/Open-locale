@@ -126,12 +126,14 @@ try {
   await page.waitForSelector('.toolbar', { timeout: 10000 });
   await page.type('input[name=newKey]', 'home.title');
   await page.click('.inline button');
-  check('first key added', await waitText('home.title'));
+  await page.waitForFunction(()=>[...document.querySelectorAll('.grid tbody tr')].some(e=>e.textContent.includes('home.title'))&&!document.querySelector('.inline button')?.disabled,{timeout:10000});
+  check('first key added', true);
   const keyInput = await page.$('input[name=newKey]');
   await keyInput.evaluate((el) => { el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); });
   await page.type('input[name=newKey]', 'cart.checkout');
   await page.click('.inline button');
-  check('second key added', await waitText('cart.checkout'));
+  await page.waitForFunction(()=>[...document.querySelectorAll('.grid tbody tr')].some(e=>e.textContent.includes('cart.checkout'))&&!document.querySelector('.inline button')?.disabled,{timeout:10000});
+  check('second key added', true);
   const cells = await page.$$('.grid tbody tr:first-child textarea');
   await cells[0].type('Welcome to the shop');
   await cells[0].evaluate((el) => el.blur());
