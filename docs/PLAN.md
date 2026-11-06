@@ -1140,3 +1140,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Fixed initial loading/error/manual retry, atomic required project+branch publish; optional glossary non-blocking with bootstrap generation/destroy fences. No raw backend failure in bootstrap UI.
 - Unit7/browser7; held retry/error and real recovery, failed branch hides partial toolbar/grid, route-away late response. Design correction removes misleading Loading heading after failure.
 - No API/schema/worker/coverage promotion or project-id route-reuse claim. Five reviews0392. Sync239/native244242unique explicitlySTAGED final0.
+
+### Continuation 327 - Independent project and security-status reads
+- Project-list loading/error/manual retry separate from 2FA-status loading/error/retry; no false empty while pending/failed, no inferred disabled status, no raw service errors for these reads.
+- Generation/destroy fences, successful list usable despite status failure and converse; project create's list reload no longer refetches security status. Unit7/browser7, zero security mutations during read-retry proof.
+- Five reviews0393; no auth mutation/API/schema/worker/coverage promotion. Sync239/native244242unique explicitlySTAGED final0. Initial batch live-descendant cleanup warning and clean rerun preserved.

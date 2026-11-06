@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService, Project } from '../api.service';
@@ -20,11 +20,15 @@ import { ApiService, Project } from '../api.service';
         <button class="primary" type="submit" [disabled]="busy()">New project</button>
       </form>
       @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
-      @if (projects().length === 0 && !error()) {
+      @if (projectsLoading()) { <p class="muted" role="status" name="projectsLoading">Loading projects.</p> }
+      @else if (projectsError()) { <p class="error" role="alert" name="projectsError">Projects unavailable. Check your access or connection, then retry.</p><button type="button" name="retryProjects" (click)="reload()">Retry projects</button> }
+      @else if (projects().length === 0) {
         <p class="muted empty">No projects yet. Create your first one above.</p>
       }
       <section class="panel tfa">
         <h2>Two-factor authentication</h2>
+        @if (tfaLoading()) { <p class="muted" role="status" name="tfaLoading">Loading two-factor status.</p> }
+        @else if (tfaError()) { <p class="error" role="alert" name="tfaError">Two-factor status unavailable. No security setting was changed by this read.</p><button type="button" name="retryTfa" [disabled]="busy()" (click)="loadTfa()">Retry status</button> }
         @if (tfa(); as t) {
           @if (t.enabled) {
             <p class="muted">Enabled. {{ t.recoveryCodesRemaining }} recovery codes remain. Changing two-factor settings signs out all sessions, including this one.</p>
@@ -73,22 +77,37 @@ import { ApiService, Project } from '../api.service';
     </main>
   `,
 })
-export class ProjectsComponent implements OnInit {
+export class ProjectsComponent implements OnInit, OnDestroy {
   projects = signal<Project[]>([]);
+  projectsLoading = signal(true); projectsError = signal(false);
+  tfaLoading = signal(true); tfaError = signal(false);
+  private projectsGeneration = 0; private tfaGeneration = 0; private destroyed = false;
   name = signal(''); slug = signal(''); locales = signal('');
   busy = signal(false); error = signal('');
   tfa = signal<{ enabled: boolean; recoveryCodesRemaining: number } | null>(null);
   tfaSetup = signal<{ secret: string; otpauthUrl: string } | null>(null);
   tfaCode = signal(''); tfaPassword = signal(''); tfaCodes = signal<string[]>([]);
   constructor(private api: ApiService) {}
-  async ngOnInit() { await this.reload(); }
+  async ngOnInit() { await Promise.all([this.reload(), this.loadTfa()]); }
   async reload() {
-    try {
-      this.projects.set(await this.api.listProjects());
-      this.tfa.set(await this.api.get2faStatus());
-    }
-    catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load'); }
+    if (this.destroyed) return;
+    const generation = ++this.projectsGeneration;
+    const current = () => !this.destroyed && generation === this.projectsGeneration;
+    this.projectsLoading.set(true); this.projectsError.set(false); this.projects.set([]);
+    try { const projects = await this.api.listProjects(); if (current()) this.projects.set(projects); }
+    catch { if (current()) this.projectsError.set(true); }
+    finally { if (current()) this.projectsLoading.set(false); }
   }
+  async loadTfa() {
+    if (this.destroyed || this.busy()) return;
+    const generation = ++this.tfaGeneration;
+    const current = () => !this.destroyed && generation === this.tfaGeneration;
+    this.tfaLoading.set(true); this.tfaError.set(false); this.tfa.set(null);
+    try { const status = await this.api.get2faStatus(); if (current()) this.tfa.set(status); }
+    catch { if (current()) this.tfaError.set(true); }
+    finally { if (current()) this.tfaLoading.set(false); }
+  }
+  ngOnDestroy() { this.destroyed = true; ++this.projectsGeneration; ++this.tfaGeneration; }
   async startTfa() {
     this.busy.set(true); this.error.set('');
     try { this.tfaSetup.set(await this.api.setup2fa(this.tfaPassword())); this.tfaPassword.set(''); }
