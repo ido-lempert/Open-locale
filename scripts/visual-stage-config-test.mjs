@@ -15,7 +15,7 @@ const check=(name,env,expected)=>{
  console.log(`${ok?'PASS':(failures++,'FAIL')} ${name}`);if(!ok)console.log('DIAG',JSON.stringify({status:result.status,error:result.error?.message,output}));
 };
 try{
- check('invalid stage fails before startup',{VISUAL_STAGE:'third',VISUAL_CHECKPOINT_DIR:root},'Set VISUAL_STAGE');
+ check('invalid stage fails before startup',{VISUAL_STAGE:'invalid',VISUAL_CHECKPOINT_DIR:root},'Set VISUAL_STAGE');
  check('stage requires explicit absolute checkpoint',{VISUAL_STAGE:'first',VISUAL_CHECKPOINT_DIR:'relative'},'absolute VISUAL_CHECKPOINT_DIR');
  check('checkpoint alone cannot imply full run',{VISUAL_CHECKPOINT_DIR:root},'requires VISUAL_STAGE');
  const pub=join(root,'public');mkdirSync(pub);chmodSync(pub,0o755);
@@ -25,6 +25,12 @@ try{
  check('second stage rejects changed source',{VISUAL_STAGE:'second',VISUAL_CHECKPOINT_DIR:dir},'source mismatch');
  writeFileSync(state,JSON.stringify({sourceHash,checks:116,failures:1}));
  check('failed first stage cannot resume',{VISUAL_STAGE:'second',VISUAL_CHECKPOINT_DIR:dir},'failed first stage');
+ writeFileSync(state,JSON.stringify({sourceHash,checks:116,failures:0}));
+ check('tail rejects first-stage checkpoint',{VISUAL_STAGE:'tail',VISUAL_CHECKPOINT_DIR:dir},'stage mismatch');
+ writeFileSync(state,JSON.stringify({sourceHash,stage:'middle',checks:225,failures:0}));
+ check('middle rejects already-middle checkpoint',{VISUAL_STAGE:'middle',VISUAL_CHECKPOINT_DIR:dir},'stage mismatch');
+ check('second rejects middle checkpoint',{VISUAL_STAGE:'second',VISUAL_CHECKPOINT_DIR:dir},'stage mismatch');
+ check('tail still requires explicit absolute checkpoint',{VISUAL_STAGE:'tail',VISUAL_CHECKPOINT_DIR:'relative'},'absolute VISUAL_CHECKPOINT_DIR');
  chmodSync(state,0o644);
  check('second stage rejects public state',{VISUAL_STAGE:'second',VISUAL_CHECKPOINT_DIR:dir},'state must be private');
  const link=join(root,'link');symlinkSync(dir,link);

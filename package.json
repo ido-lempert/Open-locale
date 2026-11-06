@@ -82,6 +82,7 @@
     "test:editor-comments-recovery-browser": "node scripts/editor-comments-recovery-browser-test.mjs",
     "test:editor-tm-apply-browser": "node scripts/editor-tm-apply-browser-test.mjs",
     "test:tasks-create-receipt-browser": "node scripts/tasks-create-receipt-browser-test.mjs",
+    "test:glossary-delete-local-browser": "node scripts/glossary-delete-local-browser-test.mjs",
     "test:glossary-create-local-browser": "node scripts/glossary-create-local-browser-test.mjs"
   },
   "private": true,

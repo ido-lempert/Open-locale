@@ -46,7 +46,7 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
                 </td>
               }
               <td class="muted">{{ t.notes }}</td>
-              <td>@if (savingIds().includes(t.id)) { <span role="status" name="glossarySaving">Saving translation...</span> }@if (deletingIds().includes(t.id)) { <span role="status" name="glossaryDeleting">Deleting term...</span> }<button [disabled]="rowPending(t.id)" class="danger" [attr.aria-label]="'Delete term ' + t.term" (click)="remove(t)">&times;</button></td>
+              <td>@if (unknownDeleteIds().includes(t.id)) { <span class="error" role="alert" name="glossaryDeleteUnknown">Delete unconfirmed. Refresh required.</span> }@if (savingIds().includes(t.id)) { <span role="status" name="glossarySaving">Saving translation...</span> }@if (deletingIds().includes(t.id)) { <span role="status" name="glossaryDeleting">Deleting term...</span> }<button [disabled]="rowPending(t.id)" class="danger" [attr.aria-label]="'Delete term ' + t.term" (click)="remove(t)">&times;</button></td>
             </tr>
           } @empty {
             @if (!loading() && !listError()) { <tr name="glossaryListEmpty"><td colspan="9" class="muted">No glossary terms yet</td></tr> }
@@ -67,6 +67,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   creating=signal(false);
   deletingIds=signal<string[]>([]);
   savingIds=signal<string[]>([]);
+  unknownDeleteIds=signal<string[]>([]);
   listError = signal(false);
   private fetchSeq=0;
   private savedTranslations=new Map<string,Record<string,string>>();
@@ -87,7 +88,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
     if(this.destroyed)return;
     ++this.projectGeneration;
     this.projectId=pid;++this.fetchSeq;this.savedTranslations.clear();
-    this.terms.set([]);this.locales.set([]);this.error.set('');this.createNotice.set('');this.listError.set(false);this.creating.set(false);this.deletingIds.set([]);this.savingIds.set([]);
+    this.terms.set([]);this.locales.set([]);this.error.set('');this.createNotice.set('');this.listError.set(false);this.creating.set(false);this.deletingIds.set([]);this.savingIds.set([]);this.unknownDeleteIds.set([]);
     this.term.set('');this.notes.set('');this.doNotTranslate.set(false);
     void this.fetch();
     this.localesLoading.set(false);this.localesError.set(false);
@@ -110,12 +111,12 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   refresh() { if(!this.loading()&&!this.mutationsPending())void this.fetch(); }
 
   async fetch() {
-    if(this.destroyed)return;
+    if(this.destroyed||this.deletingIds().length>0)return;
     const seq=++this.fetchSeq;
     this.terms.set([]);this.listError.set(false);this.loading.set(true);
     try {
       const terms=await this.api.listGlossary(this.projectId);
-      if(seq===this.fetchSeq){this.terms.set(terms);this.savedTranslations=new Map(terms.map(t=>[t.id,{...t.translations} ]));}
+      if(seq===this.fetchSeq){this.terms.set(terms);this.savedTranslations=new Map(terms.map(t=>[t.id,{...t.translations} ]));if(this.unknownDeleteIds().length&&this.error()==='Delete outcome unconfirmed. Copy local translation drafts, then refresh the glossary before trying again.')this.error.set('');this.unknownDeleteIds.set([]);}
     } catch { if(seq===this.fetchSeq)this.listError.set(true); }
     finally { if(seq===this.fetchSeq)this.loading.set(false); }
   }
@@ -152,7 +153,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
       ? { ...x, translations: { ...x.translations, [locale]: value } } : x));
   }
 
-  rowPending(id:string) {return this.deletingIds().includes(id)||this.savingIds().includes(id);}
+  rowPending(id:string) {return this.deletingIds().includes(id)||this.savingIds().includes(id)||this.unknownDeleteIds().includes(id);}
 
   async saveTranslations(t: GlossaryTermItem) {
     if(this.destroyed||this.rowPending(t.id))return;
@@ -177,16 +178,18 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   }
 
   async remove(t: GlossaryTermItem) {
-    if(this.destroyed||this.rowPending(t.id))return;
-    const scope=this.projectGeneration,pid=this.projectId;
+    if(this.destroyed||this.loading()||this.listError()||this.rowPending(t.id)||!this.terms().some(x=>x.id===t.id))return;
+    const scope=this.projectGeneration,pid=this.projectId,listGeneration=this.fetchSeq;
     this.deletingIds.update(ids=>[...ids,t.id]);this.error.set('');
     try {
       await this.api.deleteGlossaryTerm(pid, t.id);
-      if(this.current(scope))await this.fetch();
+      if(this.current(scope)&&listGeneration===this.fetchSeq){
+        this.terms.update(all=>all.filter(x=>x.id!==t.id));this.savedTranslations.delete(t.id);
+      }
     } catch {
       if(!this.current(scope))return;
-      this.error.set('Deleting term failed. Check the glossary before trying again.');
-      await this.fetch();
+      this.unknownDeleteIds.update(ids=>[...new Set([...ids,t.id])]);
+      this.error.set('Delete outcome unconfirmed. Copy local translation drafts, then refresh the glossary before trying again.');
     } finally {if(this.current(scope))this.deletingIds.update(ids=>ids.filter(id=>id!==t.id));}
   }
 }

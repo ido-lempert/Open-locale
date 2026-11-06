@@ -25,7 +25,7 @@ const checkpoint = process.env.VISUAL_CHECKPOINT_DIR;
 const sourceHash = createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
 let resume = null;
 if (stage) {
-  if (!['first', 'second'].includes(stage) || !checkpoint?.startsWith('/')) throw new Error('Set VISUAL_STAGE=first|second and an absolute VISUAL_CHECKPOINT_DIR');
+  if (!['first', 'second', 'middle', 'tail'].includes(stage) || !checkpoint?.startsWith('/')) throw new Error('Set VISUAL_STAGE=first|second|middle|tail and an absolute VISUAL_CHECKPOINT_DIR');
   if (stage === 'first') mkdirSync(checkpoint, {mode:0o700});
   else {
     const stat = lstatSync(checkpoint);
@@ -34,6 +34,7 @@ if (stage) {
     if (!metadata.isFile() || metadata.isSymbolicLink() || (metadata.mode & 0o077) || metadata.uid !== process.getuid()) throw new Error('Checkpoint state must be private');
     resume = JSON.parse(readFileSync(join(checkpoint,'state.json'),'utf8'));
     if (resume.sourceHash !== sourceHash || !Number.isSafeInteger(resume.checks) || resume.checks < 1 || resume.failures !== 0) throw new Error('Checkpoint source mismatch or failed first stage');
+    if ((stage === 'tail') !== (resume.stage === 'middle')) throw new Error('Checkpoint stage mismatch');
   }
 } else if (checkpoint) throw new Error('VISUAL_CHECKPOINT_DIR requires VISUAL_STAGE');
 // Fail-closed exit: a silent exit before the success path (for example a
@@ -1153,14 +1154,14 @@ try {
   } else {
     projId = resume.projId;
     const returnUrl = new URL(resume.url);
-    if (returnUrl.origin !== WEB || returnUrl.pathname !== `/projects/${projId}`) throw new Error('Invalid checkpoint return URL');
+    if (returnUrl.origin !== WEB || returnUrl.pathname !== `/projects/${projId}` + (stage === 'tail' ? '/settings' : '')) throw new Error('Invalid checkpoint return URL');
     await page.goto(`${WEB}/login`, {waitUntil:'networkidle0'});
     await page.evaluate(token=>localStorage.setItem('ol_token',token),resume.token);
     await page.setViewport(resume.viewport);
     await page.goto(returnUrl.toString(), {waitUntil:'networkidle0'});
-    await page.waitForSelector('.toolbar');
+    await page.waitForSelector(stage === 'tail' ? '.panel' : '.toolbar');
   }
-  if (stage !== 'first') {
+  if (stage !== 'first' && stage !== 'tail') {
   // Settings screen: rename, add locale, verify grid column appears (on the editor)
   await page.click('.settings-link');
   await page.waitForSelector('.panel', { timeout: 10000 });
@@ -2135,6 +2136,9 @@ try {
   await shot('editor-29c-automations-notify.png');
 
   // --- 2FA: enable via projects-page security panel, log out, log in with code ---
+  if (stage === 'middle') savedState = {sourceHash,stage:'middle',checks:resume.checks+checks,failures,projId,url:page.url(),viewport:page.viewport(),token:await page.evaluate(()=>localStorage.getItem('ol_token'))};
+  }
+  if (stage !== 'first' && stage !== 'middle') {
   await page.goto(`${WEB}/projects`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('.panel.tfa input[name=tfaSetupPassword]', { timeout: 10000 });
   await page.type('.panel.tfa input[name=tfaSetupPassword]', 'demo-password-1');
@@ -2268,20 +2272,20 @@ try {
     pg.stop(),
     new Promise((_, reject) => { stopTimer = setTimeout(() => reject(new Error('Database stop timed out')), 2000); }),
   ]).catch(() => { stoppedDatabase = false; failures++; }).finally(() => clearTimeout(stopTimer));
-  if (stage === 'first' && stoppedDatabase && failures === 0 && savedState) {
+  if ((stage === 'first' || stage === 'middle') && stoppedDatabase && failures === 0 && savedState) {
     cpSync(dataDir, join(checkpoint,'postgres'), {recursive:true});
     writeFileSync(join(checkpoint,'state.json'),JSON.stringify(savedState),{mode:0o600});
   } else if (stage) rmSync(checkpoint,{recursive:true,force:true});
   rmSync(dataDir, { recursive: true, force: true });
 }
 if (failures > 0) { console.log(`${failures} FAILURES`); process.exit(1); }
-if (stage === 'first') {
+if (stage === 'first' || stage === 'middle') {
   completed = true;
-  console.log(`E2E_STAGE_FIRST_RC=0 checks=${checks}; second stage still required`);
+  console.log(`E2E_STAGE_${stage.toUpperCase()}_RC=0 checks=${checks}; remaining stage still required`);
   process.exitCode = 0;
 } else {
   completed = true;
-  console.log(`E2E visual pass complete${stage ? ' (staged)' : ''}; checks=${checks}${resume ? '; combined='+(resume.checks+checks)+' (two repeated startup checks)' : ''}`);
+  console.log(`E2E visual pass complete${stage ? ' (staged)' : ''}; checks=${checks}${resume ? '; combined='+(resume.checks+checks)+(stage === 'tail' ? ' (four repeated startup checks across three stages)' : ' (two repeated startup checks)') : ''}`);
 // In-script exit marker: the outer shell can be reaped before it records
 // $?, so the suite prints its own deterministic success line.
 console.log('E2E_RC=0');
