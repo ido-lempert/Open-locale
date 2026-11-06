@@ -1164,3 +1164,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 ### Continuation 331 - Targeted editor tag updates
 - Confirmed returned tags update key metadata only, preserving translation cell drafts. Same-key pending guard/fixed scoped errors, old list generation/destroy cannot publish. Active tag filter retains row with explicit rerun guidance.
 - Unit6/browser5 real held translation PUT/DB unchanged and normalized tag PATCH/no list GET. Error placement corrected through pixel inspection. Final refreshed-runtime nativeSTAGED116+128244total242unique inner/outer0; prior host-duration interruptions preserved in review0397.
+
+### Continuation 332 - Empty-branch create continuation
+- Guard pending create, preserve newer name input, keep current branch/grid; confirmed create independent of branch-list refresh failure, fixed scoped error/manual list-only retry. Latest branch-list generation/destroy fences.
+- Unit6/browser4 with real held POST, duplicate guard, newer draft, failed list and retry persisted branch/no extra POST or key GET. Parent spotted ambiguous duplicated-word notice for branch named created; quoted name/was-created copy plus exact full text assertions, recaptured final pixels.
+- Native first116/second127PASS1FAIL was obsolete notice expectation after copy change; updated exact final notice, fresh staged116+128244total242unique final0. SyncSTAGED95+144239unique0, not canonical uninterrupted claims. Five reviews0398; no API/schema/worker/coverage promotion.

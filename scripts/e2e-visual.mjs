@@ -1867,7 +1867,7 @@ try {
     const form = document.querySelector('input[aria-label="New branch name"]').closest('form');
     form.requestSubmit();
   });
-  const branchNotice = await page.waitForFunction(() => (document.body.textContent || '').includes('Empty branch feature-x created'), { timeout: 10000 }).then(() => true).catch(() => false);
+  const branchNotice = await page.waitForFunction(() => document.querySelector('.notice')?.textContent.trim() === 'Empty branch "feature-x" was created. Branches start with no keys - they do not copy another branch. Pick it from the branch list to work there.', { timeout: 10000 }).then(() => true).catch(() => false);
   check('branch created via UI with accurate empty-branch notice', branchNotice);
   await page.select('select[aria-label="Branch"]', 'feature-x');
   await page.waitForFunction(

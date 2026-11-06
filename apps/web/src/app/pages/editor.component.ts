@@ -46,8 +46,9 @@ interface CellState {
           </select>
           <form class="branch-form" (ngSubmit)="addBranch()">
             <input placeholder="new-empty-branch" aria-label="New branch name" [ngModel]="newBranch()" (ngModelChange)="newBranch.set($event)" name="newBranch" maxlength="40" />
-            <button type="submit">Add empty branch</button>
+            <button type="submit" name="addBranch" [disabled]="branchCreating()">{{ branchCreating() ? 'Creating branch...' : 'Add empty branch' }}</button>
           </form>
+          @if (branchListError()) { <span class="error" role="alert" name="branchListError">Branch list unavailable. A confirmed new branch may not appear yet.</span><button type="button" name="retryEditorBranches" [disabled]="branchListLoading() || branchCreating()" (click)="loadBranches()">Retry branch list</button> }
           @if (branch() !== 'main') {
             <button (click)="mergeIntoMain()">Merge {{ branch() }} into main</button>
           }
@@ -344,6 +345,8 @@ export class EditorComponent implements OnInit, OnDestroy {
   cells = new Map<string, WritableSignal<CellState>>();
   search = signal(''); newKey = signal(''); newLocale = signal(''); ioLocale = signal('en'); bulkStatus = signal('REVIEWED');
   bulkReviewPending = signal(false);
+  branchCreating = signal(false); branchListLoading = signal(false); branchListError = signal(false);
+  private branchListGeneration = 0;
   branch = signal('main'); branches = signal<BranchInfo[]>([]); newBranch = signal('');
   mergePreview = signal<{ branchId: string; from: string; lines: string[]; previewAt: string } | null>(null); ioFormat = signal<'json' | 'csv' | 'android' | 'ios' | 'stringsdict' | 'po' | 'pot' | 'xliff' | 'properties' | 'arb' | 'yaml' | 'resx'>('json');
   ioFormatTouched = signal(false);
@@ -772,7 +775,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     finally { if(current())this.historyLoading.set(false); }
   }
   ngOnDestroy() {
-    this.destroyed=true; ++this.projectGeneration; ++this.keysGeneration; ++this.historyGeneration; this.clearShots(); this.clearComments(); this.clearTm();
+    this.destroyed=true; ++this.branchListGeneration; ++this.projectGeneration; ++this.keysGeneration; ++this.historyGeneration; this.clearShots(); this.clearComments(); this.clearTm();
     if(this.searchTimer)clearTimeout(this.searchTimer);
   }
   async addKey() {
@@ -812,16 +815,27 @@ export class EditorComponent implements OnInit, OnDestroy {
     this.error.set('');
     await this.reload();
   }
+  async loadBranches() {
+    if (this.destroyed) return;
+    const generation = ++this.branchListGeneration, projectId = this.projectId;
+    const current = () => !this.destroyed && generation === this.branchListGeneration;
+    this.branchListLoading.set(true); this.branchListError.set(false);
+    try { const branches = await this.api.listBranches(projectId); if (current()) this.branches.set(branches); }
+    catch { if (current()) this.branchListError.set(true); }
+    finally { if (current()) this.branchListLoading.set(false); }
+  }
   async addBranch() {
-    const name = this.newBranch().trim();
-    if (!name) return;
-    this.error.set('');
+    const submitted = this.newBranch(), name = submitted.trim();
+    if (!name || this.destroyed || this.branchCreating()) return;
+    this.branchCreating.set(true); this.error.set('');
     try {
       await this.api.createBranch(this.projectId, name);
-      this.newBranch.set('');
-      this.branches.set(await this.api.listBranches(this.projectId));
-      this.notice.set(`Empty branch ${name} created. Branches start with no keys - they do not copy ${this.branch()} or any other branch. Pick it from the branch list to work there.`);
-    } catch (err) { this.error.set(err instanceof Error ? err.message : 'Failed to create branch'); }
+      if (this.destroyed) return;
+      if (this.newBranch() === submitted) this.newBranch.set('');
+      this.notice.set(`Empty branch "${name}" was created. Branches start with no keys - they do not copy another branch. Pick it from the branch list to work there.`);
+      await this.loadBranches();
+    } catch { if (!this.destroyed) this.error.set('Branch creation could not be confirmed. Check the branch list before trying again.'); }
+    finally { if (!this.destroyed) this.branchCreating.set(false); }
   }
   async mergeIntoMain() {
     const from = this.branch();
