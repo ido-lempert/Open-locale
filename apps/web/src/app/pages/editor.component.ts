@@ -118,7 +118,12 @@ interface CellState {
           @if (keys().length) { <details><summary>Copy retained grid values before retry</summary><p class="muted">Local displayed values only, not confirmed saved data or an import file. Includes plural forms. Select and copy this text before retry.</p><textarea name="retainedKeyDrafts" aria-label="Retained grid values" readonly rows="8" style="width:100%;box-sizing:border-box" [value]="retainedGridValues()"></textarea></details> }
         }
         @if (!keysLoading() && !keysError() && keys().length === 0) {
-          <p class="muted empty">No keys yet. Add one above - for example <code>home.title</code>.</p>
+          @if (hasKeyFilters()) {
+            <p class="muted empty" name="filteredKeysEmpty">No keys match the current filters on branch {{ branch() }}. Other keys may still exist.</p>
+            <button type="button" name="clearKeyFilters" (click)="clearKeyFilters()">Clear key filters</button>
+          } @else {
+            <p class="muted empty" name="branchKeysEmpty">No keys on branch {{ branch() }}. Add one above - for example <code>home.title</code>.</p>
+          }
         }
         <table class="grid" [attr.inert]="keysLoading() || keysError() ? '' : null" [attr.aria-busy]="keysLoading()">
           <thead><tr><th>Key</th>@for (l of p.locales; track l.code) { <th>{{ l.code }}</th> }<th></th></tr></thead>
@@ -438,6 +443,12 @@ export class EditorComponent implements OnInit, OnDestroy {
       }
     } catch { if (current()) this.keysError.set(true); }
     finally { if (current()) this.keysLoading.set(false); }
+  }
+  hasKeyFilters() { return !!(this.search() || this.filterTag() || this.filterStatus()); }
+  async clearKeyFilters() {
+    if (this.destroyed || this.keysLoading() || this.keysError() || !this.hasKeyFilters()) return;
+    this.search.set(''); this.filterTag.set(''); this.filterStatus.set('');
+    await this.reload();
   }
   retainedGridValues() {
     return JSON.stringify(this.keys().map(key => ({ key: key.name, values: (this.project()?.locales ?? []).map(locale => {

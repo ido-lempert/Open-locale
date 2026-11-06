@@ -1155,3 +1155,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Guard dirty/pending/unknown cells and grid before preview; recheck readiness/scope/list generation before confirm/write; one pending bulk operation, pauses cell saves/reviews.
 - New draft/scope during submitted write prevents destructive reload; mark local cells error/reload-required with copy control. Unknown result blocks blind replay. Unit14/browser7 real held preview/write and persisted status/text.
 - Five reviews0395; error-feedback layout corrected after pixel inspection. No API/schema/worker/coverage promotion. Sync239/native244242unique explicitlySTAGED final0.
+
+### Continuation 330 - Scoped editor empty results
+- Filter-aware no-match guidance identifies branch and possible other keys; explicit Clear key filters clears search/tag/status only, preserving branch and locale. Unfiltered empty names branch, not whole project.
+- Unit8/keys browser11->14 real no-match/clear current feature/empty branch; desktop pixels inspected. Five reviews0396. No API/schema/worker/coverage promotion.
+- Review browser12PASS1FAIL render-readiness first reload fixed exact current-value wait/final13; sync239/native244242unique explicitlySTAGED final0.
