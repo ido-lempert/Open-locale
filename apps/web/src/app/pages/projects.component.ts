@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService, Project } from '../api.service';
@@ -66,8 +66,14 @@ import { ApiService, Project } from '../api.service';
           <button class="primary" (click)="dismissTfaCodes()">I've stored these - sign in again</button>
         }
       </section>
+      <label>Find in loaded project names, slugs or locale codes <input type="search" name="projectSearch" maxlength="200" [ngModel]="query()" (ngModelChange)="search($event)" /></label>
+      <button type="button" name="clearProjectSearch" [disabled]="!query()" (click)="search('')">Clear search</button>
+      @if (!projectsLoading() && !projectsError()) {
+        <p class="muted" role="status" name="projectMatches">{{ visibleProjects().length }} of {{ projects().length }} projects match. Search is a literal, case-insensitive substring in loaded projects only. Refresh projects to read newer changes.</p>
+        @if (query() && !visibleProjects().length) { <p class="muted" name="projectSearchEmpty">No loaded projects match this search. Clear search to show all loaded projects.</p> }
+      }
       <ul class="cards">
-        @for (p of projects(); track p.id) {
+        @for (p of visibleProjects(); track p.id) {
           <li>
             <a [routerLink]="['/projects', p.id]">
               <strong>{{ p.name }}</strong>
@@ -82,6 +88,9 @@ import { ApiService, Project } from '../api.service';
 })
 export class ProjectsComponent implements OnInit, OnDestroy {
   projects = signal<Project[]>([]);
+  query=signal('');
+  visibleProjects=computed(()=>{const query=this.query().toLowerCase();return query?this.projects().filter(p=>[p.name,p.slug,...p.locales.map(l=>l.code)].some(value=>value.toLowerCase().includes(query))):this.projects();});
+  search(query:string) {if(!this.destroyed)this.query.set(query.slice(0,200));}
   projectsLoading = signal(true); projectsError = signal(false);
   tfaLoading = signal(true); tfaError = signal(false);
   private projectsGeneration = 0; private tfaGeneration = 0; private destroyed = false;
