@@ -1145,3 +1145,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Project-list loading/error/manual retry separate from 2FA-status loading/error/retry; no false empty while pending/failed, no inferred disabled status, no raw service errors for these reads.
 - Generation/destroy fences, successful list usable despite status failure and converse; project create's list reload no longer refetches security status. Unit7/browser7, zero security mutations during read-retry proof.
 - Five reviews0393; no auth mutation/API/schema/worker/coverage promotion. Sync239/native244242unique explicitlySTAGED final0. Initial batch live-descendant cleanup warning and clean rerun preserved.
+
+### Continuation 328 - Retained-grid content-write boundary
+- Content save rejects pending/failed key reads before cell access, including force path; local plain/plural drafts untouched, no absent cell creation. Ready conditional save unchanged.
+- Unit6/browser keys9->11 actual held GET/failed read, deliberately dispatched input+blur despite inert, zero PUT/DB unchanged. Negative control removing guard produces exactly2 boundary FAILs, restored final11PASS0.
+- Five reviews0394; no API/schema/worker/coverage promotion. Save-browser one read-after-render race10PASS1FAIL fixed exact current-value wait/final11. Sync239/native244242unique explicitlySTAGED final0.

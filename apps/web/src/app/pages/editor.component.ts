@@ -474,6 +474,8 @@ export class EditorComponent implements OnInit, OnDestroy {
       && c.status !== 'saving' && !c.reviewing && !c.needsReload;
   }
   async save(k: Key, locale: string, force = false) {
+    // Inert is a UI affordance, not a write boundary. Reject retained-grid events.
+    if (this.destroyed || this.keysLoading() || this.keysError()) return;
     const sig = this.cell(k.id, locale);
     const c = sig();
     if (!force && c.value === c.saved && this.sameForms(c.forms, c.savedForms)) return;
