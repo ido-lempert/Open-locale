@@ -1219,3 +1219,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Post/delete unknown results keyed to original key, fixed selected-thread guidance and draft retained. Later successful current-thread read unlocks; mutation epoch blocks a read begun during write from clearing unknown state. Known delete/root-reply identity and usable-grid/read guards. Pending/unknown comment work guards key deletion.
 - Unit16/browser8 real held post/delete: unknown replay block/failed-read stays blocked/current-read unlock, duplicate pending/newer draft, one persisted post, original-key delete while other thread/draft retained. Desktop pixels inspected; five reviews0408. No cross-thread draft persistence, automatic replay or persistent exactly-once recovery.
 - API265/31 web591/40 builds0 initial440.48kB; broad regressions final0, syncSTAGED95+144239unique/nativeSTAGED116+128244total242unique inner/outer0. No API/schema/worker/coverage promotion.
+
+### Continuation 343 - Translation-memory apply readiness
+- Guard target dirty plain/plural/saving/review/unknown/row identity and grid/import/bulk/delete state before local mutation, not only at save. Blocked options retained/disabled with guidance; readiness never auto-applies a queued choice. Conditional explicit save unchanged.
+- Unit16/browser3 real held import + synthetic disabled click proves empty target/DB unchanged/zero PUT, then explicit keyboard pick once ready persists unverified. Desktop pixels inspected; five reviews0409. No source-match/read behavior/API/schema/worker/coverage promotion.
+- API265/31 web607/41 builds0; broad regressions final0, syncSTAGED95+144239unique/nativeSTAGED116+128244total242unique inner/outer0.

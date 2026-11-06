@@ -183,9 +183,10 @@ interface CellState {
                     @if (suggestFor() === k.id + ':' + l.code && tmLoading()) { <p class="muted" role="status" name="tmLoading">Looking in translation memory...</p> }
                     @if (suggestFor() === k.id + ':' + l.code && tmError()) { <p class="error" role="alert" name="tmError">Translation memory unavailable.</p><button type="button" name="retryTm" (click)="onCellFocus(k, l.code)">Retry memory</button> }
                     @if (suggestFor() === k.id + ':' + l.code && suggestions().length > 0) {
+                      @if (!canApplySuggestion(k, l.code)) { <p class="muted" name="tmApplyBlocked">Memory apply unavailable. Save local target drafts and wait for pending work, or copy retained values before reloading an unconfirmed result.</p> }
                       <div class="tm-suggest">
                         @for (sg of suggestions(); track sg.targetText) {
-                          <button type="button" class="tm-pick"
+                          <button type="button" class="tm-pick" [disabled]="!canApplySuggestion(k, l.code)"
                             (mousedown)="$event.preventDefault()" (click)="applySuggestion(k, l.code, sg.targetText)">
                             <span [attr.dir]="isRtl(l.code) ? 'rtl' : 'ltr'">{{ sg.targetText }}</span>
                             <span class="muted">memory {{ Math.round(sg.score * 100) }}%</span>
@@ -707,12 +708,19 @@ export class EditorComponent implements OnInit, OnDestroy {
     } catch { if (current()) this.tmError.set(true); }
     finally { if (current()) this.tmLoading.set(false); }
   }
-  async applySuggestion(k: Key, locale: string, text: string) {
+  canApplySuggestion(k: Key, locale: string) {
+    if (this.destroyed || this.keysLoading() || this.keysError() || this.bulkReviewPending() || this.importWritePending()
+      || this.keyDeleting().includes(k.id) || this.keyDeleteErrorFor().includes(k.id)) return false;
     const base = this.project()?.baseLocale;
-    if (this.destroyed || this.keysLoading() || this.keysError() || !base || locale === base
-      || this.suggestFor() !== `${k.id}:${locale}` || this.tmLoading() || this.tmError()
-      || !this.suggestions().some(s => s.targetText === text)
-      || this.cell(k.id, base)().value.trim() !== this.tmSource || this.cell(k.id, locale)().value.trim()) return;
+    if (!base || locale === base || this.suggestFor() !== `${k.id}:${locale}` || this.tmLoading() || this.tmError()
+      || this.cell(k.id, base)().value.trim() !== this.tmSource) return false;
+    const c = this.cell(k.id, locale)();
+    return !c.value.trim() && c.value === c.saved && this.sameForms(c.forms, c.savedForms)
+      && c.status !== 'saving' && !c.reviewing && !c.needsReload
+      && c.version !== undefined && (c.version === 0 || !!c.rowId);
+  }
+  async applySuggestion(k: Key, locale: string, text: string) {
+    if (!this.canApplySuggestion(k, locale) || !this.suggestions().some(s => s.targetText === text)) return;
     this.cell(k.id, locale).update(c => ({ ...c, value: text }));
     this.clearTm();
     await this.save(k, locale, true);

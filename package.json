@@ -79,7 +79,8 @@
     "test:editor-bundle-scope-browser": "node scripts/editor-bundle-scope-browser-test.mjs",
     "test:editor-export-scope-browser": "node scripts/editor-export-scope-browser-test.mjs",
     "test:editor-shots-write-browser": "node scripts/editor-shots-write-browser-test.mjs",
-    "test:editor-comments-recovery-browser": "node scripts/editor-comments-recovery-browser-test.mjs"
+    "test:editor-comments-recovery-browser": "node scripts/editor-comments-recovery-browser-test.mjs",
+    "test:editor-tm-apply-browser": "node scripts/editor-tm-apply-browser-test.mjs"
   },
   "private": true,
   "dependencies": {
