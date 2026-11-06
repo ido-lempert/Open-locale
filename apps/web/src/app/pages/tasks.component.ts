@@ -24,6 +24,7 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
       </select>
     </header>
     <main [attr.aria-busy]="loading()">
+      @if (actionUnknown()) { <p role="alert" name="taskActionUnknown">A task change is unconfirmed. Check tasks before acting again. Row changes are paused. Read all tasks to recover; filters will be cleared.</p><button type="button" name="recoverTaskActions" [disabled]="loading() || mutationsPending()" (click)="recoverActions()">Read all tasks</button> }
       @if (actionNotice(); as message) { <p role="status" name="taskActionNotice">{{ message }}</p> }
       @if (createNotice(); as message) { <p role="status" name="taskCreateNotice">{{ message }}</p> }
       @if (error(); as e) { <p class="error" role="alert">{{ e }}</p> }
@@ -126,6 +127,8 @@ export class TasksComponent implements OnInit, OnDestroy {
   private routeSub?: Subscription;
   private fetchSeq = 0;
   private actionSeq = 0;
+  private mutationEpoch = 0;
+  actionUnknown = signal(false);
   private destroyed = false;
   private projectGeneration = 0;
 
@@ -148,7 +151,7 @@ export class TasksComponent implements OnInit, OnDestroy {
     const scope=++this.projectGeneration;
     this.projectId = pid;
     this.fetchSeq++; // invalidate every in-flight fetch from the previous project
-    this.error.set('');this.createNotice.set('');this.actionNotice.set('');this.creating.set(false);this.updatingIds.set([]);this.deletingIds.set([]);
+    ++this.mutationEpoch;this.actionUnknown.set(false);this.error.set('');this.createNotice.set('');this.actionNotice.set('');this.creating.set(false);this.updatingIds.set([]);this.deletingIds.set([]);
     this.tasks.set([]); this.members.set([]); this.groups.set([]); this.keys.set([]);
     this.title.set(''); this.description.set(''); this.dueDate.set('');
     this.assigneeId.set(''); this.dependsOnId.set(''); this.selectedKeyIds.set([]); this.lockKeys.set(false);
@@ -202,18 +205,28 @@ export class TasksComponent implements OnInit, OnDestroy {
   mutationsPending() { return this.creating()||this.updatingIds().length>0||this.deletingIds().length>0; }
   refresh() { if(!this.loading()&&!this.mutationsPending())void this.fetch(); }
 
-  async fetch() {
+  async recoverActions() {
+    if(this.destroyed||this.loading()||this.mutationsPending()||!this.actionUnknown())return;
+    this.statusFilter.set('');this.mineFilter.set('');this.persistFilters();
+    await this.fetch(true);
+  }
+
+  async fetch(recover=false) {
     // Latest-request-wins: rapid filter changes (or a project switch) fire
     // overlapping fetches; only the newest response may touch the list,
     // the error banner or the loading flag.
     if(this.destroyed)return;
-    const seq = ++this.fetchSeq;
+    const seq = ++this.fetchSeq,epoch=this.mutationEpoch,pending=this.mutationsPending(),unfiltered=!this.hasFilters();
     this.tasks.set([]);this.listError.set(false);
     this.loading.set(true);
     try {
       const list = await this.api.listTasks(this.projectId, this.statusFilter() || undefined, this.mineFilter() === 'me');
       if (seq !== this.fetchSeq) return;
       this.tasks.set(list);
+      if(recover&&unfiltered&&!pending&&!this.mutationsPending()&&epoch===this.mutationEpoch&&!this.hasFilters()){
+        this.actionUnknown.set(false);
+        if(['Task update failed. Check the task list before trying again.','Task deletion failed. Check the task list before trying again.'].includes(this.error()))this.error.set('');
+      }
     } catch {
       if (seq === this.fetchSeq) this.listError.set(true);
     } finally {
@@ -269,13 +282,13 @@ export class TasksComponent implements OnInit, OnDestroy {
 
   rowPending(id:string) { return this.updatingIds().includes(id)||this.deletingIds().includes(id); }
 
-  rowReady(t: TaskItem) { return !this.destroyed&&!this.loading()&&!this.listError()&&!this.rowPending(t.id)&&this.tasks().some(row=>row===t); }
+  rowReady(t: TaskItem) { return !this.destroyed&&!this.actionUnknown()&&!this.loading()&&!this.listError()&&!this.rowPending(t.id)&&this.tasks().some(row=>row===t); }
 
   async update(t: TaskItem, patch: Record<string, unknown>, el?: HTMLSelectElement, revertValue?: string) {
     if(!this.rowReady(t)){if(!this.destroyed&&el&&revertValue!==undefined)el.value=revertValue;return;}
     const scope=this.projectGeneration,projectId=this.projectId,title=t.title;
     const current=()=>!this.destroyed&&scope===this.projectGeneration;
-    const action=++this.actionSeq;
+    const action=++this.actionSeq;++this.mutationEpoch;
     this.actionNotice.set('');this.updatingIds.update(ids=>[...ids,t.id]);this.error.set('');
     try {
       await this.api.updateTask(projectId, t.id, patch);
@@ -284,10 +297,11 @@ export class TasksComponent implements OnInit, OnDestroy {
       if(!current())return;
       // Preserve actionable domain guidance only for exact reviewed messages.
       const known=e instanceof Error&&['Task is blocked until its predecessor is done','Task dependency would create a cycle'].includes(e.message)?e.message:null;
+      if(!known){++this.mutationEpoch;this.actionUnknown.set(true);}
       this.error.set(known??'Task update failed. Check the task list before trying again.');
-      // Revert the control before a fresh server read settles uncertain outcomes.
+      // Revert the control. Unknown outcomes need an explicit unfiltered recovery read.
       if (el && revertValue !== undefined) el.value = revertValue;
-      await this.fetch();
+      if(known)await this.fetch();
     } finally { if(current())this.updatingIds.update(ids=>ids.filter(id=>id!==t.id)); }
   }
 
@@ -295,15 +309,15 @@ export class TasksComponent implements OnInit, OnDestroy {
     if(!this.rowReady(t))return;
     const scope=this.projectGeneration,projectId=this.projectId,title=t.title;
     const current=()=>!this.destroyed&&scope===this.projectGeneration;
-    const action=++this.actionSeq;
+    const action=++this.actionSeq;++this.mutationEpoch;
     this.actionNotice.set('');this.deletingIds.update(ids=>[...ids,t.id]);this.error.set('');
     try {
       await this.api.deleteTask(projectId, t.id);
       if(current()){if(action===this.actionSeq)this.actionNotice.set(`Task "${title}" was deleted. If the list is unavailable, retry the read without deleting again.`);await this.fetch();}
     } catch {
       if(!current())return;
+      ++this.mutationEpoch;this.actionUnknown.set(true);
       this.error.set('Task deletion failed. Check the task list before trying again.');
-      await this.fetch();
     } finally { if(current())this.deletingIds.update(ids=>ids.filter(id=>id!==t.id)); }
   }
 }
