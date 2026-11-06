@@ -94,9 +94,9 @@ interface CellState {
             <option value="ios">iOS strings</option>
             <option value="stringsdict">iOS .stringsdict (plurals)</option>
           </select>
-          <button (click)="exportFile()">Export {{ formatLabel() }}</button>
-          <button (click)="exportBundleFile()" title="Download every locale as one zip in the selected format">Export all (.zip)</button>
-          <button (click)="exportTmxFile()" title="Download the translation memory for the selected locale as TMX 1.4 (export-only)">Export TM (TMX)</button>
+          <button name="exportFile" [disabled]="exportPending()" (click)="exportFile()">Export {{ formatLabel() }}</button>
+          <button name="exportBundle" [disabled]="exportPending()" (click)="exportBundleFile()" title="Download every locale as one zip in the selected format">Export all (.zip)</button>
+          <button name="exportTmx" [disabled]="exportPending()" (click)="exportTmxFile()" title="Download the translation memory for the selected locale as TMX 1.4 (export-only)">Export TM (TMX)</button>
           <label class="import">Import {{ formatLabel() }} <input type="file" name="importFile" [disabled]="importPending()" accept=".json,.csv,.xml,.strings,.stringsdict,.po,.pot,.xlf,.xliff,.properties,.arb,.yaml,.yml,.resx" (change)="importFile($event)" hidden /></label>
           <label class="import">Preview import <input type="file" name="previewFile" [disabled]="importPending()" accept=".json,.csv,.xml,.strings,.stringsdict,.po,.pot,.xlf,.xliff,.properties,.arb,.yaml,.yml,.resx" (change)="previewFile($event)" hidden /></label>
           <label class="import" title="Upload a store-only zip from Export all (.zip); compressed zips from other tools are rejected. Each locale imports independently: skipped entries and failed locales are reported, not rolled back.">Import bundle (.zip) <input type="file" name="bundleFile" [disabled]="importPending()" accept=".zip" (change)="bundleFile($event)" hidden /></label>
@@ -104,6 +104,10 @@ interface CellState {
           @if (ioFormat() === 'csv') {
             <div class="muted csv-note">CSV exports are spreadsheet-safe: values starting with formula characters get a protective prefix, so re-importing a safe export keeps those prefixes and changes stored values. For a lossless roundtrip use the API with <code>mode=raw</code>.</div>
           }
+          <div class="muted csv-note">Exports contain saved server values only, not unsaved local drafts. TMX exports project translation memory for the selected locale, not just this branch.</div>
+          @if (exportPending()) { <span role="status" name="exportPending">Export request pending. Changing branch, locale or format discards its download, not the request already sent.</span> }
+          @if (exportError()) { <span class="error" role="alert" name="exportError">Export unavailable. Check your access or connection, then try again.</span> }
+          @if (exportNotice()) { <span role="status" name="exportNotice">{{ exportNotice() }}</span> }
           @if (importPending()) { <span role="status" name="importPending">Import request pending. Changing scope does not cancel a request already sent.</span> }
           @if (importConflict(); as c) {
             <div class="import-conflict" role="alert">
@@ -361,6 +365,8 @@ export class EditorComponent implements OnInit, OnDestroy {
   private mergeGeneration = 0; private mergePreviewKeysGeneration = -1;
   mergePreview = signal<{ branchId: string; from: string; lines: string[]; previewAt: string } | null>(null); ioFormat = signal<'json' | 'csv' | 'android' | 'ios' | 'stringsdict' | 'po' | 'pot' | 'xliff' | 'properties' | 'arb' | 'yaml' | 'resx'>('json');
   ioFormatTouched = signal(false);
+  exportPending = signal(false); exportError = signal(false); exportNotice = signal('');
+  private exportGeneration = 0;
   importWritePending = signal(false);
   importPending = signal(false); private importGeneration = 0;
   importConflict = signal<{ scope: ImportScope; filename: string; ext: string; detected: IoFormat; current: IoFormat; text: string; dryRun: boolean } | null>(null);
@@ -789,6 +795,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     finally { if(current())this.historyLoading.set(false); }
   }
   ngOnDestroy() {
+    this.invalidateExport();
     this.destroyed=true; ++this.importGeneration; ++this.mergeGeneration; ++this.branchListGeneration; ++this.projectGeneration; ++this.keysGeneration; ++this.historyGeneration; this.clearShots(); this.clearComments(); this.clearTm();
     if(this.searchTimer)clearTimeout(this.searchTimer);
   }
@@ -851,17 +858,10 @@ export class EditorComponent implements OnInit, OnDestroy {
     } catch { if (!this.destroyed) this.localeCreateError.set(true); }
     finally { if (!this.destroyed) this.localeCreating.set(false); }
   }
-  async exportJson() {
-    try {
-      const data = await this.api.exportJson(this.projectId, this.ioLocale(), this.branch());
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `${this.project()?.slug ?? 'export'}.${this.ioLocale()}.json`;
-      a.click(); URL.revokeObjectURL(a.href);
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Export failed'); }
-  }
+  async exportJson() { await this.downloadExport('file', 'json'); }
+  private invalidateExport() { ++this.exportGeneration; this.exportError.set(false); this.exportNotice.set(''); }
   async switchBranch(name: string) {
+    this.invalidateExport();
     this.branch.set(name);
     this.notice.set('');
     this.error.set('');
@@ -1009,54 +1009,51 @@ export class EditorComponent implements OnInit, OnDestroy {
     } }
     finally { if (!this.destroyed) { this.importPending.set(false); this.importWritePending.set(false); } }
   }
-  async exportBundleFile() {
-    const fmt = this.ioFormat();
+  async exportBundleFile() { await this.downloadExport('bundle'); }
+  async exportTmxFile() { await this.downloadExport('tmx'); }
+  async exportFile() { await this.downloadExport('file'); }
+  private async downloadExport(kind: 'file' | 'bundle' | 'tmx', fmt = this.ioFormat()) {
+    if (this.destroyed || this.exportPending()) return;
+    const scope = { generation: this.exportGeneration, projectGeneration: this.projectGeneration,
+      branch: this.branch(), locale: this.ioLocale(), format: this.ioFormat(), slug: this.project()?.slug ?? 'export' };
+    const current = () => !this.destroyed && scope.generation === this.exportGeneration
+      && scope.projectGeneration === this.projectGeneration && scope.branch === this.branch()
+      && scope.locale === this.ioLocale() && scope.format === this.ioFormat();
+    this.exportPending.set(true); this.exportError.set(false); this.exportNotice.set('');
     try {
-      const blob = await this.api.exportBundle(this.projectId, fmt, this.branch());
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `${this.project()?.slug ?? 'export'}-${fmt}.zip`;
-      a.click(); URL.revokeObjectURL(a.href);
-      this.notice.set(`All locales exported as one zip (${this.formatLabel()}${fmt === 'csv' ? ', spreadsheet-safe' : ''}).`);
-      this.error.set('');
-    } catch (err) { this.error.set(err instanceof Error ? err.message : 'Bundle export failed'); }
-  }
-  async exportTmxFile() {
-    const locale = this.ioLocale();
-    try {
-      const content = await this.api.exportTmx(this.projectId, locale);
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([content], { type: 'application/x-tmx+xml' }));
-      a.download = `${this.project()?.slug ?? 'export'}-${locale}.tmx`;
-      a.click(); URL.revokeObjectURL(a.href);
-      this.notice.set(`Translation memory for ${locale} exported as TMX 1.4 (export-only; there is no TMX import).`);
-      this.error.set('');
-    } catch (err) { this.error.set(err instanceof Error ? err.message : 'TMX export failed'); }
-  }
-
-  async exportFile() {
-    const fmt = this.ioFormat();
-    const locale = this.ioLocale();
-    try {
-      let content: string, type: string, ext: string;
-      if (fmt === 'json') {
-        content = JSON.stringify(await this.api.exportJson(this.projectId, locale, this.branch()), null, 2);
-        type = 'application/json'; ext = 'json';
-      } else if (fmt === 'csv') {
-        content = await this.api.exportCsv(this.projectId, locale, undefined, this.branch());
-        type = 'text/csv'; ext = 'csv';
+      let blob: Blob, filename: string, message: string;
+      if (kind === 'bundle') {
+        blob = await this.api.exportBundle(this.projectId, fmt, scope.branch);
+        filename = `${scope.slug}-${fmt}.zip`;
+        message = `All locales exported as one zip (${this.labelFor(fmt)}${fmt === 'csv' ? ', spreadsheet-safe' : ''}, branch ${scope.branch}).`;
+      } else if (kind === 'tmx') {
+        const content = await this.api.exportTmx(this.projectId, scope.locale);
+        blob = new Blob([content], { type: 'application/x-tmx+xml' });
+        filename = `${scope.slug}-${scope.locale}.tmx`;
+        message = `Translation memory for ${scope.locale} exported as TMX 1.4 (project-wide, export-only; there is no TMX import).`;
       } else {
-        content = await this.api.exportText(this.projectId, locale, fmt, this.branch());
-        type = fmt === 'android' || fmt === 'xliff' || fmt === 'resx' || fmt === 'stringsdict' ? 'text/xml' : fmt === 'arb' ? 'application/json' : fmt === 'yaml' ? 'text/yaml' : 'text/plain';
-        ext = fmt === 'android' ? 'xml' : fmt === 'po' ? 'po' : fmt === 'pot' ? 'pot' : fmt === 'xliff' ? 'xlf' : fmt === 'properties' ? 'properties' : fmt === 'arb' ? 'arb' : fmt === 'yaml' ? 'yaml' : fmt === 'resx' ? 'resx' : fmt === 'stringsdict' ? 'stringsdict' : 'strings';
+        let content: string, type: string, ext: string;
+        if (fmt === 'json') {
+          content = JSON.stringify(await this.api.exportJson(this.projectId, scope.locale, scope.branch), null, 2);
+          type = 'application/json'; ext = 'json';
+        } else if (fmt === 'csv') {
+          content = await this.api.exportCsv(this.projectId, scope.locale, undefined, scope.branch);
+          type = 'text/csv'; ext = 'csv';
+        } else {
+          content = await this.api.exportText(this.projectId, scope.locale, fmt, scope.branch);
+          type = fmt === 'android' || fmt === 'xliff' || fmt === 'resx' || fmt === 'stringsdict' ? 'text/xml' : fmt === 'arb' ? 'application/json' : fmt === 'yaml' ? 'text/yaml' : 'text/plain';
+          ext = fmt === 'android' ? 'xml' : fmt === 'po' ? 'po' : fmt === 'pot' ? 'pot' : fmt === 'xliff' ? 'xlf' : fmt === 'properties' ? 'properties' : fmt === 'arb' ? 'arb' : fmt === 'yaml' ? 'yaml' : fmt === 'resx' ? 'resx' : fmt === 'stringsdict' ? 'stringsdict' : 'strings';
+        }
+        blob = new Blob([content], { type }); filename = `${scope.slug}.${scope.locale}.${ext}`;
+        message = `${this.labelFor(fmt)} exported for ${scope.locale} on branch ${scope.branch}.${fmt === 'csv' ? ' Spreadsheet-safe. For a lossless roundtrip export use the API with mode=raw.' : ''}`;
       }
-      const blob = new Blob([content], { type });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `${this.project()?.slug ?? 'export'}.${locale}.${ext}`;
-      a.click(); URL.revokeObjectURL(a.href);
-      if (fmt === 'csv') this.notice.set('CSV exported (spreadsheet-safe). For a lossless roundtrip export use the API with mode=raw.');
-    } catch (err) { this.error.set(err instanceof Error ? err.message : 'Export failed'); }
+      if (!current()) return;
+      const url = URL.createObjectURL(blob);
+      try { const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); }
+      finally { URL.revokeObjectURL(url); }
+      this.exportNotice.set(message);
+    } catch { if (current()) this.exportError.set(true); }
+    finally { if (!this.destroyed) this.exportPending.set(false); }
   }
   labelFor(fmt: IoFormat): string {
     return fmt === 'json' ? 'JSON' : fmt === 'csv' ? 'CSV' : fmt === 'android' ? 'Android XML' : fmt === 'po' ? 'PO (gettext)' : fmt === 'pot' ? 'POT (gettext template)' : fmt === 'xliff' ? 'XLIFF 1.2' : fmt === 'properties' ? 'Java properties' : fmt === 'arb' ? 'ARB (Flutter)' : fmt === 'yaml' ? 'YAML' : fmt === 'resx' ? 'RESX (.NET)' : fmt === 'stringsdict' ? 'iOS .stringsdict' : 'iOS strings';
@@ -1065,6 +1062,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     return this.labelFor(this.ioFormat());
   }
   onFormatPick(fmt: IoFormat) {
+    this.invalidateExport();
     this.cancelImportPick(); this.ioFormat.set(fmt);
     this.ioFormatTouched.set(true);
   }
@@ -1075,7 +1073,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     return this.handleFile(event, true);
   }
   cancelImportPick() { ++this.importGeneration; this.importConflict.set(null); }
-  onIoLocalePick(locale: string) { this.cancelImportPick(); this.ioLocale.set(locale); }
+  onIoLocalePick(locale: string) { this.invalidateExport(); this.cancelImportPick(); this.ioLocale.set(locale); }
   private importScopeCurrent(scope: ImportScope) {
     return !this.destroyed && scope.generation === this.importGeneration && scope.keysGeneration === this.keysGeneration
       && scope.branch === this.branch() && scope.locale === this.ioLocale() && scope.format === this.ioFormat();
@@ -1096,7 +1094,7 @@ export class EditorComponent implements OnInit, OnDestroy {
         this.importConflict.set({ scope, filename: file.name, ext: file.name.split('.').pop() ?? '', detected, current: scope.format, text, dryRun });
         return;
       }
-      this.ioFormat.set(detected); scope.format = detected;
+      this.invalidateExport(); this.ioFormat.set(detected); scope.format = detected;
     }
     await this.runImport(text, dryRun, scope);
   }
@@ -1105,7 +1103,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     if (!c || this.importPending() || !this.importScopeCurrent(c.scope)) { this.importConflict.set(null); return; }
     this.importConflict.set(null); this.notice.set(''); this.error.set('');
     const scope = { ...c.scope };
-    if (useDetected) { this.ioFormat.set(c.detected); scope.format = c.detected; this.ioFormatTouched.set(true); }
+    if (useDetected) { this.invalidateExport(); this.ioFormat.set(c.detected); scope.format = c.detected; this.ioFormatTouched.set(true); }
     await this.runImport(c.text, c.dryRun, scope);
   }
   private async runImport(text: string, dryRun: boolean, scope: ImportScope) {

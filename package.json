@@ -76,7 +76,8 @@
     "test:editor-merge-browser": "node scripts/editor-merge-browser-test.mjs",
     "test:editor-import-scope-browser": "node scripts/editor-import-scope-browser-test.mjs",
     "test:editor-import-drafts-browser": "node scripts/editor-import-drafts-browser-test.mjs",
-    "test:editor-bundle-scope-browser": "node scripts/editor-bundle-scope-browser-test.mjs"
+    "test:editor-bundle-scope-browser": "node scripts/editor-bundle-scope-browser-test.mjs",
+    "test:editor-export-scope-browser": "node scripts/editor-export-scope-browser-test.mjs"
   },
   "private": true,
   "dependencies": {
