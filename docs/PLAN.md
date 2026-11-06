@@ -1184,3 +1184,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Confirmed same-generation removal/no grid reload; unrelated cell signals/drafts preserved. Per-key pending/inert/scoped fixed error; dirty/pending/unknown target and pending tags/bulk guard. Unknown delete blocks blind replay until explicit list read.
 - Review added content/review/tag and bulk boundaries for pending/unknown deletion. Unit17/browser4 held unrelated PUT+DELETE prove persisted deletion/DB Original/draft retained/no list GET/duplicate guard/fixed failure. Desktop pixels inspected.
 - Five reviews0401. API265/31 web476/33 builds0; syncSTAGED95+144239unique/nativeSTAGED116+128244total242unique inner/outer0. No API/schema/worker/coverage promotion or server delete CAS claim.
+
+### Continuation 336 - Scoped branch-merge continuation
+- Preview captures branch/list generation, invalidated on reload/branch change/cancel/destroy. Pending preview/write guards, fixed errors, no post-merge source-grid reload. Explicit saved-server-values-only modal/copy-first opening-main guidance.
+- Unit13/browser5 real old-preview branch switch; held source PUT+merge POST, duplicate confirm/cancel guard, main saved Feature/source local draft retained/no key GET. Browser endpoint matcher abort then disabled-render readiness4PASS1FAIL corrected/final5.
+- Five reviews0402. API265/31 web489/34 builds0; syncSTAGED95+144239unique/nativeSTAGED116+128244total242unique inner/outer0. No merge API/schema/worker/coverage promotion.

@@ -50,7 +50,7 @@ interface CellState {
           </form>
           @if (branchListError()) { <span class="error" role="alert" name="branchListError">Branch list unavailable. A confirmed new branch may not appear yet.</span><button type="button" name="retryEditorBranches" [disabled]="branchListLoading() || branchCreating()" (click)="loadBranches()">Retry branch list</button> }
           @if (branch() !== 'main') {
-            <button (click)="mergeIntoMain()">Merge {{ branch() }} into main</button>
+            <button name="previewMerge" [disabled]="mergePreviewLoading() || mergePending()" (click)="mergeIntoMain()">{{ mergePreviewLoading() ? 'Loading merge preview...' : 'Merge ' + branch() + ' into main' }}</button>
           }
           <input class="search" placeholder="Search keys" aria-label="Search keys" [ngModel]="search()" (ngModelChange)="search.set($event); onSearch()" />
           <input class="tag-filter" placeholder="tag" aria-label="Filter by tag" [ngModel]="filterTag()" (ngModelChange)="filterTag.set($event); onSearch()" />
@@ -323,7 +323,7 @@ interface CellState {
       <div class="modal-backdrop">
         <div class="modal" role="dialog" aria-label="Merge preview">
           <h3>Merge {{ mp.from }} into main</h3>
-          <p class="muted">Copy-forward: {{ mp.from }} itself stays as it is.</p>
+          <p class="muted">Copy-forward: {{ mp.from }} itself stays as it is. Only saved server values are merged; local unsaved drafts are not included.</p>
           <ul class="merge-diff">
             @for (line of mp.lines; track line) {
               <li [class.warn]="line.startsWith('WARNING')">{{ line }}</li>
@@ -331,8 +331,8 @@ interface CellState {
           </ul>
           <p class="muted">An automatic snapshot of the current state is taken first, and every overwritten translation keeps its previous value in history. Anything changed on main after this preview is skipped, not overwritten.</p>
           <div class="modal-actions">
-            <button class="primary" (click)="confirmMerge()">Merge now</button>
-            <button (click)="mergePreview.set(null)">Cancel</button>
+            <button class="primary" name="confirmMerge" [disabled]="mergePending()" (click)="confirmMerge()">{{ mergePending() ? 'Merging...' : 'Merge now' }}</button>
+            <button name="cancelMerge" [disabled]="mergePending()" (click)="cancelMerge()">Cancel</button>
           </div>
         </div>
       </div>
@@ -354,6 +354,8 @@ export class EditorComponent implements OnInit, OnDestroy {
   branchCreating = signal(false); branchListLoading = signal(false); branchListError = signal(false);
   private branchListGeneration = 0;
   branch = signal('main'); branches = signal<BranchInfo[]>([]); newBranch = signal('');
+  mergePreviewLoading = signal(false); mergePending = signal(false);
+  private mergeGeneration = 0; private mergePreviewKeysGeneration = -1;
   mergePreview = signal<{ branchId: string; from: string; lines: string[]; previewAt: string } | null>(null); ioFormat = signal<'json' | 'csv' | 'android' | 'ios' | 'stringsdict' | 'po' | 'pot' | 'xliff' | 'properties' | 'arb' | 'yaml' | 'resx'>('json');
   ioFormatTouched = signal(false);
   importConflict = signal<{ filename: string; ext: string; detected: IoFormat; current: IoFormat; text: string; dryRun: boolean } | null>(null);
@@ -433,6 +435,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   async reload() {
     if (this.destroyed) return;
     if (this.searchTimer) { clearTimeout(this.searchTimer); this.searchTimer = null; }
+    this.cancelMerge();
     const generation = ++this.keysGeneration, projectId = this.projectId;
     const current = () => !this.destroyed && generation === this.keysGeneration;
     this.keysLoading.set(true); this.keysError.set(false);
@@ -781,7 +784,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     finally { if(current())this.historyLoading.set(false); }
   }
   ngOnDestroy() {
-    this.destroyed=true; ++this.branchListGeneration; ++this.projectGeneration; ++this.keysGeneration; ++this.historyGeneration; this.clearShots(); this.clearComments(); this.clearTm();
+    this.destroyed=true; ++this.mergeGeneration; ++this.branchListGeneration; ++this.projectGeneration; ++this.keysGeneration; ++this.historyGeneration; this.clearShots(); this.clearComments(); this.clearTm();
     if(this.searchTimer)clearTimeout(this.searchTimer);
   }
   async addKey() {
@@ -881,41 +884,49 @@ export class EditorComponent implements OnInit, OnDestroy {
     } catch { if (!this.destroyed) this.error.set('Branch creation could not be confirmed. Check the branch list before trying again.'); }
     finally { if (!this.destroyed) this.branchCreating.set(false); }
   }
+  cancelMerge() {
+    ++this.mergeGeneration; this.mergePreview.set(null); this.mergePreviewLoading.set(false);
+  }
   async mergeIntoMain() {
+    if (this.destroyed || this.mergePreviewLoading() || this.mergePending() || this.keysLoading() || this.keysError()) return;
     const from = this.branch();
-    const b = this.branches().find((x) => x.name === from);
-    if (!b) return;
-    this.error.set('');
+    const b = this.branches().find(x => x.name === from);
+    if (!b || from === 'main') return;
+    const generation = ++this.mergeGeneration, keysGeneration = this.keysGeneration;
+    const current = () => !this.destroyed && generation === this.mergeGeneration && keysGeneration === this.keysGeneration && from === this.branch();
+    this.mergePreview.set(null); this.mergePreviewLoading.set(true); this.error.set('');
     try {
       const p = await this.api.previewMergeBranch(this.projectId, b.id, 'main');
+      if (!current()) return;
       const lines = [
         `${p.keysCreated} new key(s) added to main`,
         `${p.keysExisting} key(s) exist on both; main gets ${from}'s description, plural and tag settings`,
         `${p.translationsAdded} translation(s) added`,
         `${p.translationsIdentical} identical, skipped`,
       ];
-      if (p.translationsOverwritten > 0) {
-        lines.push(`WARNING: ${p.translationsOverwritten} existing main translation(s) will be OVERWRITTEN by ${from}'s version`);
-      } else {
-        lines.push('No existing main translation is overwritten.');
-      }
+      if (p.translationsOverwritten > 0) lines.push(`WARNING: ${p.translationsOverwritten} existing main translation(s) will be OVERWRITTEN by ${from}'s version`);
+      else lines.push('No existing main translation is overwritten.');
       lines.push(`${p.targetOnlyKeys} key(s) only on main are kept untouched`);
+      this.mergePreviewKeysGeneration = keysGeneration;
       this.mergePreview.set({ branchId: b.id, from, lines, previewAt: p.previewAt });
-    } catch (err) { this.error.set(err instanceof Error ? err.message : 'Merge preview failed'); }
+    } catch { if (current()) this.error.set('Merge preview unavailable. Check your access or connection, then try again.'); }
+    finally { if (current()) this.mergePreviewLoading.set(false); }
   }
   async confirmMerge() {
     const mp = this.mergePreview();
-    if (!mp) return;
-    this.error.set('');
+    if (!mp || this.destroyed || this.mergePending() || mp.from !== this.branch() || this.mergePreviewKeysGeneration !== this.keysGeneration || this.keysLoading() || this.keysError()) return;
+    const generation = this.mergeGeneration;
+    const current = () => !this.destroyed && generation === this.mergeGeneration;
+    this.mergePending.set(true); this.error.set('');
     try {
       const res = await this.api.mergeBranch(this.projectId, mp.branchId, 'main', mp.previewAt);
+      if (!current()) return;
       this.mergePreview.set(null);
       const skipped = res.translationsSkipped > 0 || res.keysSkipped > 0
-        ? ` ${res.keysSkipped} key(s) and ${res.translationsSkipped} translation(s) changed on main after the preview were skipped - preview again to re-check them.`
-        : '';
-      this.notice.set(`Merged ${res.merged}: ${res.keysMerged} keys, ${res.translationsMerged} translations copied.${skipped}`);
-      await this.reload();
-    } catch (err) { this.error.set(err instanceof Error ? err.message : 'Merge failed'); }
+        ? ` ${res.keysSkipped} key(s) and ${res.translationsSkipped} translation(s) changed on main after the preview were skipped - preview again to re-check them.` : '';
+      this.notice.set(`Merged ${res.merged}: ${res.keysMerged} keys, ${res.translationsMerged} translations copied to main.${skipped} Current local values were kept. Copy local drafts before opening main to see its current server values.`);
+    } catch { if (current()) { this.mergePreview.set(null); this.error.set('Merge result could not be confirmed. Check main before preparing another merge.'); } }
+    finally { if (!this.destroyed) this.mergePending.set(false); }
   }
   // Review queue: set one status for the translations the CURRENT filter
   // selects in the selected locale. Previews the exact affected count first;

@@ -72,7 +72,8 @@
     "test:editor-branches-browser": "node scripts/editor-branches-browser-test.mjs",
     "test:editor-key-create-browser": "node scripts/editor-key-create-browser-test.mjs",
     "test:editor-locale-create-browser": "node scripts/editor-locale-create-browser-test.mjs",
-    "test:editor-key-delete-browser": "node scripts/editor-key-delete-browser-test.mjs"
+    "test:editor-key-delete-browser": "node scripts/editor-key-delete-browser-test.mjs",
+    "test:editor-merge-browser": "node scripts/editor-merge-browser-test.mjs"
   },
   "private": true,
   "dependencies": {
