@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55544, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.WEBHOOK_JOURNAL_TEST_PG_PORT ?? 55544), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
 let failures = 0, api, web, browser, prisma;
