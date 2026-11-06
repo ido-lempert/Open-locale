@@ -1034,6 +1034,11 @@ try {
   const selStillXliff = await page.$eval('select[aria-label="Import/export format"]', (el) => el.value);
   check('keeping the explicit XLIFF choice imports as XLIFF and fails closed, selection kept', errShown && xmlStillAbsent && selStillXliff === 'xliff', `err=${errShown} absent=${xmlStillAbsent} select=${selStillXliff}`);
 
+  // The submitted invalid-XLIFF response is outcome-unconfirmed in the editor.
+  // Explicitly read current values before another real import, as required by UI.
+  await page.click('[name=retryKeys]');
+  await page.waitForFunction(()=>!document.querySelector('[name=keysLoading]')&&!document.querySelector('[name=keysError]'));
+
   const conflictJsonFile = '/tmp/e2e-conflict.json';
   writeFileSync(conflictJsonFile, JSON.stringify({ 'conflict.json': 'from json file' }) + '\n');
   await page.select('select[aria-label="Import/export format"]', 'arb');

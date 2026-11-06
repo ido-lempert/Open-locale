@@ -361,6 +361,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   private mergeGeneration = 0; private mergePreviewKeysGeneration = -1;
   mergePreview = signal<{ branchId: string; from: string; lines: string[]; previewAt: string } | null>(null); ioFormat = signal<'json' | 'csv' | 'android' | 'ios' | 'stringsdict' | 'po' | 'pot' | 'xliff' | 'properties' | 'arb' | 'yaml' | 'resx'>('json');
   ioFormatTouched = signal(false);
+  importWritePending = signal(false);
   importPending = signal(false); private importGeneration = 0;
   importConflict = signal<{ scope: ImportScope; filename: string; ext: string; detected: IoFormat; current: IoFormat; text: string; dryRun: boolean } | null>(null);
   glossary = signal<GlossaryTermItem[]>([]);
@@ -504,12 +505,12 @@ export class EditorComponent implements OnInit, OnDestroy {
   }
   canSaveDraft(k: Key, locale: string) {
     const c = this.cell(k.id, locale)();
-    return !this.destroyed && !this.keyDeleting().includes(k.id) && !this.keyDeleteErrorFor().includes(k.id) && !this.bulkReviewPending() && !this.keysLoading() && !this.keysError() && this.cellDirty(k, locale)
+    return !this.destroyed && !this.keyDeleting().includes(k.id) && !this.keyDeleteErrorFor().includes(k.id) && !this.bulkReviewPending() && !this.importWritePending() && !this.keysLoading() && !this.keysError() && this.cellDirty(k, locale)
       && c.status !== 'saving' && !c.reviewing && !c.needsReload;
   }
   async save(k: Key, locale: string, force = false) {
     // Inert is a UI affordance, not a write boundary. Reject retained-grid events.
-    if (this.destroyed || this.keysLoading() || this.keysError() || this.bulkReviewPending() || this.keyDeleting().includes(k.id) || this.keyDeleteErrorFor().includes(k.id)) return;
+    if (this.destroyed || this.keysLoading() || this.keysError() || this.bulkReviewPending() || this.importWritePending() || this.keyDeleting().includes(k.id) || this.keyDeleteErrorFor().includes(k.id)) return;
     const sig = this.cell(k.id, locale);
     const c = sig();
     if (!force && c.value === c.saved && this.sameForms(c.forms, c.savedForms)) return;
@@ -557,7 +558,7 @@ export class EditorComponent implements OnInit, OnDestroy {
 
   canReview(k: Key, locale: string) {
     const c = this.cell(k.id, locale)();
-    return !this.destroyed && !this.keyDeleting().includes(k.id) && !this.keyDeleteErrorFor().includes(k.id) && !this.bulkReviewPending() && !this.keysLoading() && !this.keysError() && !c.needsReload
+    return !this.destroyed && !this.keyDeleting().includes(k.id) && !this.keyDeleteErrorFor().includes(k.id) && !this.bulkReviewPending() && !this.importWritePending() && !this.keysLoading() && !this.keysError() && !c.needsReload
       && !c.reviewing && c.status !== 'saving' && c.value === c.saved
       && this.sameForms(c.forms, c.savedForms) && c.version !== undefined && c.version > 0 && !!c.rowId;
   }
@@ -945,7 +946,7 @@ export class EditorComponent implements OnInit, OnDestroy {
       });
   }
   async bulkMark() {
-    if (!this.canBulkReview() || this.bulkReviewPending()) return;
+    if (!this.canBulkReview() || this.bulkReviewPending() || this.importWritePending()) return;
     this.bulkReviewPending.set(true); this.error.set('');
     const scope = { locale: this.ioLocale(), status: this.bulkStatus(), from: this.filterStatus() || undefined, search: this.search() || undefined, tag: this.filterTag() || undefined, branch: this.branch() };
     const generation = this.keysGeneration;
@@ -1098,19 +1099,27 @@ export class EditorComponent implements OnInit, OnDestroy {
   private async runImport(text: string, dryRun: boolean, scope: ImportScope) {
     if (this.importPending() || !this.importScopeCurrent(scope)) return;
     const fmt = scope.format;
-    this.importPending.set(true);
+    if (!dryRun && (!this.canBulkReview() || this.bulkReviewPending())) { this.error.set('Import unavailable while local translation work is unsaved, pending or unconfirmed. Save drafts or copy retained values before reloading.'); return; }
+    this.importPending.set(true); this.importWritePending.set(!dryRun);
+    let submitted = false;
     try {
       const payload = fmt === 'json' ? { entries: JSON.parse(text) }
         : fmt === 'csv' ? { csv: text }
         : fmt === 'android' ? { xml: text } : fmt === 'po' ? { po: text } : fmt === 'pot' ? { pot: text } : fmt === 'xliff' ? { xliff: text } : fmt === 'properties' ? { properties: text } : fmt === 'arb' ? { arb: text } : fmt === 'yaml' ? { yaml: text } : fmt === 'resx' ? { resx: text } : fmt === 'stringsdict' ? { stringsdict: text } : { strings: text };
+      submitted = true;
       const res = await this.api.importPayload(this.projectId, scope.locale, payload, scope.branch, dryRun);
       if (!this.importScopeCurrent(scope)) return;
       this.error.set('');
       this.notice.set(dryRun
         ? `Preview only - nothing imported: would create ${res.keysCreated} keys, update ${res.translationsUpserted} translations, ${res.unchangedSkipped} unchanged${res.failed ? `, ${res.failed} would fail: ${(res.failures ?? []).join('; ')}` : ''} (${this.labelFor(fmt)}, ${scope.locale}, branch ${scope.branch}).`
         : `Imported ${res.keysCreated} keys, ${res.translationsUpserted} translations (${this.labelFor(fmt)}, ${scope.locale}, branch ${scope.branch}).`);
-      if (!dryRun) await this.reload();
-    } catch { if (this.importScopeCurrent(scope)) { this.notice.set(''); this.error.set(dryRun ? 'Import preview unavailable. Check the file and connection before trying again.' : 'Import result could not be confirmed. Check current server values before trying again.'); } }
-    finally { if (!this.destroyed) this.importPending.set(false); }
+      if (!dryRun) {
+        if (!this.canBulkReview() || this.bulkReviewPending()) {
+          this.prepareSaveReload();
+          this.notice.set(`Import confirmed on branch "${scope.branch}" in ${scope.locale}. Local values were kept. Copy retained values and reload current server values before more changes.`);
+        } else await this.reload();
+      }
+    } catch { if (this.importScopeCurrent(scope)) { if (!dryRun && submitted) this.prepareSaveReload(); this.notice.set(''); this.error.set(!submitted ? 'File could not be parsed in the selected format. Nothing was sent.' : dryRun ? 'Import preview unavailable. Check the file and connection before trying again.' : 'Import result could not be confirmed. Check current server values before trying again.'); } }
+    finally { if (!this.destroyed) { this.importPending.set(false); this.importWritePending.set(false); } }
   }
 }

@@ -1194,3 +1194,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - File pick captures branch/locale/format/list generation before async bytes; newer pick/scope/list change/destroy invalidates older read/conflict/result. Pending guard, fixed errors, no late changed-scope feedback/reload.
 - Unit12/browser5 delayed bytes+locale switch zero requests, conflict clears on locale change, held sent import stays EN after HE selection/persists only EN/no late key GET. Desktop pixels inspected. Bundle/general draft reconciliation unchanged.
 - Five reviews0403. API265/31 web501/35 builds0; syncSTAGED95+144239unique/nativeSTAGED116+128244total242unique inner/outer0. No API/schema/worker/coverage promotion.
+
+### Continuation 338 - Single-file import local-work boundary
+- Guard real import with dirty/plural/pending/unknown grid readiness; preview remains read-only. Pending real import pauses cell saves/reviews/bulk. Typed-during-write retained/copy-reload rather than destructive replacement; unknown result blocks blind replay. Local parse fail sends nothing/no freeze.
+- Unit14/browser5 real dirty zero request, pending typing zero blur PUT, persisted Imported/local newer draft/no list GET, unknown replay blocked. First browser4PASS1FAIL wrong copy selector corrected; native first111PASS5FAIL followed by explicit required retry after submitted-invalid-XLIFF, then fresh116+128244total242unique0.
+- Five reviews0404. API265/31 web515/36 builds0; syncSTAGED95+144239unique0. No API/schema/worker/coverage promotion; bundle/general mutation reconciliation unchanged.
