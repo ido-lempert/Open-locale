@@ -33,7 +33,7 @@ import { ApiService, SnapshotMeta } from '../api.service';
             @if (s.automatic) { <span class="auto-badge">auto</span> }
             <span class="muted">{{ s.keyCount }} keys, {{ s.translationCount }} translations</span>
             <time class="muted">{{ s.createdAt | date:'short' }}</time>
-            <button class="restore" [attr.aria-label]="'Restore snapshot ' + s.label" (click)="restore(s)" [disabled]="restoring() || creating()">Restore</button>
+            <button class="restore" [attr.aria-label]="'Restore snapshot ' + s.label" (click)="restore(s)" [disabled]="!restoreReady(s)">Restore</button>
           </li>
         } @empty {
           <li class="muted" name="snapshotListEmpty">No snapshots yet</li>
@@ -113,8 +113,13 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
     }
   }
 
+  restoreReady(s: SnapshotMeta) {
+    return !this.destroyed && !this.loading() && !this.listError() && !this.restoring() && !this.creating() && this.items().some(item=>item===s);
+  }
+
   async restore(s: SnapshotMeta) {
-    if (this.destroyed || this.restoring() || this.creating()) return;
+    if (!this.restoreReady(s)) return;
+    const scope=this.projectGeneration,projectId=this.projectId,generation=this.readGeneration;
     if (!confirm(
       `Restore the project to "${s.label}"?\n\n` +
       `- Keys and translations return to the snapshot state.\n` +
@@ -122,7 +127,7 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
       `- Keys deleted after this snapshot come back, but their old comments and screenshot links are not recovered.\n` +
       `- A snapshot of the current state is taken first, so this restore is itself recoverable.`,
     )) return;
-    const scope=this.projectGeneration,projectId=this.projectId;
+    if(!this.current(scope) || generation!==this.readGeneration || !this.restoreReady(s))return;
     this.restoring.set(true);
     this.error.set('');this.notice.set('');
     try {
