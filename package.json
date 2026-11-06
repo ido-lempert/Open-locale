@@ -52,6 +52,7 @@
     "test:qa-browser": "node scripts/qa-browser-test.mjs",
     "test:activity-browser": "node scripts/activity-browser-test.mjs",
     "test:tasks-row-ready-browser": "node scripts/tasks-row-ready-browser-test.mjs",
+    "test:tasks-action-receipt-browser": "node scripts/tasks-action-receipt-browser-test.mjs",
     "test:tasks-browser": "node scripts/tasks-browser-test.mjs",
     "test:snapshot-restore-ready-browser": "node scripts/snapshot-restore-ready-browser-test.mjs",
     "test:snapshot-restore-unknown-browser": "node scripts/snapshot-restore-unknown-browser-test.mjs",

@@ -24,6 +24,7 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
       </select>
     </header>
     <main [attr.aria-busy]="loading()">
+      @if (actionNotice(); as message) { <p role="status" name="taskActionNotice">{{ message }}</p> }
       @if (createNotice(); as message) { <p role="status" name="taskCreateNotice">{{ message }}</p> }
       @if (error(); as e) { <p class="error" role="alert">{{ e }}</p> }
       <section class="panel">
@@ -112,7 +113,7 @@ export class TasksComponent implements OnInit, OnDestroy {
   mineFilter = signal('');
   listError = signal(false);
   loading = signal(true);
-  error = signal(''); createNotice = signal('');
+  error = signal(''); createNotice = signal(''); actionNotice = signal('');
   creating = signal(false);
   updatingIds = signal<string[]>([]);
   deletingIds = signal<string[]>([]);
@@ -124,6 +125,7 @@ export class TasksComponent implements OnInit, OnDestroy {
 
   private routeSub?: Subscription;
   private fetchSeq = 0;
+  private actionSeq = 0;
   private destroyed = false;
   private projectGeneration = 0;
 
@@ -146,7 +148,7 @@ export class TasksComponent implements OnInit, OnDestroy {
     const scope=++this.projectGeneration;
     this.projectId = pid;
     this.fetchSeq++; // invalidate every in-flight fetch from the previous project
-    this.error.set('');this.createNotice.set('');this.creating.set(false);this.updatingIds.set([]);this.deletingIds.set([]);
+    this.error.set('');this.createNotice.set('');this.actionNotice.set('');this.creating.set(false);this.updatingIds.set([]);this.deletingIds.set([]);
     this.tasks.set([]); this.members.set([]); this.groups.set([]); this.keys.set([]);
     this.title.set(''); this.description.set(''); this.dueDate.set('');
     this.assigneeId.set(''); this.dependsOnId.set(''); this.selectedKeyIds.set([]); this.lockKeys.set(false);
@@ -271,12 +273,13 @@ export class TasksComponent implements OnInit, OnDestroy {
 
   async update(t: TaskItem, patch: Record<string, unknown>, el?: HTMLSelectElement, revertValue?: string) {
     if(!this.rowReady(t)){if(!this.destroyed&&el&&revertValue!==undefined)el.value=revertValue;return;}
-    const scope=this.projectGeneration,projectId=this.projectId;
+    const scope=this.projectGeneration,projectId=this.projectId,title=t.title;
     const current=()=>!this.destroyed&&scope===this.projectGeneration;
-    this.updatingIds.update(ids=>[...ids,t.id]);this.error.set('');
+    const action=++this.actionSeq;
+    this.actionNotice.set('');this.updatingIds.update(ids=>[...ids,t.id]);this.error.set('');
     try {
       await this.api.updateTask(projectId, t.id, patch);
-      if(current())await this.fetch();
+      if(current()){if(action===this.actionSeq)this.actionNotice.set(`Task "${title}" was updated. The list uses current filters. If unavailable, retry the read without repeating this change.`);await this.fetch();}
     } catch (e) {
       if(!current())return;
       // Preserve actionable domain guidance only for exact reviewed messages.
@@ -290,12 +293,13 @@ export class TasksComponent implements OnInit, OnDestroy {
 
   async remove(t: TaskItem) {
     if(!this.rowReady(t))return;
-    const scope=this.projectGeneration,projectId=this.projectId;
+    const scope=this.projectGeneration,projectId=this.projectId,title=t.title;
     const current=()=>!this.destroyed&&scope===this.projectGeneration;
-    this.deletingIds.update(ids=>[...ids,t.id]);this.error.set('');
+    const action=++this.actionSeq;
+    this.actionNotice.set('');this.deletingIds.update(ids=>[...ids,t.id]);this.error.set('');
     try {
       await this.api.deleteTask(projectId, t.id);
-      if(current())await this.fetch();
+      if(current()){if(action===this.actionSeq)this.actionNotice.set(`Task "${title}" was deleted. If the list is unavailable, retry the read without deleting again.`);await this.fetch();}
     } catch {
       if(!current())return;
       this.error.set('Task deletion failed. Check the task list before trying again.');
