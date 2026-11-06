@@ -27,6 +27,7 @@ import { ApiService, Project } from '../api.service';
       @else if (projects().length === 0) {
         <p class="muted empty">No projects yet. Create your first one above.</p>
       }
+      @if (!projectsError()) { <button type="button" name="refreshProjects" [disabled]="projectsLoading() || busy()" (click)="refreshProjects()">Refresh projects</button> }
       <section class="panel tfa">
         <h2>Two-factor authentication</h2>
         @if (tfaLoading()) { <p class="muted" role="status" name="tfaLoading">Loading two-factor status.</p> }
@@ -92,6 +93,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
   tfaCode = signal(''); tfaPassword = signal(''); tfaCodes = signal<string[]>([]);
   constructor(private api: ApiService) {}
   async ngOnInit() { await Promise.all([this.reload(), this.loadTfa()]); }
+  refreshProjects() { if(!this.destroyed&&!this.projectsLoading()&&!this.busy())void this.reload(); }
   async reload() {
     if (this.destroyed) return;
     const generation = ++this.projectsGeneration;
