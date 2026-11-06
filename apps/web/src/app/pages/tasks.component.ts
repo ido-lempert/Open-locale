@@ -24,6 +24,7 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
       </select>
     </header>
     <main [attr.aria-busy]="loading()">
+      @if (createNotice(); as message) { <p role="status" name="taskCreateNotice">{{ message }}</p> }
       @if (error(); as e) { <p class="error" role="alert">{{ e }}</p> }
       <section class="panel">
         <h2>New task</h2>
@@ -111,7 +112,7 @@ export class TasksComponent implements OnInit, OnDestroy {
   mineFilter = signal('');
   listError = signal(false);
   loading = signal(true);
-  error = signal('');
+  error = signal(''); createNotice = signal('');
   creating = signal(false);
   updatingIds = signal<string[]>([]);
   deletingIds = signal<string[]>([]);
@@ -145,7 +146,7 @@ export class TasksComponent implements OnInit, OnDestroy {
     const scope=++this.projectGeneration;
     this.projectId = pid;
     this.fetchSeq++; // invalidate every in-flight fetch from the previous project
-    this.error.set('');this.creating.set(false);this.updatingIds.set([]);this.deletingIds.set([]);
+    this.error.set('');this.createNotice.set('');this.creating.set(false);this.updatingIds.set([]);this.deletingIds.set([]);
     this.tasks.set([]); this.members.set([]); this.groups.set([]); this.keys.set([]);
     this.title.set(''); this.description.set(''); this.dueDate.set('');
     this.assigneeId.set(''); this.dependsOnId.set(''); this.selectedKeyIds.set([]); this.lockKeys.set(false);
@@ -240,7 +241,7 @@ export class TasksComponent implements OnInit, OnDestroy {
     const current=()=>!this.destroyed&&scope===this.projectGeneration;
     const draft={title:this.title(),description:this.description(),dueDate:this.dueDate(),
       assigneeId:this.assigneeId(),dependsOnId:this.dependsOnId(),keyIds:[...this.selectedKeyIds()],lockKeys:this.lockKeys()};
-    this.creating.set(true);this.error.set('');
+    this.creating.set(true);this.error.set('');this.createNotice.set('');
     try {
       await this.api.createTask(projectId, {
         title,
@@ -251,6 +252,7 @@ export class TasksComponent implements OnInit, OnDestroy {
         ...(draft.keyIds.length ? { keyIds: draft.keyIds, lockKeys: draft.lockKeys } : {}),
       });
       if(!current())return;
+      this.createNotice.set(`Task "${title}" was created. The list below uses the current assignee and status filters; a new task may not match. If the list is unavailable, retry the read without creating the task again.`);
       // Inputs remain editable during POST. Never clear a newer whole draft.
       if(this.title()===draft.title&&this.description()===draft.description&&this.dueDate()===draft.dueDate&&
         this.assigneeId()===draft.assigneeId&&this.dependsOnId()===draft.dependsOnId&&this.lockKeys()===draft.lockKeys&&

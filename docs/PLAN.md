@@ -1224,3 +1224,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Guard target dirty plain/plural/saving/review/unknown/row identity and grid/import/bulk/delete state before local mutation, not only at save. Blocked options retained/disabled with guidance; readiness never auto-applies a queued choice. Conditional explicit save unchanged.
 - Unit16/browser3 real held import + synthetic disabled click proves empty target/DB unchanged/zero PUT, then explicit keyboard pick once ready persists unverified. Desktop pixels inspected; five reviews0409. No source-match/read behavior/API/schema/worker/coverage promotion.
 - API265/31 web607/41 builds0; broad regressions final0, syncSTAGED95+144239unique/nativeSTAGED116+128244total242unique inner/outer0.
+
+### Continuation 344 - Confirmed task creation receipt
+- Confirmed task receipt before independent list refresh, submitted title/current-filter limits/read-only retry guidance. Survives read error/retry/filter changes, preserves newer draft; next create/new project clears receipt, stale project/destroy cannot publish. No forced filter reset/row injection/idempotent create.
+- Unit6/browser5 held create duplicate/newer draft, confirmed receipt + failed DONE-filter read, GET-only retry/one persisted create, clear filter reveals task. Desktop pixels inspected, five reviews0410.
+- API265/31 web613/42 builds0; broad regressions final0, syncSTAGED95+144239unique/nativeSTAGED116+128244total242unique inner/outer0. Optional automation fixture PG port after default bind conflict, final132/0. No API/schema/worker/coverage promotion.
