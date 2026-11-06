@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -33,10 +33,13 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
       @if (localesError()) { <p class="error" role="alert" name="glossaryLocalesError">Translation columns unavailable. Terms remain available.</p><button type="button" name="retryGlossaryLocales" (click)="void loadLocales()">Retry translation columns</button> }
       @if (localesLoading()) { <p role="status" name="glossaryLocalesLoading">Loading translation columns...</p> }
       @if (!listError()) { <button type="button" name="refreshGlossaryList" [disabled]="loading() || mutationsPending()" (click)="refresh()">Refresh glossary</button><p class="muted" name="glossaryRefreshHint">Refresh replaces translation fields with server values. Your new-term draft stays here.</p> }
+      <label>Find in loaded terms, notes or translations <input type="search" name="glossarySearch" maxlength="200" [ngModel]="query()" (ngModelChange)="search($event)" /></label>
+      <button type="button" name="clearGlossarySearch" [disabled]="!query()" (click)="search('')">Clear search</button>
+      @if (!loading() && !listError()) { <p class="muted" role="status" name="glossaryMatches">{{ visibleTerms().length }} of {{ terms().length }} terms match. Search is a literal, case-insensitive substring in loaded rows, including local translation text. It does not read newer server changes.</p> }
       @if (!listError()) { <table class="glossary-table">
         <thead><tr><th>Term</th>@for (l of locales(); track l) { <th>{{ l }}</th> }<th>Notes</th><th></th></tr></thead>
         <tbody>
-          @for (t of terms(); track t.id) {
+          @for (t of visibleTerms(); track t.id) {
             <tr [attr.aria-busy]="rowPending(t.id)">
               <td><code>{{ t.term }}</code>@if (t.doNotTranslate) { <span class="dnt-badge">do not translate</span> }</td>
               @for (l of locales(); track l) {
@@ -49,7 +52,7 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
               <td>@if (unknownSaveIds().includes(t.id)) { <span class="error" role="alert" name="glossarySaveUnknown">Save unconfirmed. Copy text before Refresh.</span> }@if (unknownDeleteIds().includes(t.id)) { <span class="error" role="alert" name="glossaryDeleteUnknown">Delete unconfirmed. Refresh required.</span> }@if (savingIds().includes(t.id)) { <span role="status" name="glossarySaving">Saving translation...</span> }@if (deletingIds().includes(t.id)) { <span role="status" name="glossaryDeleting">Deleting term...</span> }<button [disabled]="rowPending(t.id)" class="danger" [attr.aria-label]="'Delete term ' + t.term" (click)="remove(t)">&times;</button></td>
             </tr>
           } @empty {
-            @if (!loading() && !listError()) { <tr name="glossaryListEmpty"><td colspan="9" class="muted">No glossary terms yet</td></tr> }
+            @if (!loading() && !listError()) { <tr name="glossaryListEmpty"><td colspan="9" class="muted">{{ query() ? 'No loaded terms match this search. Clear search to show all loaded terms.' : 'No glossary terms yet' }}</td></tr> }
           }
         </tbody>
       </table> }
@@ -59,6 +62,9 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
 export class GlossaryComponent implements OnInit, OnDestroy {
   projectId = '';
   terms = signal<GlossaryTermItem[]>([]);
+  query=signal('');
+  visibleTerms=computed(()=>{const query=this.query().toLowerCase();return query?this.terms().filter(t=>[t.term,t.notes??'',...Object.values(t.translations)].some(value=>value.toLowerCase().includes(query))):this.terms();});
+  search(query:string) {if(!this.destroyed)this.query.set(query.slice(0,200));}
   locales = signal<string[]>([]);
   localesError=signal(false);
   localesLoading=signal(false);
@@ -91,7 +97,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
     ++this.projectGeneration;
     this.projectId=pid;++this.fetchSeq;this.savedTranslations.clear();
     this.terms.set([]);this.locales.set([]);this.error.set('');this.createNotice.set('');this.listError.set(false);this.creating.set(false);this.deletingIds.set([]);this.savingIds.set([]);this.unknownDeleteIds.set([]);this.unknownSaveIds.set([]);++this.saveEpoch;
-    this.term.set('');this.notes.set('');this.doNotTranslate.set(false);
+    this.term.set('');this.notes.set('');this.doNotTranslate.set(false);this.query.set('');
     void this.fetch();
     this.localesLoading.set(false);this.localesError.set(false);
     void this.loadLocales();

@@ -1,0 +1,7 @@
+import { GlossaryComponent } from './glossary.component';
+const rows:any[]=[{id:'one',term:'Checkout [A]',notes:'Billing note',translations:{he:'תשלום',fr:'Valeur'}},{id:'two',term:'Account',notes:null,translations:{}}];
+describe('loaded glossary search',()=>{
+ it('matches literal case-insensitive term notes and translations without mutating loaded rows',()=>{const c=new GlossaryComponent({} as any,{} as any);c.terms.set(rows);for(const q of ['CHECKOUT','billing','VALEUR','תשלום','[a]']){c.search(q);expect(c.visibleTerms().map(t=>t.id)).toEqual(['one']);}c.search('.*');expect(c.visibleTerms()).toEqual([]);expect(c.terms()).toBe(rows);c.search('');expect(c.visibleTerms()).toBe(rows);});
+ it('uses local translation text, retaining hidden drafts and new-term form',()=>{const c=new GlossaryComponent({} as any,{} as any);c.terms.set(rows);c.term.set('New draft');c.notes.set('Keep notes');c.setTranslation(rows[0],'he','Local draft');c.search('Account');expect(c.visibleTerms().map(t=>t.id)).toEqual(['two']);c.search('Local draft');expect(c.visibleTerms()[0].translations.he).toBe('Local draft');expect([c.term(),c.notes()]).toEqual(['New draft','Keep notes']);expect(c.terms().length).toBe(2);});
+ it('caps input and blocks search after destroy',()=>{const c=new GlossaryComponent({} as any,{} as any);c.search('x'.repeat(300));expect(c.query().length).toBe(200);c.ngOnDestroy();c.search('late');expect(c.query().length).toBe(200);});
+});

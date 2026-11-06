@@ -75,6 +75,7 @@
     "test:editor-draft-save-browser": "node scripts/editor-draft-save-browser-test.mjs",
     "test:editor-project-browser": "node scripts/editor-project-browser-test.mjs",
     "test:projects-create-browser": "node scripts/projects-create-browser-test.mjs",
+    "test:glossary-search-browser": "node scripts/glossary-search-browser-test.mjs",
     "test:tasks-options-browser": "node scripts/tasks-options-browser-test.mjs",
     "test:projects-refresh-browser": "node scripts/projects-refresh-browser-test.mjs",
     "test:projects-reads-browser": "node scripts/projects-reads-browser-test.mjs",
