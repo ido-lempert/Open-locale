@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -24,7 +24,7 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
       </select>
     </header>
     <main [attr.aria-busy]="loading()">
-      @if (actionUnknown()) { <p role="alert" name="taskActionUnknown">A task change is unconfirmed. Check tasks before acting again. Row changes are paused. Read all tasks to recover; filters will be cleared.</p><button type="button" name="recoverTaskActions" [disabled]="loading() || mutationsPending()" (click)="recoverActions()">Read all tasks</button> }
+      @if (actionUnknown()) { <p role="alert" name="taskActionUnknown">A task change is unconfirmed. Check tasks before acting again. Row changes are paused. Read all tasks to recover; filters and search will be cleared.</p><button type="button" name="recoverTaskActions" [disabled]="loading() || mutationsPending()" (click)="recoverActions()">Read all tasks</button> }
       @if (actionNotice(); as message) { <p role="status" name="taskActionNotice">{{ message }}</p> }
       @if (createNotice(); as message) { <p role="status" name="taskCreateNotice">{{ message }}</p> }
       @if (error(); as e) { <p class="error" role="alert">{{ e }}</p> }
@@ -69,8 +69,11 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
       @if (listError()) { <p class="error" role="alert" name="taskListError">Tasks unavailable. No tasks are shown. Retry this read or reload the page.</p><button type="button" name="retryTaskList" (click)="void fetch()">Retry tasks</button> }
       @if (loading()) { <p role="status" name="taskListLoading">Loading tasks...</p> }
       @if (!listError()) { <button type="button" name="refreshTaskList" [disabled]="loading() || mutationsPending()" (click)="refresh()">Refresh tasks</button> }
+      <div class="task-search" style="margin-top:1rem"><label>Find in loaded task titles or descriptions <input type="search" name="taskSearch" maxlength="200" [ngModel]="query()" (ngModelChange)="search($event)" /></label>
+      <button type="button" name="clearTaskSearch" [disabled]="!query()" (click)="search('')">Clear search</button></div>
+      @if (!loading() && !listError()) { <p class="muted" role="status" name="taskMatches">{{ visibleTasks().length }} of {{ tasks().length }} loaded tasks match. Search is a literal, case-insensitive substring within the current assignee and status filters. Refresh tasks to read newer changes.</p> }
       <ul class="task-list">
-        @for (t of tasks(); track t.id) {
+        @for (t of visibleTasks(); track t.id) {
           <li class="task-row" [attr.aria-busy]="rowPending(t.id)">
             <span class="task-status task-{{ t.status.toLowerCase().replace('_', '-') }}">{{ t.status.toLowerCase().replace('_', ' ') }}</span>
             <div class="task-body">
@@ -103,7 +106,7 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
             <button [disabled]="!rowReady(t)" class="danger" [attr.aria-label]="'Delete task ' + t.title" (click)="remove(t)">&times;</button>
           </li>
         } @empty {
-          @if (!loading() && !listError()) { <li class="muted" name="taskListEmpty">{{ hasFilters() ? 'No tasks match these filters' : 'No tasks yet' }}</li> }
+          @if (!loading() && !listError()) { <li class="muted" name="taskListEmpty">{{ query() ? 'No loaded tasks match this search. Clear search to show the current filtered list.' : hasFilters() ? 'No tasks match these filters' : 'No tasks yet' }}</li> }
         }
       </ul>
     </main>
@@ -112,6 +115,9 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
 export class TasksComponent implements OnInit, OnDestroy {
   projectId = '';
   tasks = signal<TaskItem[]>([]);
+  query=signal('');
+  visibleTasks=computed(()=>{const query=this.query().toLowerCase();return query?this.tasks().filter(t=>[t.title,t.description??''].some(value=>value.toLowerCase().includes(query))):this.tasks();});
+  search(query:string) {if(!this.destroyed)this.query.set(query.slice(0,200));}
   members = signal<MemberInfo[]>([]);
   groups = signal<GroupInfo[]>([]);
   keys = signal<Key[]>([]);
@@ -166,7 +172,7 @@ export class TasksComponent implements OnInit, OnDestroy {
     this.tasks.set([]); this.members.set([]); this.groups.set([]); this.keys.set([]);
     this.title.set(''); this.description.set(''); this.dueDate.set('');
     this.assigneeId.set(''); this.dependsOnId.set(''); this.selectedKeyIds.set([]); this.lockKeys.set(false);
-    this.statusFilter.set(''); this.mineFilter.set('');
+    this.statusFilter.set(''); this.mineFilter.set('');this.query.set('');
     // Restore the assignee/status filters chosen on a previous visit to
     // this project's tasks page (best-effort; storage may be unavailable).
     try {
@@ -239,7 +245,7 @@ export class TasksComponent implements OnInit, OnDestroy {
 
   async recoverActions() {
     if(this.destroyed||this.loading()||this.mutationsPending()||!this.actionUnknown())return;
-    this.statusFilter.set('');this.mineFilter.set('');this.persistFilters();
+    this.statusFilter.set('');this.mineFilter.set('');this.query.set('');this.persistFilters();
     await this.fetch(true);
   }
 
