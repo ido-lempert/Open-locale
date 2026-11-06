@@ -13,11 +13,13 @@ import { ApiService, Project } from '../api.service';
       <a routerLink="/account/link-saml" class="saml-identity-link">Link SAML identity</a>
       <button (click)="logout()">Log out</button></header>
     <main>
-      <form class="create" (ngSubmit)="create()">
+      @if (createNotice(); as message) { <p role="status" name="projectCreateNotice">{{ message }}</p> }
+      <form class="create" [attr.aria-busy]="creating()" (ngSubmit)="create()">
         <input placeholder="Project name" aria-label="Project name" [ngModel]="name()" (ngModelChange)="name.set($event)" name="name" required />
         <input placeholder="slug" aria-label="Project slug" [ngModel]="slug()" (ngModelChange)="slug.set($event)" name="slug" required pattern="[a-z0-9-]+" />
         <input placeholder="Locales (e.g. en, he, ar)" aria-label="Locales" [ngModel]="locales()" (ngModelChange)="locales.set($event)" name="locales" required />
         <button class="primary" type="submit" [disabled]="busy()">New project</button>
+        @if (creating()) { <span role="status" name="projectCreating">Creating project...</span> }
       </form>
       @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
       @if (projectsLoading()) { <p class="muted" role="status" name="projectsLoading">Loading projects.</p> }
@@ -84,6 +86,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
   private projectsGeneration = 0; private tfaGeneration = 0; private destroyed = false;
   name = signal(''); slug = signal(''); locales = signal('');
   busy = signal(false); error = signal('');
+  creating = signal(false); createNotice = signal('');
   tfa = signal<{ enabled: boolean; recoveryCodesRemaining: number } | null>(null);
   tfaSetup = signal<{ secret: string; otpauthUrl: string } | null>(null);
   tfaCode = signal(''); tfaPassword = signal(''); tfaCodes = signal<string[]>([]);
@@ -142,17 +145,24 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     finally { this.busy.set(false); }
   }
   async create() {
-    this.busy.set(true); this.error.set('');
+    if(this.destroyed || this.busy())return;
+    const submitted = { name: this.name(), slug: this.slug(), locales: this.locales() };
+    if(!submitted.name.trim() || !submitted.slug.trim() || !submitted.locales.trim())return;
+    this.busy.set(true);this.creating.set(true);this.error.set('');this.createNotice.set('');
     try {
-      const submitted = { name: this.name(), slug: this.slug(), locales: this.locales() };
       const codes = submitted.locales.split(',').map((s) => s.trim()).filter(Boolean);
       await this.api.createProject({ name: submitted.name, slug: submitted.slug, locales: codes });
-      if (this.name() === submitted.name) this.name.set('');
-      if (this.slug() === submitted.slug) this.slug.set('');
-      if (this.locales() === submitted.locales) this.locales.set('');
+      if(this.destroyed)return;
+      if(this.name()===submitted.name && this.slug()===submitted.slug && this.locales()===submitted.locales){
+        this.name.set('');this.slug.set('');this.locales.set('');
+      }
+      this.createNotice.set(`Project "${submitted.name.trim()}" was created. If the list is unavailable, retry the project list without creating again.`);
       await this.reload();
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
-    finally { this.busy.set(false); }
+    } catch {
+      if(!this.destroyed)this.error.set('Project creation outcome unconfirmed. Your form is kept here. Check the project list before trying again.');
+    } finally {
+      if(!this.destroyed){this.busy.set(false);this.creating.set(false);}
+    }
   }
   logout(reason?: string) {
     this.api.token = null;

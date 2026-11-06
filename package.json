@@ -66,6 +66,7 @@
     "test:editor-review-version-browser": "node scripts/editor-review-version-browser-test.mjs",
     "test:editor-draft-save-browser": "node scripts/editor-draft-save-browser-test.mjs",
     "test:editor-project-browser": "node scripts/editor-project-browser-test.mjs",
+    "test:projects-create-browser": "node scripts/projects-create-browser-test.mjs",
     "test:projects-reads-browser": "node scripts/projects-reads-browser-test.mjs",
     "test:editor-bulk-guard-browser": "node scripts/editor-bulk-guard-browser-test.mjs",
     "test:editor-tags-browser": "node scripts/editor-tags-browser-test.mjs",
