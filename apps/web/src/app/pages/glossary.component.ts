@@ -13,6 +13,7 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
       <h1>Glossary</h1>
     </header>
     <main [attr.aria-busy]="loading()">
+      @if (createNotice(); as message) { <p role="status" name="glossaryCreateNotice">{{ message }}</p> }
       @if (error(); as e) { <p class="error" role="alert">{{ e }}</p> }
       <section class="panel">
         <h2>New term</h2>
@@ -62,7 +63,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   localesError=signal(false);
   localesLoading=signal(false);
   loading = signal(true);
-  error = signal('');
+  error = signal(''); createNotice = signal('');
   creating=signal(false);
   deletingIds=signal<string[]>([]);
   savingIds=signal<string[]>([]);
@@ -86,7 +87,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
     if(this.destroyed)return;
     ++this.projectGeneration;
     this.projectId=pid;++this.fetchSeq;this.savedTranslations.clear();
-    this.terms.set([]);this.locales.set([]);this.error.set('');this.listError.set(false);this.creating.set(false);this.deletingIds.set([]);this.savingIds.set([]);
+    this.terms.set([]);this.locales.set([]);this.error.set('');this.createNotice.set('');this.listError.set(false);this.creating.set(false);this.deletingIds.set([]);this.savingIds.set([]);
     this.term.set('');this.notes.set('');this.doNotTranslate.set(false);
     void this.fetch();
     this.localesLoading.set(false);this.localesError.set(false);
@@ -122,11 +123,11 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   async create() {
     const term = this.term().trim();
     if (!term||this.destroyed||this.creating()) return;
-    const scope=this.projectGeneration,pid=this.projectId;
+    const scope=this.projectGeneration,pid=this.projectId,listGeneration=this.fetchSeq;
     const draft={term:this.term(),notes:this.notes(),doNotTranslate:this.doNotTranslate()};
-    this.creating.set(true);this.error.set('');
+    this.creating.set(true);this.error.set('');this.createNotice.set('');
     try {
-      await this.api.createGlossaryTerm(pid, {
+      const created = await this.api.createGlossaryTerm(pid, {
         term,
         ...(draft.notes.trim() ? { notes: draft.notes.trim() } : {}),
         doNotTranslate: draft.doNotTranslate,
@@ -136,7 +137,12 @@ export class GlossaryComponent implements OnInit, OnDestroy {
       if(this.term()===draft.term&&this.notes()===draft.notes&&this.doNotTranslate()===draft.doNotTranslate){
         this.term.set(''); this.notes.set(''); this.doNotTranslate.set(false);
       }
-      await this.fetch();
+      const insert = listGeneration === this.fetchSeq && !this.loading() && !this.listError();
+      if (insert && !this.terms().some(t => t.id === created.id)) {
+        this.terms.update(terms => [...terms, created].sort((a,b) => a.term.localeCompare(b.term)));
+        this.savedTranslations.set(created.id, { ...created.translations });
+      }
+      this.createNotice.set(`Term "${term}" was added.${insert ? ' Existing local translation values were kept.' : ' The current glossary was kept. Copy local translation drafts before refreshing to find the new term.'}`);
     } catch { if(this.current(scope))this.error.set('Adding term failed. Check the glossary before trying again.'); }
     finally {if(this.current(scope))this.creating.set(false);}
   }
