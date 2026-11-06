@@ -41,12 +41,12 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
               <td><code>{{ t.term }}</code>@if (t.doNotTranslate) { <span class="dnt-badge">do not translate</span> }</td>
               @for (l of locales(); track l) {
                 <td>
-                  <input [disabled]="rowPending(t.id)" [attr.aria-label]="t.term + ' in ' + l" [ngModel]="t.translations[l] ?? ''"
+                  <input [readOnly]="unknownSaveIds().includes(t.id)" [disabled]="rowPending(t.id) && !unknownSaveIds().includes(t.id)" [attr.aria-label]="t.term + ' in ' + l" [ngModel]="t.translations[l] ?? ''"
                     (ngModelChange)="setTranslation(t, l, $event)" (blur)="saveTranslations(t)" />
                 </td>
               }
               <td class="muted">{{ t.notes }}</td>
-              <td>@if (unknownDeleteIds().includes(t.id)) { <span class="error" role="alert" name="glossaryDeleteUnknown">Delete unconfirmed. Refresh required.</span> }@if (savingIds().includes(t.id)) { <span role="status" name="glossarySaving">Saving translation...</span> }@if (deletingIds().includes(t.id)) { <span role="status" name="glossaryDeleting">Deleting term...</span> }<button [disabled]="rowPending(t.id)" class="danger" [attr.aria-label]="'Delete term ' + t.term" (click)="remove(t)">&times;</button></td>
+              <td>@if (unknownSaveIds().includes(t.id)) { <span class="error" role="alert" name="glossarySaveUnknown">Save unconfirmed. Copy text before Refresh.</span> }@if (unknownDeleteIds().includes(t.id)) { <span class="error" role="alert" name="glossaryDeleteUnknown">Delete unconfirmed. Refresh required.</span> }@if (savingIds().includes(t.id)) { <span role="status" name="glossarySaving">Saving translation...</span> }@if (deletingIds().includes(t.id)) { <span role="status" name="glossaryDeleting">Deleting term...</span> }<button [disabled]="rowPending(t.id)" class="danger" [attr.aria-label]="'Delete term ' + t.term" (click)="remove(t)">&times;</button></td>
             </tr>
           } @empty {
             @if (!loading() && !listError()) { <tr name="glossaryListEmpty"><td colspan="9" class="muted">No glossary terms yet</td></tr> }
@@ -68,6 +68,8 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   deletingIds=signal<string[]>([]);
   savingIds=signal<string[]>([]);
   unknownDeleteIds=signal<string[]>([]);
+  unknownSaveIds=signal<string[]>([]);
+  private saveEpoch=0;
   listError = signal(false);
   private fetchSeq=0;
   private savedTranslations=new Map<string,Record<string,string>>();
@@ -88,7 +90,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
     if(this.destroyed)return;
     ++this.projectGeneration;
     this.projectId=pid;++this.fetchSeq;this.savedTranslations.clear();
-    this.terms.set([]);this.locales.set([]);this.error.set('');this.createNotice.set('');this.listError.set(false);this.creating.set(false);this.deletingIds.set([]);this.savingIds.set([]);this.unknownDeleteIds.set([]);
+    this.terms.set([]);this.locales.set([]);this.error.set('');this.createNotice.set('');this.listError.set(false);this.creating.set(false);this.deletingIds.set([]);this.savingIds.set([]);this.unknownDeleteIds.set([]);this.unknownSaveIds.set([]);++this.saveEpoch;
     this.term.set('');this.notes.set('');this.doNotTranslate.set(false);
     void this.fetch();
     this.localesLoading.set(false);this.localesError.set(false);
@@ -112,11 +114,11 @@ export class GlossaryComponent implements OnInit, OnDestroy {
 
   async fetch() {
     if(this.destroyed||this.deletingIds().length>0)return;
-    const seq=++this.fetchSeq;
+    const seq=++this.fetchSeq,epoch=this.saveEpoch,pendingSave=this.savingIds().length>0;
     this.terms.set([]);this.listError.set(false);this.loading.set(true);
     try {
       const terms=await this.api.listGlossary(this.projectId);
-      if(seq===this.fetchSeq){this.terms.set(terms);this.savedTranslations=new Map(terms.map(t=>[t.id,{...t.translations} ]));if(this.unknownDeleteIds().length&&this.error()==='Delete outcome unconfirmed. Copy local translation drafts, then refresh the glossary before trying again.')this.error.set('');this.unknownDeleteIds.set([]);}
+      if(seq===this.fetchSeq){this.terms.set(terms);this.savedTranslations=new Map(terms.map(t=>[t.id,{...t.translations} ]));if(this.unknownDeleteIds().length&&this.error()==='Delete outcome unconfirmed. Copy local translation drafts, then refresh the glossary before trying again.')this.error.set('');this.unknownDeleteIds.set([]);if(!pendingSave&&!this.savingIds().length&&epoch===this.saveEpoch){if(this.unknownSaveIds().length&&this.error()==='Save outcome unconfirmed. Copy local translation drafts, then refresh the glossary before trying again.')this.error.set('');this.unknownSaveIds.set([]);}}
     } catch { if(seq===this.fetchSeq)this.listError.set(true); }
     finally { if(seq===this.fetchSeq)this.loading.set(false); }
   }
@@ -149,11 +151,12 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   }
 
   setTranslation(t: GlossaryTermItem, locale: string, value: string) {
+    if(this.destroyed||this.unknownSaveIds().includes(t.id))return;
     this.terms.update((all) => all.map((x) => x.id === t.id
       ? { ...x, translations: { ...x.translations, [locale]: value } } : x));
   }
 
-  rowPending(id:string) {return this.deletingIds().includes(id)||this.savingIds().includes(id)||this.unknownDeleteIds().includes(id);}
+  rowPending(id:string) {return this.deletingIds().includes(id)||this.savingIds().includes(id)||this.unknownDeleteIds().includes(id)||this.unknownSaveIds().includes(id);}
 
   async saveTranslations(t: GlossaryTermItem) {
     if(this.destroyed||this.rowPending(t.id))return;
@@ -163,7 +166,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
     if(!row)return;
     const translations={...row.translations},saved=this.savedTranslations.get(t.id);
     if(saved&&Object.keys(saved).length===Object.keys(translations).length&&Object.entries(translations).every(([key,value])=>saved[key]===value))return;
-    this.savingIds.update(ids=>[...ids,t.id]);this.error.set('');
+    ++this.saveEpoch;this.savingIds.update(ids=>[...ids,t.id]);this.error.set('');
     try {
       const updated=await this.api.updateGlossaryTerm(pid, t.id, { translations });
       if(!this.current(scope))return;
@@ -173,7 +176,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
         this.savedTranslations.set(t.id,confirmed);
         this.terms.update(all=>all.map(x=>x===row?{...x,translations:confirmed}:x));
       }
-    } catch {if(this.current(scope))this.error.set('Saving translation failed. Your text is kept here. Check the glossary before trying again.');}
+    } catch {if(this.current(scope)){++this.saveEpoch;this.unknownSaveIds.update(ids=>[...new Set([...ids,t.id])]);this.error.set('Save outcome unconfirmed. Copy local translation drafts, then refresh the glossary before trying again.');}}
     finally {if(this.current(scope))this.savingIds.update(ids=>ids.filter(id=>id!==t.id));}
   }
 
