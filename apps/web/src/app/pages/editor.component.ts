@@ -11,6 +11,7 @@ interface CellState {
   value: string; saved: string;
   // Per-CLDR-category text for plural keys; {} for plain keys.
   forms: Record<string, string>; savedForms: Record<string, string>;
+  version?: number; rowId?: string; needsReload?: boolean;
   status: 'idle' | 'saving' | 'saved' | 'error';
   errorMsg: string;
   review: TranslationStatus;
@@ -183,7 +184,7 @@ interface CellState {
                         }
                       </select>
                       @if (cell(k.id, l.code)().status === 'error') {
-                        <button class="cell-status retry" (click)="save(k, l.code, true)">save failed - retry</button>
+                        <span class="cell-status">Save not confirmed. Local draft retained.</span><button type="button" name="reloadAfterSave" (click)="prepareSaveReload()">Review retained values before reload</button>
                         @if (cell(k.id, l.code)().errorMsg) {
                           <span class="cell-error-reason">{{ cell(k.id, l.code)().errorMsg }}</span>
                         }
@@ -408,7 +409,7 @@ export class EditorComponent implements OnInit, OnDestroy {
       this.cells.clear();
       for (const k of keys) for (const t of k.translations) {
         this.cells.set(`${k.id}:${t.localeCode}`,
-          signal({ value: t.value, saved: t.value, status: 'idle', errorMsg: '', review: t.status ?? 'UNVERIFIED',
+          signal({ version: t.version, rowId: t.rowId, value: t.value, saved: t.value, status: 'idle', errorMsg: '', review: t.status ?? 'UNVERIFIED',
             forms: { ...(t.pluralForms ?? {}) }, savedForms: { ...(t.pluralForms ?? {}) },
             mtScore: t.mtScore ?? null, mtProvider: t.mtProvider ?? null }));
       }
@@ -424,7 +425,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   cell(keyId: string, locale: string): WritableSignal<CellState> {
     let s = this.cells.get(`${keyId}:${locale}`);
     if (!s) {
-      s = signal<CellState>({ value: '', saved: '', status: 'idle', errorMsg: '', review: 'UNVERIFIED', forms: {}, savedForms: {}, mtScore: null, mtProvider: null });
+      s = signal<CellState>({ version: 0, value: '', saved: '', status: 'idle', errorMsg: '', review: 'UNVERIFIED', forms: {}, savedForms: {}, mtScore: null, mtProvider: null });
       this.cells.set(`${keyId}:${locale}`, s);
     }
     return s;
@@ -446,7 +447,10 @@ export class EditorComponent implements OnInit, OnDestroy {
     const sig = this.cell(k.id, locale);
     const c = sig();
     if (!force && c.value === c.saved && this.sameForms(c.forms, c.savedForms)) return;
-    if (c.status === 'saving') return;
+    if (this.destroyed || c.status === 'saving' || c.needsReload) return;
+    if (c.version === undefined || (c.version > 0 && !c.rowId)) {
+      sig.update(cur => ({ ...cur, status: 'error', needsReload: true, errorMsg: 'Loaded row identity is unavailable. Copy local values and reload before saving.' })); return;
+    }
     const reviewAtSend = c.review;
     // Plural keys send the merge of the server's last-known forms with this
     // browser's category edits: categories a different ICU build stored but
@@ -456,12 +460,12 @@ export class EditorComponent implements OnInit, OnDestroy {
       : undefined;
     sig.set({ ...c, status: 'saving' });
     try {
-      const res = await this.api.upsertTranslation(this.projectId, k.id, locale, c.value, formsAtSend);
+      const res = await this.api.upsertTranslation(this.projectId, k.id, locale, c.value, formsAtSend, c.version, c.rowId);
       const latest = sig();
       const newerReview = latest.review !== reviewAtSend;
       // A review the user chose while the save was in flight wins over the
       // (older) save response, and is re-sent so the server ends consistent.
-      sig.set({ value: latest.value, saved: c.value, errorMsg: '',
+      sig.set({ version: res.version, rowId: res.rowId, value: latest.value, saved: c.value, errorMsg: '',
         forms: latest.forms, savedForms: formsAtSend ?? latest.savedForms,
         status: latest.value === c.value && this.sameForms(latest.forms, c.forms) ? 'saved' : 'idle',
         // The server clears MT provenance on a human write; mirror that here.
@@ -469,15 +473,17 @@ export class EditorComponent implements OnInit, OnDestroy {
         review: newerReview ? latest.review : (res.status ?? 'UNVERIFIED') });
       if (newerReview) {
         const st = await this.api.setStatus(this.projectId, k.id, locale, latest.review);
-        sig.update((cur) => ({ ...cur, review: st.status }));
+        sig.update((cur) => ({ ...cur, review: st.status, ...(st.value === cur.saved && this.sameForms(st.pluralForms ?? {}, cur.savedForms) ? { version: st.version, rowId: st.rowId } : {}) }));
       }
     } catch (e) {
-      // Keep saved pointing at what the server actually holds so a retry
-      // re-sends. Surface the server's reason (e.g. a task key lock) so the
-      // user can resolve the cause instead of blind-retrying.
-      const msg = e instanceof Error && e.message ? e.message : 'save failed';
-      sig.update((cur) => ({ ...cur, status: 'error', errorMsg: msg }));
+      // A failed response may follow a committed write. Never blindly replay.
+      sig.update(cur => ({ ...cur, status: 'error', needsReload: true,
+        errorMsg: 'The row may have changed or the result may be unknown. Copy retained values and reload before another save.' }));
     }
+  }
+  prepareSaveReload() {
+    ++this.keysGeneration; this.keysLoading.set(false); this.keysError.set(true);
+    this.clearHistory(); this.clearShots(); this.clearComments(); this.clearTm();
   }
   statusText(keyId: string, locale: string): string {
     const s = this.cell(keyId, locale)().status;
@@ -495,7 +501,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     const sig = this.cell(k.id, locale);
     try {
       const res = await this.api.setStatus(this.projectId, k.id, locale, status);
-      sig.update((c) => ({ ...c, review: res.status }));
+      sig.update((c) => ({ ...c, review: res.status, ...(res.value === c.saved && this.sameForms(res.pluralForms ?? {}, c.savedForms) && c.status !== 'saving' && !c.needsReload ? { version: res.version, rowId: res.rowId } : {}) }));
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to set status'); }
   }
   openTagEdit(k: Key) {

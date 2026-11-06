@@ -87,7 +87,7 @@ describe('EditorComponent save/status ordering', () => {
       }),
       listKeys: () => Promise.resolve([
         { id: 'k1', name: 'a.b', description: '', isPlural: false, maxLength: null,
-          translations: [{ keyId: 'k1', localeCode: 'en', value: 'hi', status: 'UNVERIFIED' }] },
+          translations: [{ keyId: 'k1', localeCode: 'en', value: 'hi', version:1, rowId:'row1', status: 'UNVERIFIED' }] },
       ]),
       listGlossary: () => Promise.resolve([]),
       listBranches: () => Promise.resolve([]),

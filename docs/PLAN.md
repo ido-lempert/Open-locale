@@ -1121,3 +1121,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Clear stale options before each read, generation/source/empty-target fences; any cell edit/list change/destroy invalidates. Apply only current offered option against unchanged source/empty target.
 - Pending/fixed failure/manual retry and keyboard/click application. Actual same-cell held responses, edit-before-response, real memory retry and keyboard apply persisted unverified; unit7/browser8/five reviews0388.
 - No API/provider/worker change or coverage promotion. Existing project-route reuse/list-save recovery and plural-memory semantics unchanged.
+
+### Continuation 323 - Conditional editor content writes
+- Editor retains version/immutable rowId and sends existing API conditional text/form write fields; absent row is create-only0. Confirmed writes advance baseline; status response advances only when returned content/forms match baseline.
+- Failed/unknown response retains draft and blocks blind blur/force replay until explicit copy/list reload; missing identity fails closed. No definitive rejection/reconciliation or status-write concurrency guarantee.
+- Real two-editor browser11 verifies newer-version conflict, same-version recreated-row identity rejection, explicit reload recovery and create-only target. Unit5/five reviews0389. Native lock fixture updated for intentional safe-reload behavior, failures/full chronology recorded. Coverage/external/defaultOFF unchanged.

@@ -1580,13 +1580,13 @@ try {
   await lockCells[1].evaluate((el) => el.blur());
   const saveFailed = await page.waitForFunction(() => {
     const row = [...document.querySelectorAll('.grid tbody tr')].find((r) => r.textContent.includes('home.title'));
-    return [...row.querySelectorAll('.cell-status')].some((e) => /save failed/i.test(e.textContent));
+    return [...row.querySelectorAll('.cell-status')].some((e) => /Save not confirmed/i.test(e.textContent));
   }, { timeout: 10000 }).then(() => true).catch(() => false);
-  check('locked key: plain member editor save rejected (save failed)', saveFailed);
+  check('locked key: plain member editor save leaves unconfirmed fixed guidance', saveFailed);
   const reasonShown = await page.waitForFunction(() =>
-    [...document.querySelectorAll('.cell-error-reason')].some((e) => e.textContent.includes('locked by task')),
+    [...document.querySelectorAll('.cell-error-reason')].some((e) => e.textContent.includes('Copy retained values and reload')&&!e.textContent.includes('locked by task')),
     { timeout: 5000 }).then(() => true).catch(() => false);
-  check('cell shows the server lock reason (not a blind retry)', reasonShown);
+  check('cell uses fixed copy/reload guidance rather than raw service text', reasonShown);
   await page.evaluate(() => {
     // The locked row is the grid's last: align the reason's bottom edge so
     // the full message is inside the viewport (top-align clamps short).
@@ -1613,6 +1613,10 @@ try {
   const lockTasks = await (await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/tasks`, { headers: { Authorization: `Bearer ${ownerJwt}` } })).json();
   const lockTaskId = lockTasks.find((t) => t.title === 'Lock home.title').id;
   await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/tasks/${lockTaskId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ownerJwt}` }, body: JSON.stringify({ status: 'DONE' }) });
+  await page.click('[name=reloadAfterSave]');
+  await page.waitForSelector('[name=retainedKeyDrafts]');
+  await page.click('[name=retryKeys]');
+  await page.waitForFunction(()=>!document.querySelector('[name=keysLoading]'));
   const lockCells2 = await page.$$(`.grid tbody tr:nth-child(${lockRowIdx + 1}) textarea`);
   await lockCells2[1].click();
   await lockCells2[1].type('member retry');
