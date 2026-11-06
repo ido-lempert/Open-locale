@@ -183,6 +183,11 @@ interface CellState {
                           <option [value]="cell(k.id, l.code)().review">{{ cell(k.id, l.code)().review.toLowerCase() }} (removed)</option>
                         }
                       </select>
+                      @if (cell(k.id, l.code)().reviewing) { <span class="muted" role="status" name="reviewPending">Updating review. New text stays local until you save it.</span> }
+                      @if (cellDirty(k, l.code)) {
+                        <span class="muted" name="localDraft">Local draft differs from last confirmed save.</span>
+                        <button type="button" name="saveCellDraft" [disabled]="!canSaveDraft(k, l.code)" (click)="save(k, l.code)">Save draft</button>
+                      }
                       @if (cell(k.id, l.code)().status === 'error') {
                         <span class="cell-status">Save not confirmed. Local draft retained.</span><button type="button" name="reloadAfterSave" (click)="prepareSaveReload()">Review retained values before reload</button>
                         @if (cell(k.id, l.code)().errorMsg) {
@@ -442,6 +447,15 @@ export class EditorComponent implements OnInit, OnDestroy {
   private sameForms(a: Record<string, string>, b: Record<string, string>): boolean {
     const ka = Object.keys(a), kb = Object.keys(b);
     return ka.length === kb.length && ka.every((k) => a[k] === b[k]);
+  }
+  cellDirty(k: Key, locale: string) {
+    const c = this.cell(k.id, locale)();
+    return c.value !== c.saved || !this.sameForms(c.forms, c.savedForms);
+  }
+  canSaveDraft(k: Key, locale: string) {
+    const c = this.cell(k.id, locale)();
+    return !this.destroyed && !this.keysLoading() && !this.keysError() && this.cellDirty(k, locale)
+      && c.status !== 'saving' && !c.reviewing && !c.needsReload;
   }
   async save(k: Key, locale: string, force = false) {
     const sig = this.cell(k.id, locale);
