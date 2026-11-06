@@ -234,6 +234,8 @@ interface CellState {
               @if (keyDeleting().includes(k.id) || keyDeleteErrorFor().includes(k.id)) { <tr><td [attr.colspan]="2 + p.locales.length">@if (keyDeleting().includes(k.id)) { <span role="status" name="keyDeleting">Deleting key "{{ k.name }}"...</span> } @else { <span class="error" role="alert" name="keyDeleteError">Deletion of key "{{ k.name }}" could not be confirmed. Copy local values and reload before trying again.</span> }</td></tr> }
               @if (shotsFor() === k.id) {
                 <tr class="history-row shots-row"><td [attr.colspan]="2 + p.locales.length">
+                  @if (shotsMutating().includes(k.id)) { <p class="muted" role="status" name="shotsMutating">Screenshot change pending. Closing this pane does not cancel it.</p> }
+                  @if (shotsMutationError().includes(k.id)) { <p class="error" role="alert" name="shotsMutationError">Screenshot change could not be confirmed. Check current screenshots before another change.</p><button name="checkCurrentShots" [disabled]="shotsMutating().includes(k.id) || shotsLoading()" (click)="readShots(k)">Check current screenshots</button> }
                   @if (shotsLoading()) { <p class="muted" role="status" name="shotsLoading">Loading screenshots...</p> }
                   @else if (shotsError()) { <p class="error" role="alert" name="shotsError">Screenshots unavailable. No images are shown.</p><button type="button" name="retryShots" (click)="readShots(k)">Retry screenshots</button> }
                   @else {
@@ -243,12 +245,12 @@ interface CellState {
                         <li>
                           <img [src]="shotUrls()[sh.id]" [alt]="'Screenshot ' + sh.filename" width="160" />
                           <span class="muted">{{ sh.filename }} · {{ sh.uploader?.displayName ?? 'unknown' }}</span>
-                          <button class="danger" [attr.aria-label]="'Delete screenshot ' + sh.filename" (click)="deleteShot(k, sh.id)">&times;</button>
+                          <button class="danger" [attr.aria-label]="'Delete screenshot ' + sh.filename" [disabled]="shotsMutating().includes(k.id) || shotsMutationError().includes(k.id)" (click)="deleteShot(k, sh.id)">&times;</button>
                         </li>
                       }
                     </ul>
                     <label class="shot-upload">Add screenshot (PNG, JPEG, GIF or WebP, max 2 MB)
-                      <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" aria-label="Upload screenshot"
+                      <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" aria-label="Upload screenshot" [disabled]="shotsMutating().includes(k.id) || shotsMutationError().includes(k.id)"
                         (change)="uploadShot(k, $event)" />
                     </label>
                   }
@@ -387,6 +389,8 @@ export class EditorComponent implements OnInit, OnDestroy {
   shotsFor = signal<string | null>(null);
   shots = signal<ScreenshotMeta[]>([]);
   shotUrls = signal<Record<string, string>>({});
+  private shotsMutationEpoch = new Map<string, number>();
+  shotsMutating = signal<string[]>([]); shotsMutationError = signal<string[]>([]);
   shotsLoading = signal(false);
   shotsError = signal(false);
   private shotsGeneration = 0;
@@ -719,6 +723,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     const current = () => !this.destroyed && generation === this.shotsGeneration && this.shotsFor() === keyId;
     this.revokeShots(this.shotUrls()); this.shotUrls.set({}); this.shots.set([]);
     this.shotsLoading.set(true); this.shotsError.set(false);
+    const mutationEpoch = this.shotsMutationEpoch.get(keyId) ?? 0;
     const urls: Record<string, string> = {};
     let published = false;
     try {
@@ -729,6 +734,10 @@ export class EditorComponent implements OnInit, OnDestroy {
         if (!current()) return;
       }
       this.shots.set(list); this.shotUrls.set(urls); published = true;
+      if (!this.shotsMutating().includes(keyId) && mutationEpoch === (this.shotsMutationEpoch.get(keyId) ?? 0)) {
+        this.shotsMutationError.update(ids => ids.filter(id => id !== keyId));
+        this.keys.update(keys => keys.map(key => key.id === keyId && key._count ? { ...key, _count: { ...key._count, screenshots: list.length } } : key));
+      }
     } catch { if (current()) this.shotsError.set(true); }
     finally {
       if (!published) this.revokeShots(urls);
@@ -739,25 +748,34 @@ export class EditorComponent implements OnInit, OnDestroy {
     this.keys.update(keys => keys.map(key => key.id === keyId && key._count
       ? { ...key, _count: { ...key._count, screenshots: Math.max(0, (key._count.screenshots ?? 0) + delta) } } : key));
   }
+  private canChangeShots(k: Key) {
+    return !this.destroyed && this.shotsFor() === k.id && !this.shotsLoading() && !this.shotsError()
+      && !this.shotsMutating().includes(k.id) && !this.shotsMutationError().includes(k.id)
+      && !this.keysLoading() && !this.keysError() && !this.keyDeleting().includes(k.id)
+      && !this.keyDeleteErrorFor().includes(k.id);
+  }
   async uploadShot(k: Key, ev: Event) {
-    const input = ev.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-    const generation = this.shotsGeneration;
-    try {
-      await this.api.uploadScreenshot(this.projectId, k.id, file);
-      if (!this.destroyed) this.updateShotCount(k.id, 1);
-      if (!this.destroyed && generation === this.shotsGeneration && this.shotsFor() === k.id) await this.readShots(k);
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to upload screenshot'); }
-    finally { input.value = ''; }
+    const input = ev.target as HTMLInputElement, file = input.files?.[0];
+    input.value = '';
+    if (!file || !this.canChangeShots(k)) return;
+    await this.changeShots(k, () => this.api.uploadScreenshot(this.projectId, k.id, file), 1);
   }
   async deleteShot(k: Key, shotId: string) {
-    const generation = this.shotsGeneration;
+    if (!this.canChangeShots(k) || !this.shots().some(sh => sh.id === shotId)) return;
+    await this.changeShots(k, () => this.api.deleteScreenshot(this.projectId, k.id, shotId), -1);
+  }
+  private async changeShots(k: Key, write: () => Promise<unknown>, delta: number) {
+    const generation = this.shotsGeneration, keysGeneration = this.keysGeneration;
+    this.shotsMutationEpoch.set(k.id, (this.shotsMutationEpoch.get(k.id) ?? 0) + 1);
+    this.shotsMutating.update(ids => [...ids,k.id]);
+    let confirmed = false;
     try {
-      await this.api.deleteScreenshot(this.projectId, k.id, shotId);
-      if (!this.destroyed) this.updateShotCount(k.id, -1);
-      if (!this.destroyed && generation === this.shotsGeneration && this.shotsFor() === k.id) await this.readShots(k);
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to delete screenshot'); }
+      await write(); confirmed = true;
+      if (!this.destroyed && keysGeneration === this.keysGeneration) this.updateShotCount(k.id, delta);
+    } catch { if (!this.destroyed) this.shotsMutationError.update(ids => ids.includes(k.id) ? ids : [...ids,k.id]); }
+    finally { if (!this.destroyed) { this.shotsMutationEpoch.set(k.id, (this.shotsMutationEpoch.get(k.id) ?? 0) + 1); this.shotsMutating.update(ids => ids.filter(id => id !== k.id)); } }
+    // Refresh is an independent read, never relabel a confirmed mutation as failed.
+    if (confirmed && !this.destroyed && generation === this.shotsGeneration && this.shotsFor() === k.id) await this.readShots(k);
   }
   async deleteComment(k: Key, commentId: string) {
     if (this.commentsSaving() || this.destroyed || this.commentsFor() !== k.id) return;
@@ -818,7 +836,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   canRemoveKey(k: Key) {
     return !this.destroyed && !this.keysLoading() && !this.keysError() && !this.bulkReviewPending()
       && !this.keyDeleting().includes(k.id) && !this.keyDeleteErrorFor().includes(k.id)
-      && !this.tagsSaving().includes(k.id) && this.keys().some(key => key.id === k.id)
+      && !this.tagsSaving().includes(k.id) && !this.shotsMutating().includes(k.id) && !this.shotsMutationError().includes(k.id) && this.keys().some(key => key.id === k.id)
       && ![...this.cells.entries()].some(([id,sig]) => { const c = sig(); return id.startsWith(`${k.id}:`)
         && (c.needsReload || c.reviewing || c.status === 'saving' || c.value !== c.saved || !this.sameForms(c.forms,c.savedForms)); });
   }
