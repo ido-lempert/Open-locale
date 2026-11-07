@@ -24,10 +24,12 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
       </select>
     </header>
     <main [attr.aria-busy]="loading()">
-      @if (actionUnknown()) { <p role="alert" name="taskActionUnknown">A task change is unconfirmed. Check tasks before acting again. Row changes are paused. Read all tasks to recover; filters and search will be cleared.</p><button type="button" name="recoverTaskActions" [disabled]="loading() || mutationsPending()" (click)="recoverActions()">Read all tasks</button> }
+      @if (actionUnknown()) { <p role="alert" name="taskActionUnknown">A task change is unconfirmed. Check tasks before acting again. Row changes are paused.</p> }
+      @if (createUnknown()) { <p role="alert" name="taskCreateUnknown">Task creation outcome unconfirmed. Your new-task form is kept here. Read all tasks and check the list before creating again. Do not repeat the request without checking.</p> }
+      @if (actionUnknown() || createUnknown()) { <p>Read all tasks to recover; filters and search will be cleared. Your new-task form stays here.</p><button type="button" name="recoverTaskActions" [disabled]="loading() || mutationsPending()" (click)="recoverActions()">Read all tasks</button> }
       @if (actionNotice(); as message) { <p role="status" name="taskActionNotice">{{ message }}</p> }
       @if (createNotice(); as message) { <p role="status" name="taskCreateNotice">{{ message }}</p> }
-      @if (error(); as e) { <p class="error" role="alert">{{ e }}</p> }
+      @if (error(); as e) { @if (!createUnknown() || e !== 'Task creation failed. Check the task list before trying again.') { <p class="error" role="alert">{{ e }}</p> } }
       <section class="panel">
         <h2>New task</h2>
         <p class="muted">Assignees, groups and lockable keys load independently. A failed option read does not mean none exist.</p>
@@ -51,6 +53,7 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
           </select>
           <select aria-label="Depends on (optional)" [ngModel]="dependsOnId()" (ngModelChange)="dependsOnId.set($event)" name="taskDependsOn">
             <option value="">no predecessor</option>
+            @if (draftPredecessorMissing()) { <option [value]="dependsOnId()">Selected predecessor outside list</option> }
             @for (t of tasks(); track t.id) { <option [value]="t.id">{{ t.title }}</option> }
           </select>
           <select multiple aria-label="Locked keys (optional)" size="4"
@@ -62,7 +65,7 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
             lock the selected keys while this task is open
           </label>
           <span class="muted lock-scope-note">A lock blocks editor saves, status changes, MT fills, branch merges, snapshot restores and key deletion for everyone except the assignee and team admins. Imports skip locked keys and report them in the run; other keys still import.</span>
-          <button class="primary" type="submit" [disabled]="creating()">Create task</button>
+          <button class="primary" type="submit" [disabled]="creating() || createUnknown()">Create task</button>
           @if (creating()) { <span role="status" name="taskCreating">Creating task...</span> }
         </form>
       </section>
@@ -133,6 +136,7 @@ export class TasksComponent implements OnInit, OnDestroy {
   loading = signal(true);
   error = signal(''); createNotice = signal(''); actionNotice = signal('');
   creating = signal(false);
+  createUnknown = signal(false);
   updatingIds = signal<string[]>([]);
   deletingIds = signal<string[]>([]);
   title = signal('');
@@ -168,7 +172,7 @@ export class TasksComponent implements OnInit, OnDestroy {
     ++this.projectGeneration;
     this.projectId = pid;
     this.fetchSeq++; // invalidate every in-flight fetch from the previous project
-    ++this.mutationEpoch;this.actionUnknown.set(false);this.error.set('');this.createNotice.set('');this.actionNotice.set('');this.creating.set(false);this.updatingIds.set([]);this.deletingIds.set([]);
+    ++this.mutationEpoch;this.actionUnknown.set(false);this.createUnknown.set(false);this.error.set('');this.createNotice.set('');this.actionNotice.set('');this.creating.set(false);this.updatingIds.set([]);this.deletingIds.set([]);
     this.tasks.set([]); this.members.set([]); this.groups.set([]); this.keys.set([]);
     this.title.set(''); this.description.set(''); this.dueDate.set('');
     this.assigneeId.set(''); this.dependsOnId.set(''); this.selectedKeyIds.set([]); this.lockKeys.set(false);
@@ -228,6 +232,8 @@ export class TasksComponent implements OnInit, OnDestroy {
     void this.fetch();
   }
 
+  draftPredecessorMissing() { return !!this.dependsOnId()&&!this.tasks().some(t=>t.id===this.dependsOnId()); }
+
   hasFilters() { return !!(this.statusFilter()||this.mineFilter()==='me'); }
 
   private filterKey(): string {
@@ -244,7 +250,7 @@ export class TasksComponent implements OnInit, OnDestroy {
   refresh() { if(!this.loading()&&!this.mutationsPending())void this.fetch(); }
 
   async recoverActions() {
-    if(this.destroyed||this.loading()||this.mutationsPending()||!this.actionUnknown())return;
+    if(this.destroyed||this.loading()||this.mutationsPending()||(!this.actionUnknown()&&!this.createUnknown()))return;
     this.statusFilter.set('');this.mineFilter.set('');this.query.set('');this.persistFilters();
     await this.fetch(true);
   }
@@ -262,8 +268,8 @@ export class TasksComponent implements OnInit, OnDestroy {
       if (seq !== this.fetchSeq) return;
       this.tasks.set(list);
       if(recover&&unfiltered&&!pending&&!this.mutationsPending()&&epoch===this.mutationEpoch&&!this.hasFilters()){
-        this.actionUnknown.set(false);
-        if(['Task update failed. Check the task list before trying again.','Task deletion failed. Check the task list before trying again.'].includes(this.error()))this.error.set('');
+        this.actionUnknown.set(false);this.createUnknown.set(false);
+        if(['Task creation failed. Check the task list before trying again.','Task update failed. Check the task list before trying again.','Task deletion failed. Check the task list before trying again.'].includes(this.error()))this.error.set('');
       }
     } catch {
       if (seq === this.fetchSeq) this.listError.set(true);
@@ -289,12 +295,12 @@ export class TasksComponent implements OnInit, OnDestroy {
 
   async create() {
     const title = this.title().trim();
-    if (!title||this.creating()||this.destroyed) return;
+    if (!title||this.creating()||this.createUnknown()||this.destroyed) return;
     const scope=this.projectGeneration,projectId=this.projectId;
     const current=()=>!this.destroyed&&scope===this.projectGeneration;
     const draft={title:this.title(),description:this.description(),dueDate:this.dueDate(),
       assigneeId:this.assigneeId(),dependsOnId:this.dependsOnId(),keyIds:[...this.selectedKeyIds()],lockKeys:this.lockKeys()};
-    this.creating.set(true);this.error.set('');this.createNotice.set('');
+    ++this.mutationEpoch;this.creating.set(true);this.error.set('');this.createNotice.set('');
     try {
       await this.api.createTask(projectId, {
         title,
@@ -314,7 +320,7 @@ export class TasksComponent implements OnInit, OnDestroy {
         this.selectedKeyIds.set([]); this.lockKeys.set(false);
       }
       await this.fetch();
-    } catch { if(current())this.error.set('Task creation failed. Check the task list before trying again.'); }
+    } catch { if(current()){++this.mutationEpoch;this.createUnknown.set(true);this.error.set('Task creation failed. Check the task list before trying again.');} }
     finally {if(current())this.creating.set(false);}
   }
 

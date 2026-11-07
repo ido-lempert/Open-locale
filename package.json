@@ -118,7 +118,8 @@
     "test:sync-history-download-browser": "node scripts/sync-history-download-browser-test.mjs",
     "test:snapshot-capture-unknown-browser": "node scripts/snapshot-capture-unknown-browser-test.mjs",
     "test:projects-create-unknown-browser": "node scripts/projects-create-unknown-browser-test.mjs",
-    "test:glossary-create-unknown-browser": "node scripts/glossary-create-unknown-browser-test.mjs"
+    "test:glossary-create-unknown-browser": "node scripts/glossary-create-unknown-browser-test.mjs",
+    "test:tasks-create-unknown-browser": "node scripts/tasks-create-unknown-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

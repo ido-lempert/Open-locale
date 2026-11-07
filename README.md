@@ -1010,3 +1010,9 @@ list read. Term, notes and do-not-translate stay editable and kept. Copy local
 translation drafts before refresh, then inspect the list before adding again.
 Existing row save/delete remain independent. This pause is visit-local, not
 persistent request deduplication. See [review0447](docs/reviews/0447-glossary-create-unknown.md).
+
+Unconfirmed task creation pauses Create task until explicit Read all tasks recovery.
+That read clears assignee/status filters and search so a committed task is not hidden;
+the whole new-task form stays editable and kept. Ordinary filtered/unfiltered reads
+cannot clear this visit-local pause. Existing row work remains independent. See
+[review0448](docs/reviews/0448-tasks-create-unknown.md).
