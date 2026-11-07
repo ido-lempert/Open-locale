@@ -1319,3 +1319,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Local JSON of loaded progress/quality plus schemaVersion/projectId/branch, excludes usage/tasks. Pending/error/missing/destroy guards, fixed filename/feedback and temporary URL cleanup; branch read clears feedback. Explicit loaded/private/separate-read/not-shared scope, no snapshot/delivery claim.
 - Unit8/browser6 actual saved bytes match release progress/quality only, no download reads/writes, held/failed guarded/siblings retained, empty main scope correct. Full-page pixels inspected/five reviews0428. Initial5PASS1FAIL nonexistent sibling selector corrected, no app fix.
 - API265/31 web738/60 builds0 initial444.16kB; all API/isolated browsers final0, syncSTAGED95+144239unique/nativeSTAGED116+111+19246total242unique inner/outer0. Final configs16/14/docs4-138routes/reaper4 all0. No interrupted check/API/schema/worker/coverage promotion.
+
+### Continuation 363 - Loaded QA type filter
+- Local exact supported issue-type filter, shown/loaded count/no-match/Clear. Full findings remain intact; branch/locale unchanged, explicit reread retains type and project visit resets it. JSON includes all loaded findings regardless of visible type, explicitly stated. No new reads/writes/persistence claim.
+- Unit4/browser7 actual release/he match/no-match/Clear, no filter/download requests, full downloaded JSON with zero shown, reread retains selection. Desktop/390px pixels inspected/five reviews0429.
+- API265/31 web742/61 builds0 initial444.16kB; all API/isolated browsers0, syncSTAGED95+144239unique/nativeSTAGED116+111+19246total242unique inner/outer0. Final configs16/14/docs4-138routes/reaper4 all0. No failed/interrupted check/API/schema/worker/coverage promotion.

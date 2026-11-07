@@ -76,6 +76,7 @@
     "test:editor-project-browser": "node scripts/editor-project-browser-test.mjs",
     "test:projects-create-browser": "node scripts/projects-create-browser-test.mjs",
     "test:reports-download-browser": "node scripts/reports-download-browser-test.mjs",
+    "test:qa-type-browser": "node scripts/qa-type-browser-test.mjs",
     "test:qa-download-browser": "node scripts/qa-download-browser-test.mjs",
     "test:tasks-search-browser": "node scripts/tasks-search-browser-test.mjs",
     "test:projects-search-browser": "node scripts/projects-search-browser-test.mjs",

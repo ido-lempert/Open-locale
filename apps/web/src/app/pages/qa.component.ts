@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -32,15 +32,20 @@ import { ApiService, BranchInfo, Project, QaIssue } from '../api.service';
         @if (!error()) { <button type="button" name="refreshQa" [disabled]="loading()" (click)="refresh()">Run checks again</button> }
         @if (!loading() && !error()) { <span class="muted" name="qaCount">{{ issues().length }} issue{{ issues().length === 1 ? '' : 's' }}</span> }
       </div>
+      <div class="toolbar">
+        <label>Issue type <select name="qaType" [ngModel]="issueType()" (ngModelChange)="setIssueType($event)"><option value="">all issue types</option>@for(type of issueTypes;track type){<option [value]="type">{{ label(type) }}</option>}</select></label>
+        <button type="button" name="clearQaType" [disabled]="!issueType()" (click)="setIssueType('')">Clear type filter</button>
+        @if (!loading() && !error()) { <span class="muted" role="status" name="qaTypeCount">{{ visibleIssues().length }} of {{ issues().length }} loaded findings shown. Type filtering does not run checks again.</span> }
+      </div>
       <button type="button" name="downloadQa" [disabled]="loading() || !!error()" (click)="download()">Download findings (.json)</button>
-      <p class="muted" name="qaDownloadScope">Downloads the current loaded findings and project, branch and locale scope, not newer server changes or live editor drafts. The file can contain private project text. Downloading does not share it.</p>
+      <p class="muted" name="qaDownloadScope">Downloads all current loaded findings, regardless of the type filter, and project, branch and locale scope, not newer server changes or live editor drafts. The file can contain private project text. Downloading does not share it.</p>
       @if (downloadNotice()) { <p role="status" name="qaDownloadNotice">{{ downloadNotice() }}</p> }
       @if (loading()) { <p role="status" name="qaLoading">Loading QA checks...</p> }
       @if (!loading() && !error()) {
       <div class="table-scroll"><table class="qa-table">
         <thead><tr><th>Key</th><th>Locale</th><th>Issue</th><th>Detail</th></tr></thead>
         <tbody>
-          @for (i of issues(); track $index) {
+          @for (i of visibleIssues(); track $index) {
             <tr>
               <td>@if (branch() === 'main') { <a class="qa-key" [routerLink]="['/projects', projectId]">{{ i.key }}</a> } @else { <code>{{ i.key }}</code> }</td>
               <td><code>{{ i.locale }}</code></td>
@@ -58,6 +63,10 @@ import { ApiService, BranchInfo, Project, QaIssue } from '../api.service';
 export class QaComponent implements OnInit, OnDestroy {
   projectId = '';
   issues = signal<QaIssue[]>([]);
+  readonly issueTypes:QaIssue['type'][]=['untranslated','placeholder_mismatch','max_length','whitespace','number_mismatch','html_mismatch'];
+  issueType=signal<QaIssue['type']|''>('');
+  visibleIssues=computed(()=>{const type=this.issueType();return type?this.issues().filter(i=>i.type===type):this.issues();});
+  setIssueType(type:string) {if(!this.destroyed&&(type===''||this.issueTypes.includes(type as QaIssue['type'])))this.issueType.set(type as QaIssue['type']|'');}
   targetLocales = signal<string[]>([]);
   locale = signal('');
   branch=signal('main');branches=signal<BranchInfo[]>([]);branchesLoading=signal(false);branchesError=signal(false);
@@ -80,7 +89,7 @@ export class QaComponent implements OnInit, OnDestroy {
   }
   async loadProject(projectId:string) {
     if(this.destroyed)return;
-    ++this.projectGeneration;this.projectId=projectId;this.locale.set('');this.targetLocales.set([]);this.branch.set('main');this.branches.set([]);
+    ++this.projectGeneration;this.projectId=projectId;this.locale.set('');this.targetLocales.set([]);this.branch.set('main');this.branches.set([]);this.issueType.set('');
     await Promise.all([this.loadLocales(),this.loadBranches(),this.fetch()]);
   }
   async loadBranches() {
@@ -129,7 +138,7 @@ export class QaComponent implements OnInit, OnDestroy {
     finally {if(url)URL.revokeObjectURL(url);}
   }
 
-  emptyLabel() { return (this.locale() ? 'No QA issues found for ' + this.locale() : 'No QA issues found') + ' on branch ' + this.branch(); }
+  emptyLabel() { if(this.issueType())return 'No loaded findings of type '+this.label(this.issueType() as QaIssue['type'])+' in the current branch and locale scope. Clear type filter to show all loaded findings.';return (this.locale() ? 'No QA issues found for ' + this.locale() : 'No QA issues found') + ' on branch ' + this.branch(); }
 
   label(type: QaIssue['type']): string {
     switch (type) {
