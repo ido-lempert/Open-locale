@@ -80,7 +80,7 @@ describe('login lifecycle', () => {
     expect(router.navigate).toHaveBeenCalledWith(['/projects']);
     expect(c.busy()).toBe(false);
   });
-  it('late configuration cannot set flags or begin sibling read after destruction', async () => {
+  it('late configuration cannot set flags after destruction', async () => {
     const wait = deferred(),
       api = {
         getSamlSpInfo: jest.fn().mockReturnValue(wait.promise),
@@ -92,7 +92,7 @@ describe('login lifecycle', () => {
     wait.resolve({ browserEnabled: true });
     await pending;
     expect(c.samlConfigured()).toBe(false);
-    expect(api.getOidcInfo).not.toHaveBeenCalled();
+    expect(api.getOidcInfo).toHaveBeenCalledTimes(1);
   });
   it('late OIDC start cannot change same-tab state', async () => {
     const wait = deferred(),

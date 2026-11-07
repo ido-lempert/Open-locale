@@ -13,6 +13,35 @@ import { ApiService } from '../api.service';
       @if (notice()) {
         <p class="muted" role="status" name="loginNotice">{{ notice() }}</p>
       }
+      @for (provider of providers; track provider) {
+        @if (providerLoading()[provider]) {
+          <p
+            class="muted"
+            role="status"
+            [attr.name]="provider + 'ConfigurationLoading'"
+          >
+            Checking {{ provider.toUpperCase() }} sign-in...
+          </p>
+        }
+        @if (providerError()[provider]) {
+          <p
+            class="error"
+            role="alert"
+            [attr.name]="provider + 'ConfigurationError'"
+          >
+            {{ provider.toUpperCase() }} sign-in configuration unavailable.
+            Password sign-in remains available.
+          </p>
+          <button
+            type="button"
+            [attr.name]="provider + 'ConfigurationRetry'"
+            (click)="loadProvider(provider)"
+            [disabled]="busy() || providerLoading()[provider]"
+          >
+            Retry {{ provider.toUpperCase() }} configuration
+          </button>
+        }
+      }
       @if (oidcConfigured()) {
         <button
           type="button"
@@ -123,19 +152,36 @@ export class LoginComponent implements OnInit, OnDestroy {
   ) {
     this.notice.set(route.snapshot.queryParamMap.get('reason') ?? '');
   }
+  readonly providers = ['oidc', 'saml'] as const;
+  providerLoading = signal({ oidc: false, saml: false });
+  providerError = signal({ oidc: false, saml: false });
   async ngOnInit() {
+    await Promise.all(
+      this.providers.map((provider) => this.loadProvider(provider)),
+    );
+  }
+  async loadProvider(provider: 'oidc' | 'saml') {
+    if (!this.alive || this.busy() || this.providerLoading()[provider]) return;
+    this.providerLoading.update((state) => ({ ...state, [provider]: true }));
+    this.providerError.update((state) => ({ ...state, [provider]: false }));
+    const configured =
+      provider === 'oidc' ? this.oidcConfigured : this.samlConfigured;
+    configured.set(false);
     try {
-      const info = await this.api.getSamlSpInfo();
-      if (this.alive) this.samlConfigured.set(!!info.browserEnabled);
+      const enabled =
+        provider === 'oidc'
+          ? (await this.api.getOidcInfo()).configured
+          : !!(await this.api.getSamlSpInfo()).browserEnabled;
+      if (this.alive) configured.set(enabled);
     } catch {
-      /* Password login remains available. */
-    }
-    if (!this.alive) return;
-    try {
-      const info = await this.api.getOidcInfo();
-      if (this.alive) this.oidcConfigured.set(info.configured);
-    } catch {
-      /* Password login remains available. */
+      if (this.alive)
+        this.providerError.update((state) => ({ ...state, [provider]: true }));
+    } finally {
+      if (this.alive)
+        this.providerLoading.update((state) => ({
+          ...state,
+          [provider]: false,
+        }));
     }
   }
   ngOnDestroy() {

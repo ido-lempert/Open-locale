@@ -1369,3 +1369,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Alive/busy/configured-provider guards prevent duplicate/competing/departed start handlers. Post-digest SAML fence and late response/config fences protect handoff/session writes; destroy clears password/2FA draft. Already-submitted requests are not cancelled.
 - Unit8/browser8 actual local password socket/held crypto/current valid login, pending pixels inspected/five reviews0438. Initial browser7/1 DOM wait timing fixed fixture then twice8/0. Task-ready twice prestartup port bind abort, later6/0 with no app/fixture change.
 - API265/31 web784/68 builds0; all API/isolated browsers final0, syncSTAGED95+144239unique/nativeSTAGED116+111+19246total242unique inner/outer0. Final16/14/docs4-138routes/reaper4 all0. Continued across run boundary, no interrupted tests/worker/API/schema/coverage promotion.
+
+### Continuation 373 - Independent login provider configuration recovery
+- Independent provider reads/status/error/retry let OIDC become available while SAML is pending. Retry rereads only its provider, preserves password/email/2FA/error draft and never starts sign-in. Password login remains available; disabled provider is not a read failure.
+- Unit4/browser8 local held provider-info plus actual password fallback; desktop/390px inspected/five reviews0439. New browser initial6/2 pending DOM timing fixed fixture then8/0; identity-refresh twice6/1 disabled DOM timing fixed fixture then7/0.
+- API265/31 web788/69 builds0; all API/isolated browsers final0, syncSTAGED95+144239unique/nativeSTAGED116+111+19246total242unique inner/outer0. Final16/14/docs4-138routes/reaper4 all0. Continued across run boundary, no interrupted tests/API/schema/worker/coverage promotion.
