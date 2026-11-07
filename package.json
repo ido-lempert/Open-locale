@@ -116,7 +116,8 @@
     "test:glossary-create-local-browser": "node scripts/glossary-create-local-browser-test.mjs",
     "test:webhook-download-browser": "node scripts/webhook-download-browser-test.mjs",
     "test:sync-history-download-browser": "node scripts/sync-history-download-browser-test.mjs",
-    "test:snapshot-capture-unknown-browser": "node scripts/snapshot-capture-unknown-browser-test.mjs"
+    "test:snapshot-capture-unknown-browser": "node scripts/snapshot-capture-unknown-browser-test.mjs",
+    "test:projects-create-unknown-browser": "node scripts/projects-create-unknown-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

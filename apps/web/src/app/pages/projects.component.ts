@@ -18,10 +18,11 @@ import { ApiService, Project } from '../api.service';
         <input placeholder="Project name" aria-label="Project name" [ngModel]="name()" (ngModelChange)="name.set($event)" name="name" required />
         <input placeholder="slug" aria-label="Project slug" [ngModel]="slug()" (ngModelChange)="slug.set($event)" name="slug" required pattern="[a-z0-9-]+" />
         <input placeholder="Locales (e.g. en, he, ar)" aria-label="Locales" [ngModel]="locales()" (ngModelChange)="locales.set($event)" name="locales" required />
-        <button class="primary" type="submit" [disabled]="busy()">New project</button>
+        <button class="primary" type="submit" [disabled]="busy() || createUnknown()">New project</button>
         @if (creating()) { <span role="status" name="projectCreating">Creating project...</span> }
       </form>
-      @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
+      @if (createUnknown()) { <p class="error" role="alert" name="projectCreateUnknown">Project creation outcome unconfirmed. Your form is kept here. Check the project list, then refresh projects before creating again. Do not repeat the request without checking.</p> }
+      @if (error() && (!createUnknown() || error() !== 'Project creation outcome unconfirmed. Your form is kept here. Check the project list before trying again.')) { <p class="error" role="alert">{{ error() }}</p> }
       @if (projectsLoading()) { <p class="muted" role="status" name="projectsLoading">Loading projects.</p> }
       @else if (projectsError()) { <p class="error" role="alert" name="projectsError">Projects unavailable. Check your access or connection, then retry.</p><button type="button" name="retryProjects" (click)="reload()">Retry projects</button> }
       @else if (projects().length === 0) {
@@ -97,6 +98,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
   name = signal(''); slug = signal(''); locales = signal('');
   busy = signal(false); error = signal('');
   creating = signal(false); createNotice = signal('');
+  createUnknown = signal(false); private createEpoch = 0;
   tfa = signal<{ enabled: boolean; recoveryCodesRemaining: number } | null>(null);
   tfaSetup = signal<{ secret: string; otpauthUrl: string } | null>(null);
   tfaCode = signal(''); tfaPassword = signal(''); tfaCodes = signal<string[]>([]);
@@ -105,10 +107,10 @@ export class ProjectsComponent implements OnInit, OnDestroy {
   refreshProjects() { if(!this.destroyed&&!this.projectsLoading()&&!this.busy())void this.reload(); }
   async reload() {
     if (this.destroyed) return;
-    const generation = ++this.projectsGeneration;
+    const generation = ++this.projectsGeneration, epoch=this.createEpoch, pendingCreate=this.creating();
     const current = () => !this.destroyed && generation === this.projectsGeneration;
     this.projectsLoading.set(true); this.projectsError.set(false); this.projects.set([]);
-    try { const projects = await this.api.listProjects(); if (current()) this.projects.set(projects); }
+    try { const projects = await this.api.listProjects(); if (current()) {this.projects.set(projects);if(!pendingCreate&&!this.creating()&&epoch===this.createEpoch){if(this.createUnknown()&&this.error()==='Project creation outcome unconfirmed. Your form is kept here. Check the project list before trying again.')this.error.set('');this.createUnknown.set(false);}} }
     catch { if (current()) this.projectsError.set(true); }
     finally { if (current()) this.projectsLoading.set(false); }
   }
@@ -156,10 +158,10 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     finally { this.busy.set(false); }
   }
   async create() {
-    if(this.destroyed || this.busy())return;
+    if(this.destroyed || this.busy() || this.createUnknown())return;
     const submitted = { name: this.name(), slug: this.slug(), locales: this.locales() };
     if(!submitted.name.trim() || !submitted.slug.trim() || !submitted.locales.trim())return;
-    this.busy.set(true);this.creating.set(true);this.error.set('');this.createNotice.set('');
+    ++this.createEpoch;this.busy.set(true);this.creating.set(true);this.error.set('');this.createNotice.set('');
     try {
       const codes = submitted.locales.split(',').map((s) => s.trim()).filter(Boolean);
       await this.api.createProject({ name: submitted.name, slug: submitted.slug, locales: codes });
@@ -170,7 +172,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
       this.createNotice.set(`Project "${submitted.name.trim()}" was created. If the list is unavailable, retry the project list without creating again.`);
       await this.reload();
     } catch {
-      if(!this.destroyed)this.error.set('Project creation outcome unconfirmed. Your form is kept here. Check the project list before trying again.');
+      if(!this.destroyed){++this.createEpoch;this.createUnknown.set(true);this.error.set('Project creation outcome unconfirmed. Your form is kept here. Check the project list before trying again.');}
     } finally {
       if(!this.destroyed){this.busy.set(false);this.creating.set(false);}
     }

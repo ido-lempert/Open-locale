@@ -997,3 +997,10 @@ before deciding whether to capture again. A failed list read keeps the pause, an
 read begun before or during capture cannot clear a later unknown outcome. This does
 not cancel submitted requests, guarantee exactly-once capture, or persist the pause
 across reloads/devices. No capture or restore is automatically replayed.
+
+Unconfirmed project creation pauses another create in the current visit. Name,
+slug and locales stay editable; check the project list and successfully refresh it
+before deciding to submit again. Failed reads keep the pause; reads begun before
+or during create cannot clear a later unknown result. Independent two-factor work
+and errors remain available. This does not replay creation, cancel submitted work,
+guarantee exactly-once creation or persist the pause across reloads/devices.
