@@ -39,10 +39,10 @@ import { ApiService } from '../api.service';
     </header>
     <main>
       <p class="notice">
-        Link the identity you choose at the configured {{ provider }} provider to your
-        current account. This does not merge accounts or change project access.
-        An identity linked to another account is rejected. You must confirm your
-        current password first.
+        Link the identity you choose at the configured {{ provider }} provider
+        to your current account. This does not merge accounts or change project
+        access. An identity linked to another account is rejected. You must
+        confirm your current password first.
       </p>
       @if (loading()) {
         <p role="status">Checking single sign-on configuration...</p>
@@ -77,8 +77,18 @@ import { ApiService } from '../api.service';
         </p>
       } @else if (!error()) {
         <p role="status">
-          {{ provider }} browser single sign-on is not configured on this instance.
+          {{ provider }} browser single sign-on is not configured on this
+          instance.
         </p>
+      }
+      @if (configurationError()) {
+        <button
+          type="button"
+          name="retryLinkConfiguration"
+          (click)="void loadConfiguration()"
+        >
+          Retry provider configuration
+        </button>
       }
       @if (error()) {
         <p class="error" role="alert">{{ error() }}</p>
@@ -92,22 +102,45 @@ export class IdentityLinkComponent implements OnInit, OnDestroy {
   configured = signal(false);
   busy = signal(false);
   error = signal('');
+  configurationError = signal(false);
+  private configurationStarted = false;
   private alive = true;
   readonly isSaml: boolean;
   readonly provider: string;
-  constructor(private api: ApiService, route: ActivatedRoute) {
+  constructor(
+    private api: ApiService,
+    route: ActivatedRoute,
+  ) {
     this.isSaml = route.snapshot.data['provider'] === 'saml';
     this.provider = this.isSaml ? 'SAML' : 'OIDC';
   }
   async ngOnInit() {
+    await this.loadConfiguration();
+  }
+  async loadConfiguration() {
+    if (
+      !this.alive ||
+      this.busy() ||
+      (this.loading() && this.configurationStarted)
+    )
+      return;
+    this.configurationStarted = true;
+    this.loading.set(true);
+    this.configurationError.set(false);
+    this.configured.set(false);
+    this.error.set('');
     try {
-      const configured = this.isSaml ? !!(await this.api.getSamlSpInfo()).browserEnabled : (await this.api.getOidcInfo()).configured;
+      const configured = this.isSaml
+        ? !!(await this.api.getSamlSpInfo()).browserEnabled
+        : (await this.api.getOidcInfo()).configured;
       if (this.alive) this.configured.set(configured);
     } catch {
-      if (this.alive)
+      if (this.alive) {
+        this.configurationError.set(true);
         this.error.set(
-          'Could not check single sign-on configuration. Reload to try again.',
+          'Could not check single sign-on configuration. Retry provider configuration or reload the page.',
         );
+      }
     } finally {
       if (this.alive) this.loading.set(false);
     }
@@ -117,7 +150,14 @@ export class IdentityLinkComponent implements OnInit, OnDestroy {
     this.password = '';
   }
   async start() {
-    if (!this.alive || this.loading() || this.busy() || !this.password || !this.configured()) return;
+    if (
+      !this.alive ||
+      this.loading() ||
+      this.busy() ||
+      !this.password ||
+      !this.configured()
+    )
+      return;
     this.busy.set(true);
     this.error.set('');
     const password = this.password;
@@ -129,20 +169,34 @@ export class IdentityLinkComponent implements OnInit, OnDestroy {
       let verifier = '';
       let challenge = '';
       if (this.isSaml) {
-        verifier = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('');
-        const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
-        challenge = btoa(String.fromCharCode(...digest)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        verifier = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
+          b.toString(16).padStart(2, '0'),
+        ).join('');
+        const digest = new Uint8Array(
+          await crypto.subtle.digest(
+            'SHA-256',
+            new TextEncoder().encode(verifier),
+          ),
+        );
+        challenge = btoa(String.fromCharCode(...digest))
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=+$/, '');
       }
       if (!this.alive) return;
-      const result = this.isSaml ? await this.api.startSamlLink(password, challenge) : await this.api.startOidcLink(password);
+      const result = this.isSaml
+        ? await this.api.startSamlLink(password, challenge)
+        : await this.api.startOidcLink(password);
       if (!this.alive) return;
       const url = new URL(result.url);
-      if (!['https:', 'http:'].includes(url.protocol)) throw new Error('Invalid single sign-on authorization URL');
+      if (!['https:', 'http:'].includes(url.protocol))
+        throw new Error('Invalid single sign-on authorization URL');
       if (this.isSaml) {
         sessionStorage.setItem(stateKey, verifier);
       } else {
         const states = url.searchParams.getAll('state');
-        if (states.length !== 1 || !states[0]) throw new Error('Invalid single sign-on authorization URL');
+        if (states.length !== 1 || !states[0])
+          throw new Error('Invalid single sign-on authorization URL');
         sessionStorage.setItem(stateKey, states[0]);
       }
       window.location.assign(url.toString());

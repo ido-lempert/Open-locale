@@ -1354,3 +1354,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Alive/configuration-pending guard before start effects and alive fence after async SAML digest prevent departed handlers from submitting link starts. Existing submitted-request/provider-handoff caveats/normal flows unchanged, no real provider/account changes.
 - Unit5/browser5 local flags/deferred crypto/no-request/storage boundaries, real OIDC-link12/SAML-link55 regressions0. Pending pixels inspected/five reviews0435. Identities regression initial5PASS1FAIL missing confirmation DOM before typing; added selector wait then7/0, no app fix.
 - API265/31 web769/67 builds0; all API/isolated browsers final0, syncSTAGED95+144239unique/nativeSTAGED116+111+19246total242unique inner/outer0. Final16/14/docs4-138routes/reaper4 all0, no interrupted tests/API/schema/worker/coverage promotion.
+
+### Continuation 370 - Identity provider configuration retry
+- Explicit retry reads provider configuration only after read failure, with pending/destroyed/busy guards and bounded separate error. Does not replay password/link-start; existing handoff caveats unchanged.
+- Unit4/browser11 both providers held singleGET/recovery/noPOST/draft/late read, desktop/390px pixels inspected/five reviews0436. Initial browser assertions11/0 outer1 due daemon descendants; no-daemon repeat0. Initial native and final docs wrong-script launches1 before startup; actual package-entry reruns0, no app fix.
+- API265/31 web773/67 builds0; all API/isolated browsers final0, syncSTAGED95+144239unique/nativeSTAGED116+111+19246total242unique inner/outer0. Final16/14/docs4-138routes/reaper4 all0, no interrupted tests/API/schema/worker/coverage promotion.
