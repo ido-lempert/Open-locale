@@ -63,7 +63,7 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
                 </td>
               }
               <td class="muted" data-label="Notes">{{ t.notes }}</td>
-              <td data-label="Actions">@if (unknownSaveIds().includes(t.id)) { <span class="error" role="alert" name="glossarySaveUnknown">Save unconfirmed. Copy text before Refresh.</span> }@if (unknownDeleteIds().includes(t.id)) { <span class="error" role="alert" name="glossaryDeleteUnknown">Delete unconfirmed. Refresh required.</span> }@if (savingIds().includes(t.id)) { <span role="status" name="glossarySaving">Saving translation...</span> }@if (deletingIds().includes(t.id)) { <span role="status" name="glossaryDeleting">Deleting term...</span> }<button [disabled]="rowPending(t.id)" class="danger" [attr.aria-label]="'Delete term ' + t.term" (click)="remove(t)">&times;</button></td>
+              <td data-label="Actions">@if (localTextChanged(t)) { <span role="status" name="glossaryLocalDraft">Unsaved local text. Leave the translation field to save, or copy/download the local draft before refreshing.</span> }@if (unknownSaveIds().includes(t.id)) { <span class="error" role="alert" name="glossarySaveUnknown">Save unconfirmed. Copy text before Refresh.</span> }@if (unknownDeleteIds().includes(t.id)) { <span class="error" role="alert" name="glossaryDeleteUnknown">Delete unconfirmed. Refresh required.</span> }@if (savingIds().includes(t.id)) { <span role="status" name="glossarySaving">Saving translation...</span> }@if (deletingIds().includes(t.id)) { <span role="status" name="glossaryDeleting">Deleting term...</span> }<button [disabled]="rowPending(t.id)" class="danger" [attr.aria-label]="'Delete term ' + t.term" (click)="remove(t)">&times;</button></td>
             </tr>
           } @empty {
             @if (!loading() && !listError()) { <tr name="glossaryListEmpty"><td colspan="9" class="muted">{{ query() ? 'No loaded terms match this search. Clear search to show all loaded terms.' : 'No glossary terms yet' }}</td></tr> }
@@ -193,6 +193,12 @@ export class GlossaryComponent implements OnInit, OnDestroy {
       ? { ...x, translations: { ...x.translations, [locale]: value } } : x));
   }
 
+  localTextChanged(t:GlossaryTermItem) {
+    if(this.destroyed||this.loading()||this.listError()||this.rowPending(t.id))return false;
+    const row=this.terms().find(x=>x===t),saved=this.savedTranslations.get(t.id);
+    return !!row&&!!saved&&(Object.keys(saved).length!==Object.keys(row.translations).length||Object.entries(row.translations).some(([locale,value])=>saved[locale]!==value));
+  }
+
   rowPending(id:string) {return this.deletingIds().includes(id)||this.savingIds().includes(id)||this.unknownDeleteIds().includes(id)||this.unknownSaveIds().includes(id);}
 
   async saveTranslations(t: GlossaryTermItem) {
@@ -201,16 +207,17 @@ export class GlossaryComponent implements OnInit, OnDestroy {
     // Read the current immutable row, not an older event-handler snapshot.
     const row=this.terms().find(x=>x.id===t.id);
     if(!row)return;
-    const translations={...row.translations},saved=this.savedTranslations.get(t.id);
+    const translations={...row.translations},saved=this.savedTranslations.get(t.id),listGeneration=this.fetchSeq;
     if(saved&&Object.keys(saved).length===Object.keys(translations).length&&Object.entries(translations).every(([key,value])=>saved[key]===value))return;
     this.draftDownloadNotice.set('');++this.saveEpoch;this.savingIds.update(ids=>[...ids,t.id]);this.error.set('');
     try {
       const updated=await this.api.updateGlossaryTerm(pid, t.id, { translations });
       if(!this.current(scope))return;
       const confirmed={...updated.translations};
-      // Do not replace a row or its comparison refreshed/edited since submission.
+      // Preserve later local text, but advance its comparison on this same read.
+      // A newer list owns its own comparison and must not be overwritten.
+      if(listGeneration===this.fetchSeq&&this.terms().some(x=>x.id===t.id))this.savedTranslations.set(t.id,confirmed);
       if(this.terms().find(x=>x.id===t.id)===row){
-        this.savedTranslations.set(t.id,confirmed);
         this.terms.update(all=>all.map(x=>x===row?{...x,translations:confirmed}:x));
       }
     } catch {if(this.current(scope)){++this.saveEpoch;this.unknownSaveIds.update(ids=>[...new Set([...ids,t.id])]);this.error.set('Save outcome unconfirmed. Copy local translation drafts, then refresh the glossary before trying again.');}}

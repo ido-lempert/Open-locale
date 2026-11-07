@@ -1047,3 +1047,9 @@ search: IDs, private labels, counts, time and automatic flag. No snapshot bodies
 keys or translation values. The JSON is not restorable and does not confirm a
 capture/restore; pending, failed, uncertain and departed states block download.
 [review0453](docs/reviews/0453-snapshots-download.md).
+
+Glossary rows show "Unsaved local text" when translation values differ from their
+loaded/confirmed comparison. Exact revert or confirmed save clears it; saving and
+unconfirmed states stay distinct. Later local edits survive in-flight save results,
+and the comparison advances only when no newer list owns it. No extra requests.
+[review0454](docs/reviews/0454-glossary-local-text.md).
