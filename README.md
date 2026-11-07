@@ -1016,3 +1016,9 @@ That read clears assignee/status filters and search so a committed task is not h
 the whole new-task form stays editable and kept. Ordinary filtered/unfiltered reads
 cannot clear this visit-local pause. Existing row work remains independent. See
 [review0448](docs/reviews/0448-tasks-create-unknown.md).
+
+Activity can download metadata from currently loaded filtered pages as JSON, with
+project/filter scope and a has-more indicator. It does not fetch complete history,
+include raw event detail/actor emails, share the file or prove an action succeeded.
+Exports are paused during reads/errors and key-search debounce. See
+[review0449](docs/reviews/0449-activity-download.md).

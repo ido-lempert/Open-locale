@@ -77,6 +77,9 @@ function roleSnapshot(value: unknown): value is { role: string; allowedLocales: 
       <button type="button" name="clearActivityFilters" style="margin-left:.5rem" [disabled]="!hasFilters()" (click)="clearFilters()">Clear activity filters</button>
       <p class="muted" name="activityFilterScope">Clear reads the first page of current project activity without action, actor or key filters. Use Load more for earlier entries; this is not a complete history or automatic refresh.</p>
       @if (actionFilter() === 'automation.run' || hasAutomationEntries()) { <p class="muted" name="automationActivityScope">Automation activity is best-effort, not a complete run history. Recorded errors may cover only part of a run. A recorded run does not confirm delivery or receiver processing. Raw error details and notification messages are not shown here.</p> }
+      <button type="button" name="downloadActivity" [disabled]="loading() || !!error() || !loaded()" (click)="download()">Download loaded activity metadata (.json)</button>
+      <p class="muted" name="activityDownloadScope">Downloads only currently loaded pages under these action, actor and key filters, not complete history or newer server changes. Includes record IDs, action, displayed actor name, key, locale and time. Omits raw detail, translation/comment text, actor emails and private errors. The file can contain private project metadata; downloading does not share it or confirm an action succeeded.</p>
+      @if (downloadNotice()) { <p role="status" name="activityDownloadNotice">{{downloadNotice()}}</p> }
       <ul class="activity-list">
         @for (ev of items(); track ev.id) {
           <li class="activity-row">
@@ -109,6 +112,7 @@ export class ActivityComponent implements OnInit, OnDestroy {
   membersError = signal(false);
   private memberGeneration = 0;
   loading = signal(true);
+  loaded=signal(false);downloadNotice=signal('');
   error = signal('');
   actions = Object.keys(ACTION_LABELS);
   private keyTimer: ReturnType<typeof setTimeout> | null = null;
@@ -149,7 +153,7 @@ export class ActivityComponent implements OnInit, OnDestroy {
   // Debounced like the editor search: one request per pause, not per keystroke.
   onKeyInput(v: string) {
     if(this.destroyed)return;
-    ++this.generation;this.items.set([]);this.nextCursor.set(null);this.error.set('');this.loading.set(true);
+    ++this.generation;this.loaded.set(false);this.downloadNotice.set('');this.items.set([]);this.nextCursor.set(null);this.error.set('');this.loading.set(true);
     this.keyFilter.set(v);
     if (this.keyTimer) clearTimeout(this.keyTimer);
     this.keyTimer = setTimeout(() => void this.fetch(true), 250);
@@ -239,6 +243,19 @@ export class ActivityComponent implements OnInit, OnDestroy {
     }
   }
 
+  download() {
+    if(this.destroyed||this.loading()||this.error()||!this.loaded())return;
+    let url:string|undefined;
+    try {
+      const entries=this.items().map(ev=>({id:ev.id,action:ev.action,actorName:ev.actor?.displayName??'Former user',keyName:ev.keyName,localeCode:ev.localeCode,createdAt:ev.createdAt}));
+      const content=JSON.stringify({schemaVersion:1,projectId:this.projectId,scope:'loaded-filtered-pages',filters:{action:this.actionFilter(),actorId:this.actorFilter(),key:this.keyFilter().trim()},hasMore:!!this.nextCursor(),entries},null,2);
+      url=URL.createObjectURL(new Blob([content],{type:'application/json;charset=utf-8'}));
+      const anchor=document.createElement('a');anchor.href=url;anchor.download='activity-metadata.json';anchor.click();
+      this.downloadNotice.set('Download requested for loaded activity metadata only. This does not confirm the file was saved or shared.');
+    }catch{this.downloadNotice.set('Download could not be started. Try again from the current activity.');}
+    finally{if(url)URL.revokeObjectURL(url);}
+  }
+
   setFilter(action: string) {
     this.actionFilter.set(action);
     void this.fetch(true);
@@ -263,10 +280,10 @@ export class ActivityComponent implements OnInit, OnDestroy {
     const current=()=>!this.destroyed&&scope===this.projectGeneration&&generation===this.generation;
     const options={action:this.actionFilter()||undefined,actorId:this.actorFilter()||undefined,key:this.keyFilter().trim()||undefined,cursor:reset?undefined:this.nextCursor()??undefined};
     if(reset){this.items.set([]);this.nextCursor.set(null);}
-    this.loading.set(true);this.error.set('');
+    this.loaded.set(false);this.downloadNotice.set('');this.loading.set(true);this.error.set('');
     try {
       const res=await this.api.listActivity(projectId,options);
-      if(current()){this.items.set(reset?res.items:[...this.items(),...res.items]);this.nextCursor.set(res.nextCursor);}
+      if(current()){this.loaded.set(true);this.items.set(reset?res.items:[...this.items(),...res.items]);this.nextCursor.set(res.nextCursor);}
     } catch {
       if(current()){this.failedReset=reset;this.error.set('Activity unavailable. Retry this read or reload the page.');}
     } finally {if(current())this.loading.set(false);}
