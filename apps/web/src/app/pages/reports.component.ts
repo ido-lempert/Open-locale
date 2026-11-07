@@ -21,6 +21,9 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
       @if (branchListError()) { <p class="error" role="alert" name="branchListError">Branch list unavailable. Retry loading branches or reload this page.</p><button type="button" name="retryBranches" (click)="void loadBranches()">Retry branch list</button> }
       @if (error(); as e) { <p class="error" role="alert" name="branchReportError">{{ e }}</p><button type="button" name="retryBranchReports" (click)="void fetch()">Retry branch reports</button> }
       @if (!error()) { <button type="button" name="refreshBranchReports" [disabled]="branchLoading()" (click)="refreshBranch()">Refresh branch reports</button> }
+      <button type="button" name="downloadBranchReports" [disabled]="branchLoading() || !!error() || !report() || !quality()" (click)="downloadBranch()">Download branch reports (.json)</button>
+      <p class="muted" name="branchDownloadScope">Downloads loaded progress and quality for this branch, not usage, task reports, newer server changes or live drafts. These are separate reads, not one database snapshot. The file can contain private project data; downloading does not share it.</p>
+      @if (downloadNotice()) { <p role="status" name="branchDownloadNotice">{{ downloadNotice() }}</p> }
       @if (branchLoading()) { <p role="status" name="branchReportLoading">Loading progress and quality reports for {{ branch() }}...</p> }
       @if (report(); as r) {
         <p class="muted">{{ r.totalKeys }} keys on {{ r.branch }}. A key counts as translated when its value is not empty; status counts cover non-empty values only.</p>
@@ -129,7 +132,7 @@ export class ReportsComponent implements OnInit, OnDestroy {
   branchListLoading=signal(false);
   branch = signal('main');
   statusColumns = signal<string[]>([]);
-  error = signal('');
+  error = signal('');downloadNotice=signal('');
   branchLoading=signal(false);
   usageError=signal(false);
   taskReportError=signal(false);
@@ -154,7 +157,7 @@ export class ReportsComponent implements OnInit, OnDestroy {
     if(this.destroyed)return;
     ++this.projectGeneration;++this.generation;this.projectId=projectId;
     this.usageDays.set(30);++this.usageGeneration;++this.taskGeneration;this.branch.set('main');this.branches.set([]);this.branchListError.set(false);this.branchListLoading.set(true);this.report.set(null);this.quality.set(null);
-    this.usage.set(null);this.taskReport.set(null);this.statusColumns.set([]);this.error.set('');this.branchLoading.set(true);this.usageError.set(false);this.taskReportError.set(false);this.dashboardsLoading.set(true);this.usageLoading.set(true);this.tasksLoading.set(true);
+    this.usage.set(null);this.taskReport.set(null);this.statusColumns.set([]);this.error.set('');this.downloadNotice.set('');this.branchLoading.set(true);this.usageError.set(false);this.taskReportError.set(false);this.dashboardsLoading.set(true);this.usageLoading.set(true);this.tasksLoading.set(true);
     await Promise.all([this.loadBranches(),this.fetch(),this.ngOnInitDashboards()]);
   }
 
@@ -181,7 +184,7 @@ export class ReportsComponent implements OnInit, OnDestroy {
   async fetch() {
     if(this.destroyed)return;
     const generation=++this.generation,projectId=this.projectId,branch=this.branch();
-    this.error.set('');this.branchLoading.set(true);this.report.set(null);this.quality.set(null);this.statusColumns.set([]);
+    this.error.set('');this.downloadNotice.set('');this.branchLoading.set(true);this.report.set(null);this.quality.set(null);this.statusColumns.set([]);
     try {
       const [r,q]=await Promise.all([this.api.getProgress(projectId,branch),this.api.getQuality(projectId,branch)]);
       if(this.destroyed||generation!==this.generation)return;
@@ -190,6 +193,19 @@ export class ReportsComponent implements OnInit, OnDestroy {
       this.report.set(r);this.statusColumns.set(cols);this.quality.set(q);
     } catch { if(!this.destroyed&&generation===this.generation)this.error.set('Progress and quality reports unavailable. No branch figures are shown. Retry branch reports, choose a branch again or reload this page.'); }
     finally { if(!this.destroyed&&generation===this.generation)this.branchLoading.set(false); }
+  }
+
+  downloadBranch() {
+    const progress=this.report(),quality=this.quality();
+    if(this.destroyed||this.branchLoading()||this.error()||!progress||!quality)return;
+    let url:string|undefined;
+    try {
+      const content=JSON.stringify({schemaVersion:1,projectId:this.projectId,branch:this.branch(),progress,quality},null,2)+'\n';
+      url=URL.createObjectURL(new Blob([content],{type:'application/json;charset=utf-8'}));
+      const anchor=document.createElement('a');anchor.href=url;anchor.download='branch-reports.json';anchor.click();
+      this.downloadNotice.set('Download requested for the loaded branch reports. This does not confirm the file was saved or shared.');
+    } catch {this.downloadNotice.set('Download could not be started. Try again from the current branch reports.');}
+    finally {if(url)URL.revokeObjectURL(url);}
   }
 
   async loadUsage() {
