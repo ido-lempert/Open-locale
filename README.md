@@ -975,3 +975,10 @@ Diagnostic preview history now has local search across loaded branch, locale, ca
 Loaded webhook delivery journals support local event-name search combined with the
 recorded-status filter. Search matches only the up to 50 loaded event names; it
 does not fetch older deliveries or confirm receiver processing.
+
+Loaded webhook journals can download a versioned JSON file of all loaded records,
+regardless of search/status filters. It includes project/webhook scope, record IDs
+and displayed delivery metadata, not payloads, private API errors or signing secrets.
+A pending/failed/unread journal cannot be downloaded; a successful empty read can.
+This does not fetch older records, newer server changes, replay deliveries or share
+the file. Treat the file as private project metadata.
