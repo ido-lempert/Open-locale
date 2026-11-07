@@ -1374,3 +1374,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Independent provider reads/status/error/retry let OIDC become available while SAML is pending. Retry rereads only its provider, preserves password/email/2FA/error draft and never starts sign-in. Password login remains available; disabled provider is not a read failure.
 - Unit4/browser8 local held provider-info plus actual password fallback; desktop/390px inspected/five reviews0439. New browser initial6/2 pending DOM timing fixed fixture then8/0; identity-refresh twice6/1 disabled DOM timing fixed fixture then7/0.
 - API265/31 web788/69 builds0; all API/isolated browsers final0, syncSTAGED95+144239unique/nativeSTAGED116+111+19246total242unique inner/outer0. Final16/14/docs4-138routes/reaper4 all0. Continued across run boundary, no interrupted tests/API/schema/worker/coverage promotion.
+
+### Continuation 374 - Callback handler readiness
+- OIDC/SAML completion rejects blank factor before spending one-use pending token; busy/destroyed Back handler matches disabled UI. Destroyed consumer/completion guards retain existing generation fences and normal valid sign-ins. Does not cancel submitted requests.
+- Unit10/browser9 actual held completion sockets/local fixtures/idle Back; pending pixels inspected/five reviews0440. Initial browser0/1 fixture pendingToken mutation lacked render signal, fixed fixture then9/0.
+- API265/31 web798/70 builds0; all API/isolated browsers final0, syncSTAGED95+144239unique/nativeSTAGED116+111+19246total242unique inner/outer0. Final16/14/docs4-138routes/reaper4 all0. Continued across run boundary, no interrupted tests/API/schema/worker/coverage promotion.

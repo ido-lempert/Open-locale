@@ -41,6 +41,7 @@
     "test:groups": "node scripts/groups-test.mjs",
     "test:plural": "node scripts/plural-test.mjs",
     "test:saml": "node scripts/saml-test.mjs",
+    "test:callback-handlers-browser": "node scripts/callback-handlers-browser-test.mjs",
     "test:login-configuration-browser": "node scripts/login-configuration-browser-test.mjs",
     "test:login-lifecycle-browser": "node scripts/login-lifecycle-browser-test.mjs",
     "test:oidc-browser": "node scripts/oidc-browser-test.mjs",

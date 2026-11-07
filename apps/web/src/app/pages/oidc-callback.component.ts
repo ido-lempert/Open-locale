@@ -26,12 +26,14 @@ import { ApiService } from '../api.service';
 export class OidcCallbackComponent implements OnInit, OnDestroy {
   // Each callback owns its async results only until navigation or a new attempt.
   private generation = 0;
+  private destroyed = false;
   private querySubscription?: { unsubscribe(): void };
   busy = signal(true); error = signal(''); code = ''; pendingToken = '';
   constructor(private api: ApiService, private router: Router, private route: ActivatedRoute) {}
   ngOnInit() { this.querySubscription = this.route.queryParamMap.subscribe(() => { void this.consumeCallback(); }); }
-  ngOnDestroy() { this.generation++; this.pendingToken = ''; this.code = ''; this.querySubscription?.unsubscribe(); }
+  ngOnDestroy() { this.destroyed = true; this.generation++; this.pendingToken = ''; this.code = ''; this.querySubscription?.unsubscribe(); }
   private async consumeCallback() {
+    if (this.destroyed) return;
     const generation = ++this.generation;
     this.pendingToken = ''; this.code = ''; this.error.set(''); this.busy.set(true);
     const params = new URL(window.location.href).searchParams;
@@ -53,7 +55,7 @@ export class OidcCallbackComponent implements OnInit, OnDestroy {
     finally { if (generation === this.generation) this.busy.set(false); }
   }
   async complete() {
-    if (!this.pendingToken || this.busy()) return;
+    if (this.destroyed || !this.pendingToken || this.busy() || !this.code.trim()) return;
     const generation = ++this.generation;
     this.busy.set(true); this.error.set('');
     const pending = this.pendingToken;
@@ -69,5 +71,5 @@ export class OidcCallbackComponent implements OnInit, OnDestroy {
     } catch { if (generation === this.generation) this.error.set('Second-factor verification failed. Return to sign-in to start again.'); }
     finally { if (generation === this.generation) { this.code = ''; this.busy.set(false); } }
   }
-  restart() { this.generation++; this.pendingToken = ''; this.code = ''; void this.router.navigate(['/login'], { replaceUrl: true }); }
+  restart() { if(this.destroyed || this.busy()) return; this.generation++; this.pendingToken = ''; this.code = ''; void this.router.navigate(['/login'], { replaceUrl: true }); }
 }
