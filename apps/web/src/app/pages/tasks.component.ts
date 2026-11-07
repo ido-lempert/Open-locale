@@ -75,6 +75,9 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
       <div class="task-search" style="margin-top:1rem"><label>Find in loaded task titles or descriptions <input type="search" name="taskSearch" maxlength="200" [ngModel]="query()" (ngModelChange)="search($event)" /></label>
       <button type="button" name="clearTaskSearch" [disabled]="!query()" (click)="search('')">Clear search</button></div>
       @if (!loading() && !listError()) { <p class="muted" role="status" name="taskMatches">{{ visibleTasks().length }} of {{ tasks().length }} loaded tasks match. Search is a literal, case-insensitive substring within the current assignee and status filters. Refresh tasks to read newer changes.</p> }
+      <button type="button" name="downloadTasks" [disabled]="!downloadReady()" (click)="download()">Download loaded task metadata (.json)</button>
+      <p class="muted" name="taskDownloadScope">Downloads all loaded tasks under the current assignee and status filters, regardless of title search. Not newer server changes or complete project history. Includes task IDs, titles, status, due date, displayed assignee/group names, predecessor IDs and lock/key metadata. Omits descriptions, emails and creator details. The file can contain private project metadata; downloading does not share it or confirm task outcomes.</p>
+      @if (downloadNotice()) { <p role="status" name="taskDownloadNotice">{{downloadNotice()}}</p> }
       <ul class="task-list">
         @for (t of visibleTasks(); track t.id) {
           <li class="task-row" [attr.aria-busy]="rowPending(t.id)">
@@ -137,6 +140,7 @@ export class TasksComponent implements OnInit, OnDestroy {
   error = signal(''); createNotice = signal(''); actionNotice = signal('');
   creating = signal(false);
   createUnknown = signal(false);
+  loaded=signal(false);downloadNotice=signal('');
   updatingIds = signal<string[]>([]);
   deletingIds = signal<string[]>([]);
   title = signal('');
@@ -173,7 +177,7 @@ export class TasksComponent implements OnInit, OnDestroy {
     this.projectId = pid;
     this.fetchSeq++; // invalidate every in-flight fetch from the previous project
     ++this.mutationEpoch;this.actionUnknown.set(false);this.createUnknown.set(false);this.error.set('');this.createNotice.set('');this.actionNotice.set('');this.creating.set(false);this.updatingIds.set([]);this.deletingIds.set([]);
-    this.tasks.set([]); this.members.set([]); this.groups.set([]); this.keys.set([]);
+    this.loaded.set(false);this.downloadNotice.set('');this.tasks.set([]); this.members.set([]); this.groups.set([]); this.keys.set([]);
     this.title.set(''); this.description.set(''); this.dueDate.set('');
     this.assigneeId.set(''); this.dependsOnId.set(''); this.selectedKeyIds.set([]); this.lockKeys.set(false);
     this.statusFilter.set(''); this.mineFilter.set('');this.query.set('');
@@ -261,12 +265,12 @@ export class TasksComponent implements OnInit, OnDestroy {
     // the error banner or the loading flag.
     if(this.destroyed)return;
     const seq = ++this.fetchSeq,epoch=this.mutationEpoch,pending=this.mutationsPending(),unfiltered=!this.hasFilters();
-    this.tasks.set([]);this.listError.set(false);
+    this.loaded.set(false);this.downloadNotice.set('');this.tasks.set([]);this.listError.set(false);
     this.loading.set(true);
     try {
       const list = await this.api.listTasks(this.projectId, this.statusFilter() || undefined, this.mineFilter() === 'me');
       if (seq !== this.fetchSeq) return;
-      this.tasks.set(list);
+      this.loaded.set(true);this.tasks.set(list);
       if(recover&&unfiltered&&!pending&&!this.mutationsPending()&&epoch===this.mutationEpoch&&!this.hasFilters()){
         this.actionUnknown.set(false);this.createUnknown.set(false);
         if(['Task creation failed. Check the task list before trying again.','Task update failed. Check the task list before trying again.','Task deletion failed. Check the task list before trying again.'].includes(this.error()))this.error.set('');
@@ -300,7 +304,7 @@ export class TasksComponent implements OnInit, OnDestroy {
     const current=()=>!this.destroyed&&scope===this.projectGeneration;
     const draft={title:this.title(),description:this.description(),dueDate:this.dueDate(),
       assigneeId:this.assigneeId(),dependsOnId:this.dependsOnId(),keyIds:[...this.selectedKeyIds()],lockKeys:this.lockKeys()};
-    ++this.mutationEpoch;this.creating.set(true);this.error.set('');this.createNotice.set('');
+    this.loaded.set(false);this.downloadNotice.set('');++this.mutationEpoch;this.creating.set(true);this.error.set('');this.createNotice.set('');
     try {
       await this.api.createTask(projectId, {
         title,
@@ -324,6 +328,20 @@ export class TasksComponent implements OnInit, OnDestroy {
     finally {if(current())this.creating.set(false);}
   }
 
+  downloadReady() { return !this.destroyed&&this.loaded()&&!this.loading()&&!this.listError()&&!this.mutationsPending()&&!this.actionUnknown()&&!this.createUnknown(); }
+  download() {
+    if(!this.downloadReady())return;
+    let url:string|undefined;
+    try {
+      const tasks=this.tasks().map(t=>({id:t.id,title:t.title,status:t.status,dueDate:t.dueDate,assigneeName:t.assignee?.displayName??null,assigneeGroupName:t.assigneeGroup?.name??null,dependsOnId:t.dependsOn?.id??null,lockKeys:t.lockKeys,keys:t.keys.map(({key})=>({id:key.id,name:key.name}))}));
+      const content=JSON.stringify({schemaVersion:1,projectId:this.projectId,scope:'all-loaded-filtered-tasks',filters:{status:this.statusFilter(),mine:this.mineFilter()==='me'},tasks},null,2);
+      url=URL.createObjectURL(new Blob([content],{type:'application/json;charset=utf-8'}));
+      const anchor=document.createElement('a');anchor.href=url;anchor.download='task-metadata.json';anchor.click();
+      this.downloadNotice.set('Download requested for loaded task metadata only. This does not confirm the file was saved or shared.');
+    }catch{this.downloadNotice.set('Download could not be started. Try again from the current task list.');}
+    finally{if(url)URL.revokeObjectURL(url);}
+  }
+
   rowPending(id:string) { return this.updatingIds().includes(id)||this.deletingIds().includes(id); }
 
   rowReady(t: TaskItem) { return !this.destroyed&&!this.actionUnknown()&&!this.loading()&&!this.listError()&&!this.rowPending(t.id)&&this.tasks().some(row=>row===t); }
@@ -333,7 +351,7 @@ export class TasksComponent implements OnInit, OnDestroy {
     const scope=this.projectGeneration,projectId=this.projectId,title=t.title;
     const current=()=>!this.destroyed&&scope===this.projectGeneration;
     const action=++this.actionSeq;++this.mutationEpoch;
-    this.actionNotice.set('');this.updatingIds.update(ids=>[...ids,t.id]);this.error.set('');
+    this.loaded.set(false);this.downloadNotice.set('');this.actionNotice.set('');this.updatingIds.update(ids=>[...ids,t.id]);this.error.set('');
     try {
       await this.api.updateTask(projectId, t.id, patch);
       if(current()){if(action===this.actionSeq)this.actionNotice.set(`Task "${title}" was updated. The list uses current filters. If unavailable, retry the read without repeating this change.`);await this.fetch();}
@@ -354,7 +372,7 @@ export class TasksComponent implements OnInit, OnDestroy {
     const scope=this.projectGeneration,projectId=this.projectId,title=t.title;
     const current=()=>!this.destroyed&&scope===this.projectGeneration;
     const action=++this.actionSeq;++this.mutationEpoch;
-    this.actionNotice.set('');this.deletingIds.update(ids=>[...ids,t.id]);this.error.set('');
+    this.loaded.set(false);this.downloadNotice.set('');this.actionNotice.set('');this.deletingIds.update(ids=>[...ids,t.id]);this.error.set('');
     try {
       await this.api.deleteTask(projectId, t.id);
       if(current()){if(action===this.actionSeq)this.actionNotice.set(`Task "${title}" was deleted. If the list is unavailable, retry the read without deleting again.`);await this.fetch();}

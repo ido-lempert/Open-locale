@@ -1022,3 +1022,9 @@ project/filter scope and a has-more indicator. It does not fetch complete histor
 include raw event detail/actor emails, share the file or prove an action succeeded.
 Exports are paused during reads/errors and key-search debounce. See
 [review0449](docs/reviews/0449-activity-download.md).
+
+Tasks can download metadata from all loaded tasks under current assignee/status
+filters as JSON, regardless of local title search. Descriptions, emails and creator
+details are excluded. Export pauses during reads/errors/mutations and unknown
+outcomes. This local file is not shared and does not prove task outcomes. See
+[review0450](docs/reviews/0450-tasks-download.md).

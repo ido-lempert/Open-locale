@@ -120,7 +120,8 @@
     "test:projects-create-unknown-browser": "node scripts/projects-create-unknown-browser-test.mjs",
     "test:glossary-create-unknown-browser": "node scripts/glossary-create-unknown-browser-test.mjs",
     "test:tasks-create-unknown-browser": "node scripts/tasks-create-unknown-browser-test.mjs",
-    "test:activity-download-browser": "node scripts/activity-download-browser-test.mjs"
+    "test:activity-download-browser": "node scripts/activity-download-browser-test.mjs",
+    "test:tasks-download-browser": "node scripts/tasks-download-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

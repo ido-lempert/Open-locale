@@ -1421,3 +1421,7 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 ### Continuation 383 - Download loaded activity metadata
 - Explicit local JSON whitelist: record/action/actor name/key/locale/time, project/filter scope and hasMore. No raw detail, actor email, complete-history/newer-state claims or automatic reads/writes. Initial/pending/debounced/error/destroyed guards and bounded requested/failure notices.
 - Unit8/browser11 exact downloaded bytes first50/appended55/filtered11 and empty/current lifecycle; desktop/390px inspected/five reviews0449. Web855/79/API265/31/builds0, all API/76 isolated browsers0; separate sync95/144/native116/111/19 and config16/14/docs4/reaper4 all0. No failed/interrupted checks or uninterrupted claim, coverage/defaultOFF unchanged.
+
+### Continuation 384 - Download loaded task metadata
+- Explicit local JSON whitelist with project/assignee/status scope, all loaded tasks regardless of local search. No description/email/creator details, automatic reads/writes/sharing or complete-history/outcome claims. Initial/read/error/mutation/unknown/departed guards and bounded requested/failure notices.
+- Unit10/browser11 actual file bytes/current scope/real uncertain mutation pause; desktop/390px inspected/five reviews0450. Web865/80/API265/31/builds0; all API/77 isolated browsers0; separate sync95/144/native116/111/19, configs16/14/docs4/reaper4 all0. No failed/interrupted checks or uninterrupted claim, coverage/defaultOFF unchanged.
