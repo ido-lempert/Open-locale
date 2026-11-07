@@ -166,6 +166,9 @@ import { ApiService, SyncPreviewRecord } from '../api.service';
           }
         </ul>
       }
+      <button type="button" name="downloadSyncHistory" [disabled]="loading() || !!error() || !loaded()" (click)="download()">Download loaded diagnostics (.json)</button>
+      <p class="muted" name="syncHistoryDownloadScope">Downloads all loaded records regardless of search, not older history or newer server changes. Includes IDs, caller labels, fingerprints and counts, not translation text. Caller labels remain unverified; records are not applied changes or accepted baselines. The file can contain private project metadata; downloading does not share it.</p>
+      @if(downloadNotice()){<p role="status" name="syncHistoryDownloadNotice">{{downloadNotice()}}</p>}
       <button
         type="button"
         name="syncHistoryRefresh"
@@ -180,6 +183,8 @@ import { ApiService, SyncPreviewRecord } from '../api.service';
 export class SyncHistoryComponent implements OnInit, OnDestroy {
   projectId = '';
   query = signal('');
+  loaded = signal(false);
+  downloadNotice = signal('');
   filteredRecords = computed(() => {
     const query = this.query().trim().toLowerCase();
     return query
@@ -213,17 +218,31 @@ export class SyncHistoryComponent implements OnInit, OnDestroy {
   refresh() {
     if (!this.destroyed && !this.loading()) void this.load(this.projectId);
   }
+  download() {
+    if (this.destroyed || this.loading() || this.error() || !this.loaded()) return;
+    let url: string | undefined;
+    try {
+      const records = this.records().map(({id,branch,locale,fingerprint,remoteSha,createdAt,summary}) => ({id,branch,locale,fingerprint,remoteSha,createdAt,summary:{total:summary.total,conflict:summary.conflict,manual:summary.manual}}));
+      const content = JSON.stringify({schemaVersion:1,projectId:this.projectId,scope:'all-loaded-diagnostics',canApply:false,baselineVerified:false,remoteVerified:false,records},null,2);
+      url = URL.createObjectURL(new Blob([content],{type:'application/json;charset=utf-8'}));
+      const anchor = document.createElement('a'); anchor.href=url; anchor.download='sync-diagnostics.json'; anchor.click();
+      this.downloadNotice.set('Download requested for all loaded diagnostics. This does not confirm the file was saved or shared.');
+    } catch { this.downloadNotice.set('Download could not be started. Try again from the current diagnostic history.'); }
+    finally { if(url) URL.revokeObjectURL(url); }
+  }
   async load(id: string) {
     if (this.destroyed) return;
     const generation = ++this.generation;
     if (this.projectId !== id) this.query.set('');
     this.projectId = id;
     this.records.set([]);
+    this.loaded.set(false);
+    this.downloadNotice.set('');
     this.error.set('');
     this.loading.set(true);
     try {
       const result = await this.api.listSyncPreviewRecords(id);
-      if (generation === this.generation) this.records.set(result.records);
+      if (generation === this.generation) {this.records.set(result.records);this.loaded.set(true);}
     } catch {
       if (generation === this.generation)
         this.error.set(

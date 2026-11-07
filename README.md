@@ -982,3 +982,11 @@ and displayed delivery metadata, not payloads, private API errors or signing sec
 A pending/failed/unread journal cannot be downloaded; a successful empty read can.
 This does not fetch older records, newer server changes, replay deliveries or share
 the file. Treat the file as private project metadata.
+
+Diagnostic preview history can download a versioned project-scoped JSON snapshot of
+all loaded records regardless of search, not older history or newer server changes.
+The metadata whitelist includes IDs, caller branch/locale/SHA labels, fingerprints,
+timestamps and counts, not translation text. Explicit false verification/apply flags
+keep caller diagnostics distinct from verified remote sources, completed syncs and
+accepted baselines. Pending/failed/unread/departed views cannot download old records;
+a successful empty read can. Downloading does not share the private metadata file.
