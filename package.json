@@ -125,7 +125,8 @@
     "test:ota-bundle-download-browser": "node scripts/ota-bundle-download-browser-test.mjs",
     "test:glossary-draft-download-browser": "node scripts/glossary-draft-download-browser-test.mjs",
     "test:snapshots-download-browser": "node scripts/snapshots-download-browser-test.mjs",
-    "test:glossary-local-text-browser": "node scripts/glossary-local-text-browser-test.mjs"
+    "test:glossary-local-text-browser": "node scripts/glossary-local-text-browser-test.mjs",
+    "test:glossary-reset-local-browser": "node scripts/glossary-reset-local-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

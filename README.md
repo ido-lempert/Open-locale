@@ -1053,3 +1053,9 @@ loaded/confirmed comparison. Exact revert or confirmed save clears it; saving an
 unconfirmed states stay distinct. Later local edits survive in-flight save results,
 and the comparison advances only when no newer list owns it. No extra requests.
 [review0454](docs/reviews/0454-glossary-local-text.md).
+
+Changed glossary rows offer an explicit local-text reset with inline Keep/Discard
+confirmation. It restores that row's last loaded/confirmed translation map in the
+page only, not newer server values or server undo. Stale/pending/unknown/departed
+handlers refuse reset; copy/download the draft first if needed.
+[review0455](docs/reviews/0455-glossary-reset-local.md).
