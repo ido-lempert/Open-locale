@@ -971,3 +971,7 @@ Login now checks OIDC and SAML configuration independently. A failed check shows
 Single sign-on callbacks now ignore blank second-factor submissions before consuming the one-use pending sign-in. Back to sign-in cannot run while verification is pending or after the screen has been destroyed, matching its disabled state. Valid idle Back still returns to login. Leaving the screen does not cancel or undo submitted verification requests.
 
 Diagnostic preview history now has local search across loaded branch, locale, caller SHA and fingerprint, with shown/loaded counts, no-match guidance and Clear. Matching is a trimmed, literal, case-insensitive substring. Refresh retains search; visiting another project resets it. Search does not fetch newer records, verify caller labels or apply changes. Records remain diagnostics, not completed syncs or accepted baselines.
+
+Loaded webhook delivery journals support local event-name search combined with the
+recorded-status filter. Search matches only the up to 50 loaded event names; it
+does not fetch older deliveries or confirm receiver processing.

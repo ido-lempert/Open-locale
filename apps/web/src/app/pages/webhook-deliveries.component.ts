@@ -20,6 +20,9 @@ import { ApiService, WebhookDeliveryInfo } from '../api.service';
         <label>Recorded status <select name="deliveryStatus" [ngModel]="status()" (ngModelChange)="setStatus($event)"><option value="">all recorded statuses</option><option value="succeeded">Succeeded</option><option value="failed">Failed</option></select></label>
         <button type="button" name="clearDeliveryStatus" [disabled]="!status()" (click)="setStatus('')">Clear status filter</button>
       </div>
+      <label>Find loaded event names <input type="search" name="deliveryEventSearch" maxlength="200" [ngModel]="query()" (ngModelChange)="setQuery($event)" /></label>
+      <button type="button" name="clearDeliveryEventSearch" [disabled]="!query()" (click)="setQuery('')">Clear event search</button>
+      <p class="muted">Event search is a trimmed, literal, case-insensitive substring in loaded event names only. Clear event search and the status filter to show all loaded records.</p>
       @if(loading()){<p role="status">Loading deliveries...</p>}
       @if(error()){<p role="alert" class="error">Deliveries unavailable. This journal requires project admin access and an existing webhook. No deliveries are shown. Try refreshing.</p>}
       @if(!loading()&&!error()){
@@ -31,7 +34,7 @@ import { ApiService, WebhookDeliveryInfo } from '../api.service';
               <span>HTTP {{d.httpStatus===null?'unavailable':d.httpStatus}}</span><span>{{d.attempts}} attempt(s)</span>
               <span>{{d.durationMs}} ms</span><time [attr.datetime]="d.createdAt">{{d.createdAt|date:'medium'}} {{d.createdAt|date:'z'}}</time>
             </li>
-          }@empty{<li name="deliveriesEmpty" class="muted">{{status() ? 'No loaded records match this status. Clear status filter to show all loaded records.' : 'No recorded deliveries for this webhook.'}}</li>}
+          }@empty{<li name="deliveriesEmpty" class="muted">{{query().trim() ? 'No loaded records match this event search and status. Clear event search or status filter to widen the results.' : status() ? 'No loaded records match this status. Clear status filter to show all loaded records.' : 'No recorded deliveries for this webhook.'}}</li>}
         </ul>
       }
     </main>`,
@@ -39,12 +42,14 @@ import { ApiService, WebhookDeliveryInfo } from '../api.service';
 export class WebhookDeliveriesComponent implements OnInit,OnDestroy {
   projectId='';hookId='';items=signal<WebhookDeliveryInfo[]>([]);loading=signal(false);error=signal(false);
   status=signal<''|'succeeded'|'failed'>('');
-  visibleItems=computed(()=>{const status=this.status();return status?this.items().filter(item=>item.success===(status==='succeeded')):this.items();});
+  query=signal('');
+  setQuery(value:string){if(!this.destroyed)this.query.set(value.slice(0,200));}
+  visibleItems=computed(()=>{const status=this.status(),query=this.query().trim().toLowerCase();return status||query?this.items().filter(item=>(!status||item.success===(status==='succeeded'))&&(!query||item.event.toLowerCase().includes(query))):this.items();});
   setStatus(value:string){if(!this.destroyed&&(value===''||value==='succeeded'||value==='failed'))this.status.set(value);}
   private generation=0;private destroyed=false;private routeSub?:Subscription;
   constructor(private readonly route:ActivatedRoute,private readonly api:ApiService){}
   ngOnInit(){this.routeSub=this.route.paramMap.subscribe(p=>this.visit(p.get('id')??'',p.get('hookId')??''));}
-  visit(projectId:string,hookId:string){if(this.destroyed)return;this.projectId=projectId;this.hookId=hookId;this.status.set('');void this.reload();}
+  visit(projectId:string,hookId:string){if(this.destroyed)return;this.projectId=projectId;this.hookId=hookId;this.status.set('');this.query.set('');void this.reload();}
   refresh(){if(!this.loading())void this.reload();}
   async reload(){
     if(this.destroyed)return;
