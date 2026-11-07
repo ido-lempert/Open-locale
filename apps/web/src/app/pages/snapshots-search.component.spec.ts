@@ -1,0 +1,9 @@
+import { SnapshotsComponent } from './snapshots.component';
+const rows:any[]=[{id:'one',label:'Before release [A]'},{id:'two',label:'Before migration'}];
+const make=(api:any={})=>new SnapshotsComponent({} as any,api);
+describe('loaded snapshot label search',()=>{
+ it('matches literal trimmed case-insensitive labels retaining original objects and complete set',()=>{const c=make();c.items.set(rows);for(const q of ['RELEASE',' [a] ']){c.setSearch(q);expect(c.visibleItems()).toEqual([rows[0]]);expect(c.visibleItems()[0]).toBe(rows[0]);}c.setSearch('.*');expect(c.visibleItems()).toEqual([]);expect(c.items()).toBe(rows);c.setSearch(' ');expect(c.visibleItems()).toBe(rows);});
+ it('keeps capture draft receipts and unknown restore pause without account reads or writes',()=>{const api={listSnapshots:jest.fn(),createSnapshot:jest.fn(),restoreSnapshot:jest.fn()},c=make(api);c.items.set(rows);c.label='Capture draft';c.notice.set('Captured');c.error.set('Unconfirmed');c.restoreUnknown.set(true);c.setSearch('migration');expect(c.visibleItems()).toEqual([rows[1]]);c.setSearch('');expect(c.restoreReady(rows[0])).toBe(false);expect(c.restoreUnknown()).toBe(true);expect([c.label,c.notice(),c.error()]).toEqual(['Capture draft','Captured','Unconfirmed']);for(const method of Object.values(api))expect(method).not.toHaveBeenCalled();});
+ it('caps search and resets on project visit but retains on current refresh',async()=>{const c=make({listSnapshots:async()=>rows});c.setSearch('x'.repeat(300));expect(c.search().length).toBe(200);c.setSearch('release');await c.reload();expect(c.search()).toBe('release');(c as any).initForProject('new');expect(c.search()).toBe('');await Promise.resolve();expect(c.items()).toBe(rows);});
+ it('blocks late search handler after destruction',()=>{const c=make();c.setSearch('release');c.ngOnDestroy();c.setSearch('late');expect(c.search()).toBe('release');});
+});

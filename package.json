@@ -60,6 +60,7 @@
     "test:tasks-browser": "node scripts/tasks-browser-test.mjs",
     "test:snapshot-restore-ready-browser": "node scripts/snapshot-restore-ready-browser-test.mjs",
     "test:snapshot-restore-unknown-browser": "node scripts/snapshot-restore-unknown-browser-test.mjs",
+    "test:snapshots-search-browser": "node scripts/snapshots-search-browser-test.mjs",
     "test:snapshot-browser": "node scripts/snapshot-browser-test.mjs",
     "test:production-routes-browser": "node scripts/production-routes-browser-test.mjs",
     "test:ota-bundle-browser": "node scripts/ota-bundle-browser-test.mjs",

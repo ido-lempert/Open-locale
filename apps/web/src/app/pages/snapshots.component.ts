@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -26,9 +26,14 @@ import { ApiService, SnapshotMeta } from '../api.service';
       </form>
       @if (listError()) { <p class="error" role="alert" name="snapshotListError">Snapshots unavailable. No snapshots are shown. Retry this read or reload the page.</p><button type="button" name="retrySnapshotList" (click)="void reload()">Retry snapshots</button> }
       @if (!listError()) { <button type="button" name="refreshSnapshots" [disabled]="loading() || creating() || restoring()" (click)="refresh()">Refresh snapshots</button> }
+      <div class="toolbar" style="margin-top:1rem">
+        <label>Search loaded snapshots <input name="snapshotSearch" maxlength="200" placeholder="Label contains" [ngModel]="search()" (ngModelChange)="setSearch($event)" /></label>
+        <button type="button" name="clearSnapshotSearch" [disabled]="!search()" (click)="setSearch('')">Clear search</button>
+        @if (!loading() && !listError()) { <span class="muted" role="status" name="snapshotSearchCount">{{ visibleItems().length }} of {{ items().length }} loaded snapshots shown. Search matches labels only. Refresh snapshots reads newer changes.</span> }
+      </div>
       @if (loading()) { <p role="status" name="snapshotListLoading">Loading snapshots...</p> }
       @if (!loading() && !listError()) { <ul class="snapshot-list">
-        @for (s of items(); track s.id) {
+        @for (s of visibleItems(); track s.id) {
           <li class="snapshot-row">
             <span class="snapshot-label">{{ s.label }}</span>
             @if (s.automatic) { <span class="auto-badge">auto</span> }
@@ -37,7 +42,7 @@ import { ApiService, SnapshotMeta } from '../api.service';
             <button class="restore" [attr.aria-label]="'Restore snapshot ' + s.label" (click)="restore(s)" [disabled]="!restoreReady(s)">Restore</button>
           </li>
         } @empty {
-          <li class="muted" name="snapshotListEmpty">No snapshots yet</li>
+          <li class="muted" name="snapshotListEmpty">{{ search().trim() ? 'No loaded snapshots match this label search. Clear search to show all loaded snapshots.' : 'No snapshots yet' }}</li>
         }
       </ul> }
     </main>
@@ -46,6 +51,9 @@ import { ApiService, SnapshotMeta } from '../api.service';
 export class SnapshotsComponent implements OnInit, OnDestroy {
   projectId = '';
   items = signal<SnapshotMeta[]>([]);
+  search=signal('');
+  visibleItems=computed(()=>{const query=this.search().trim().toLowerCase();return query?this.items().filter(item=>item.label.toLowerCase().includes(query)):this.items();});
+  setSearch(value:string) {if(!this.destroyed)this.search.set(value.slice(0,200));}
   label = '';
   listError = signal(false);
   private readGeneration=0;
@@ -69,7 +77,7 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
   private initForProject(id:string) {
     if(this.destroyed)return;
     ++this.projectGeneration;++this.readGeneration;this.projectId=id;
-    this.items.set([]);this.label='';this.listError.set(false);this.error.set('');this.notice.set('');
+    this.items.set([]);this.search.set('');this.label='';this.listError.set(false);this.error.set('');this.notice.set('');
     this.creating.set(false);this.restoring.set(false);this.restoreUnknown.set(false);++this.restoreEpoch;void this.reload();
   }
   private current(scope:number) { return !this.destroyed&&scope===this.projectGeneration; }
