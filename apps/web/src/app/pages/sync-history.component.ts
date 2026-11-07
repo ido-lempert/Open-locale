@@ -1,12 +1,13 @@
-import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { FormsModule } from '@angular/forms';
 import { DatePipe } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { ApiService, SyncPreviewRecord } from '../api.service';
 
 @Component({
   selector: 'ol-sync-history',
-  imports: [RouterLink, DatePipe],
+  imports: [RouterLink, DatePipe, FormsModule],
   styles: [
     `
       main {
@@ -96,12 +97,35 @@ import { ApiService, SyncPreviewRecord } from '../api.service';
           Latest {{ records().length }} record{{
             records().length === 1 ? '' : 's'
           }}
-          shown, up to 50. Up to 100 are retained per project. Ordinary
+          loaded, up to 50. Up to 100 are retained per project. Ordinary
           comparison does not create a record. Records currently require an
           explicit API request.
         </p>
+        <label
+          >Find loaded diagnostics
+          <input
+            type="search"
+            name="syncHistorySearch"
+            maxlength="200"
+            [ngModel]="query()"
+            (ngModelChange)="query.set($event)"
+        /></label>
+        <button
+          type="button"
+          name="clearSyncHistorySearch"
+          [disabled]="!query()"
+          (click)="query.set('')"
+        >
+          Clear search
+        </button>
+        <p class="muted" role="status" name="syncHistoryMatches">
+          Showing {{ filteredRecords().length }} of
+          {{ records().length }} loaded records. Search matches branch, locale,
+          caller SHA or fingerprint as a literal, case-insensitive substring. It
+          does not read newer records or verify caller labels.
+        </p>
         <ul class="records">
-          @for (r of records(); track r.id) {
+          @for (r of filteredRecords(); track r.id) {
             <li>
               <article>
                 <h2>{{ r.branch }} / {{ r.locale }}</h2>
@@ -133,8 +157,11 @@ import { ApiService, SyncPreviewRecord } from '../api.service';
             </li>
           } @empty {
             <li class="empty" role="status">
-              No diagnostic preview records. Comparing files alone does not save
-              history.
+              {{
+                records().length
+                  ? 'No loaded diagnostic records match this search. Clear search to show all loaded records.'
+                  : 'No diagnostic preview records. Comparing files alone does not save history.'
+              }}
             </li>
           }
         </ul>
@@ -152,6 +179,17 @@ import { ApiService, SyncPreviewRecord } from '../api.service';
 })
 export class SyncHistoryComponent implements OnInit, OnDestroy {
   projectId = '';
+  query = signal('');
+  filteredRecords = computed(() => {
+    const query = this.query().trim().toLowerCase();
+    return query
+      ? this.records().filter((r) =>
+          [r.branch, r.locale, r.remoteSha, r.fingerprint].some((value) =>
+            value.toLowerCase().includes(query),
+          ),
+        )
+      : this.records();
+  });
   records = signal<SyncPreviewRecord[]>([]);
   loading = signal(true);
   error = signal('');
@@ -168,14 +206,17 @@ export class SyncHistoryComponent implements OnInit, OnDestroy {
     });
   }
   ngOnDestroy() {
-    this.destroyed=true;
+    this.destroyed = true;
     this.generation++;
     this.subscription?.unsubscribe();
   }
-  refresh() {if(!this.destroyed&&!this.loading())void this.load(this.projectId);}
+  refresh() {
+    if (!this.destroyed && !this.loading()) void this.load(this.projectId);
+  }
   async load(id: string) {
-    if(this.destroyed)return;
+    if (this.destroyed) return;
     const generation = ++this.generation;
+    if (this.projectId !== id) this.query.set('');
     this.projectId = id;
     this.records.set([]);
     this.error.set('');
