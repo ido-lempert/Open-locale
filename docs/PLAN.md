@@ -1364,3 +1364,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Refresh linked identities is available on loaded/empty/error views with pending/busy disabling and visible confirmation/password clearing notice. Existing guarded current read retained, no unlink/API/schema changes.
 - Unit3/browser7 real local API/Postgres heldGET/new identity/failure/empty recovery/from-empty/busy/zeroDELETE. Desktop/390px long issuer pixels inspected/five reviews0437.
 - API265/31 web776/67 builds0; all API/isolated browsers0, syncSTAGED95+144239unique/nativeSTAGED116+111+19246total242unique inner/outer0. Final16/14/docs4-138routes/reaper4 all0. No failed/interrupted checks/worker/coverage promotion.
+
+### Continuation 372 - Login handler lifecycle
+- Alive/busy/configured-provider guards prevent duplicate/competing/departed start handlers. Post-digest SAML fence and late response/config fences protect handoff/session writes; destroy clears password/2FA draft. Already-submitted requests are not cancelled.
+- Unit8/browser8 actual local password socket/held crypto/current valid login, pending pixels inspected/five reviews0438. Initial browser7/1 DOM wait timing fixed fixture then twice8/0. Task-ready twice prestartup port bind abort, later6/0 with no app/fixture change.
+- API265/31 web784/68 builds0; all API/isolated browsers final0, syncSTAGED95+144239unique/nativeSTAGED116+111+19246total242unique inner/outer0. Final16/14/docs4-138routes/reaper4 all0. Continued across run boundary, no interrupted tests/worker/API/schema/coverage promotion.

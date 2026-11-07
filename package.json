@@ -41,6 +41,7 @@
     "test:groups": "node scripts/groups-test.mjs",
     "test:plural": "node scripts/plural-test.mjs",
     "test:saml": "node scripts/saml-test.mjs",
+    "test:login-lifecycle-browser": "node scripts/login-lifecycle-browser-test.mjs",
     "test:oidc-browser": "node scripts/oidc-browser-test.mjs",
     "test:saml-browser": "node scripts/saml-browser-test.mjs",
     "test:sync-preview": "node scripts/sync-preview-test.mjs",
