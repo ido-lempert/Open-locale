@@ -51,6 +51,7 @@
     "test:oidc-link-browser": "node scripts/oidc-link-browser-test.mjs",
     "test:identity-link-configuration-browser": "node scripts/identity-link-configuration-browser-test.mjs",
     "test:identity-link-guards-browser": "node scripts/identity-link-guards-browser-test.mjs",
+    "test:identities-refresh-browser": "node scripts/identities-refresh-browser-test.mjs",
     "test:identities-guards-browser": "node scripts/identities-guards-browser-test.mjs",
     "test:saml-link-browser": "node scripts/saml-link-browser-test.mjs",
     "test:visual-stage-config": "node scripts/visual-stage-config-test.mjs",

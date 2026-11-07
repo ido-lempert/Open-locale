@@ -1359,3 +1359,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Explicit retry reads provider configuration only after read failure, with pending/destroyed/busy guards and bounded separate error. Does not replay password/link-start; existing handoff caveats unchanged.
 - Unit4/browser11 both providers held singleGET/recovery/noPOST/draft/late read, desktop/390px pixels inspected/five reviews0436. Initial browser assertions11/0 outer1 due daemon descendants; no-daemon repeat0. Initial native and final docs wrong-script launches1 before startup; actual package-entry reruns0, no app fix.
 - API265/31 web773/67 builds0; all API/isolated browsers final0, syncSTAGED95+144239unique/nativeSTAGED116+111+19246total242unique inner/outer0. Final16/14/docs4-138routes/reaper4 all0, no interrupted tests/API/schema/worker/coverage promotion.
+
+### Continuation 371 - Explicit linked identity refresh
+- Refresh linked identities is available on loaded/empty/error views with pending/busy disabling and visible confirmation/password clearing notice. Existing guarded current read retained, no unlink/API/schema changes.
+- Unit3/browser7 real local API/Postgres heldGET/new identity/failure/empty recovery/from-empty/busy/zeroDELETE. Desktop/390px long issuer pixels inspected/five reviews0437.
+- API265/31 web776/67 builds0; all API/isolated browsers0, syncSTAGED95+144239unique/nativeSTAGED116+111+19246total242unique inner/outer0. Final16/14/docs4-138routes/reaper4 all0. No failed/interrupted checks/worker/coverage promotion.
