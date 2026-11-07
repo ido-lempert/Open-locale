@@ -64,6 +64,7 @@
     "test:snapshot-browser": "node scripts/snapshot-browser-test.mjs",
     "test:production-routes-browser": "node scripts/production-routes-browser-test.mjs",
     "test:ota-bundle-browser": "node scripts/ota-bundle-browser-test.mjs",
+    "test:webhook-status-browser": "node scripts/webhook-status-browser-test.mjs",
     "test:webhook-deliveries-browser": "node scripts/webhook-deliveries-browser-test.mjs",
     "test:glossary-save-unknown-browser": "node scripts/glossary-save-unknown-browser-test.mjs",
     "test:glossary-browser": "node scripts/glossary-browser-test.mjs",

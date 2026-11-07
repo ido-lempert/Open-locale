@@ -1,0 +1,9 @@
+import { WebhookDeliveriesComponent } from './webhook-deliveries.component';
+const rows:any[]=[{id:'ok',success:true},{id:'failed',success:false},{id:'no-response',success:false}];
+const make=(api:any={})=>new WebhookDeliveriesComponent({} as any,api);
+describe('loaded webhook recorded status filter',()=>{
+ it('matches persisted success boolean retaining complete loaded objects without requests',()=>{const api={listWebhookDeliveries:jest.fn()},c=make(api);c.items.set(rows);c.projectId='p';c.hookId='h';c.setStatus('succeeded');expect(c.visibleItems()).toEqual([rows[0]]);c.setStatus('failed');expect(c.visibleItems()).toEqual(rows.slice(1));expect(c.visibleItems()[0]).toBe(rows[1]);expect(c.items()).toBe(rows);c.setStatus('');expect(c.visibleItems()).toBe(rows);expect([c.projectId,c.hookId]).toEqual(['p','h']);expect(api.listWebhookDeliveries).not.toHaveBeenCalled();});
+ it('rejects unknown statuses, supports no-match, fences destruction',()=>{const c=make();c.items.set([rows[0]]);c.setStatus('failed');expect(c.visibleItems()).toEqual([]);c.setStatus('INVALID');expect(c.status()).toBe('failed');c.ngOnDestroy();c.setStatus('succeeded');expect(c.status()).toBe('failed');});
+ it('current reread retains status but route visit resets it',async()=>{const api={listWebhookDeliveries:jest.fn().mockResolvedValue(rows)},c=make(api);c.setStatus('failed');await c.reload();expect(c.status()).toBe('failed');expect(c.visibleItems()).toEqual(rows.slice(1));c.visit('new','new-hook');await Promise.resolve();expect(c.status()).toBe('');expect(c.visibleItems()).toBe(rows);});
+ it('filter cannot turn failed current read into a successful empty view',async()=>{const c=make({listWebhookDeliveries:async()=>{throw new Error('PRIVATE');}});c.items.set(rows);await c.reload();c.setStatus('failed');expect(c.error()).toBe(true);expect(c.items()).toEqual([]);expect(c.loading()).toBe(false);});
+});
