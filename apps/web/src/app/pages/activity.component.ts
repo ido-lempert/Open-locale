@@ -74,6 +74,8 @@ function roleSnapshot(value: unknown): value is { role: string; allowedLocales: 
       @if (error(); as e) { <p class="error" role="alert">{{ e }}</p><button type="button" name="retryActivity" (click)="retry()">Retry activity</button> }
       @if (loading()) { <p role="status" name="activityLoading">Loading activity...</p> }
       @if (!error()) { <button type="button" name="refreshActivity" [disabled]="loading()" (click)="refresh()">Refresh activity</button> }
+      <button type="button" name="clearActivityFilters" style="margin-left:.5rem" [disabled]="!hasFilters()" (click)="clearFilters()">Clear activity filters</button>
+      <p class="muted" name="activityFilterScope">Clear reads the first page of current project activity without action, actor or key filters. Use Load more for earlier entries; this is not a complete history or automatic refresh.</p>
       @if (actionFilter() === 'automation.run' || hasAutomationEntries()) { <p class="muted" name="automationActivityScope">Automation activity is best-effort, not a complete run history. Recorded errors may cover only part of a run. A recorded run does not confirm delivery or receiver processing. Raw error details and notification messages are not shown here.</p> }
       <ul class="activity-list">
         @for (ev of items(); track ev.id) {
@@ -239,6 +241,13 @@ export class ActivityComponent implements OnInit, OnDestroy {
 
   setFilter(action: string) {
     this.actionFilter.set(action);
+    void this.fetch(true);
+  }
+
+  clearFilters() {
+    if(this.destroyed||!this.hasFilters())return;
+    if(this.keyTimer)clearTimeout(this.keyTimer);this.keyTimer=null;
+    this.actionFilter.set('');this.actorFilter.set('');this.keyFilter.set('');
     void this.fetch(true);
   }
 
