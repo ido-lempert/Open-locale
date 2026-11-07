@@ -1028,3 +1028,9 @@ filters as JSON, regardless of local title search. Descriptions, emails and crea
 details are excluded. Export pauses during reads/errors/mutations and unknown
 outcomes. This local file is not shared and does not prove task outcomes. See
 [review0450](docs/reviews/0450-tasks-download.md).
+
+Retained OTA inspection can download all loaded locale values as JSON, regardless
+of local search/page, with publication context and explicit unpinned identity for
+legacy links. Includes private translation content, not live editor changes; no
+sharing, publishing or client-delivery claim. Loading/error/departed guards apply.
+[review0451](docs/reviews/0451-ota-bundle-download.md).

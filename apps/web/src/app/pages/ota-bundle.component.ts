@@ -15,6 +15,9 @@ import { ApiService, OtaBundle } from '../api.service';
    <p class="bundle-scope muted" name="bundleIdentity">{{publicationId===undefined?'Unpinned legacy link: branch recreation can select another publication. Open a fresh Inspect link from Settings to pin it.':'Pinned publication ID: '+publicationId}}</p>
    <p class="muted">Read-only retained publication, not live editor content. Empty values and unreviewed translations can be included. Publishing keeps up to 25 recent versions per branch; deleted or pruned bundles cannot be read here. This view does not publish or confirm client delivery.</p>
    <button type="button" name="refreshBundle" (click)="refresh()" [disabled]="loading()" [attr.aria-busy]="loading()">Refresh bundle</button>
+   <button type="button" name="downloadBundle" [disabled]="loading() || error() || !bundle()" (click)="download()">Download loaded locale bundle (.json)</button>
+   <p class="muted" name="bundleDownloadScope">Downloads all loaded retained translation values in this locale, regardless of search or page. Includes private translation content and publication context, not live editor changes. An unpinned link remains unpinned in the file. Downloading does not share, publish or confirm client delivery.</p>
+   @if(downloadNotice()){<p role="status" name="bundleDownloadNotice">{{downloadNotice()}}</p>}
    @if(loading()){<p role="status" name="bundleLoading">Loading published bundle...</p>}
    @if(error()){<p role="alert" class="error">Bundle unavailable. Project membership and a retained publication are required. No translation values are shown. Try refreshing.</p>}
    @if(bundle();as b){
@@ -32,7 +35,7 @@ import { ApiService, OtaBundle } from '../api.service';
 })
 export class OtaBundleComponent implements OnInit,OnDestroy{
  publicationId:string|undefined;projectId='';branch='main';version='';locale='';bundle=signal<OtaBundle|null>(null);rows=signal<[string,string][]>([]);page=signal(0);loading=signal(false);error=signal(false);
- query=signal('');
+ query=signal('');downloadNotice=signal('');
  filteredRows=computed(()=>{const query=this.query().toLowerCase();return query?this.rows().filter(([key,value])=>key.toLowerCase().includes(query)||value.toLowerCase().includes(query)):this.rows();});
  private generation=0;private destroyed=false;private sub?:Subscription;
  constructor(private readonly route:ActivatedRoute,private readonly api:ApiService){}
@@ -46,10 +49,21 @@ export class OtaBundleComponent implements OnInit,OnDestroy{
  async reload(){
    if(this.destroyed)return;
    const generation=++this.generation,{projectId,branch,version,locale,publicationId}=this,current=()=>!this.destroyed&&generation===this.generation;
-   this.bundle.set(null);this.rows.set([]);this.page.set(0);this.error.set(false);this.loading.set(true);
+   this.downloadNotice.set('');this.bundle.set(null);this.rows.set([]);this.page.set(0);this.error.set(false);this.loading.set(true);
    try{const b=await this.api.getOtaBundle(projectId,branch,version,locale,publicationId);if(current()){this.rows.set(Object.entries(b.translations));this.bundle.set(b);}}
    catch{if(current())this.error.set(true);}
    finally{if(current())this.loading.set(false);}
+ }
+ download(){
+   const b=this.bundle();if(this.destroyed||this.loading()||this.error()||!b)return;
+   let url:string|undefined;
+   try{
+     const content=JSON.stringify({schemaVersion:1,projectId:this.projectId,publicationId:this.publicationId??null,scope:'all-loaded-retained-locale-values',bundle:{project:b.project,branch:b.branch,locale:b.locale,version:b.version,publishedAt:b.publishedAt,translations:b.translations}},null,2);
+     url=URL.createObjectURL(new Blob([content],{type:'application/json;charset=utf-8'}));
+     const anchor=document.createElement('a');anchor.href=url;anchor.download='ota-locale-bundle.json';anchor.click();
+     this.downloadNotice.set('Download requested for the loaded retained locale bundle. This does not confirm the file was saved, shared or delivered to clients.');
+   }catch{this.downloadNotice.set('Download could not be started. Try again from the current locale bundle.');}
+   finally{if(url)URL.revokeObjectURL(url);}
  }
  ngOnDestroy(){this.destroyed=true;++this.generation;this.sub?.unsubscribe();}
 }
