@@ -1034,3 +1034,10 @@ of local search/page, with publication context and explicit unpinned identity fo
 legacy links. Includes private translation content, not live editor changes; no
 sharing, publishing or client-delivery claim. Loading/error/departed guards apply.
 [review0451](docs/reviews/0451-ota-bundle-download.md).
+
+Glossary can download a local draft JSON backup of all loaded terms/translations
+and the new-term form, regardless of search. Private content and unconfirmed
+save/delete/create outcomes are explicit; this is reference text, not an import
+or proof of server state. Pending/read-error/departed guards apply. Narrow screens
+use stacked labeled rows with readable translation inputs.
+[review0452](docs/reviews/0452-glossary-draft-download.md).
