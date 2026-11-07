@@ -1041,3 +1041,9 @@ save/delete/create outcomes are explicit; this is reference text, not an import
 or proof of server state. Pending/read-error/departed guards apply. Narrow screens
 use stacked labeled rows with readable translation inputs.
 [review0452](docs/reviews/0452-glossary-draft-download.md).
+
+Snapshots can download an inventory of all loaded metadata regardless of label
+search: IDs, private labels, counts, time and automatic flag. No snapshot bodies,
+keys or translation values. The JSON is not restorable and does not confirm a
+capture/restore; pending, failed, uncertain and departed states block download.
+[review0453](docs/reviews/0453-snapshots-download.md).

@@ -27,6 +27,9 @@ import { ApiService, SnapshotMeta } from '../api.service';
       </form>
       @if (listError()) { <p class="error" role="alert" name="snapshotListError">Snapshots unavailable. No snapshots are shown. Retry this read or reload the page.</p><button type="button" name="retrySnapshotList" (click)="void reload()">Retry snapshots</button> }
       @if (!listError()) { <button type="button" name="refreshSnapshots" [disabled]="loading() || creating() || restoring()" (click)="refresh()">Refresh snapshots</button> }
+      <button type="button" name="downloadSnapshots" [disabled]="!downloadReady()" (click)="download()">Download loaded snapshot inventory (.json)</button>
+      <p class="muted" name="snapshotDownloadScope">Metadata for all loaded snapshots, regardless of label search. Includes private labels and IDs, not keys or translation values. This is not a restorable backup, complete history, newer server state or confirmation of a capture or restore. Downloading does not share or change the project.</p>
+      @if(downloadNotice()){<p role="status" name="snapshotDownloadNotice">{{downloadNotice()}}</p>}
       <div class="toolbar" style="margin-top:1rem">
         <label>Search loaded snapshots <input name="snapshotSearch" maxlength="200" placeholder="Label contains" [ngModel]="search()" (ngModelChange)="setSearch($event)" /></label>
         <button type="button" name="clearSnapshotSearch" [disabled]="!search()" (click)="setSearch('')">Clear search</button>
@@ -51,6 +54,8 @@ import { ApiService, SnapshotMeta } from '../api.service';
 })
 export class SnapshotsComponent implements OnInit, OnDestroy {
   projectId = '';
+  loaded=signal(false);
+  downloadNotice=signal('');
   items = signal<SnapshotMeta[]>([]);
   search=signal('');
   visibleItems=computed(()=>{const query=this.search().trim().toLowerCase();return query?this.items().filter(item=>item.label.toLowerCase().includes(query)):this.items();});
@@ -80,11 +85,24 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
   private initForProject(id:string) {
     if(this.destroyed)return;
     ++this.projectGeneration;++this.readGeneration;this.projectId=id;
-    this.items.set([]);this.search.set('');this.label='';this.listError.set(false);this.error.set('');this.notice.set('');
+    this.loaded.set(false);this.downloadNotice.set('');this.items.set([]);this.search.set('');this.label='';this.listError.set(false);this.error.set('');this.notice.set('');
     this.creating.set(false);this.restoring.set(false);this.restoreUnknown.set(false);++this.restoreEpoch;this.captureUnknown.set(false);++this.captureEpoch;void this.reload();
   }
   private current(scope:number) { return !this.destroyed&&scope===this.projectGeneration; }
   ngOnDestroy() { this.destroyed=true;++this.readGeneration;++this.projectGeneration;this.routeSub?.unsubscribe(); }
+
+  downloadReady() {return !this.destroyed&&this.loaded()&&!this.loading()&&!this.listError()&&!this.creating()&&!this.restoring()&&!this.captureUnknown()&&!this.restoreUnknown();}
+  download() {
+    if(!this.downloadReady())return;
+    let url:string|undefined;
+    try {
+      const content=JSON.stringify({schemaVersion:1,projectId:this.projectId,scope:'all-loaded-snapshot-metadata',restorable:false,snapshots:this.items().map(s=>({id:s.id,label:s.label,keyCount:s.keyCount,translationCount:s.translationCount,automatic:s.automatic,createdAt:s.createdAt}))},null,2);
+      url=URL.createObjectURL(new Blob([content],{type:'application/json;charset=utf-8'}));
+      const anchor=document.createElement('a');anchor.href=url;anchor.download='snapshot-inventory.json';anchor.click();
+      this.downloadNotice.set('Download requested for the loaded snapshot inventory. This does not confirm the file was saved or a capture or restore completed.');
+    }catch{this.downloadNotice.set('Download could not be started. Try again from the current snapshot list.');}
+    finally{if(url)URL.revokeObjectURL(url);}
+  }
 
   refresh() {
     if(this.loading() || this.creating() || this.restoring())return;
@@ -95,10 +113,10 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
     if(this.destroyed)return;
     const generation=++this.readGeneration,epoch=this.restoreEpoch,pendingRestore=this.restoring(),captureEpoch=this.captureEpoch,pendingCapture=this.creating();
     const current=()=>!this.destroyed&&generation===this.readGeneration;
-    this.items.set([]);this.listError.set(false);this.loading.set(true);
+    this.loaded.set(false);this.downloadNotice.set('');this.items.set([]);this.listError.set(false);this.loading.set(true);
     try {
       const items=await this.api.listSnapshots(this.projectId);
-      if(current()){this.items.set(items);if(!pendingCapture&&!this.creating()&&captureEpoch===this.captureEpoch){if(this.captureUnknown()&&this.error()==='Capturing snapshot failed. Your label is kept here. Check snapshots before trying again.')this.error.set('');this.captureUnknown.set(false);}if(!pendingRestore&&!this.restoring()&&epoch===this.restoreEpoch){if(this.restoreUnknown()&&this.error()==='Restoring snapshot failed. Check the project before trying again.')this.error.set('');this.restoreUnknown.set(false);}}
+      if(current()){this.loaded.set(true);this.items.set(items);if(!pendingCapture&&!this.creating()&&captureEpoch===this.captureEpoch){if(this.captureUnknown()&&this.error()==='Capturing snapshot failed. Your label is kept here. Check snapshots before trying again.')this.error.set('');this.captureUnknown.set(false);}if(!pendingRestore&&!this.restoring()&&epoch===this.restoreEpoch){if(this.restoreUnknown()&&this.error()==='Restoring snapshot failed. Check the project before trying again.')this.error.set('');this.restoreUnknown.set(false);}}
     } catch {
       if(current())this.listError.set(true);
     } finally {
@@ -111,7 +129,7 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
     const label = this.label.trim();
     if (!label || this.destroyed || this.creating() || this.restoring() || this.restoreUnknown() || this.captureUnknown()) return;
     const draft=this.label,scope=this.projectGeneration,projectId=this.projectId;
-    ++this.captureEpoch;this.creating.set(true);
+    this.downloadNotice.set('');++this.captureEpoch;this.creating.set(true);
     this.error.set('');this.notice.set('');
     try {
       await this.api.createSnapshot(projectId, label);
@@ -143,7 +161,7 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
       `- A snapshot of the current state is taken first, so this restore is itself recoverable.`,
     )) return;
     if(!this.current(scope) || generation!==this.readGeneration || !this.restoreReady(s))return;
-    ++this.restoreEpoch;this.restoring.set(true);
+    this.downloadNotice.set('');++this.restoreEpoch;this.restoring.set(true);
     this.error.set('');this.notice.set('');
     try {
       const r = await this.api.restoreSnapshot(projectId, s.id);

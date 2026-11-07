@@ -123,7 +123,8 @@
     "test:activity-download-browser": "node scripts/activity-download-browser-test.mjs",
     "test:tasks-download-browser": "node scripts/tasks-download-browser-test.mjs",
     "test:ota-bundle-download-browser": "node scripts/ota-bundle-download-browser-test.mjs",
-    "test:glossary-draft-download-browser": "node scripts/glossary-draft-download-browser-test.mjs"
+    "test:glossary-draft-download-browser": "node scripts/glossary-draft-download-browser-test.mjs",
+    "test:snapshots-download-browser": "node scripts/snapshots-download-browser-test.mjs"
   },
   "private": true,
   "dependencies": {
