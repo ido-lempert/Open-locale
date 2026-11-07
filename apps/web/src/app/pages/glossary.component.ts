@@ -14,7 +14,8 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
     </header>
     <main [attr.aria-busy]="loading()">
       @if (createNotice(); as message) { <p role="status" name="glossaryCreateNotice">{{ message }}</p> }
-      @if (error(); as e) { <p class="error" role="alert">{{ e }}</p> }
+      @if (createUnknown()) { <p class="error" role="alert" name="glossaryCreateUnknown">Adding term outcome unconfirmed. Your new-term form is kept here. Copy local translation drafts, then refresh the glossary and check the list before adding again. Do not repeat the request without checking.</p> }
+      @if (error(); as e) { @if (!createUnknown() || e !== 'Adding term failed. Check the glossary before trying again.') { <p class="error" role="alert">{{ e }}</p> } }
       <section class="panel">
         <h2>New term</h2>
         <form class="task-form" [attr.aria-busy]="creating()" (ngSubmit)="create()">
@@ -24,7 +25,7 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
             [ngModel]="notes()" (ngModelChange)="notes.set($event)" />
           <label class="dnt"><input type="checkbox" name="gDnt"
             [ngModel]="doNotTranslate()" (ngModelChange)="doNotTranslate.set($event)" /> do not translate</label>
-          <button class="primary" type="submit" [disabled]="creating()">Add term</button>
+          <button class="primary" type="submit" [disabled]="creating() || createUnknown()">Add term</button>
           @if (creating()) { <span role="status" name="glossaryCreating">Adding term...</span> }
         </form>
       </section>
@@ -71,6 +72,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   loading = signal(true);
   error = signal(''); createNotice = signal('');
   creating=signal(false);
+  createUnknown=signal(false);private createEpoch=0;
   deletingIds=signal<string[]>([]);
   savingIds=signal<string[]>([]);
   unknownDeleteIds=signal<string[]>([]);
@@ -96,7 +98,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
     if(this.destroyed)return;
     ++this.projectGeneration;
     this.projectId=pid;++this.fetchSeq;this.savedTranslations.clear();
-    this.terms.set([]);this.locales.set([]);this.error.set('');this.createNotice.set('');this.listError.set(false);this.creating.set(false);this.deletingIds.set([]);this.savingIds.set([]);this.unknownDeleteIds.set([]);this.unknownSaveIds.set([]);++this.saveEpoch;
+    this.terms.set([]);this.locales.set([]);this.error.set('');this.createNotice.set('');this.listError.set(false);this.creating.set(false);this.deletingIds.set([]);this.savingIds.set([]);this.unknownDeleteIds.set([]);this.unknownSaveIds.set([]);++this.saveEpoch;this.createUnknown.set(false);++this.createEpoch;
     this.term.set('');this.notes.set('');this.doNotTranslate.set(false);this.query.set('');
     void this.fetch();
     this.localesLoading.set(false);this.localesError.set(false);
@@ -120,21 +122,21 @@ export class GlossaryComponent implements OnInit, OnDestroy {
 
   async fetch() {
     if(this.destroyed||this.deletingIds().length>0)return;
-    const seq=++this.fetchSeq,epoch=this.saveEpoch,pendingSave=this.savingIds().length>0;
+    const seq=++this.fetchSeq,epoch=this.saveEpoch,pendingSave=this.savingIds().length>0,createEpoch=this.createEpoch,pendingCreate=this.creating();
     this.terms.set([]);this.listError.set(false);this.loading.set(true);
     try {
       const terms=await this.api.listGlossary(this.projectId);
-      if(seq===this.fetchSeq){this.terms.set(terms);this.savedTranslations=new Map(terms.map(t=>[t.id,{...t.translations} ]));if(this.unknownDeleteIds().length&&this.error()==='Delete outcome unconfirmed. Copy local translation drafts, then refresh the glossary before trying again.')this.error.set('');this.unknownDeleteIds.set([]);if(!pendingSave&&!this.savingIds().length&&epoch===this.saveEpoch){if(this.unknownSaveIds().length&&this.error()==='Save outcome unconfirmed. Copy local translation drafts, then refresh the glossary before trying again.')this.error.set('');this.unknownSaveIds.set([]);}}
+      if(seq===this.fetchSeq){this.terms.set(terms);if(!pendingCreate&&!this.creating()&&createEpoch===this.createEpoch){if(this.createUnknown()&&this.error()==='Adding term failed. Check the glossary before trying again.')this.error.set('');this.createUnknown.set(false);}this.savedTranslations=new Map(terms.map(t=>[t.id,{...t.translations} ]));if(this.unknownDeleteIds().length&&this.error()==='Delete outcome unconfirmed. Copy local translation drafts, then refresh the glossary before trying again.')this.error.set('');this.unknownDeleteIds.set([]);if(!pendingSave&&!this.savingIds().length&&epoch===this.saveEpoch){if(this.unknownSaveIds().length&&this.error()==='Save outcome unconfirmed. Copy local translation drafts, then refresh the glossary before trying again.')this.error.set('');this.unknownSaveIds.set([]);}}
     } catch { if(seq===this.fetchSeq)this.listError.set(true); }
     finally { if(seq===this.fetchSeq)this.loading.set(false); }
   }
 
   async create() {
     const term = this.term().trim();
-    if (!term||this.destroyed||this.creating()) return;
+    if (!term||this.destroyed||this.creating()||this.createUnknown()) return;
     const scope=this.projectGeneration,pid=this.projectId,listGeneration=this.fetchSeq;
     const draft={term:this.term(),notes:this.notes(),doNotTranslate:this.doNotTranslate()};
-    this.creating.set(true);this.error.set('');this.createNotice.set('');
+    ++this.createEpoch;this.creating.set(true);this.error.set('');this.createNotice.set('');
     try {
       const created = await this.api.createGlossaryTerm(pid, {
         term,
@@ -152,7 +154,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
         this.savedTranslations.set(created.id, { ...created.translations });
       }
       this.createNotice.set(`Term "${term}" was added.${insert ? ' Existing local translation values were kept.' : ' The current glossary was kept. Copy local translation drafts before refreshing to find the new term.'}`);
-    } catch { if(this.current(scope))this.error.set('Adding term failed. Check the glossary before trying again.'); }
+    } catch { if(this.current(scope)){++this.createEpoch;this.createUnknown.set(true);this.error.set('Adding term failed. Check the glossary before trying again.');} }
     finally {if(this.current(scope))this.creating.set(false);}
   }
 

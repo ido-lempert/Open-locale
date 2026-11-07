@@ -1004,3 +1004,9 @@ before deciding to submit again. Failed reads keep the pause; reads begun before
 or during create cannot clear a later unknown result. Independent two-factor work
 and errors remain available. This does not replay creation, cancel submitted work,
 guarantee exactly-once creation or persist the pause across reloads/devices.
+
+Unconfirmed glossary term creation pauses Add term until a successful current
+list read. Term, notes and do-not-translate stay editable and kept. Copy local
+translation drafts before refresh, then inspect the list before adding again.
+Existing row save/delete remain independent. This pause is visit-local, not
+persistent request deduplication. See [review0447](docs/reviews/0447-glossary-create-unknown.md).
