@@ -14,15 +14,16 @@ import { ApiService, SnapshotMeta } from '../api.service';
       <h1>Snapshots</h1>
     </header>
     <main>
-      @if (error(); as e) { <p class="error" role="alert">{{ e }}</p> }
+      @if (error(); as e) { @if (!captureUnknown()) { <p class="error" role="alert">{{ e }}</p> } }
       @if (creating()) { <p role="status" name="snapshotCreating">Capturing snapshot...</p> }
       @if (restoreUnknown()) { <p class="error" role="alert" name="snapshotRestoreUnknown">Restore outcome unconfirmed. Check the project, then refresh snapshots before capturing or restoring again. Do not repeat the restore without checking.</p> }
+      @if (captureUnknown()) { <p class="error" role="alert" name="snapshotCaptureUnknown">Capture outcome unconfirmed. Your label is kept here. Check the snapshot list, then refresh snapshots before capturing or restoring again. Do not repeat the capture without checking.</p> }
       @if (restoring()) { <p role="status" name="snapshotRestoring">Restoring snapshot...</p> }
       @if (notice(); as n) { <p class="notice" role="status">{{ n }}</p> }
       <form class="snapshot-create" (ngSubmit)="create($event)">
         <input aria-label="Snapshot label" [(ngModel)]="label" name="label"
                placeholder="Label, e.g. before release 1.4" maxlength="200" />
-        <button type="submit" [disabled]="creating() || restoring() || restoreUnknown() || !label.trim()" [attr.aria-busy]="creating() || restoring()">Take snapshot</button>
+        <button type="submit" [disabled]="creating() || restoring() || restoreUnknown() || captureUnknown() || !label.trim()" [attr.aria-busy]="creating() || restoring()">Take snapshot</button>
       </form>
       @if (listError()) { <p class="error" role="alert" name="snapshotListError">Snapshots unavailable. No snapshots are shown. Retry this read or reload the page.</p><button type="button" name="retrySnapshotList" (click)="void reload()">Retry snapshots</button> }
       @if (!listError()) { <button type="button" name="refreshSnapshots" [disabled]="loading() || creating() || restoring()" (click)="refresh()">Refresh snapshots</button> }
@@ -65,6 +66,8 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
   restoring = signal(false);
   restoreUnknown = signal(false);
   private restoreEpoch=0;
+  captureUnknown = signal(false);
+  private captureEpoch=0;
   error = signal('');
   notice = signal('');
 
@@ -78,7 +81,7 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
     if(this.destroyed)return;
     ++this.projectGeneration;++this.readGeneration;this.projectId=id;
     this.items.set([]);this.search.set('');this.label='';this.listError.set(false);this.error.set('');this.notice.set('');
-    this.creating.set(false);this.restoring.set(false);this.restoreUnknown.set(false);++this.restoreEpoch;void this.reload();
+    this.creating.set(false);this.restoring.set(false);this.restoreUnknown.set(false);++this.restoreEpoch;this.captureUnknown.set(false);++this.captureEpoch;void this.reload();
   }
   private current(scope:number) { return !this.destroyed&&scope===this.projectGeneration; }
   ngOnDestroy() { this.destroyed=true;++this.readGeneration;++this.projectGeneration;this.routeSub?.unsubscribe(); }
@@ -90,12 +93,12 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
 
   async reload() {
     if(this.destroyed)return;
-    const generation=++this.readGeneration,epoch=this.restoreEpoch,pendingRestore=this.restoring();
+    const generation=++this.readGeneration,epoch=this.restoreEpoch,pendingRestore=this.restoring(),captureEpoch=this.captureEpoch,pendingCapture=this.creating();
     const current=()=>!this.destroyed&&generation===this.readGeneration;
     this.items.set([]);this.listError.set(false);this.loading.set(true);
     try {
       const items=await this.api.listSnapshots(this.projectId);
-      if(current()){this.items.set(items);if(!pendingRestore&&!this.restoring()&&epoch===this.restoreEpoch){if(this.restoreUnknown()&&this.error()==='Restoring snapshot failed. Check the project before trying again.')this.error.set('');this.restoreUnknown.set(false);}}
+      if(current()){this.items.set(items);if(!pendingCapture&&!this.creating()&&captureEpoch===this.captureEpoch){if(this.captureUnknown()&&this.error()==='Capturing snapshot failed. Your label is kept here. Check snapshots before trying again.')this.error.set('');this.captureUnknown.set(false);}if(!pendingRestore&&!this.restoring()&&epoch===this.restoreEpoch){if(this.restoreUnknown()&&this.error()==='Restoring snapshot failed. Check the project before trying again.')this.error.set('');this.restoreUnknown.set(false);}}
     } catch {
       if(current())this.listError.set(true);
     } finally {
@@ -106,9 +109,9 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
   async create(event: Event) {
     event.preventDefault();
     const label = this.label.trim();
-    if (!label || this.destroyed || this.creating() || this.restoring() || this.restoreUnknown()) return;
+    if (!label || this.destroyed || this.creating() || this.restoring() || this.restoreUnknown() || this.captureUnknown()) return;
     const draft=this.label,scope=this.projectGeneration,projectId=this.projectId;
-    this.creating.set(true);
+    ++this.captureEpoch;this.creating.set(true);
     this.error.set('');this.notice.set('');
     try {
       await this.api.createSnapshot(projectId, label);
@@ -118,6 +121,7 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
       await this.reload();
     } catch {
       if(!this.current(scope))return;
+      ++this.captureEpoch;this.captureUnknown.set(true);
       this.error.set('Capturing snapshot failed. Your label is kept here. Check snapshots before trying again.');
     } finally {
       if(this.current(scope))this.creating.set(false);
@@ -125,7 +129,7 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
   }
 
   restoreReady(s: SnapshotMeta) {
-    return !this.destroyed && !this.loading() && !this.listError() && !this.restoring() && !this.creating() && !this.restoreUnknown() && this.items().some(item=>item===s);
+    return !this.destroyed && !this.loading() && !this.listError() && !this.restoring() && !this.creating() && !this.restoreUnknown() && !this.captureUnknown() && this.items().some(item=>item===s);
   }
 
   async restore(s: SnapshotMeta) {

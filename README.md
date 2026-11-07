@@ -990,3 +990,10 @@ timestamps and counts, not translation text. Explicit false verification/apply f
 keep caller diagnostics distinct from verified remote sources, completed syncs and
 accepted baselines. Pending/failed/unread/departed views cannot download old records;
 a successful empty read can. Downloading does not share the private metadata file.
+
+An unconfirmed snapshot capture pauses both capture and restore for the current
+visit. Your label stays editable; inspect the list and successfully refresh snapshots
+before deciding whether to capture again. A failed list read keeps the pause, and a
+read begun before or during capture cannot clear a later unknown outcome. This does
+not cancel submitted requests, guarantee exactly-once capture, or persist the pause
+across reloads/devices. No capture or restore is automatically replayed.
