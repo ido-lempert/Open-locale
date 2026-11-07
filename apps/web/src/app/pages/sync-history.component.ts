@@ -143,7 +143,7 @@ import { ApiService, SyncPreviewRecord } from '../api.service';
         type="button"
         name="syncHistoryRefresh"
         [disabled]="loading()"
-        (click)="load(projectId)"
+        (click)="refresh()"
       >
         Refresh history
       </button>
@@ -156,6 +156,7 @@ export class SyncHistoryComponent implements OnInit, OnDestroy {
   loading = signal(true);
   error = signal('');
   private generation = 0;
+  private destroyed = false;
   private subscription?: Subscription;
   constructor(
     private route: ActivatedRoute,
@@ -167,10 +168,13 @@ export class SyncHistoryComponent implements OnInit, OnDestroy {
     });
   }
   ngOnDestroy() {
+    this.destroyed=true;
     this.generation++;
     this.subscription?.unsubscribe();
   }
+  refresh() {if(!this.destroyed&&!this.loading())void this.load(this.projectId);}
   async load(id: string) {
+    if(this.destroyed)return;
     const generation = ++this.generation;
     this.projectId = id;
     this.records.set([]);
@@ -179,10 +183,10 @@ export class SyncHistoryComponent implements OnInit, OnDestroy {
     try {
       const result = await this.api.listSyncPreviewRecords(id);
       if (generation === this.generation) this.records.set(result.records);
-    } catch (e) {
+    } catch {
       if (generation === this.generation)
         this.error.set(
-          e instanceof Error ? e.message : 'Could not load history',
+          'Diagnostic history unavailable. Project admin access is required. Try Refresh history or reload the page.',
         );
     } finally {
       if (generation === this.generation) this.loading.set(false);

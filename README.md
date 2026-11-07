@@ -953,3 +953,5 @@ Activity now offers Clear activity filters: action, actor and key reset together
 Snapshots now offers local label search with shown/loaded counts, no-match guidance and Clear. It searches only loaded labels, not snapshot contents or newer server changes; Refresh snapshots reads newer changes. Search keeps the capture label and existing restore guards, including an unconfirmed restore pause. Current rereads retain search; project visits reset it.
 
 Webhook deliveries now offers a local Recorded status filter (all, succeeded, failed), shown/loaded counts and Clear. It filters only the loaded journal, up to50 recent records, without reading newer records or sending/retrying anything. Success still means an HTTP success response, not event processing. Explicit refresh retains the status; visiting a webhook resets it.
+
+Diagnostic preview history now uses bounded failure guidance with its admin-access prerequisite instead of raw exception text. Refresh suppresses pending duplicate reads and captured handlers after leaving the screen. Existing stale-project guards and diagnostic-only/no-apply scope remain unchanged.

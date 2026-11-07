@@ -1339,3 +1339,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Local all/succeeded/failed filter on persisted success boolean, shown/loaded count/no-match/Clear. Full loaded set/scope untouched. Current read retains filter/new route resets it; pending/error/stale-read guards unchanged. HTTP-only/up-to50/read-only caveats retained, no send/retry/worker claim.
 - Unit4/browser8 actual persisted mixed outcomes, filter/Clear no account requests/writes, explicit reread/status, failed read remains failure/new webhook reset/no-match. Desktop/390px long-event wrapping pixels inspected/five reviews0432.
 - API265/31 web755/64 builds0 initial444.16kB; all API/isolated browsers0, syncSTAGED95+144239unique/nativeSTAGED116+111+19246total242unique inner/outer0. Final configs16/14/docs4-138routes/reaper4 all0. No failed/interrupted checks/API/schema/worker/coverage promotion.
+
+### Continuation 367 - Diagnostic history bounded read recovery
+- Fixed error with admin prerequisite replaces raw exception; explicit refresh guards duplicate/destroyed handlers and load refuses after destruction. Existing project-generation fences/diagnostic-only/no-apply caveats unchanged.
+- Unit4/browser6 before/after wording fix, actual failed/held/project-race/destroyed reads. Desktop/390px inspected/five reviews0433. Sync second143PASS1FAIL caught lost admin guidance; app fixed then web units/build/history browser and staged suites rerun. Earlier API/isolated browsers passed initial fixed-error wording, final stages cover final wording.
+- API265/31 web759/65 builds0; final syncSTAGED95+144239unique/nativeSTAGED116+111+19246total242unique inner/outer0. Final16/14/docs4-138routes/reaper4 all0. No interrupted tests/API/schema/worker/coverage promotion.
