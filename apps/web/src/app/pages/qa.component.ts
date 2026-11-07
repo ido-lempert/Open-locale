@@ -32,6 +32,9 @@ import { ApiService, BranchInfo, Project, QaIssue } from '../api.service';
         @if (!error()) { <button type="button" name="refreshQa" [disabled]="loading()" (click)="refresh()">Run checks again</button> }
         @if (!loading() && !error()) { <span class="muted" name="qaCount">{{ issues().length }} issue{{ issues().length === 1 ? '' : 's' }}</span> }
       </div>
+      <button type="button" name="downloadQa" [disabled]="loading() || !!error()" (click)="download()">Download findings (.json)</button>
+      <p class="muted" name="qaDownloadScope">Downloads the current loaded findings and project, branch and locale scope, not newer server changes or live editor drafts. The file can contain private project text. Downloading does not share it.</p>
+      @if (downloadNotice()) { <p role="status" name="qaDownloadNotice">{{ downloadNotice() }}</p> }
       @if (loading()) { <p role="status" name="qaLoading">Loading QA checks...</p> }
       @if (!loading() && !error()) {
       <div class="table-scroll"><table class="qa-table">
@@ -63,7 +66,7 @@ export class QaComponent implements OnInit, OnDestroy {
   localesError=signal(false);
   private localeGeneration=0;
   loading = signal(true);
-  error = signal('');
+  error = signal('');downloadNotice=signal('');
 
   constructor(private route: ActivatedRoute, private api: ApiService) {}
 
@@ -106,12 +109,24 @@ export class QaComponent implements OnInit, OnDestroy {
     if(this.destroyed)return;
     const generation=++this.generation,scope=this.projectGeneration,projectId=this.projectId,locale=this.locale()||undefined,branch=this.branch();
     const current=()=>!this.destroyed&&scope===this.projectGeneration&&generation===this.generation;
-    this.loading.set(true);this.error.set('');this.issues.set([]);
+    this.loading.set(true);this.error.set('');this.issues.set([]);this.downloadNotice.set('');
     try {
       const res=await this.api.runQa(projectId,locale,branch);
       if(current())this.issues.set(res.issues);
     } catch { if(current())this.error.set('QA checks unavailable. No findings are shown. Retry checks or reload this page.'); }
     finally { if(current())this.loading.set(false); }
+  }
+
+  download() {
+    if(this.destroyed||this.loading()||this.error())return;
+    let url:string|undefined;
+    try {
+      const content=JSON.stringify({schemaVersion:1,projectId:this.projectId,branch:this.branch(),locale:this.locale()||null,issues:this.issues()},null,2)+'\n';
+      url=URL.createObjectURL(new Blob([content],{type:'application/json;charset=utf-8'}));
+      const anchor=document.createElement('a');anchor.href=url;anchor.download='qa-findings.json';anchor.click();
+      this.downloadNotice.set('Download requested for the loaded findings. This does not confirm the file was saved or shared.');
+    } catch { this.downloadNotice.set('Download could not be started. Try again from the current findings.'); }
+    finally {if(url)URL.revokeObjectURL(url);}
   }
 
   emptyLabel() { return (this.locale() ? 'No QA issues found for ' + this.locale() : 'No QA issues found') + ' on branch ' + this.branch(); }
