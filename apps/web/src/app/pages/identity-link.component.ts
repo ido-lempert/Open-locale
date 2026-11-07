@@ -117,7 +117,7 @@ export class IdentityLinkComponent implements OnInit, OnDestroy {
     this.password = '';
   }
   async start() {
-    if (this.busy() || !this.password || !this.configured()) return;
+    if (!this.alive || this.loading() || this.busy() || !this.password || !this.configured()) return;
     this.busy.set(true);
     this.error.set('');
     const password = this.password;
@@ -133,6 +133,7 @@ export class IdentityLinkComponent implements OnInit, OnDestroy {
         const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
         challenge = btoa(String.fromCharCode(...digest)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
       }
+      if (!this.alive) return;
       const result = this.isSaml ? await this.api.startSamlLink(password, challenge) : await this.api.startOidcLink(password);
       if (!this.alive) return;
       const url = new URL(result.url);

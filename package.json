@@ -49,6 +49,7 @@
     "test:sync-browser": "node scripts/sync-browser-test.mjs",
     "test:visual": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false python3 scripts/run-reaped.py node scripts/e2e-visual.mjs",
     "test:oidc-link-browser": "node scripts/oidc-link-browser-test.mjs",
+    "test:identity-link-guards-browser": "node scripts/identity-link-guards-browser-test.mjs",
     "test:identities-guards-browser": "node scripts/identities-guards-browser-test.mjs",
     "test:saml-link-browser": "node scripts/saml-link-browser-test.mjs",
     "test:visual-stage-config": "node scripts/visual-stage-config-test.mjs",

@@ -957,3 +957,5 @@ Webhook deliveries now offers a local Recorded status filter (all, succeeded, fa
 Diagnostic preview history now uses bounded failure guidance with its admin-access prerequisite instead of raw exception text. Refresh suppresses pending duplicate reads and captured handlers after leaving the screen. Existing stale-project guards and diagnostic-only/no-apply scope remain unchanged.
 
 Linked identities now rejects stale or destroyed UI handlers and choices absent from the current successfully loaded identity list. Duplicate pending reads are suppressed. Valid explicit password-confirmed unlink and its session/API-token caveats remain unchanged; server ownership and password checks still enforce access.
+
+Identity linking now refuses captured start handlers after leaving the screen or while configuration is pending. SAML also rechecks the screen lifecycle after its asynchronous digest, before submitting a link-start request. This does not cancel already-submitted requests or undo a validated identity link.

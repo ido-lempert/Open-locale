@@ -1349,3 +1349,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Explicit destroyed guards and loaded-list/current-id readiness for choose/unlink; load suppresses pending duplicates. Existing password/selection/session/late-result behavior unchanged. No real identity/provider/account changes.
 - Unit5/browser7 local fixtures actual heldGET/no stale or destroyed DELETE/current valid unlink+signout. Desktop/390px confirmation inspected/five reviews0434.
 - API265/31 web764/66 builds0 initial444.16kB; all API/isolated browsers0, syncSTAGED95+144239unique/nativeSTAGED116+111+19246total242unique inner/outer0. Final16/14/docs4-138routes/reaper4 all0. No failed/interrupted checks/API/schema/worker/coverage promotion.
+
+### Continuation 369 - Identity linking start lifecycle
+- Alive/configuration-pending guard before start effects and alive fence after async SAML digest prevent departed handlers from submitting link starts. Existing submitted-request/provider-handoff caveats/normal flows unchanged, no real provider/account changes.
+- Unit5/browser5 local flags/deferred crypto/no-request/storage boundaries, real OIDC-link12/SAML-link55 regressions0. Pending pixels inspected/five reviews0435. Identities regression initial5PASS1FAIL missing confirmation DOM before typing; added selector wait then7/0, no app fix.
+- API265/31 web769/67 builds0; all API/isolated browsers final0, syncSTAGED95+144239unique/nativeSTAGED116+111+19246total242unique inner/outer0. Final16/14/docs4-138routes/reaper4 all0, no interrupted tests/API/schema/worker/coverage promotion.
