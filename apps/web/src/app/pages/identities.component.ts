@@ -59,10 +59,11 @@ export class IdentitiesComponent implements OnInit, OnDestroy {
   unlinkError = signal('');
   password = '';
   private generation = 0;
-  choose(id: string) { if (!this.busy()) { this.selected.set(id); this.password = ''; this.unlinkError.set(''); } }
-  cancel() { if (!this.busy()) { this.selected.set(''); this.password = ''; this.unlinkError.set(''); } }
+  private destroyed = false;
+  choose(id: string) { if (!this.destroyed && !this.loading() && !this.error() && !this.busy() && this.identities().some(identity=>identity.id===id)) { this.selected.set(id); this.password = ''; this.unlinkError.set(''); } }
+  cancel() { if (!this.destroyed && !this.busy()) { this.selected.set(''); this.password = ''; this.unlinkError.set(''); } }
   async unlink(id: string) {
-    if (this.busy() || this.selected() !== id || !this.password) return;
+    if (this.destroyed || this.loading() || !!this.error() || this.busy() || this.selected() !== id || !this.identities().some(identity=>identity.id===id) || !this.password) return;
     const generation = this.generation;
     const password = this.password; this.password = '';
     this.busy.set(true); this.unlinkError.set('');
@@ -77,9 +78,9 @@ export class IdentitiesComponent implements OnInit, OnDestroy {
   }
   constructor(private api: ApiService, private router: Router) {}
   ngOnInit() { void this.load(); }
-  ngOnDestroy() { this.generation++; this.password = ''; this.selected.set(''); this.identities.set([]); }
+  ngOnDestroy() { this.destroyed=true; this.generation++; this.password = ''; this.selected.set(''); this.identities.set([]); }
   async load() {
-    if (this.busy()) return;
+    if (this.destroyed || (this.loading() && this.generation>0) || this.busy()) return;
     this.cancel();
     const generation = ++this.generation;
     this.loading.set(true); this.error.set(''); this.identities.set([]);

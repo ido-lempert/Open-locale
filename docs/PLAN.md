@@ -1344,3 +1344,8 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Fixed error with admin prerequisite replaces raw exception; explicit refresh guards duplicate/destroyed handlers and load refuses after destruction. Existing project-generation fences/diagnostic-only/no-apply caveats unchanged.
 - Unit4/browser6 before/after wording fix, actual failed/held/project-race/destroyed reads. Desktop/390px inspected/five reviews0433. Sync second143PASS1FAIL caught lost admin guidance; app fixed then web units/build/history browser and staged suites rerun. Earlier API/isolated browsers passed initial fixed-error wording, final stages cover final wording.
 - API265/31 web759/65 builds0; final syncSTAGED95+144239unique/nativeSTAGED116+111+19246total242unique inner/outer0. Final16/14/docs4-138routes/reaper4 all0. No interrupted tests/API/schema/worker/coverage promotion.
+
+### Continuation 368 - Linked identity current-handler guards
+- Explicit destroyed guards and loaded-list/current-id readiness for choose/unlink; load suppresses pending duplicates. Existing password/selection/session/late-result behavior unchanged. No real identity/provider/account changes.
+- Unit5/browser7 local fixtures actual heldGET/no stale or destroyed DELETE/current valid unlink+signout. Desktop/390px confirmation inspected/five reviews0434.
+- API265/31 web764/66 builds0 initial444.16kB; all API/isolated browsers0, syncSTAGED95+144239unique/nativeSTAGED116+111+19246total242unique inner/outer0. Final16/14/docs4-138routes/reaper4 all0. No failed/interrupted checks/API/schema/worker/coverage promotion.

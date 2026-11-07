@@ -955,3 +955,5 @@ Snapshots now offers local label search with shown/loaded counts, no-match guida
 Webhook deliveries now offers a local Recorded status filter (all, succeeded, failed), shown/loaded counts and Clear. It filters only the loaded journal, up to50 recent records, without reading newer records or sending/retrying anything. Success still means an HTTP success response, not event processing. Explicit refresh retains the status; visiting a webhook resets it.
 
 Diagnostic preview history now uses bounded failure guidance with its admin-access prerequisite instead of raw exception text. Refresh suppresses pending duplicate reads and captured handlers after leaving the screen. Existing stale-project guards and diagnostic-only/no-apply scope remain unchanged.
+
+Linked identities now rejects stale or destroyed UI handlers and choices absent from the current successfully loaded identity list. Duplicate pending reads are suppressed. Valid explicit password-confirmed unlink and its session/API-token caveats remain unchanged; server ownership and password checks still enforce access.
