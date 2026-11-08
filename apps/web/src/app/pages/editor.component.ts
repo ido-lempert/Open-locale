@@ -237,6 +237,8 @@ interface CellState {
                 <tr class="history-row shots-row"><td [attr.colspan]="2 + p.locales.length">
                   @if (shotsMutating().includes(k.id)) { <p class="muted" role="status" name="shotsMutating">Screenshot change pending. Closing this pane does not cancel it.</p> }
                   @if (shotsMutationError().includes(k.id)) { <p class="error" role="alert" name="shotsMutationError">Screenshot change could not be confirmed. Check current screenshots before another change.</p><button name="checkCurrentShots" [disabled]="shotsMutating().includes(k.id) || shotsLoading()" (click)="readShots(k)">Check current screenshots</button> }
+                  @if (!shotsError() && !shotsMutationError().includes(k.id)) { <button type="button" name="refreshShots" (mousedown)="$event.preventDefault()" [disabled]="!shotsRefreshReady(k)" (click)="refreshShots(k)">Refresh screenshots</button> }
+                  <p class="muted" name="shotsRefreshScope" style="white-space:normal;max-width:40rem">Refresh reads this key's current screenshot list and image bytes only. It does not reload translations, discard local values or change screenshots. These separate reads are not one database snapshot.</p>
                   @if (shotsLoading()) { <p class="muted" role="status" name="shotsLoading">Loading screenshots...</p> }
                   @else if (shotsError()) { <p class="error" role="alert" name="shotsError">Screenshots unavailable. No images are shown.</p><button type="button" name="retryShots" (click)="readShots(k)">Retry screenshots</button> }
                   @else {
@@ -738,6 +740,10 @@ export class EditorComponent implements OnInit, OnDestroy {
     this.shotsFor.set(k.id);
     await this.readShots(k);
   }
+  shotsRefreshReady(k:Key) {
+    return this.canChangeShots(k) && this.keys().some(key=>key.id===k.id);
+  }
+  refreshShots(k:Key) { if(this.shotsRefreshReady(k))return this.readShots(k);return Promise.resolve(); }
   async readShots(k: Key) {
     if (this.destroyed || this.shotsFor() !== k.id) return;
     const generation = ++this.shotsGeneration, projectId = this.projectId, keyId = k.id;

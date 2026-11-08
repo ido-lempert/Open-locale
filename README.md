@@ -1202,3 +1202,10 @@ explain loaded versus currently available choices. Nothing is silently cleared
 or verified; refresh/retry reads to check newer state. Explicit changes still use
 the existing guarded API route. See
 [review0475](docs/reviews/0475-tasks-row-retained.md).
+
+An open healthy screenshot pane can refresh its selected key's current list and
+image bytes without reloading translations or discarding local values. Pointer
+refresh does not trigger translation blur autosave. Duplicate/pending/uncertain
+or departed refreshes are refused; errors and unconfirmed changes keep their
+separate recovery routes. See
+[review0476](docs/reviews/0476-editor-shots-refresh.md).
