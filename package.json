@@ -128,7 +128,8 @@
     "test:glossary-local-text-browser": "node scripts/glossary-local-text-browser-test.mjs",
     "test:glossary-reset-local-browser": "node scripts/glossary-reset-local-browser-test.mjs",
     "test:qa-search-browser": "node scripts/qa-search-browser-test.mjs",
-    "test:reports-project-download-browser": "node scripts/reports-project-download-browser-test.mjs"
+    "test:reports-project-download-browser": "node scripts/reports-project-download-browser-test.mjs",
+    "test:snapshots-kind-browser": "node scripts/snapshots-kind-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

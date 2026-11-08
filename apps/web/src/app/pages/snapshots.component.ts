@@ -28,12 +28,14 @@ import { ApiService, SnapshotMeta } from '../api.service';
       @if (listError()) { <p class="error" role="alert" name="snapshotListError">Snapshots unavailable. No snapshots are shown. Retry this read or reload the page.</p><button type="button" name="retrySnapshotList" (click)="void reload()">Retry snapshots</button> }
       @if (!listError()) { <button type="button" name="refreshSnapshots" [disabled]="loading() || creating() || restoring()" (click)="refresh()">Refresh snapshots</button> }
       <button type="button" name="downloadSnapshots" [disabled]="!downloadReady()" (click)="download()">Download loaded snapshot inventory (.json)</button>
-      <p class="muted" name="snapshotDownloadScope">Metadata for all loaded snapshots, regardless of label search. Includes private labels and IDs, not keys or translation values. This is not a restorable backup, complete history, newer server state or confirmation of a capture or restore. Downloading does not share or change the project.</p>
+      <p class="muted" name="snapshotDownloadScope">Metadata for all loaded snapshots, regardless of label search or kind filter. Includes private labels and IDs, not keys or translation values. This is not a restorable backup, complete history, newer server state or confirmation of a capture or restore. Downloading does not share or change the project.</p>
       @if(downloadNotice()){<p role="status" name="snapshotDownloadNotice">{{downloadNotice()}}</p>}
       <div class="toolbar" style="margin-top:1rem">
+        <label>Snapshot kind <select name="snapshotKind" [ngModel]="kind()" (ngModelChange)="setKind($event)"><option value="">all kinds</option><option value="manual">manual captures</option><option value="automatic">automatic snapshots</option></select></label>
+        <button type="button" name="clearSnapshotKind" [disabled]="!kind()" (click)="setKind('')">Clear kind filter</button>
         <label>Search loaded snapshots <input name="snapshotSearch" maxlength="200" placeholder="Label contains" [ngModel]="search()" (ngModelChange)="setSearch($event)" /></label>
         <button type="button" name="clearSnapshotSearch" [disabled]="!search()" (click)="setSearch('')">Clear search</button>
-        @if (!loading() && !listError()) { <span class="muted" role="status" name="snapshotSearchCount">{{ visibleItems().length }} of {{ items().length }} loaded snapshots shown. Search matches labels only. Refresh snapshots reads newer changes.</span> }
+        @if (!loading() && !listError()) { <span class="muted" role="status" name="snapshotSearchCount">{{ visibleItems().length }} of {{ items().length }} loaded snapshots shown. Search matches labels only and combines with recorded snapshot kind. Refresh snapshots reads newer changes.</span> }
       </div>
       @if (loading()) { <p role="status" name="snapshotListLoading">Loading snapshots...</p> }
       @if (!loading() && !listError()) { <ul class="snapshot-list">
@@ -46,7 +48,7 @@ import { ApiService, SnapshotMeta } from '../api.service';
             <button class="restore" [attr.aria-label]="'Restore snapshot ' + s.label" (click)="restore(s)" [disabled]="!restoreReady(s)">Restore</button>
           </li>
         } @empty {
-          <li class="muted" name="snapshotListEmpty">{{ search().trim() ? 'No loaded snapshots match this label search. Clear search to show all loaded snapshots.' : 'No snapshots yet' }}</li>
+          <li class="muted" name="snapshotListEmpty">{{ emptyLabel() }}</li>
         }
       </ul> }
     </main>
@@ -58,7 +60,10 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
   downloadNotice=signal('');
   items = signal<SnapshotMeta[]>([]);
   search=signal('');
-  visibleItems=computed(()=>{const query=this.search().trim().toLowerCase();return query?this.items().filter(item=>item.label.toLowerCase().includes(query)):this.items();});
+  kind=signal<''|'manual'|'automatic'>('');
+  setKind(value:string) {if(!this.destroyed&&(value===''||value==='manual'||value==='automatic'))this.kind.set(value);}
+  visibleItems=computed(()=>{const query=this.search().trim().toLowerCase(),kind=this.kind();if(!query&&!kind)return this.items();return this.items().filter(item=>(!query||item.label.toLowerCase().includes(query))&&(!kind||(kind==='automatic'?item.automatic===true:item.automatic===false)));});
+  emptyLabel() {if(this.kind())return 'No loaded snapshots match this kind filter and label search. Clear kind filter or search to show other loaded snapshots.';return this.search().trim()?'No loaded snapshots match this label search. Clear search to show all loaded snapshots.':'No snapshots yet';}
   setSearch(value:string) {if(!this.destroyed)this.search.set(value.slice(0,200));}
   label = '';
   listError = signal(false);
@@ -85,7 +90,7 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
   private initForProject(id:string) {
     if(this.destroyed)return;
     ++this.projectGeneration;++this.readGeneration;this.projectId=id;
-    this.loaded.set(false);this.downloadNotice.set('');this.items.set([]);this.search.set('');this.label='';this.listError.set(false);this.error.set('');this.notice.set('');
+    this.loaded.set(false);this.downloadNotice.set('');this.items.set([]);this.search.set('');this.kind.set('');this.label='';this.listError.set(false);this.error.set('');this.notice.set('');
     this.creating.set(false);this.restoring.set(false);this.restoreUnknown.set(false);++this.restoreEpoch;this.captureUnknown.set(false);++this.captureEpoch;void this.reload();
   }
   private current(scope:number) { return !this.destroyed&&scope===this.projectGeneration; }

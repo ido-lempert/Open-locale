@@ -1073,3 +1073,9 @@ private actor/assignee names/IDs, not task descriptions, translation values or
 branch reports. Either pending/failed/missing dashboard or departure blocks export;
 branch read failures stay independent. No refresh, sharing or newer-state claim.
 [review0457](docs/reviews/0457-reports-project-download.md).
+
+Snapshots can filter loaded metadata by recorded manual/automatic kind, combined
+with label search. Filtered-empty guidance and Clear controls do not read/change
+the project or clear capture/restore uncertainty. Refresh retains kind, project
+visit resets it; inventory download still includes every loaded snapshot.
+[review0458](docs/reviews/0458-snapshots-kind.md).
