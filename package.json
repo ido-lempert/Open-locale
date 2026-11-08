@@ -139,7 +139,8 @@
     "test:projects-draft-download-browser": "node scripts/projects-draft-download-browser-test.mjs",
     "test:projects-draft-reset-browser": "node scripts/projects-draft-reset-browser-test.mjs",
     "test:tasks-draft-reset-browser": "node scripts/tasks-draft-reset-browser-test.mjs",
-    "test:glossary-new-term-reset-browser": "node scripts/glossary-new-term-reset-browser-test.mjs"
+    "test:glossary-new-term-reset-browser": "node scripts/glossary-new-term-reset-browser-test.mjs",
+    "test:form-reset-edit-revert-browser": "node scripts/form-reset-edit-revert-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

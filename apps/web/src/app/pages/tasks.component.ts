@@ -42,27 +42,27 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
         @if (hasLocalDraft()) { <p role="status" name="taskLocalDraft">{{ localDraftLabel() }}</p> }
         <form class="task-form" [attr.aria-busy]="creating()" (ngSubmit)="create()">
           <input aria-label="Task title" placeholder="e.g. Translate checkout to Hebrew" maxlength="200"
-            [ngModel]="title()" (ngModelChange)="title.set($event)" name="taskTitle" required />
+            [ngModel]="title()" (ngModelChange)="formDraftEdited();title.set($event)" name="taskTitle" required />
           <input aria-label="Description (optional)" placeholder="Details, key names, context"
-            [ngModel]="description()" (ngModelChange)="description.set($event)" name="taskDescription" />
+            [ngModel]="description()" (ngModelChange)="formDraftEdited();description.set($event)" name="taskDescription" />
           <input aria-label="Due date (optional)" type="date"
-            [ngModel]="dueDate()" (ngModelChange)="dueDate.set($event)" name="taskDue" />
-          <select aria-label="Assignee (optional)" [ngModel]="assigneeId()" (ngModelChange)="assigneeId.set($event)" name="taskAssignee">
+            [ngModel]="dueDate()" (ngModelChange)="formDraftEdited();dueDate.set($event)" name="taskDue" />
+          <select aria-label="Assignee (optional)" [ngModel]="assigneeId()" (ngModelChange)="formDraftEdited();assigneeId.set($event)" name="taskAssignee">
             <option value="">unassigned</option>
             @for (m of members(); track m.id) { <option [value]="m.id">{{ m.displayName }}</option> }
             @for (g of groups(); track g.id) { <option [value]="'g:' + g.id">Group: {{ g.name }}</option> }
           </select>
-          <select aria-label="Depends on (optional)" [ngModel]="dependsOnId()" (ngModelChange)="dependsOnId.set($event)" name="taskDependsOn">
+          <select aria-label="Depends on (optional)" [ngModel]="dependsOnId()" (ngModelChange)="formDraftEdited();dependsOnId.set($event)" name="taskDependsOn">
             <option value="">no predecessor</option>
             @if (draftPredecessorMissing()) { <option [value]="dependsOnId()">Selected predecessor outside list</option> }
             @for (t of tasks(); track t.id) { <option [value]="t.id">{{ t.title }}</option> }
           </select>
           <select multiple aria-label="Locked keys (optional)" size="4"
-            [ngModel]="selectedKeyIds()" (ngModelChange)="selectedKeyIds.set($event)" name="taskLockKeys">
+            [ngModel]="selectedKeyIds()" (ngModelChange)="formDraftEdited();selectedKeyIds.set($event)" name="taskLockKeys">
             @for (k of keys(); track k.id) { <option [value]="k.id">{{ k.name }}</option> }
           </select>
           <label class="lock-toggle">
-            <input type="checkbox" [ngModel]="lockKeys()" (ngModelChange)="lockKeys.set($event)" name="taskLockToggle" />
+            <input type="checkbox" [ngModel]="lockKeys()" (ngModelChange)="formDraftEdited();lockKeys.set($event)" name="taskLockToggle" />
             lock the selected keys while this task is open
           </label>
           <span class="muted lock-scope-note">A lock blocks editor saves, status changes, MT fills, branch merges, snapshot restores and key deletion for everyone except the assignee and team admins. Imports skip locked keys and report them in the run; other keys still import.</span>
@@ -183,6 +183,7 @@ export class TasksComponent implements OnInit, OnDestroy {
   draftResetPending=computed(()=>this.draftResetSnapshot()!==null&&this.draftResetSnapshot()===this.draftJson()&&!this.creating());
   draftResetNotice=computed(()=>this.draftResetResult()===this.draftJson()?'Local new-task form discarded. No task, assignment or server lock was changed. Unconfirmed changes stay unconfirmed.':'');
   askDraftReset(){if(this.draftResetReady()){this.draftResetResult.set(null);this.draftResetSnapshot.set(this.draftJson());}}
+  formDraftEdited(){this.cancelDraftReset();this.draftResetResult.set(null);}
   cancelDraftReset(){this.draftResetSnapshot.set(null);}
   confirmDraftReset(){
     if(!this.draftResetReady()||!this.draftResetPending()){this.cancelDraftReset();return;}

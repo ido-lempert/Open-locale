@@ -16,9 +16,9 @@ import { ApiService, Project } from '../api.service';
       @if (createNotice(); as message) { <p role="status" name="projectCreateNotice">{{ message }}</p> }
       @if (hasProjectDraft()) { <p role="status" name="projectLocalDraft">{{ projectDraftLabel() }}</p> }
       <form class="create" [attr.aria-busy]="creating()" (ngSubmit)="create()">
-        <input placeholder="Project name" aria-label="Project name" [ngModel]="name()" (ngModelChange)="name.set($event)" name="name" required />
-        <input placeholder="slug" aria-label="Project slug" [ngModel]="slug()" (ngModelChange)="slug.set($event)" name="slug" required pattern="[a-z0-9-]+" />
-        <input placeholder="Locales (e.g. en, he, ar)" aria-label="Locales" [ngModel]="locales()" (ngModelChange)="locales.set($event)" name="locales" required />
+        <input placeholder="Project name" aria-label="Project name" [ngModel]="name()" (ngModelChange)="formDraftEdited();name.set($event)" name="name" required />
+        <input placeholder="slug" aria-label="Project slug" [ngModel]="slug()" (ngModelChange)="formDraftEdited();slug.set($event)" name="slug" required pattern="[a-z0-9-]+" />
+        <input placeholder="Locales (e.g. en, he, ar)" aria-label="Locales" [ngModel]="locales()" (ngModelChange)="formDraftEdited();locales.set($event)" name="locales" required />
         <button class="primary" type="submit" [disabled]="busy() || createUnknown()">New project</button>
         @if (creating()) { <span role="status" name="projectCreating">Creating project...</span> }
       </form>
@@ -126,6 +126,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
   draftResetPending=computed(()=>this.draftResetSnapshot()!==null&&this.draftResetSnapshot()===this.draftJson()&&!this.creating());
   draftResetNotice=computed(()=>this.draftResetResult()===this.draftJson()?'Local new-project form discarded. No project or security setting was changed. Unconfirmed creation stays unconfirmed.':'');
   askDraftReset(){if(this.draftResetReady()){this.draftResetResult.set(null);this.draftResetSnapshot.set(this.draftJson());}}
+  formDraftEdited(){this.cancelDraftReset();this.draftResetResult.set(null);}
   cancelDraftReset(){this.draftResetSnapshot.set(null);}
   confirmDraftReset(){
     if(!this.draftResetReady()||!this.draftResetPending()){this.cancelDraftReset();return;}

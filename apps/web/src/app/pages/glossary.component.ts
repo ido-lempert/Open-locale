@@ -31,11 +31,11 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
         @if (hasNewTermDraft()) { <p role="status" name="glossaryNewTermDraft">{{ newTermDraftLabel() }}</p> }
         <form class="task-form" [attr.aria-busy]="creating()" (ngSubmit)="create()">
           <input aria-label="Term" placeholder="e.g. checkout" maxlength="200" name="gTerm"
-            [ngModel]="term()" (ngModelChange)="draftDownloadNotice.set('');term.set($event)" required />
+            [ngModel]="term()" (ngModelChange)="formDraftEdited();draftDownloadNotice.set('');term.set($event)" required />
           <input aria-label="Notes (optional)" placeholder="Context for translators" name="gNotes"
-            [ngModel]="notes()" (ngModelChange)="draftDownloadNotice.set('');notes.set($event)" />
+            [ngModel]="notes()" (ngModelChange)="formDraftEdited();draftDownloadNotice.set('');notes.set($event)" />
           <label class="dnt"><input type="checkbox" name="gDnt"
-            [ngModel]="doNotTranslate()" (ngModelChange)="draftDownloadNotice.set('');doNotTranslate.set($event)" /> do not translate</label>
+            [ngModel]="doNotTranslate()" (ngModelChange)="formDraftEdited();draftDownloadNotice.set('');doNotTranslate.set($event)" /> do not translate</label>
           <button class="primary" type="submit" [disabled]="creating() || createUnknown()">Add term</button>
           @if (creating()) { <span role="status" name="glossaryCreating">Adding term...</span> }
         </form>
@@ -121,6 +121,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   newTermResetPending=computed(()=>this.newTermResetSnapshot()!==null&&this.newTermResetSnapshot()===this.newTermJson()&&!this.creating());
   newTermResetNotice=computed(()=>this.newTermResetResult()===this.newTermJson()?'Local new-term form discarded. Loaded translation drafts and server terms were not changed. Unconfirmed changes stay unconfirmed.':'');
   askNewTermReset(){if(this.newTermResetReady()){this.newTermResetResult.set(null);this.newTermResetSnapshot.set(this.newTermJson());}}
+  formDraftEdited(){this.cancelNewTermReset();this.newTermResetResult.set(null);}
   cancelNewTermReset(){this.newTermResetSnapshot.set(null);}
   confirmNewTermReset(){
     if(!this.newTermResetReady()||!this.newTermResetPending()){this.cancelNewTermReset();return;}

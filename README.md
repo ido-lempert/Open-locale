@@ -1153,3 +1153,10 @@ drafts and server terms stay untouched, including uncertain outcomes. Pointer
 reset controls preserve a focused translation input to avoid triggering blur
 save. Pending/stale/project/departed confirmation refuses. See
 [review0468](docs/reviews/0468-glossary-new-term-reset.md).
+
+
+Editing any local project/task/new-term form field cancels its pending discard
+confirmation, even after reverting to the exact prior value. A fresh discard
+requires a fresh prompt. Obsolete discard feedback does not return after a new
+draft is edited and emptied. See
+[review0469](docs/reviews/0469-form-reset-edit-revert.md).
