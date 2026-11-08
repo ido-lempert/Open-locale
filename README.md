@@ -1099,3 +1099,10 @@ read. Pending creation blocks backup. The file preserves uncertainty and does
 not import, create, retry, verify choices or confirm server state. Private form
 text stays local; loaded-task metadata export remains separate.
 [review0461](docs/reviews/0461-tasks-draft-download.md).
+
+The new-task form now explains when it contains local text or choices that are
+not automatically saved/restored. Pending creation instead distinguishes current
+editable fields from submitted data; uncertain creation stays unconfirmed with
+check-before-create guidance. Downloading a backup does not clear the draft or
+create a task. No storage, request or navigation behavior changed.
+[review0462](docs/reviews/0462-tasks-local-draft.md).

@@ -39,6 +39,7 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
         @if (groupsError()) { <p role="alert" class="error" name="taskGroupsError">Group options unavailable.</p><button type="button" name="retryTaskGroups" [disabled]="groupsLoading()" (click)="void loadGroups()">Retry group options</button> }
         @if (keysLoading()) { <p role="status" name="taskKeysLoading">Loading lockable key options...</p> }
         @if (keysError()) { <p role="alert" class="error" name="taskKeysError">Lockable key options unavailable.</p><button type="button" name="retryTaskKeys" [disabled]="keysLoading()" (click)="void loadKeys()">Retry lockable key options</button> }
+        @if (hasLocalDraft()) { <p role="status" name="taskLocalDraft">{{ localDraftLabel() }}</p> }
         <form class="task-form" [attr.aria-busy]="creating()" (ngSubmit)="create()">
           <input aria-label="Task title" placeholder="e.g. Translate checkout to Hebrew" maxlength="200"
             [ngModel]="title()" (ngModelChange)="title.set($event)" name="taskTitle" required />
@@ -152,6 +153,8 @@ export class TasksComponent implements OnInit, OnDestroy {
   assigneeId = signal('');
   dependsOnId = signal('');
 
+  hasLocalDraft=computed(()=>!!(this.title()||this.description()||this.dueDate()||this.assigneeId()||this.dependsOnId()||this.selectedKeyIds().length||this.lockKeys()));
+  localDraftLabel=computed(()=>this.creating()?'Creation is pending. Current form text and choices are kept here; they may differ from the submitted task. Do not submit again.':this.createUnknown()?'Current local form is kept here, but task creation is unconfirmed. Back up the form before leaving and check tasks before creating again.':'Current new-task form has local text or choices. It is not automatically saved or restored after leaving. Download the form before leaving to keep a copy; a copy does not create a task.');
   private draftDownloadResult=signal<{snapshot:string;message:string}|null>(null);
   draftDownloadNotice=computed(()=>{const result=this.draftDownloadResult();return result&&result.snapshot===this.draftJson()?result.message:'';});
   draftDownloadReady(){return !this.destroyed&&!!this.projectId&&!this.creating();}
