@@ -1173,3 +1173,10 @@ of glossary reads and row saves, but not while adding a term. It excludes loaded
 terms and translations, does not add/retry/import/confirm anything, and does not
 share the file. Existing all-loaded glossary draft download remains separate. See
 [review0471](docs/reviews/0471-glossary-new-term-download.md).
+
+The new-task form keeps retained assignee and lockable-key selections visible
+when current option reads omit them. Generic unavailable labels do not verify
+availability or permission; review or clear them before creating. Fresh options
+restore real labels, and the local form download keeps exact unverified IDs.
+No task/assignment/lock behavior changes. See
+[review0472](docs/reviews/0472-tasks-retained-options.md).

@@ -49,6 +49,7 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
             [ngModel]="dueDate()" (ngModelChange)="formDraftEdited();dueDate.set($event)" name="taskDue" />
           <select aria-label="Assignee (optional)" [ngModel]="assigneeId()" (ngModelChange)="formDraftEdited();assigneeId.set($event)" name="taskAssignee">
             <option value="">unassigned</option>
+            @if (draftAssigneeMissing()) { <option [value]="assigneeId()">Selected assignee unavailable</option> }
             @for (m of members(); track m.id) { <option [value]="m.id">{{ m.displayName }}</option> }
             @for (g of groups(); track g.id) { <option [value]="'g:' + g.id">Group: {{ g.name }}</option> }
           </select>
@@ -59,8 +60,10 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
           </select>
           <select multiple aria-label="Locked keys (optional)" size="4"
             [ngModel]="selectedKeyIds()" (ngModelChange)="formDraftEdited();selectedKeyIds.set($event)" name="taskLockKeys">
+            @for (id of draftMissingKeyIds(); track id) { <option [value]="id">Selected key unavailable</option> }
             @for (k of keys(); track k.id) { <option [value]="k.id">{{ k.name }}</option> }
           </select>
+          @if (draftAssigneeMissing() || draftMissingKeyIds().length) { <p class="muted" name="taskRetainedChoices">Some selected IDs are outside the loaded options. They are retained in this local form, not verified as available or allowed. Review or clear the selections before creating. Download preserves the selected IDs, not their validity.</p> }
           <label class="lock-toggle">
             <input type="checkbox" [ngModel]="lockKeys()" (ngModelChange)="formDraftEdited();lockKeys.set($event)" name="taskLockToggle" />
             lock the selected keys while this task is open
@@ -278,6 +281,11 @@ export class TasksComponent implements OnInit, OnDestroy {
     void this.fetch();
   }
 
+  draftAssigneeMissing=computed(()=>{
+    const value=this.assigneeId();
+    return !!value&&(value.startsWith('g:')?!this.groups().some(g=>'g:'+g.id===value):!this.members().some(m=>m.id===value));
+  });
+  draftMissingKeyIds=computed(()=>[...new Set(this.selectedKeyIds())].filter(id=>!this.keys().some(k=>k.id===id)));
   draftPredecessorMissing() { return !!this.dependsOnId()&&!this.tasks().some(t=>t.id===this.dependsOnId()); }
 
   hasFilters() { return !!(this.statusFilter()||this.mineFilter()==='me'); }
