@@ -57,11 +57,17 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
       @if (!listError()) { <button type="button" name="refreshGlossaryList" [disabled]="loading() || mutationsPending()" (click)="refresh()">Refresh glossary</button><p class="muted" name="glossaryRefreshHint">Refresh replaces translation fields with server values. Your new-term draft stays here.</p> }
       @if(localReset();as pending){<section role="region" aria-label="Confirm local text reset" name="glossaryResetConfirmation"><p>Discard unsaved local translation text for "{{pending.row.term}}"? This restores the last loaded or confirmed values in this page only. It does not read newer server values or undo server changes. Copy or download the local draft first if you need it.</p><button type="button" name="confirmGlossaryLocalReset" (pointerdown)="$event.preventDefault()" (click)="confirmLocalReset()">Discard local translation text</button><button type="button" name="cancelGlossaryLocalReset" (pointerdown)="$event.preventDefault()" (click)="localReset.set(null)">Keep local text</button></section>}
       <button type="button" name="downloadGlossaryDraft" (pointerdown)="$event.preventDefault()" [disabled]="!draftDownloadReady()" (click)="downloadDraft()">Download local glossary draft (.json)</button>
-      <p class="muted" name="glossaryDraftScope">Backup of all loaded local terms, notes and translation text, regardless of search, plus your new-term form. Includes private content and may include unsaved or unconfirmed changes. For reference only, not an import or proof of server state. Copy text separately while loading or saving. Downloading does not share or save changes to the project.</p>
+      <p class="muted" name="glossaryDraftScope">Backup of all loaded local terms, notes and translation text, regardless of search or attention filter, plus your new-term form. Includes private content and may include unsaved or unconfirmed changes. For reference only, not an import or proof of server state. Copy text separately while loading or saving. Downloading does not share or save changes to the project.</p>
       @if(draftDownloadNotice()){<p role="status" name="glossaryDraftNotice">{{draftDownloadNotice()}}</p>}
+      <div class="toolbar" role="group" aria-label="Filter glossary attention" name="glossaryAttentionFilters">
+        <button type="button" name="glossaryAttentionAll" (pointerdown)="$event.preventDefault()" [class.primary]="attention()==='all'" [attr.aria-pressed]="attention()==='all'" (click)="setAttention('all')">All loaded terms</button>
+        <button type="button" name="glossaryAttentionSave" (pointerdown)="$event.preventDefault()" [class.primary]="attention()==='save'" [attr.aria-pressed]="attention()==='save'" (click)="setAttention('save')">Save unconfirmed</button>
+        <button type="button" name="glossaryAttentionDelete" (pointerdown)="$event.preventDefault()" [class.primary]="attention()==='delete'" [attr.aria-pressed]="attention()==='delete'" (click)="setAttention('delete')">Delete unconfirmed</button>
+      </div>
+      <p class="muted" name="glossaryAttentionScope">Attention filters show only outcomes recorded as unconfirmed in this page, combined with text search. They do not read current server state, retry requests or clear uncertainty. Copy or download local drafts before refreshing to recover.</p>
       <label>Find in loaded terms, notes or translations <input type="search" name="glossarySearch" maxlength="200" [ngModel]="query()" (ngModelChange)="search($event)" /></label>
       <button type="button" name="clearGlossarySearch" [disabled]="!query()" (click)="search('')">Clear search</button>
-      @if (!loading() && !listError()) { <p class="muted" role="status" name="glossaryMatches">{{ visibleTerms().length }} of {{ terms().length }} terms match. Search is a literal, case-insensitive substring in loaded rows, including local translation text. It does not read newer server changes.</p> }
+      @if (!loading() && !listError()) { <p class="muted" role="status" name="glossaryMatches">{{ visibleTerms().length }} of {{ terms().length }} terms match. Text search is a literal, case-insensitive substring in loaded rows, including local translation text, combined with the attention filter. It does not read newer server changes.</p> }
       @if (!listError()) { <table class="glossary-table">
         <thead><tr><th>Term</th>@for (l of locales(); track l) { <th>{{ l }}</th> }<th>Notes</th><th></th></tr></thead>
         <tbody>
@@ -71,14 +77,14 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
               @for (l of locales(); track l) {
                 <td [attr.data-label]="l">
                   <input [readOnly]="unknownSaveIds().includes(t.id)" [disabled]="rowPending(t.id) && !unknownSaveIds().includes(t.id)" [attr.aria-label]="t.term + ' in ' + l" [ngModel]="t.translations[l] ?? ''"
-                    (ngModelChange)="setTranslation(t, l, $event)" (blur)="saveTranslations(t)" />
+                    (ngModelChange)="setTranslation(t, l, $event)" (blur)="translationBlur(t)" />
                 </td>
               }
               <td class="muted" data-label="Notes">{{ t.notes }}</td>
               <td data-label="Actions">@if (localTextChanged(t)) { <span role="status" name="glossaryLocalDraft">Unsaved local text. Leave the translation field to save, or copy/download the local draft before refreshing.</span><button type="button" name="resetGlossaryLocalText" (pointerdown)="$event.preventDefault()" (click)="resetLocalText(t)">Reset local translation text</button> }@if (unknownSaveIds().includes(t.id)) { <span class="error" role="alert" name="glossarySaveUnknown">Save unconfirmed. Copy text before Refresh.</span> }@if (unknownDeleteIds().includes(t.id)) { <span class="error" role="alert" name="glossaryDeleteUnknown">Delete unconfirmed. Refresh required.</span> }@if (savingIds().includes(t.id)) { <span role="status" name="glossarySaving">Saving translation...</span> }@if (deletingIds().includes(t.id)) { <span role="status" name="glossaryDeleting">Deleting term...</span> }<button [disabled]="rowPending(t.id)" class="danger" [attr.aria-label]="'Delete term ' + t.term" (click)="remove(t)">&times;</button></td>
             </tr>
           } @empty {
-            @if (!loading() && !listError()) { <tr name="glossaryListEmpty"><td colspan="9" class="muted">{{ query() ? 'No loaded terms match this search. Clear search to show all loaded terms.' : 'No glossary terms yet' }}</td></tr> }
+            @if (!loading() && !listError()) { <tr name="glossaryListEmpty"><td colspan="9" class="muted">{{ query() || attention()!=='all' ? 'No loaded terms match these filters. Clear search and choose All loaded terms to show all loaded terms.' : 'No glossary terms yet' }}</td></tr> }
           }
         </tbody>
       </table> }
@@ -91,7 +97,9 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   loaded=signal(false);
   terms = signal<GlossaryTermItem[]>([]);
   query=signal('');
-  visibleTerms=computed(()=>{const query=this.query().toLowerCase();return query?this.terms().filter(t=>[t.term,t.notes??'',...Object.values(t.translations)].some(value=>value.toLowerCase().includes(query))):this.terms();});
+  attention=signal<'all'|'save'|'delete'>('all');
+  setAttention(value:string){if(!this.destroyed&&['all','save','delete'].includes(value))this.attention.set(value as 'all'|'save'|'delete');}
+  visibleTerms=computed(()=>{const query=this.query().toLowerCase(),attention=this.attention();if(!query&&attention==='all')return this.terms();return this.terms().filter(t=>(attention==='all'||(attention==='save'?this.unknownSaveIds():this.unknownDeleteIds()).includes(t.id))&&(!query||[t.term,t.notes??'',...Object.values(t.translations)].some(value=>value.toLowerCase().includes(query))));});
   search(query:string) {if(!this.destroyed)this.query.set(query.slice(0,200));}
   locales = signal<string[]>([]);
   localesError=signal(false);
@@ -156,7 +164,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
     ++this.projectGeneration;
     this.cancelNewTermReset();this.newTermResetResult.set(null);this.newTermDownloadResult.set(null);this.projectId=pid;++this.fetchSeq;this.savedTranslations.clear();
     this.localReset.set(null);this.loaded.set(false);this.draftDownloadNotice.set('');this.terms.set([]);this.locales.set([]);this.error.set('');this.createNotice.set('');this.listError.set(false);this.creating.set(false);this.deletingIds.set([]);this.savingIds.set([]);this.unknownDeleteIds.set([]);this.unknownSaveIds.set([]);++this.saveEpoch;this.createUnknown.set(false);++this.createEpoch;
-    this.term.set('');this.notes.set('');this.doNotTranslate.set(false);this.query.set('');
+    this.term.set('');this.notes.set('');this.doNotTranslate.set(false);this.query.set('');this.attention.set('all');
     void this.fetch();
     this.localesLoading.set(false);this.localesError.set(false);
     void this.loadLocales();
@@ -256,6 +264,8 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   }
 
   rowPending(id:string) {return this.deletingIds().includes(id)||this.savingIds().includes(id)||this.unknownDeleteIds().includes(id)||this.unknownSaveIds().includes(id);}
+
+  translationBlur(t:GlossaryTermItem) {if(this.visibleTerms().some(row=>row.id===t.id))void this.saveTranslations(t);}
 
   async saveTranslations(t: GlossaryTermItem) {
     if(this.destroyed||this.rowPending(t.id))return;

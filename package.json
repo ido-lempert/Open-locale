@@ -143,7 +143,8 @@
     "test:form-reset-edit-revert-browser": "node scripts/form-reset-edit-revert-browser-test.mjs",
     "test:form-backup-edit-revert-browser": "node scripts/form-backup-edit-revert-browser-test.mjs",
     "test:glossary-new-term-download-browser": "node scripts/glossary-new-term-download-browser-test.mjs",
-    "test:tasks-retained-options-browser": "node scripts/tasks-retained-options-browser-test.mjs"
+    "test:tasks-retained-options-browser": "node scripts/tasks-retained-options-browser-test.mjs",
+    "test:glossary-attention-browser": "node scripts/glossary-attention-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

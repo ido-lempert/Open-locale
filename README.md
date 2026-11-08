@@ -1180,3 +1180,11 @@ availability or permission; review or clear them before creating. Fresh options
 restore real labels, and the local form download keeps exact unverified IDs.
 No task/assignment/lock behavior changes. See
 [review0472](docs/reviews/0472-tasks-retained-options.md).
+
+Glossary attention buttons filter loaded rows to recorded unconfirmed save or
+delete outcomes, intersecting text search. They do not read/retry/recover server
+state or discard hidden local text. All loaded terms restores the full view;
+explicit refresh owns recovery. Combined glossary JSON still includes all loaded
+rows regardless of both filters. Hiding a focused changed row does not autosave
+it; visible ordinary blur keeps autosave. See
+[review0473](docs/reviews/0473-glossary-attention.md).
