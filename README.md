@@ -1066,3 +1066,10 @@ stay distinct from rerunning checks. Download still includes all loaded findings
 regardless of local filters, not newer server changes or editor drafts. Empty
 feedback wraps on narrow screens.
 [review0456](docs/reviews/0456-qa-search.md).
+
+Reports can separately download loaded whole-project usage/task dashboard figures
+as JSON, with each captured window/cutoff and a separate-read warning. Includes
+private actor/assignee names/IDs, not task descriptions, translation values or
+branch reports. Either pending/failed/missing dashboard or departure blocks export;
+branch read failures stay independent. No refresh, sharing or newer-state claim.
+[review0457](docs/reviews/0457-reports-project-download.md).

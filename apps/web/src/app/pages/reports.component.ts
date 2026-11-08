@@ -81,6 +81,9 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
       }
 
       <p class="muted" name="projectDashboardScope">Usage and tasks cover the whole project. The branch selector filters progress and quality only.</p>
+      <button type="button" name="downloadProjectReports" [disabled]="!projectDownloadReady()" (click)="downloadProject()">Download loaded project dashboards (.json)</button>
+      <p class="muted" name="projectDownloadScope">Downloads loaded usage and task dashboard figures for the whole project, regardless of the branch selector. Includes private actor/assignee names and IDs, not translation values, task descriptions or branch reports. Keeps each captured window and cutoff. Separate reads are not one database snapshot or newer server state. Downloading does not share or change the project.</p>
+      @if(projectDownloadNotice()){<p role="status" name="projectDownloadNotice">{{projectDownloadNotice()}}</p>}
       <h2>Usage <span class="muted">last {{ usage()?.days ?? usageDays() }} days</span></h2>
       <label>Usage window <select name="usageDays" aria-label="Usage window" [ngModel]="usageDays()" (ngModelChange)="usageDays.set(+$event); void loadUsage()"><option [ngValue]="7">7 days</option><option [ngValue]="30">30 days</option><option [ngValue]="90">90 days</option></select></label>
       @if (!usageError()) { <button type="button" name="refreshUsageReport" [disabled]="usageLoading()" (click)="refreshUsage()">Refresh usage</button> }
@@ -132,7 +135,7 @@ export class ReportsComponent implements OnInit, OnDestroy {
   branchListLoading=signal(false);
   branch = signal('main');
   statusColumns = signal<string[]>([]);
-  error = signal('');downloadNotice=signal('');
+  error = signal('');downloadNotice=signal('');projectDownloadNotice=signal('');
   branchLoading=signal(false);
   usageError=signal(false);
   taskReportError=signal(false);
@@ -157,7 +160,7 @@ export class ReportsComponent implements OnInit, OnDestroy {
     if(this.destroyed)return;
     ++this.projectGeneration;++this.generation;this.projectId=projectId;
     this.usageDays.set(30);++this.usageGeneration;++this.taskGeneration;this.branch.set('main');this.branches.set([]);this.branchListError.set(false);this.branchListLoading.set(true);this.report.set(null);this.quality.set(null);
-    this.usage.set(null);this.taskReport.set(null);this.statusColumns.set([]);this.error.set('');this.downloadNotice.set('');this.branchLoading.set(true);this.usageError.set(false);this.taskReportError.set(false);this.dashboardsLoading.set(true);this.usageLoading.set(true);this.tasksLoading.set(true);
+    this.usage.set(null);this.taskReport.set(null);this.statusColumns.set([]);this.error.set('');this.downloadNotice.set('');this.projectDownloadNotice.set('');this.branchLoading.set(true);this.usageError.set(false);this.taskReportError.set(false);this.dashboardsLoading.set(true);this.usageLoading.set(true);this.tasksLoading.set(true);
     await Promise.all([this.loadBranches(),this.fetch(),this.ngOnInitDashboards()]);
   }
 
@@ -208,11 +211,27 @@ export class ReportsComponent implements OnInit, OnDestroy {
     finally {if(url)URL.revokeObjectURL(url);}
   }
 
+  projectDownloadReady() {return !this.destroyed&&!this.usageLoading()&&!this.tasksLoading()&&!this.usageError()&&!this.taskReportError()&&!!this.usage()&&!!this.taskReport();}
+  downloadProject() {
+    if(!this.projectDownloadReady())return;
+    const u=this.usage()!,t=this.taskReport()!;
+    let url:string|undefined;
+    try {
+      const content=JSON.stringify({schemaVersion:1,projectId:this.projectId,scope:'loaded-project-dashboards',singleDatabaseSnapshot:false,
+        usage:{days:u.days,since:u.since,asOf:u.asOf,timezone:u.timezone,totalEvents:u.totalEvents,activeKeys:u.activeKeys,byAction:{...u.byAction},topActors:u.topActors.map(a=>({actorId:a.actorId,name:a.name,count:a.count}))},
+        tasks:{asOf:t.asOf,dueSoonThrough:t.dueSoonThrough,total:t.total,byStatus:{...t.byStatus},overdue:t.overdue,dueSoon:t.dueSoon,perAssignee:t.perAssignee.map(a=>({kind:a.kind,assigneeId:a.assigneeId,assigneeGroupId:a.assigneeGroupId,name:a.name,count:a.count}))}},null,2)+'\n';
+      url=URL.createObjectURL(new Blob([content],{type:'application/json;charset=utf-8'}));
+      const anchor=document.createElement('a');anchor.href=url;anchor.download='project-dashboards.json';anchor.click();
+      this.projectDownloadNotice.set('Download requested for the loaded project dashboards. This does not confirm the file was saved or shared.');
+    } catch {this.projectDownloadNotice.set('Download could not be started. Try again from the current project dashboards.');}
+    finally {if(url)URL.revokeObjectURL(url);}
+  }
+
   async loadUsage() {
     if(this.destroyed)return;
     const generation=++this.usageGeneration,scope=this.projectGeneration,projectId=this.projectId,days=this.usageDays();
     const current=()=>!this.destroyed&&scope===this.projectGeneration&&generation===this.usageGeneration;
-    this.usage.set(null);this.usageError.set(false);this.usageLoading.set(true);this.dashboardsLoading.set(true);
+    this.projectDownloadNotice.set('');this.usage.set(null);this.usageError.set(false);this.usageLoading.set(true);this.dashboardsLoading.set(true);
     try { const value=await this.api.getUsage(projectId,days);if(current())this.usage.set(value); }
     catch { if(current())this.usageError.set(true); }
     finally { if(current()){this.usageLoading.set(false);this.dashboardsLoading.set(this.tasksLoading());} }
@@ -222,7 +241,7 @@ export class ReportsComponent implements OnInit, OnDestroy {
     if(this.destroyed)return;
     const generation=++this.taskGeneration,scope=this.projectGeneration,projectId=this.projectId;
     const current=()=>!this.destroyed&&scope===this.projectGeneration&&generation===this.taskGeneration;
-    this.taskReport.set(null);this.taskReportError.set(false);this.tasksLoading.set(true);this.dashboardsLoading.set(true);
+    this.projectDownloadNotice.set('');this.taskReport.set(null);this.taskReportError.set(false);this.tasksLoading.set(true);this.dashboardsLoading.set(true);
     try { const value=await this.api.getTaskReport(projectId);if(current())this.taskReport.set(value); }
     catch { if(current())this.taskReportError.set(true); }
     finally { if(current()){this.tasksLoading.set(false);this.dashboardsLoading.set(this.usageLoading());} }
