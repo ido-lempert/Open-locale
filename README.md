@@ -1195,3 +1195,10 @@ guidance distinguish the local view from full totals. Workflow columns, usage,
 tasks and complete JSON downloads remain unchanged. Refresh/branch change keeps
 the query; project change clears it. See
 [review0474](docs/reviews/0474-reports-locale-search.md).
+
+Loaded task rows retain selected assignment and predecessor IDs when independent
+options or server task filters omit them. Short fallback labels and a row notice
+explain loaded versus currently available choices. Nothing is silently cleared
+or verified; refresh/retry reads to check newer state. Explicit changes still use
+the existing guarded API route. See
+[review0475](docs/reviews/0475-tasks-row-retained.md).

@@ -145,7 +145,8 @@
     "test:glossary-new-term-download-browser": "node scripts/glossary-new-term-download-browser-test.mjs",
     "test:tasks-retained-options-browser": "node scripts/tasks-retained-options-browser-test.mjs",
     "test:glossary-attention-browser": "node scripts/glossary-attention-browser-test.mjs",
-    "test:reports-locale-search-browser": "node scripts/reports-locale-search-browser-test.mjs"
+    "test:reports-locale-search-browser": "node scripts/reports-locale-search-browser-test.mjs",
+    "test:tasks-row-retained-browser": "node scripts/tasks-row-retained-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

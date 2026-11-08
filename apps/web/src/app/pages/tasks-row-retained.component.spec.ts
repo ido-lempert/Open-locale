@@ -1,0 +1,10 @@
+import { TasksComponent } from './tasks.component';
+const make=()=>new TasksComponent({} as any,{} as any);
+describe('loaded task row retained choices',()=>{
+ it('unassigned and no predecessor do not add fallbacks',()=>{const c=make(),t={id:'t',assignee:null,assigneeGroup:null,dependsOn:null} as any;expect(c.rowAssigneeMissing(t)).toBe(false);expect(c.rowPredecessorMissing(t)).toBe(false);});
+ it('missing member retains current row value without mutating loaded row',()=>{const c=make(),t={id:'t',assignee:{id:'m'},assigneeGroup:null} as any;c.tasks.set([t]);expect(c.rowAssigneeMissing(t)).toBe(true);expect(c.assigneeValue(t)).toBe('m');c.members.set([{id:'m'}] as any);expect(c.rowAssigneeMissing(t)).toBe(false);expect(c.tasks()[0]).toBe(t);});
+ it('group namespace is not satisfied by member ID and restores with exact group',()=>{const c=make(),t={assigneeGroup:{id:'g'},assignee:null} as any;c.members.set([{id:'g'},{id:'g:g'}] as any);expect(c.rowAssigneeMissing(t)).toBe(true);expect(c.assigneeValue(t)).toBe('g:g');c.groups.set([{id:'g'}] as any);expect(c.rowAssigneeMissing(t)).toBe(false);});
+ it('predecessor outside filtered task list stays visible, current list removes fallback',()=>{const c=make(),t={id:'t',dependsOn:{id:'p'}} as any;c.tasks.set([t]);expect(c.rowPredecessorMissing(t)).toBe(true);c.tasks.set([t,{id:'p'}] as any);expect(c.rowPredecessorMissing(t)).toBe(false);expect(t.dependsOn.id).toBe('p');});
+ it('self predecessor is never represented as an ordinary valid option',()=>{const c=make(),t={id:'t',dependsOn:{id:'t'}} as any;c.tasks.set([t]);expect(c.rowPredecessorMissing(t)).toBe(true);});
+ it('missing options neither enable paused row nor change assignee patch semantics',()=>{const c=make(),t={id:'t',assignee:{id:'m'},assigneeGroup:null,dependsOn:{id:'p'}} as any;c.tasks.set([t]);c.loading.set(false);expect(c.rowReady(t)).toBe(true);c.actionUnknown.set(true);expect(c.rowReady(t)).toBe(false);expect(c.rowAssigneeMissing(t)).toBe(true);expect(c.assigneePatch('g:g')).toEqual({assigneeGroupId:'g'});});
+});

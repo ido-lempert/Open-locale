@@ -103,6 +103,7 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
                 <select [disabled]="!rowReady(t)" class="depends-select" [attr.aria-label]="'Depends on for ' + t.title" [ngModel]="t.dependsOn?.id ?? ''"
                   (change)="update(t, { dependsOnId: $any($event.target).value || null }, $any($event.target), t.dependsOn?.id ?? '')">
                   <option value="">no predecessor</option>
+                  @if (rowPredecessorMissing(t)) { <option [value]="t.dependsOn!.id">Loaded predecessor</option> }
                   @for (p of tasks(); track p.id) { @if (p.id !== t.id) { <option [value]="p.id">{{ p.title }} ({{ p.status.toLowerCase().replace('_', ' ') }})</option> } }
                 </select>
               </span>
@@ -117,9 +118,11 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
             <select [disabled]="!rowReady(t)" [attr.aria-label]="'Assignee for ' + t.title" [ngModel]="assigneeValue(t)"
               (change)="update(t, assigneePatch($any($event.target).value), $any($event.target), assigneeValue(t))">
               <option value="">unassigned</option>
+              @if (rowAssigneeMissing(t)) { <option [value]="assigneeValue(t)">Loaded assignee outside options</option> }
               @for (m of members(); track m.id) { <option [value]="m.id">{{ m.displayName }}</option> }
               @for (g of groups(); track g.id) { <option [value]="'g:' + g.id">Group: {{ g.name }}</option> }
             </select>
+            @if (rowAssigneeMissing(t) || rowPredecessorMissing(t)) { <p class="muted" name="taskRowRetainedChoices">Selections from this loaded task are outside the loaded options. They are not cleared or verified as currently available or allowed. Refresh tasks or retry option reads to check newer state; this notice does not change the task.</p> }
             @if (t.dueDate) { <time class="muted">due {{ t.dueDate | date:'mediumDate' }}</time> }
             @if (updatingIds().includes(t.id)) { <span role="status" name="taskUpdating">Updating task...</span> }
             @if (deletingIds().includes(t.id)) { <span role="status" name="taskDeleting">Deleting task...</span> }
@@ -332,6 +335,11 @@ export class TasksComponent implements OnInit, OnDestroy {
     }
   }
 
+  rowAssigneeMissing(t:TaskItem) {
+    if(t.assigneeGroup)return !this.groups().some(g=>g.id===t.assigneeGroup!.id);
+    return !!t.assignee&&!this.members().some(m=>m.id===t.assignee!.id);
+  }
+  rowPredecessorMissing(t:TaskItem) { return !!t.dependsOn&&!this.tasks().some(p=>p.id!==t.id&&p.id===t.dependsOn!.id); }
   assigneeValue(t: TaskItem): string {
     return t.assignee?.id ?? (t.assigneeGroup ? 'g:' + t.assigneeGroup.id : '');
   }
