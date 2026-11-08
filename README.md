@@ -1106,3 +1106,11 @@ editable fields from submitted data; uncertain creation stays unconfirmed with
 check-before-create guidance. Downloading a backup does not clear the draft or
 create a task. No storage, request or navigation behavior changed.
 [review0462](docs/reviews/0462-tasks-local-draft.md).
+
+Glossary new-term form feedback now distinguishes local text/choices from pending
+or unconfirmed creation. Normal guidance names no automatic save/restoration and
+suggests copying or downloading the local glossary draft when available. Pending
+add distinguishes current edited fields from submitted data; unconfirmed add
+still requires checking the glossary before adding again. Loaded-row translation
+draft feedback and save behavior stay separate.
+[review0463](docs/reviews/0463-glossary-new-term-draft.md).

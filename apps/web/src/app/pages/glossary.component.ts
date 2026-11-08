@@ -28,6 +28,7 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
       @if (error(); as e) { @if (!createUnknown() || e !== 'Adding term failed. Check the glossary before trying again.') { <p class="error" role="alert">{{ e }}</p> } }
       <section class="panel">
         <h2>New term</h2>
+        @if (hasNewTermDraft()) { <p role="status" name="glossaryNewTermDraft">{{ newTermDraftLabel() }}</p> }
         <form class="task-form" [attr.aria-busy]="creating()" (ngSubmit)="create()">
           <input aria-label="Term" placeholder="e.g. checkout" maxlength="200" name="gTerm"
             [ngModel]="term()" (ngModelChange)="draftDownloadNotice.set('');term.set($event)" required />
@@ -100,6 +101,8 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   private projectGeneration=0;
   private routeSub?:Subscription;
   private destroyed=false;
+  hasNewTermDraft=computed(()=>!!(this.term()||this.notes()||this.doNotTranslate()));
+  newTermDraftLabel=computed(()=>this.creating()?'Adding a term is pending. Current new-term fields are kept here; they may differ from the submitted term. Do not add again.':this.createUnknown()?'Current new-term form is kept here, but adding the term is unconfirmed. Copy the form before leaving and check the glossary before adding again.':'New-term form has local text or choices. It is not automatically saved or restored after leaving. Copy the form before leaving, or download the local glossary draft when available. A copy does not add a term.');
   term = signal('');
   notes = signal('');
   doNotTranslate = signal(false);

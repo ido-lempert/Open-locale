@@ -133,7 +133,8 @@
     "test:ota-value-filter-browser": "node scripts/ota-value-filter-browser-test.mjs",
     "test:sync-history-attention-browser": "node scripts/sync-history-attention-browser-test.mjs",
     "test:tasks-draft-download-browser": "node scripts/tasks-draft-download-browser-test.mjs",
-    "test:tasks-local-draft-browser": "node scripts/tasks-local-draft-browser-test.mjs"
+    "test:tasks-local-draft-browser": "node scripts/tasks-local-draft-browser-test.mjs",
+    "test:glossary-new-term-draft-browser": "node scripts/glossary-new-term-draft-browser-test.mjs"
   },
   "private": true,
   "dependencies": {
