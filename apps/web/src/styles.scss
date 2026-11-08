@@ -263,3 +263,8 @@ span.review { font-size: 0.72rem; padding: 0.05rem 0.4rem; border: 1px solid var
 .cell-foot { flex-wrap: wrap; }
 .cell-foot > * { max-width: 100%; }
 .cell-error-reason { flex: 1 0 100%; }
+
+@media (max-width: 600px) {
+  .comment-form { flex-wrap: wrap; }
+  .comment-form input { flex: 1 1 100%; min-width: 0; }
+}

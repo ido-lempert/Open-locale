@@ -1209,3 +1209,10 @@ refresh does not trigger translation blur autosave. Duplicate/pending/uncertain
 or departed refreshes are refused; errors and unconfirmed changes keep their
 separate recovery routes. See
 [review0476](docs/reviews/0476-editor-shots-refresh.md).
+
+An open healthy comment thread can refresh without reloading translations or
+posting/deleting anything. Comment text and locale stay; a reply target missing
+from the fresh thread is cleared. Focused pointer refresh does not blur-autosave
+a translation. Mobile comment text uses the full form width. Pending/uncertain
+and failed states keep their separate recovery routes. See
+[review0477](docs/reviews/0477-editor-comments-refresh.md).

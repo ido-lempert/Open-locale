@@ -263,6 +263,8 @@ interface CellState {
                 <tr class="history-row"><td [attr.colspan]="2 + p.locales.length">
                   @if (commentsSaving()) { <p class="muted" role="status" name="commentsPending">Comment change pending. Closing this thread does not cancel it.</p> }
                   @if (commentsMutationError().includes(k.id)) { <p class="error" role="alert" name="commentsMutationError">Comment change could not be confirmed. Keep your draft and check current comments before another change.</p><button name="checkCurrentComments" [disabled]="commentsSaving() || commentsLoading()" (click)="readComments(k)">Check current comments</button> }
+                  @if (!commentsError() && !commentsMutationError().includes(k.id)) { <button type="button" name="refreshComments" (mousedown)="$event.preventDefault()" [disabled]="!commentsRefreshReady(k)" (click)="refreshComments(k)">Refresh comments</button> }
+                  <p class="muted" name="commentsRefreshScope" style="white-space:normal;max-width:40rem">Refresh reads this key's current thread only, not translations. Your comment text and locale stay here; a reply target missing from the new thread is cleared. It does not post, delete or retry a comment.</p>
                   @if (commentsLoading()) { <p class="muted" role="status" name="commentsLoading">Loading comments...</p> }
                   @else if (commentsError()) { <p class="error" role="alert" name="commentsError">Comments unavailable. No thread is shown.</p><button type="button" name="retryComments" (click)="readComments(k)">Retry comments</button> }
                   @else {
@@ -623,6 +625,8 @@ export class EditorComponent implements OnInit, OnDestroy {
     this.commentDraft.set(''); this.commentLocale.set(''); this.replyTo.set(null);
     await this.readComments(k);
   }
+  commentsRefreshReady(k:Key) { return this.canChangeComments(k) && this.keys().some(key=>key.id===k.id); }
+  refreshComments(k:Key) { if(this.commentsRefreshReady(k))return this.readComments(k);return Promise.resolve(); }
   async readComments(k: Key) {
     if (this.destroyed || this.commentsFor() !== k.id) return;
     const generation = ++this.commentsGeneration, projectId = this.projectId, keyId = k.id;
