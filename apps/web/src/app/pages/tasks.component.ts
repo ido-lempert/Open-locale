@@ -72,6 +72,13 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
         <button type="button" name="downloadTaskDraft" [disabled]="!draftDownloadReady()" (click)="downloadDraft()">Download new-task form (.json)</button>
         <p class="muted" name="taskDraftDownloadScope">Backs up only the current local new-task form, including description and selected IDs, not loaded tasks or server state. Choices may be stale or unavailable. This file is not importable and does not create, retry or confirm a task. Unconfirmed creation stays unconfirmed; check tasks before creating again. The file can contain private project text; downloading does not share it.</p>
         @if (draftDownloadNotice()) { <p role="status" name="taskDraftDownloadNotice">{{draftDownloadNotice()}}</p> }
+        <button type="button" name="resetTaskDraft" [disabled]="!draftResetReady()" (click)="askDraftReset()">Discard local new-task form</button>
+        @if (draftResetPending()) { <section role="group" aria-label="Discard local new-task form" name="taskDraftResetConfirm">
+          <p>Discard the current local new-task text and choices? Download or copy first to keep them. This cannot be undone here. No task, assignment or server lock is changed. Unconfirmed changes stay unconfirmed.</p>
+          <div class="toolbar"><button type="button" name="keepTaskDraft" (click)="cancelDraftReset()">Keep form</button>
+          <button type="button" name="confirmTaskDraftReset" (click)="confirmDraftReset()">Discard local form</button></div>
+        </section> }
+        @if (draftResetNotice()) { <p role="status" name="taskDraftResetNotice">{{draftResetNotice()}}</p> }
       </section>
       @if (listError()) { <p class="error" role="alert" name="taskListError">Tasks unavailable. No tasks are shown. Retry this read or reload the page.</p><button type="button" name="retryTaskList" (click)="void fetch()">Retry tasks</button> }
       @if (loading()) { <p role="status" name="taskListLoading">Loading tasks...</p> }
@@ -170,6 +177,19 @@ export class TasksComponent implements OnInit, OnDestroy {
     finally{if(url)URL.revokeObjectURL(url);}
   }
 
+  private draftResetSnapshot=signal<string|null>(null);
+  private draftResetResult=signal<string|null>(null);
+  draftResetReady(){return !this.destroyed&&!!this.projectId&&!this.creating()&&this.hasLocalDraft();}
+  draftResetPending=computed(()=>this.draftResetSnapshot()!==null&&this.draftResetSnapshot()===this.draftJson()&&!this.creating());
+  draftResetNotice=computed(()=>this.draftResetResult()===this.draftJson()?'Local new-task form discarded. No task, assignment or server lock was changed. Unconfirmed changes stay unconfirmed.':'');
+  askDraftReset(){if(this.draftResetReady()){this.draftResetResult.set(null);this.draftResetSnapshot.set(this.draftJson());}}
+  cancelDraftReset(){this.draftResetSnapshot.set(null);}
+  confirmDraftReset(){
+    if(!this.draftResetReady()||!this.draftResetPending()){this.cancelDraftReset();return;}
+    this.title.set('');this.description.set('');this.dueDate.set('');this.assigneeId.set('');this.dependsOnId.set('');this.selectedKeyIds.set([]);this.lockKeys.set(false);
+    this.draftDownloadResult.set(null);this.cancelDraftReset();this.draftResetResult.set(this.draftJson());
+  }
+
   private routeSub?: Subscription;
   private fetchSeq = 0;
   private actionSeq = 0;
@@ -188,14 +208,14 @@ export class TasksComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    this.destroyed=true;++this.fetchSeq;++this.projectGeneration;
+    this.cancelDraftReset();this.draftResetResult.set(null);this.destroyed=true;++this.fetchSeq;++this.projectGeneration;
     this.routeSub?.unsubscribe();
   }
 
   private initForProject(pid: string) {
     if(this.destroyed)return;
     ++this.projectGeneration;
-    this.projectId = pid;this.draftDownloadResult.set(null);
+    this.cancelDraftReset();this.draftResetResult.set(null);this.projectId = pid;this.draftDownloadResult.set(null);
     this.fetchSeq++; // invalidate every in-flight fetch from the previous project
     ++this.mutationEpoch;this.actionUnknown.set(false);this.createUnknown.set(false);this.error.set('');this.createNotice.set('');this.actionNotice.set('');this.creating.set(false);this.updatingIds.set([]);this.deletingIds.set([]);
     this.loaded.set(false);this.downloadNotice.set('');this.tasks.set([]); this.members.set([]); this.groups.set([]); this.keys.set([]);
@@ -325,7 +345,7 @@ export class TasksComponent implements OnInit, OnDestroy {
     const current=()=>!this.destroyed&&scope===this.projectGeneration;
     const draft={title:this.title(),description:this.description(),dueDate:this.dueDate(),
       assigneeId:this.assigneeId(),dependsOnId:this.dependsOnId(),keyIds:[...this.selectedKeyIds()],lockKeys:this.lockKeys()};
-    this.draftDownloadResult.set(null);this.loaded.set(false);this.downloadNotice.set('');++this.mutationEpoch;this.creating.set(true);this.error.set('');this.createNotice.set('');
+    this.cancelDraftReset();this.draftResetResult.set(null);this.draftDownloadResult.set(null);this.loaded.set(false);this.downloadNotice.set('');++this.mutationEpoch;this.creating.set(true);this.error.set('');this.createNotice.set('');
     try {
       await this.api.createTask(projectId, {
         title,

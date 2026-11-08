@@ -1137,3 +1137,11 @@ exact current name/slug/locale text. Copy or download first to keep it; there is
 no local undo. It does not delete a project, change security settings or resolve
 uncertain creation. Pending creation and stale/departed confirmation refuse.
 See [review0466](docs/reviews/0466-projects-draft-reset.md).
+
+
+Discard local new-task form uses an inline Keep/Discard confirmation for current
+project text and choices, including selected IDs and lock choice. Download/copy
+first to keep them; no local undo. It does not delete a task, change assignment or
+remove server locks. Unknown changes remain unconfirmed. Pending creation and
+stale/project/departed confirmation refuse. See
+[review0467](docs/reviews/0467-tasks-draft-reset.md).

@@ -137,7 +137,8 @@
     "test:glossary-new-term-draft-browser": "node scripts/glossary-new-term-draft-browser-test.mjs",
     "test:projects-local-draft-browser": "node scripts/projects-local-draft-browser-test.mjs",
     "test:projects-draft-download-browser": "node scripts/projects-draft-download-browser-test.mjs",
-    "test:projects-draft-reset-browser": "node scripts/projects-draft-reset-browser-test.mjs"
+    "test:projects-draft-reset-browser": "node scripts/projects-draft-reset-browser-test.mjs",
+    "test:tasks-draft-reset-browser": "node scripts/tasks-draft-reset-browser-test.mjs"
   },
   "private": true,
   "dependencies": {
