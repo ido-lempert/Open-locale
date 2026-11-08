@@ -39,6 +39,13 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
           <button class="primary" type="submit" [disabled]="creating() || createUnknown()">Add term</button>
           @if (creating()) { <span role="status" name="glossaryCreating">Adding term...</span> }
         </form>
+        <button type="button" name="resetNewTermDraft" (pointerdown)="$event.preventDefault()" [disabled]="!newTermResetReady()" (click)="askNewTermReset()">Discard local new-term form</button>
+        @if (newTermResetPending()) { <section role="group" aria-label="Discard local new-term form" name="newTermResetConfirm">
+          <p>Discard the current local term, notes and do-not-translate choice? Copy or download first to keep them. This cannot be undone here. Loaded translation drafts and server terms are not changed. Unconfirmed changes stay unconfirmed.</p>
+          <div class="toolbar"><button type="button" name="keepNewTermDraft" (pointerdown)="$event.preventDefault()" (click)="cancelNewTermReset()">Keep form</button>
+          <button type="button" name="confirmNewTermReset" (pointerdown)="$event.preventDefault()" (click)="confirmNewTermReset()">Discard local form</button></div>
+        </section> }
+        @if (newTermResetNotice()) { <p role="status" name="newTermResetNotice">{{newTermResetNotice()}}</p> }
       </section>
       @if (listError()) { <p class="error" role="alert" name="glossaryListError">Glossary unavailable. No terms are shown. Retry this read or reload the page.</p><button type="button" name="retryGlossaryList" (click)="void fetch()">Retry glossary</button> }
       @if (loading()) { <p role="status" name="glossaryListLoading">Loading glossary...</p> }
@@ -107,6 +114,19 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   notes = signal('');
   doNotTranslate = signal(false);
 
+  private newTermResetSnapshot=signal<string|null>(null);
+  private newTermResetResult=signal<string|null>(null);
+  private newTermJson(){return JSON.stringify({projectId:this.projectId,scope:this.projectGeneration,term:this.term(),notes:this.notes(),doNotTranslate:this.doNotTranslate(),createUnknown:this.createUnknown()});}
+  newTermResetReady(){return !this.destroyed&&!!this.projectId&&!this.creating()&&this.hasNewTermDraft();}
+  newTermResetPending=computed(()=>this.newTermResetSnapshot()!==null&&this.newTermResetSnapshot()===this.newTermJson()&&!this.creating());
+  newTermResetNotice=computed(()=>this.newTermResetResult()===this.newTermJson()?'Local new-term form discarded. Loaded translation drafts and server terms were not changed. Unconfirmed changes stay unconfirmed.':'');
+  askNewTermReset(){if(this.newTermResetReady()){this.newTermResetResult.set(null);this.newTermResetSnapshot.set(this.newTermJson());}}
+  cancelNewTermReset(){this.newTermResetSnapshot.set(null);}
+  confirmNewTermReset(){
+    if(!this.newTermResetReady()||!this.newTermResetPending()){this.cancelNewTermReset();return;}
+    this.term.set('');this.notes.set('');this.doNotTranslate.set(false);this.draftDownloadNotice.set('');this.cancelNewTermReset();this.newTermResetResult.set(this.newTermJson());
+  }
+
   constructor(private route: ActivatedRoute, private api: ApiService) {}
 
   ngOnInit() {
@@ -116,7 +136,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   private initForProject(pid:string) {
     if(this.destroyed)return;
     ++this.projectGeneration;
-    this.projectId=pid;++this.fetchSeq;this.savedTranslations.clear();
+    this.cancelNewTermReset();this.newTermResetResult.set(null);this.projectId=pid;++this.fetchSeq;this.savedTranslations.clear();
     this.localReset.set(null);this.loaded.set(false);this.draftDownloadNotice.set('');this.terms.set([]);this.locales.set([]);this.error.set('');this.createNotice.set('');this.listError.set(false);this.creating.set(false);this.deletingIds.set([]);this.savingIds.set([]);this.unknownDeleteIds.set([]);this.unknownSaveIds.set([]);++this.saveEpoch;this.createUnknown.set(false);++this.createEpoch;
     this.term.set('');this.notes.set('');this.doNotTranslate.set(false);this.query.set('');
     void this.fetch();
@@ -134,7 +154,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   }
 
   private current(scope:number) { return !this.destroyed&&scope===this.projectGeneration; }
-  ngOnDestroy() { this.localReset.set(null);this.destroyed=true;++this.fetchSeq;++this.projectGeneration;this.routeSub?.unsubscribe(); }
+  ngOnDestroy() { this.cancelNewTermReset();this.newTermResetResult.set(null);this.localReset.set(null);this.destroyed=true;++this.fetchSeq;++this.projectGeneration;this.routeSub?.unsubscribe(); }
 
   draftDownloadReady() {return !this.destroyed&&this.loaded()&&!this.loading()&&!this.listError()&&!this.mutationsPending();}
   downloadDraft() {
@@ -168,7 +188,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
     if (!term||this.destroyed||this.creating()||this.createUnknown()) return;
     const scope=this.projectGeneration,pid=this.projectId,listGeneration=this.fetchSeq;
     const draft={term:this.term(),notes:this.notes(),doNotTranslate:this.doNotTranslate()};
-    this.draftDownloadNotice.set('');++this.createEpoch;this.creating.set(true);this.error.set('');this.createNotice.set('');
+    this.cancelNewTermReset();this.newTermResetResult.set(null);this.draftDownloadNotice.set('');++this.createEpoch;this.creating.set(true);this.error.set('');this.createNotice.set('');
     try {
       const created = await this.api.createGlossaryTerm(pid, {
         term,

@@ -1145,3 +1145,11 @@ first to keep them; no local undo. It does not delete a task, change assignment 
 remove server locks. Unknown changes remain unconfirmed. Pending creation and
 stale/project/departed confirmation refuse. See
 [review0467](docs/reviews/0467-tasks-draft-reset.md).
+
+
+Discard local new-term form confirms the exact current glossary term, notes and
+do-not-translate choice. Copy/download first; no local undo. Loaded translation
+drafts and server terms stay untouched, including uncertain outcomes. Pointer
+reset controls preserve a focused translation input to avoid triggering blur
+save. Pending/stale/project/departed confirmation refuses. See
+[review0468](docs/reviews/0468-glossary-new-term-reset.md).
