@@ -1166,3 +1166,10 @@ or backup-failure notice, even after an exact revert. A fresh explicit download
 shows current feedback. This does not change backup contents, saving/sharing
 claims, creation uncertainty or independent project security inputs. See
 [review0470](docs/reviews/0470-form-backup-edit-revert.md).
+
+The glossary new-term form has a separate local JSON download of raw term, notes,
+do-not-translate choice and explicit creation uncertainty. It works independently
+of glossary reads and row saves, but not while adding a term. It excludes loaded
+terms and translations, does not add/retry/import/confirm anything, and does not
+share the file. Existing all-loaded glossary draft download remains separate. See
+[review0471](docs/reviews/0471-glossary-new-term-download.md).

@@ -39,6 +39,9 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
           <button class="primary" type="submit" [disabled]="creating() || createUnknown()">Add term</button>
           @if (creating()) { <span role="status" name="glossaryCreating">Adding term...</span> }
         </form>
+        <button type="button" name="downloadNewTermDraft" (pointerdown)="$event.preventDefault()" [disabled]="!newTermDownloadReady()" (click)="downloadNewTermDraft()">Download new-term form (.json)</button>
+        <p class="muted" name="newTermDownloadScope">Backs up only the current local term, notes and do-not-translate choice, not loaded terms or translations. Available independently of glossary reads and row saves. Not imported here; does not add, retry or confirm a term. Unconfirmed creation stays unconfirmed. The file can contain private text; downloading does not share it.</p>
+        @if (newTermDownloadNotice()) { <p role="status" name="newTermDownloadNotice">{{newTermDownloadNotice()}}</p> }
         <button type="button" name="resetNewTermDraft" (pointerdown)="$event.preventDefault()" [disabled]="!newTermResetReady()" (click)="askNewTermReset()">Discard local new-term form</button>
         @if (newTermResetPending()) { <section role="group" aria-label="Discard local new-term form" name="newTermResetConfirm">
           <p>Discard the current local term, notes and do-not-translate choice? Copy or download first to keep them. This cannot be undone here. Loaded translation drafts and server terms are not changed. Unconfirmed changes stay unconfirmed.</p>
@@ -114,6 +117,20 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   notes = signal('');
   doNotTranslate = signal(false);
 
+  private newTermDownloadResult=signal<{snapshot:string;message:string}|null>(null);
+  newTermDownloadNotice=computed(()=>{const result=this.newTermDownloadResult();return result&&result.snapshot===this.newTermDownloadJson()?result.message:'';});
+  newTermDownloadReady(){return !this.destroyed&&!!this.projectId&&!this.creating();}
+  private newTermDownloadJson(){return JSON.stringify({schemaVersion:1,projectId:this.projectId,scope:'current-local-new-glossary-term-form',serverStateConfirmed:false,importable:false,canCreate:false,createOutcomeUnconfirmed:this.createUnknown(),draft:{term:this.term(),notes:this.notes(),doNotTranslate:this.doNotTranslate()}},null,2);}
+  downloadNewTermDraft(){
+    if(!this.newTermDownloadReady())return;
+    let url:string|undefined;const snapshot=this.newTermDownloadJson();
+    try{
+      url=URL.createObjectURL(new Blob([snapshot],{type:'application/json;charset=utf-8'}));
+      const anchor=document.createElement('a');anchor.href=url;anchor.download='new-glossary-term-form.json';anchor.click();
+      this.newTermDownloadResult.set({snapshot,message:'Download requested for the current local new-term form. This does not confirm the file was saved, shared or a term was added.'});
+    }catch{this.newTermDownloadResult.set({snapshot,message:'Download could not be started. Copy your form text before leaving.'});}
+    finally{if(url)URL.revokeObjectURL(url);}
+  }
   private newTermResetSnapshot=signal<string|null>(null);
   private newTermResetResult=signal<string|null>(null);
   private newTermJson(){return JSON.stringify({projectId:this.projectId,scope:this.projectGeneration,term:this.term(),notes:this.notes(),doNotTranslate:this.doNotTranslate(),createUnknown:this.createUnknown()});}
@@ -121,11 +138,11 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   newTermResetPending=computed(()=>this.newTermResetSnapshot()!==null&&this.newTermResetSnapshot()===this.newTermJson()&&!this.creating());
   newTermResetNotice=computed(()=>this.newTermResetResult()===this.newTermJson()?'Local new-term form discarded. Loaded translation drafts and server terms were not changed. Unconfirmed changes stay unconfirmed.':'');
   askNewTermReset(){if(this.newTermResetReady()){this.newTermResetResult.set(null);this.newTermResetSnapshot.set(this.newTermJson());}}
-  formDraftEdited(){this.cancelNewTermReset();this.newTermResetResult.set(null);}
+  formDraftEdited(){this.cancelNewTermReset();this.newTermResetResult.set(null);this.newTermDownloadResult.set(null);}
   cancelNewTermReset(){this.newTermResetSnapshot.set(null);}
   confirmNewTermReset(){
     if(!this.newTermResetReady()||!this.newTermResetPending()){this.cancelNewTermReset();return;}
-    this.term.set('');this.notes.set('');this.doNotTranslate.set(false);this.draftDownloadNotice.set('');this.cancelNewTermReset();this.newTermResetResult.set(this.newTermJson());
+    this.term.set('');this.notes.set('');this.doNotTranslate.set(false);this.newTermDownloadResult.set(null);this.draftDownloadNotice.set('');this.cancelNewTermReset();this.newTermResetResult.set(this.newTermJson());
   }
 
   constructor(private route: ActivatedRoute, private api: ApiService) {}
@@ -137,7 +154,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   private initForProject(pid:string) {
     if(this.destroyed)return;
     ++this.projectGeneration;
-    this.cancelNewTermReset();this.newTermResetResult.set(null);this.projectId=pid;++this.fetchSeq;this.savedTranslations.clear();
+    this.cancelNewTermReset();this.newTermResetResult.set(null);this.newTermDownloadResult.set(null);this.projectId=pid;++this.fetchSeq;this.savedTranslations.clear();
     this.localReset.set(null);this.loaded.set(false);this.draftDownloadNotice.set('');this.terms.set([]);this.locales.set([]);this.error.set('');this.createNotice.set('');this.listError.set(false);this.creating.set(false);this.deletingIds.set([]);this.savingIds.set([]);this.unknownDeleteIds.set([]);this.unknownSaveIds.set([]);++this.saveEpoch;this.createUnknown.set(false);++this.createEpoch;
     this.term.set('');this.notes.set('');this.doNotTranslate.set(false);this.query.set('');
     void this.fetch();
@@ -155,7 +172,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   }
 
   private current(scope:number) { return !this.destroyed&&scope===this.projectGeneration; }
-  ngOnDestroy() { this.cancelNewTermReset();this.newTermResetResult.set(null);this.localReset.set(null);this.destroyed=true;++this.fetchSeq;++this.projectGeneration;this.routeSub?.unsubscribe(); }
+  ngOnDestroy() { this.newTermDownloadResult.set(null);this.cancelNewTermReset();this.newTermResetResult.set(null);this.localReset.set(null);this.destroyed=true;++this.fetchSeq;++this.projectGeneration;this.routeSub?.unsubscribe(); }
 
   draftDownloadReady() {return !this.destroyed&&this.loaded()&&!this.loading()&&!this.listError()&&!this.mutationsPending();}
   downloadDraft() {
@@ -189,7 +206,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
     if (!term||this.destroyed||this.creating()||this.createUnknown()) return;
     const scope=this.projectGeneration,pid=this.projectId,listGeneration=this.fetchSeq;
     const draft={term:this.term(),notes:this.notes(),doNotTranslate:this.doNotTranslate()};
-    this.cancelNewTermReset();this.newTermResetResult.set(null);this.draftDownloadNotice.set('');++this.createEpoch;this.creating.set(true);this.error.set('');this.createNotice.set('');
+    this.cancelNewTermReset();this.newTermResetResult.set(null);this.newTermDownloadResult.set(null);this.draftDownloadNotice.set('');++this.createEpoch;this.creating.set(true);this.error.set('');this.createNotice.set('');
     try {
       const created = await this.api.createGlossaryTerm(pid, {
         term,
