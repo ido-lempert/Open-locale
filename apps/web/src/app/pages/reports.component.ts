@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -25,8 +25,13 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
       <p class="muted" name="branchDownloadScope">Downloads loaded progress and quality for this branch, not usage, task reports, newer server changes or live drafts. These are separate reads, not one database snapshot. The file can contain private project data; downloading does not share it.</p>
       @if (downloadNotice()) { <p role="status" name="branchDownloadNotice">{{ downloadNotice() }}</p> }
       @if (branchLoading()) { <p role="status" name="branchReportLoading">Loading progress and quality reports for {{ branch() }}...</p> }
+      <label>Find locale in loaded branch reports <input type="search" name="reportLocaleSearch" maxlength="200" [ngModel]="localeQuery()" (ngModelChange)="setLocaleQuery($event)" /></label>
+      <button type="button" name="clearReportLocaleSearch" [disabled]="!localeQuery()" (click)="setLocaleQuery('')">Clear locale search</button>
+      <p class="muted" name="reportLocaleScope">Literal, case-insensitive locale-code search in loaded progress and quality rows only. Totals, workflow columns, usage, tasks and downloaded reports keep their full loaded scope. Search does not read or recompute reports.</p>
       @if (report(); as r) {
         <p class="muted">{{ r.totalKeys }} keys on {{ r.branch }}. A key counts as translated when its value is not empty; status counts cover non-empty values only.</p>
+        <p class="muted" role="status" name="progressLocaleMatches">{{ visibleProgressLocales().length }} of {{ r.locales.length }} loaded progress locales shown.</p>
+        @if (localeQuery().trim() && !visibleProgressLocales().length) { <p class="muted" role="status" name="progressLocaleSearchHint">No loaded progress locales match this search. Clear locale search to show all loaded rows. Report totals are unchanged.</p> }
         <div class="table-scroll">
         <table class="qa-table progress-table">
           <thead>
@@ -42,7 +47,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
             </tr>
           </thead>
           <tbody>
-            @for (l of r.locales; track l.locale) {
+            @for (l of visibleProgressLocales(); track l.locale) {
               <tr>
                 <td><code>{{ l.locale }}</code>@if (l.base) { <span class="muted"> base</span> }</td>
                 <td class="progress-bar-col">
@@ -55,7 +60,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
                 <td>{{ l.untranslated }}</td>
                 @for (s of statusColumns(); track s) { <td [class.status-group]="s === statusColumns()[0]">{{ l.byStatus[s] ?? 0 }}</td> }
               </tr>
-            }
+            } @empty { <tr name="progressLocaleEmpty"><td [attr.colspan]="4 + statusColumns().length" class="muted">{{ localeQuery().trim() ? 'No loaded progress locales match this search. Clear locale search to show all loaded rows.' : 'No loaded progress locale rows.' }}</td></tr> }
           </tbody>
         </table>
         </div>
@@ -64,6 +69,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
       <h2>Quality</h2>
       @if (quality(); as q) {
         <p class="muted">{{ q.totalIssues }} open findings across {{ q.keysWithIssues }} keys on {{ q.branch }}.</p>
+        <p class="muted" role="status" name="qualityLocaleMatches">{{ visibleQualityLocales().length }} of {{ q.locales.length }} loaded quality locales shown.</p>
         @if (q.totalIssues > 0) {
           <div class="table-scroll">
           <table class="qa-table quality-table">
@@ -71,9 +77,9 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
               <tr><th class="row-head">Locale</th><th>Total</th>@for (t of q.types; track t) { <th>{{ t.split('_').join(' ') }}</th> }</tr>
             </thead>
             <tbody>
-              @for (l of q.locales; track l.locale) {
+              @for (l of visibleQualityLocales(); track l.locale) {
                 <tr><td><code>{{ l.locale }}</code></td><td>{{ l.total }}</td>@for (t of q.types; track t) { <td>{{ l.byType[t] ?? 0 }}</td> }</tr>
-              }
+              } @empty { <tr name="qualityLocaleEmpty"><td [attr.colspan]="2 + q.types.length" class="muted">{{ localeQuery().trim() ? 'No loaded quality locales match this search. Clear locale search to show all loaded rows. Report totals are unchanged.' : 'No loaded quality locale rows. Report totals are unchanged.' }}</td></tr> }
             </tbody>
           </table>
           </div>
@@ -126,6 +132,10 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
 })
 export class ReportsComponent implements OnInit, OnDestroy {
   projectId = '';
+  localeQuery=signal('');
+  setLocaleQuery(value:string){if(!this.destroyed)this.localeQuery.set(value.slice(0,200));}
+  visibleProgressLocales=computed(()=>{const rows=this.report()?.locales??[],query=this.localeQuery().trim().toLowerCase();return query?rows.filter(row=>row.locale.toLowerCase().includes(query)):rows;});
+  visibleQualityLocales=computed(()=>{const rows=this.quality()?.locales??[],query=this.localeQuery().trim().toLowerCase();return query?rows.filter(row=>row.locale.toLowerCase().includes(query)):rows;});
   report = signal<ProgressReport | null>(null);
   quality = signal<QualityReport | null>(null);
   usage = signal<UsageReport | null>(null);
@@ -159,7 +169,7 @@ export class ReportsComponent implements OnInit, OnDestroy {
   async loadProject(projectId:string) {
     if(this.destroyed)return;
     ++this.projectGeneration;++this.generation;this.projectId=projectId;
-    this.usageDays.set(30);++this.usageGeneration;++this.taskGeneration;this.branch.set('main');this.branches.set([]);this.branchListError.set(false);this.branchListLoading.set(true);this.report.set(null);this.quality.set(null);
+    this.usageDays.set(30);++this.usageGeneration;++this.taskGeneration;this.localeQuery.set('');this.branch.set('main');this.branches.set([]);this.branchListError.set(false);this.branchListLoading.set(true);this.report.set(null);this.quality.set(null);
     this.usage.set(null);this.taskReport.set(null);this.statusColumns.set([]);this.error.set('');this.downloadNotice.set('');this.projectDownloadNotice.set('');this.branchLoading.set(true);this.usageError.set(false);this.taskReportError.set(false);this.dashboardsLoading.set(true);this.usageLoading.set(true);this.tasksLoading.set(true);
     await Promise.all([this.loadBranches(),this.fetch(),this.ngOnInitDashboards()]);
   }

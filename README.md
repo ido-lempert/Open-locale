@@ -1188,3 +1188,10 @@ explicit refresh owns recovery. Combined glossary JSON still includes all loaded
 rows regardless of both filters. Hiding a focused changed row does not autosave
 it; visible ordinary blur keeps autosave. See
 [review0473](docs/reviews/0473-glossary-attention.md).
+
+Reports can find locale codes in loaded branch progress and quality rows using
+trimmed, literal, case-insensitive search. Shown/loaded counts and no-match
+guidance distinguish the local view from full totals. Workflow columns, usage,
+tasks and complete JSON downloads remain unchanged. Refresh/branch change keeps
+the query; project change clears it. See
+[review0474](docs/reviews/0474-reports-locale-search.md).
