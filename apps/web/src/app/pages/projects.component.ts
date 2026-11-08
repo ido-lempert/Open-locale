@@ -25,6 +25,13 @@ import { ApiService, Project } from '../api.service';
       <button type="button" name="downloadProjectDraft" [disabled]="!draftDownloadReady()" (click)="downloadDraft()">Download new-project form (.json)</button>
       <p class="muted" name="projectDraftDownloadScope">Backs up only the current local name, slug and raw locale text, not loaded projects or security settings. Not importable and does not create, retry or confirm a project. Unconfirmed creation stays unconfirmed; check projects before creating again. May contain private project text; downloading does not share it.</p>
       @if (draftDownloadNotice()) { <p role="status" name="projectDraftDownloadNotice">{{draftDownloadNotice()}}</p> }
+      <button type="button" name="resetProjectDraft" [disabled]="!draftResetReady()" (click)="askDraftReset()">Discard local new-project form</button>
+      @if (draftResetPending()) { <section role="group" aria-label="Discard local new-project form" name="projectDraftResetConfirm">
+        <p>Discard the current local name, slug and locale text? Download or copy it first to keep it. This cannot be undone here. No project or security setting is changed. Unconfirmed creation stays unconfirmed.</p>
+        <div class="toolbar"><button type="button" name="keepProjectDraft" (click)="cancelDraftReset()">Keep form</button>
+        <button type="button" name="confirmProjectDraftReset" (click)="confirmDraftReset()">Discard local form</button></div>
+      </section> }
+      @if (draftResetNotice()) { <p role="status" name="projectDraftResetNotice">{{draftResetNotice()}}</p> }
       @if (createUnknown()) { <p class="error" role="alert" name="projectCreateUnknown">Project creation outcome unconfirmed. Your form is kept here. Check the project list, then refresh projects before creating again. Do not repeat the request without checking.</p> }
       @if (error() && (!createUnknown() || error() !== 'Project creation outcome unconfirmed. Your form is kept here. Check the project list before trying again.')) { <p class="error" role="alert">{{ error() }}</p> }
       @if (projectsLoading()) { <p class="muted" role="status" name="projectsLoading">Loading projects.</p> }
@@ -113,6 +120,17 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     }catch{this.draftDownloadResult.set({snapshot,message:'Download could not be started. Copy your form text before leaving.'});}
     finally{if(url)URL.revokeObjectURL(url);}
   }
+  private draftResetSnapshot=signal<string|null>(null);
+  private draftResetResult=signal<string|null>(null);
+  draftResetReady(){return !this.destroyed&&!this.creating()&&this.hasProjectDraft();}
+  draftResetPending=computed(()=>this.draftResetSnapshot()!==null&&this.draftResetSnapshot()===this.draftJson()&&!this.creating());
+  draftResetNotice=computed(()=>this.draftResetResult()===this.draftJson()?'Local new-project form discarded. No project or security setting was changed. Unconfirmed creation stays unconfirmed.':'');
+  askDraftReset(){if(this.draftResetReady()){this.draftResetResult.set(null);this.draftResetSnapshot.set(this.draftJson());}}
+  cancelDraftReset(){this.draftResetSnapshot.set(null);}
+  confirmDraftReset(){
+    if(!this.draftResetReady()||!this.draftResetPending()){this.cancelDraftReset();return;}
+    this.name.set('');this.slug.set('');this.locales.set('');this.draftDownloadResult.set(null);this.cancelDraftReset();this.draftResetResult.set(this.draftJson());
+  }
   hasProjectDraft=computed(()=>!!(this.name()||this.slug()||this.locales()));
   projectDraftLabel=computed(()=>this.creating()?'Project creation is pending. Current new-project fields are kept here; they may differ from the submitted project. Do not create again.':this.createUnknown()?'Current new-project form is kept here, but project creation is unconfirmed. Copy the form before leaving and check/refresh projects before creating again.':'New-project form has local text. It is not automatically saved or restored after leaving. Copy the form before leaving to keep it; a copy does not create a project.');
   name = signal(''); slug = signal(''); locales = signal('');
@@ -143,7 +161,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     catch { if (current()) this.tfaError.set(true); }
     finally { if (current()) this.tfaLoading.set(false); }
   }
-  ngOnDestroy() { this.destroyed = true; ++this.projectsGeneration; ++this.tfaGeneration; }
+  ngOnDestroy() { this.cancelDraftReset();this.draftResetResult.set(null);this.destroyed = true; ++this.projectsGeneration; ++this.tfaGeneration; }
   async startTfa() {
     this.busy.set(true); this.error.set('');
     try { this.tfaSetup.set(await this.api.setup2fa(this.tfaPassword())); this.tfaPassword.set(''); }
@@ -181,7 +199,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     if(this.destroyed || this.busy() || this.createUnknown())return;
     const submitted = { name: this.name(), slug: this.slug(), locales: this.locales() };
     if(!submitted.name.trim() || !submitted.slug.trim() || !submitted.locales.trim())return;
-    this.draftDownloadResult.set(null);++this.createEpoch;this.busy.set(true);this.creating.set(true);this.error.set('');this.createNotice.set('');
+    this.cancelDraftReset();this.draftResetResult.set(null);this.draftDownloadResult.set(null);++this.createEpoch;this.busy.set(true);this.creating.set(true);this.error.set('');this.createNotice.set('');
     try {
       const codes = submitted.locales.split(',').map((s) => s.trim()).filter(Boolean);
       await this.api.createProject({ name: submitted.name, slug: submitted.slug, locales: codes });

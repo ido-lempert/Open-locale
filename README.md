@@ -1130,3 +1130,10 @@ create, retry or confirm a project. Pending creation and departed pages refuse;
 failed project/security reads do not prevent copying local text. Download feedback
 is tied to the current form and does not claim the file was saved or shared. See
 [review0465](docs/reviews/0465-projects-draft-download.md).
+
+
+Discard local new-project form uses an inline Keep/Discard confirmation for the
+exact current name/slug/locale text. Copy or download first to keep it; there is
+no local undo. It does not delete a project, change security settings or resolve
+uncertain creation. Pending creation and stale/departed confirmation refuse.
+See [review0466](docs/reviews/0466-projects-draft-reset.md).
