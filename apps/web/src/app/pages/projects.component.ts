@@ -22,6 +22,9 @@ import { ApiService, Project } from '../api.service';
         <button class="primary" type="submit" [disabled]="busy() || createUnknown()">New project</button>
         @if (creating()) { <span role="status" name="projectCreating">Creating project...</span> }
       </form>
+      <button type="button" name="downloadProjectDraft" [disabled]="!draftDownloadReady()" (click)="downloadDraft()">Download new-project form (.json)</button>
+      <p class="muted" name="projectDraftDownloadScope">Backs up only the current local name, slug and raw locale text, not loaded projects or security settings. Not importable and does not create, retry or confirm a project. Unconfirmed creation stays unconfirmed; check projects before creating again. May contain private project text; downloading does not share it.</p>
+      @if (draftDownloadNotice()) { <p role="status" name="projectDraftDownloadNotice">{{draftDownloadNotice()}}</p> }
       @if (createUnknown()) { <p class="error" role="alert" name="projectCreateUnknown">Project creation outcome unconfirmed. Your form is kept here. Check the project list, then refresh projects before creating again. Do not repeat the request without checking.</p> }
       @if (error() && (!createUnknown() || error() !== 'Project creation outcome unconfirmed. Your form is kept here. Check the project list before trying again.')) { <p class="error" role="alert">{{ error() }}</p> }
       @if (projectsLoading()) { <p class="muted" role="status" name="projectsLoading">Loading projects.</p> }
@@ -96,6 +99,20 @@ export class ProjectsComponent implements OnInit, OnDestroy {
   projectsLoading = signal(true); projectsError = signal(false);
   tfaLoading = signal(true); tfaError = signal(false);
   private projectsGeneration = 0; private tfaGeneration = 0; private destroyed = false;
+  private draftDownloadResult=signal<{snapshot:string;message:string}|null>(null);
+  draftDownloadNotice=computed(()=>{const result=this.draftDownloadResult();return result&&result.snapshot===this.draftJson()?result.message:'';});
+  draftDownloadReady(){return !this.destroyed&&!this.creating();}
+  private draftJson(){return JSON.stringify({schemaVersion:1,scope:'current-local-new-project-form',serverStateConfirmed:false,importable:false,canCreate:false,createOutcomeUnconfirmed:this.createUnknown(),draft:{name:this.name(),slug:this.slug(),localesText:this.locales()}},null,2);}
+  downloadDraft(){
+    if(!this.draftDownloadReady())return;
+    let url:string|undefined;const snapshot=this.draftJson();
+    try{
+      url=URL.createObjectURL(new Blob([snapshot],{type:'application/json;charset=utf-8'}));
+      const anchor=document.createElement('a');anchor.href=url;anchor.download='new-project-form.json';anchor.click();
+      this.draftDownloadResult.set({snapshot,message:'Download requested for the current local new-project form. This does not confirm the file was saved, shared or a project was created.'});
+    }catch{this.draftDownloadResult.set({snapshot,message:'Download could not be started. Copy your form text before leaving.'});}
+    finally{if(url)URL.revokeObjectURL(url);}
+  }
   hasProjectDraft=computed(()=>!!(this.name()||this.slug()||this.locales()));
   projectDraftLabel=computed(()=>this.creating()?'Project creation is pending. Current new-project fields are kept here; they may differ from the submitted project. Do not create again.':this.createUnknown()?'Current new-project form is kept here, but project creation is unconfirmed. Copy the form before leaving and check/refresh projects before creating again.':'New-project form has local text. It is not automatically saved or restored after leaving. Copy the form before leaving to keep it; a copy does not create a project.');
   name = signal(''); slug = signal(''); locales = signal('');
@@ -164,7 +181,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     if(this.destroyed || this.busy() || this.createUnknown())return;
     const submitted = { name: this.name(), slug: this.slug(), locales: this.locales() };
     if(!submitted.name.trim() || !submitted.slug.trim() || !submitted.locales.trim())return;
-    ++this.createEpoch;this.busy.set(true);this.creating.set(true);this.error.set('');this.createNotice.set('');
+    this.draftDownloadResult.set(null);++this.createEpoch;this.busy.set(true);this.creating.set(true);this.error.set('');this.createNotice.set('');
     try {
       const codes = submitted.locales.split(',').map((s) => s.trim()).filter(Boolean);
       await this.api.createProject({ name: submitted.name, slug: submitted.slug, locales: codes });

@@ -1121,3 +1121,12 @@ submitted project; unconfirmed creation still requires checking/refreshing the
 project list before another create. Copying the form does not create a project.
 Two-factor fields and loaded projects are separate from this local form feedback.
 [review0464](docs/reviews/0464-projects-local-draft.md).
+
+
+The new-project form can download a separate local JSON backup of exact raw name,
+slug and locale text, including an explicit unconfirmed-creation flag. It excludes
+loaded projects and all security fields. This is not importable and does not
+create, retry or confirm a project. Pending creation and departed pages refuse;
+failed project/security reads do not prevent copying local text. Download feedback
+is tied to the current form and does not claim the file was saved or shared. See
+[review0465](docs/reviews/0465-projects-draft-download.md).
