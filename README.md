@@ -1079,3 +1079,9 @@ with label search. Filtered-empty guidance and Clear controls do not read/change
 the project or clear capture/restore uncertainty. Refresh retains kind, project
 visit resets it; inventory download still includes every loaded snapshot.
 [review0458](docs/reviews/0458-snapshots-kind.md).
+
+Retained OTA inspection can filter exact empty/non-empty published values, combined
+with literal key/value search. Whitespace is non-empty; this does not find missing
+keys or run live QA. Filter changes reset paging, refresh retains filter and route
+visits reset it. Download still includes all loaded retained locale values.
+[review0459](docs/reviews/0459-ota-value-filter.md).
