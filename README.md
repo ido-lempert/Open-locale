@@ -1160,3 +1160,9 @@ confirmation, even after reverting to the exact prior value. A fresh discard
 requires a fresh prompt. Obsolete discard feedback does not return after a new
 draft is edited and emptied. See
 [review0469](docs/reviews/0469-form-reset-edit-revert.md).
+
+Editing the local new-project or new-task form also clears its old backup-request
+or backup-failure notice, even after an exact revert. A fresh explicit download
+shows current feedback. This does not change backup contents, saving/sharing
+claims, creation uncertainty or independent project security inputs. See
+[review0470](docs/reviews/0470-form-backup-edit-revert.md).

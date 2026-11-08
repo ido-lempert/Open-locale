@@ -1,0 +1,9 @@
+import { ProjectsComponent } from './projects.component';
+import { TasksComponent } from './tasks.component';
+describe('local form backup edit/revert feedback',()=>{
+ let create:any,revoke:any,click:any;
+ beforeEach(()=>{create=Object.getOwnPropertyDescriptor(URL,'createObjectURL');revoke=Object.getOwnPropertyDescriptor(URL,'revokeObjectURL');Object.defineProperty(URL,'createObjectURL',{configurable:true,value:jest.fn(()=> 'blob:local')});Object.defineProperty(URL,'revokeObjectURL',{configurable:true,value:jest.fn()});click=jest.spyOn(HTMLAnchorElement.prototype,'click').mockImplementation(()=>{});});
+ afterEach(()=>{click.mockRestore();create?Object.defineProperty(URL,'createObjectURL',create):delete (URL as any).createObjectURL;revoke?Object.defineProperty(URL,'revokeObjectURL',revoke):delete (URL as any).revokeObjectURL;});
+ for(const kind of ['projects','tasks'])for(const failure of [false,true])it(`${kind} edit/revert cannot revive ${failure?'failed':'requested'} backup notice`,()=>{const c:any=kind==='projects'?new ProjectsComponent({} as any):new TasksComponent({} as any,{} as any);c.projectId='p';const field=kind==='projects'?c.name:c.title;field.set('original');if(failure)click.mockImplementation(()=>{throw new Error('PRIVATE');});c.downloadDraft();expect(c.draftDownloadNotice()).not.toBe('');c.formDraftEdited();field.set('edited');c.formDraftEdited();field.set('original');expect(c.draftDownloadNotice()).toBe('');expect(click).toHaveBeenCalledTimes(1);c.downloadDraft();expect(c.draftDownloadNotice()).not.toBe('');expect(click).toHaveBeenCalledTimes(2);});
+ it('unrelated project security input does not invalidate current form backup',()=>{const c=new ProjectsComponent({} as any);c.name.set('original');c.downloadDraft();c.tfaPassword.set('PRIVATE');expect(c.draftDownloadNotice()).not.toBe('');});
+});

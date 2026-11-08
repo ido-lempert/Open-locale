@@ -126,7 +126,7 @@ export class ProjectsComponent implements OnInit, OnDestroy {
   draftResetPending=computed(()=>this.draftResetSnapshot()!==null&&this.draftResetSnapshot()===this.draftJson()&&!this.creating());
   draftResetNotice=computed(()=>this.draftResetResult()===this.draftJson()?'Local new-project form discarded. No project or security setting was changed. Unconfirmed creation stays unconfirmed.':'');
   askDraftReset(){if(this.draftResetReady()){this.draftResetResult.set(null);this.draftResetSnapshot.set(this.draftJson());}}
-  formDraftEdited(){this.cancelDraftReset();this.draftResetResult.set(null);}
+  formDraftEdited(){this.cancelDraftReset();this.draftResetResult.set(null);this.draftDownloadResult.set(null);}
   cancelDraftReset(){this.draftResetSnapshot.set(null);}
   confirmDraftReset(){
     if(!this.draftResetReady()||!this.draftResetPending()){this.cancelDraftReset();return;}
