@@ -694,6 +694,9 @@ try {
     return t.includes('Bundle import (PO (gettext), main)') && t.includes('he:') && t.includes('unchanged') && t.includes('independently');
   }, { timeout: 10000 }).then(() => true).catch(() => false);
   check('bundle import via UI summarizes every locale with partial-outcome wording', bundleNotice);
+  // The summary precedes the follow-up key read. Wait for the input to be
+  // enabled before starting another upload, otherwise that change is ignored.
+  await page.waitForFunction(() => document.querySelector('input[name=bundleFile]')?.disabled === false && !document.querySelector('[name=keysLoading]'));
   // Hostile upload: server rejects CRC tampering; UI uses fixed unknown guidance.
   const badZip = Buffer.from(bundleBuf);
   badZip[30 + 'en.po'.length] ^= 0xff;

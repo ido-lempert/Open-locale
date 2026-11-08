@@ -7,7 +7,7 @@ import { ApiService, BranchInfo, Project, QaIssue } from '../api.service';
 @Component({
   selector: 'ol-qa',
   imports: [FormsModule, RouterLink],
-  styles: [` .qa-table { width:100%; min-width:680px; border-collapse:collapse; } .qa-table th,.qa-table td { text-align:left; padding:.5rem; vertical-align:top; border-bottom:1px solid #e5e7eb; } .qa-table td { overflow-wrap:anywhere; } .qa-table th:nth-child(-n+3),.qa-table td:nth-child(-n+3) { white-space:nowrap; } `],
+  styles: [` .qa-table.qa-empty {min-width:0;} .qa-empty thead {display:none;} .qa-table.qa-empty td:nth-child(-n+3) {white-space:normal;max-width:none;} .qa-table { width:100%; min-width:680px; border-collapse:collapse; } .qa-table th,.qa-table td { text-align:left; padding:.5rem; vertical-align:top; border-bottom:1px solid #e5e7eb; } .qa-table td { overflow-wrap:anywhere; } .qa-table th:nth-child(-n+3),.qa-table td:nth-child(-n+3) { white-space:nowrap; } `],
   template: `
     <header class="bar">
       <a [routerLink]="['/projects', projectId]" class="back">&larr; Editor</a>
@@ -35,14 +35,17 @@ import { ApiService, BranchInfo, Project, QaIssue } from '../api.service';
       <div class="toolbar">
         <label>Issue type <select name="qaType" [ngModel]="issueType()" (ngModelChange)="setIssueType($event)"><option value="">all issue types</option>@for(type of issueTypes;track type){<option [value]="type">{{ label(type) }}</option>}</select></label>
         <button type="button" name="clearQaType" [disabled]="!issueType()" (click)="setIssueType('')">Clear type filter</button>
-        @if (!loading() && !error()) { <span class="muted" role="status" name="qaTypeCount">{{ visibleIssues().length }} of {{ issues().length }} loaded findings shown. Type filtering does not run checks again.</span> }
+        @if (!loading() && !error()) { <span class="muted" role="status" name="qaTypeCount">{{ visibleIssues().length }} of {{ issues().length }} loaded findings shown. Local search and type filtering do not run checks again.</span> }
       </div>
+      <label>Find in loaded keys, locales or details <input type="search" name="qaSearch" maxlength="200" [ngModel]="query()" (ngModelChange)="setQuery($event)" /></label>
+      <button type="button" name="clearQaSearch" [disabled]="!query()" (click)="setQuery('')">Clear search</button>
+      <p class="muted" name="qaSearchScope">Search is a literal, case-insensitive substring in loaded findings. It combines with the issue-type filter and does not run checks again.</p>
       <button type="button" name="downloadQa" [disabled]="loading() || !!error()" (click)="download()">Download findings (.json)</button>
-      <p class="muted" name="qaDownloadScope">Downloads all current loaded findings, regardless of the type filter, and project, branch and locale scope, not newer server changes or live editor drafts. The file can contain private project text. Downloading does not share it.</p>
+      <p class="muted" name="qaDownloadScope">Downloads all current loaded findings, regardless of local search or the type filter, and project, branch and locale scope, not newer server changes or live editor drafts. The file can contain private project text. Downloading does not share it.</p>
       @if (downloadNotice()) { <p role="status" name="qaDownloadNotice">{{ downloadNotice() }}</p> }
       @if (loading()) { <p role="status" name="qaLoading">Loading QA checks...</p> }
       @if (!loading() && !error()) {
-      <div class="table-scroll"><table class="qa-table">
+      <div class="table-scroll"><table class="qa-table" [class.qa-empty]="!visibleIssues().length">
         <thead><tr><th>Key</th><th>Locale</th><th>Issue</th><th>Detail</th></tr></thead>
         <tbody>
           @for (i of visibleIssues(); track $index) {
@@ -65,7 +68,9 @@ export class QaComponent implements OnInit, OnDestroy {
   issues = signal<QaIssue[]>([]);
   readonly issueTypes:QaIssue['type'][]=['untranslated','placeholder_mismatch','max_length','whitespace','number_mismatch','html_mismatch'];
   issueType=signal<QaIssue['type']|''>('');
-  visibleIssues=computed(()=>{const type=this.issueType();return type?this.issues().filter(i=>i.type===type):this.issues();});
+  query=signal('');
+  setQuery(value:string){if(!this.destroyed)this.query.set(value.slice(0,200));}
+  visibleIssues=computed(()=>{const type=this.issueType(),query=this.query().trim().toLowerCase();if(!type&&!query)return this.issues();return this.issues().filter(i=>(!type||i.type===type)&&(!query||[i.key,i.locale,i.detail??''].some(value=>value.toLowerCase().includes(query))));});
   setIssueType(type:string) {if(!this.destroyed&&(type===''||this.issueTypes.includes(type as QaIssue['type'])))this.issueType.set(type as QaIssue['type']|'');}
   targetLocales = signal<string[]>([]);
   locale = signal('');
@@ -89,7 +94,7 @@ export class QaComponent implements OnInit, OnDestroy {
   }
   async loadProject(projectId:string) {
     if(this.destroyed)return;
-    ++this.projectGeneration;this.projectId=projectId;this.locale.set('');this.targetLocales.set([]);this.branch.set('main');this.branches.set([]);this.issueType.set('');
+    ++this.projectGeneration;this.projectId=projectId;this.locale.set('');this.targetLocales.set([]);this.branch.set('main');this.branches.set([]);this.issueType.set('');this.query.set('');
     await Promise.all([this.loadLocales(),this.loadBranches(),this.fetch()]);
   }
   async loadBranches() {
@@ -138,7 +143,7 @@ export class QaComponent implements OnInit, OnDestroy {
     finally {if(url)URL.revokeObjectURL(url);}
   }
 
-  emptyLabel() { if(this.issueType())return 'No loaded findings of type '+this.label(this.issueType() as QaIssue['type'])+' in the current branch and locale scope. Clear type filter to show all loaded findings.';return (this.locale() ? 'No QA issues found for ' + this.locale() : 'No QA issues found') + ' on branch ' + this.branch(); }
+  emptyLabel() { if(this.query().trim())return 'No loaded findings match this search and current issue-type filter. Clear search or type filter to show other loaded findings.';if(this.issueType())return 'No loaded findings of type '+this.label(this.issueType() as QaIssue['type'])+' in the current branch and locale scope. Clear type filter to show all loaded findings.';return (this.locale() ? 'No QA issues found for ' + this.locale() : 'No QA issues found') + ' on branch ' + this.branch(); }
 
   label(type: QaIssue['type']): string {
     switch (type) {

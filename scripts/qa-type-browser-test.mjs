@@ -44,7 +44,7 @@ try {
   await page.select('[name=qaType]','max_length');await page.waitForFunction(()=>document.querySelector('[name=qaTypeCount]')?.textContent.includes('0 of 1'));
   check('no match is local filter guidance rather than no issues claim',await page.$eval('tbody',e=>e.textContent.includes('No loaded findings of type Too long')&&e.textContent.includes('Clear type filter')));
   const file=join(downloadDir,'qa-findings.json');await page.click('[name=downloadQa]');for(let n=0;n<100&&!existsSync(file);n++)await new Promise(r=>setTimeout(r,20));const report=JSON.parse(readFileSync(file,'utf8'));
-  check('actual download preserves all loaded findings despite zero visible rows',JSON.stringify(report.issues)===JSON.stringify(expected.issues)&&report.branch==='release'&&report.locale==='he'&&await page.$eval('[name=qaDownloadScope]',e=>e.textContent.includes('regardless of the type filter')));
+  check('actual download preserves all loaded findings despite zero visible rows',JSON.stringify(report.issues)===JSON.stringify(expected.issues)&&report.branch==='release'&&report.locale==='he'&&await page.$eval('[name=qaDownloadScope]',e=>e.textContent.includes('regardless of local search or the type filter')));
   check('filter and download issue no additional reads or writes',reads===0&&writes===0);
   await page.screenshot({path:'/downloads/qa-type-filter.png',fullPage:true});
   await page.click('[name=clearQaType]');await page.waitForFunction(()=>document.querySelector('[name=qaTypeCount]')?.textContent.includes('1 of 1'));check('Clear restores loaded findings without API requests',await page.$eval('[name=qaType]',e=>e.value==='')&&await page.$$eval('table tbody tr',es=>es.length===1)&&reads===0&&writes===0);

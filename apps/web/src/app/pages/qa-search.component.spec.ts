@@ -1,0 +1,9 @@
+import { QaComponent } from './qa.component';
+const rows:any[]=[{key:'Checkout [A]',locale:'he',detail:'Missing NAME',type:'untranslated'},{key:'Other',locale:'fr',detail:'Whitespace',type:'whitespace'},{key:'Name',locale:'he',detail:null,type:'untranslated'}];
+const make=(api:any={})=>new QaComponent({} as any,api);
+describe('local QA loaded finding search',()=>{
+ it('searches key/locale/detail literally and case-insensitively with trimmed query and exact type intersection',()=>{const api={runQa:jest.fn()},c=make(api);c.issues.set(rows);c.setQuery(' [a] ');expect(c.visibleIssues()).toEqual([rows[0]]);c.setQuery('NAME');expect(c.visibleIssues()).toEqual([rows[0],rows[2]]);c.setIssueType('whitespace');expect(c.visibleIssues()).toEqual([]);expect(c.emptyLabel()).toContain('No loaded findings match this search');c.setIssueType('');c.setQuery(' FR ');expect(c.visibleIssues()).toEqual([rows[1]]);expect(c.issues()).toBe(rows);expect(api.runQa).not.toHaveBeenCalled();});
+ it('empty/blank query keeps existing type-only and no-issues guidance',()=>{const c=make();c.issues.set(rows);c.setQuery('   ');expect(c.visibleIssues()).toEqual(rows);c.setIssueType('max_length');expect(c.emptyLabel()).toContain('No loaded findings of type Too long');c.setIssueType('');c.issues.set([]);expect(c.emptyLabel()).toContain('No QA issues found');});
+ it('reread retains search/type and project visit resets both',async()=>{const c=make({runQa:async()=>({issues:rows}),getProject:async()=>({locales:[]}),listBranches:async()=>[]});c.setQuery('name');c.setIssueType('untranslated');await c.fetch();expect(c.query()).toBe('name');expect(c.visibleIssues().length).toBe(2);await c.loadProject('new');expect(c.query()).toBe('');expect(c.issueType()).toBe('');});
+ it('bounds search and rejects departed handler',()=>{const c=make();c.setQuery('x'.repeat(300));expect(c.query().length).toBe(200);c.ngOnDestroy();c.setQuery('late');expect(c.query().length).toBe(200);});
+});

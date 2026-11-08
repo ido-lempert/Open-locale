@@ -1059,3 +1059,10 @@ confirmation. It restores that row's last loaded/confirmed translation map in th
 page only, not newer server values or server undo. Stale/pending/unknown/departed
 handlers refuse reset; copy/download the draft first if needed.
 [review0455](docs/reviews/0455-glossary-reset-local.md).
+
+QA findings support local literal case-insensitive key/locale/detail search,
+combined with the issue-type filter. Shown/loaded counts and no-match guidance
+stay distinct from rerunning checks. Download still includes all loaded findings
+regardless of local filters, not newer server changes or editor drafts. Empty
+feedback wraps on narrow screens.
+[review0456](docs/reviews/0456-qa-search.md).
