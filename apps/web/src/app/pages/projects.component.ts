@@ -14,6 +14,7 @@ import { ApiService, Project } from '../api.service';
       <button (click)="logout()">Log out</button></header>
     <main>
       @if (createNotice(); as message) { <p role="status" name="projectCreateNotice">{{ message }}</p> }
+      @if (hasProjectDraft()) { <p role="status" name="projectLocalDraft">{{ projectDraftLabel() }}</p> }
       <form class="create" [attr.aria-busy]="creating()" (ngSubmit)="create()">
         <input placeholder="Project name" aria-label="Project name" [ngModel]="name()" (ngModelChange)="name.set($event)" name="name" required />
         <input placeholder="slug" aria-label="Project slug" [ngModel]="slug()" (ngModelChange)="slug.set($event)" name="slug" required pattern="[a-z0-9-]+" />
@@ -95,6 +96,8 @@ export class ProjectsComponent implements OnInit, OnDestroy {
   projectsLoading = signal(true); projectsError = signal(false);
   tfaLoading = signal(true); tfaError = signal(false);
   private projectsGeneration = 0; private tfaGeneration = 0; private destroyed = false;
+  hasProjectDraft=computed(()=>!!(this.name()||this.slug()||this.locales()));
+  projectDraftLabel=computed(()=>this.creating()?'Project creation is pending. Current new-project fields are kept here; they may differ from the submitted project. Do not create again.':this.createUnknown()?'Current new-project form is kept here, but project creation is unconfirmed. Copy the form before leaving and check/refresh projects before creating again.':'New-project form has local text. It is not automatically saved or restored after leaving. Copy the form before leaving to keep it; a copy does not create a project.');
   name = signal(''); slug = signal(''); locales = signal('');
   busy = signal(false); error = signal('');
   creating = signal(false); createNotice = signal('');

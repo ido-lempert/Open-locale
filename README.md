@@ -1114,3 +1114,10 @@ add distinguishes current edited fields from submitted data; unconfirmed add
 still requires checking the glossary before adding again. Loaded-row translation
 draft feedback and save behavior stay separate.
 [review0463](docs/reviews/0463-glossary-new-term-draft.md).
+
+The new-project form now explains local name/slug/locale text is not automatically
+saved/restored. Pending creation distinguishes current editable fields from the
+submitted project; unconfirmed creation still requires checking/refreshing the
+project list before another create. Copying the form does not create a project.
+Two-factor fields and loaded projects are separate from this local form feedback.
+[review0464](docs/reviews/0464-projects-local-draft.md).
