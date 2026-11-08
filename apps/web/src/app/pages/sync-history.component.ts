@@ -101,6 +101,9 @@ import { ApiService, SyncPreviewRecord } from '../api.service';
           comparison does not create a record. Records currently require an
           explicit API request.
         </p>
+        <label>Recorded attention <select name="syncHistoryAttention" [ngModel]="attention()" (ngModelChange)="setAttention($event)"><option value="">all records</option><option value="conflict">with conflicts</option><option value="manual">with manual-review keys</option></select></label>
+        <button type="button" name="clearSyncHistoryAttention" [disabled]="!attention()" (click)="setAttention('')">Clear attention filter</button>
+        <p class="muted" name="syncHistoryAttentionScope">Filters recorded caller-file counts only, not current project problems, verified remote state or completed work.</p>
         <label
           >Find loaded diagnostics
           <input
@@ -121,7 +124,7 @@ import { ApiService, SyncPreviewRecord } from '../api.service';
         <p class="muted" role="status" name="syncHistoryMatches">
           Showing {{ filteredRecords().length }} of
           {{ records().length }} loaded records. Search matches branch, locale,
-          caller SHA or fingerprint as a literal, case-insensitive substring. It
+          caller SHA or fingerprint as a literal, case-insensitive substring. It combines with recorded attention and
           does not read newer records or verify caller labels.
         </p>
         <ul class="records">
@@ -159,7 +162,7 @@ import { ApiService, SyncPreviewRecord } from '../api.service';
             <li class="empty" role="status">
               {{
                 records().length
-                  ? 'No loaded diagnostic records match this search. Clear search to show all loaded records.'
+                  ? emptyLabel()
                   : 'No diagnostic preview records. Comparing files alone does not save history.'
               }}
             </li>
@@ -167,7 +170,7 @@ import { ApiService, SyncPreviewRecord } from '../api.service';
         </ul>
       }
       <button type="button" name="downloadSyncHistory" [disabled]="loading() || !!error() || !loaded()" (click)="download()">Download loaded diagnostics (.json)</button>
-      <p class="muted" name="syncHistoryDownloadScope">Downloads all loaded records regardless of search, not older history or newer server changes. Includes IDs, caller labels, fingerprints and counts, not translation text. Caller labels remain unverified; records are not applied changes or accepted baselines. The file can contain private project metadata; downloading does not share it.</p>
+      <p class="muted" name="syncHistoryDownloadScope">Downloads all loaded records regardless of search or attention filter, not older history or newer server changes. Includes IDs, caller labels, fingerprints and counts, not translation text. Caller labels remain unverified; records are not applied changes or accepted baselines. The file can contain private project metadata; downloading does not share it.</p>
       @if(downloadNotice()){<p role="status" name="syncHistoryDownloadNotice">{{downloadNotice()}}</p>}
       <button
         type="button"
@@ -185,15 +188,13 @@ export class SyncHistoryComponent implements OnInit, OnDestroy {
   query = signal('');
   loaded = signal(false);
   downloadNotice = signal('');
+  attention=signal<''|'conflict'|'manual'>('');
+  setAttention(value:string){if(!this.destroyed&&(value===''||value==='conflict'||value==='manual'))this.attention.set(value);}
+  emptyLabel(){return this.attention()?'No loaded diagnostic records match this attention filter and search. Clear attention filter or search to show other loaded records.':'No loaded diagnostic records match this search. Clear search to show all loaded records.';}
   filteredRecords = computed(() => {
-    const query = this.query().trim().toLowerCase();
-    return query
-      ? this.records().filter((r) =>
-          [r.branch, r.locale, r.remoteSha, r.fingerprint].some((value) =>
-            value.toLowerCase().includes(query),
-          ),
-        )
-      : this.records();
+    const query=this.query().trim().toLowerCase(),attention=this.attention();
+    if(!query&&!attention)return this.records();
+    return this.records().filter(r=>(!query||[r.branch,r.locale,r.remoteSha,r.fingerprint].some(value=>value.toLowerCase().includes(query)))&&(!attention||(attention==='conflict'?r.summary.conflict>0:r.summary.manual>0)));
   });
   records = signal<SyncPreviewRecord[]>([]);
   loading = signal(true);
@@ -233,7 +234,7 @@ export class SyncHistoryComponent implements OnInit, OnDestroy {
   async load(id: string) {
     if (this.destroyed) return;
     const generation = ++this.generation;
-    if (this.projectId !== id) this.query.set('');
+    if (this.projectId !== id) {this.query.set('');this.attention.set('');}
     this.projectId = id;
     this.records.set([]);
     this.loaded.set(false);

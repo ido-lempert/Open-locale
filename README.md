@@ -1085,3 +1085,10 @@ with literal key/value search. Whitespace is non-empty; this does not find missi
 keys or run live QA. Filter changes reset paging, refresh retains filter and route
 visits reset it. Download still includes all loaded retained locale values.
 [review0459](docs/reviews/0459-ota-value-filter.md).
+
+Diagnostic history can filter loaded records by recorded conflict/manual-review
+counts, combined with literal metadata search. These caller-file counts do not
+identify current project problems or verified remote state. Refresh retains the
+filter, project visits reset it; download still includes every loaded record
+regardless of search/attention. No read, apply or sync action from filtering.
+[review0460](docs/reviews/0460-sync-history-attention.md).

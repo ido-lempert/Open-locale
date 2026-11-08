@@ -130,7 +130,8 @@
     "test:qa-search-browser": "node scripts/qa-search-browser-test.mjs",
     "test:reports-project-download-browser": "node scripts/reports-project-download-browser-test.mjs",
     "test:snapshots-kind-browser": "node scripts/snapshots-kind-browser-test.mjs",
-    "test:ota-value-filter-browser": "node scripts/ota-value-filter-browser-test.mjs"
+    "test:ota-value-filter-browser": "node scripts/ota-value-filter-browser-test.mjs",
+    "test:sync-history-attention-browser": "node scripts/sync-history-attention-browser-test.mjs"
   },
   "private": true,
   "dependencies": {
