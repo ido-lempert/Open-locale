@@ -131,7 +131,8 @@
     "test:reports-project-download-browser": "node scripts/reports-project-download-browser-test.mjs",
     "test:snapshots-kind-browser": "node scripts/snapshots-kind-browser-test.mjs",
     "test:ota-value-filter-browser": "node scripts/ota-value-filter-browser-test.mjs",
-    "test:sync-history-attention-browser": "node scripts/sync-history-attention-browser-test.mjs"
+    "test:sync-history-attention-browser": "node scripts/sync-history-attention-browser-test.mjs",
+    "test:tasks-draft-download-browser": "node scripts/tasks-draft-download-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

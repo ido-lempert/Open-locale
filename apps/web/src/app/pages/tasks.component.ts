@@ -68,6 +68,9 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
           <button class="primary" type="submit" [disabled]="creating() || createUnknown()">Create task</button>
           @if (creating()) { <span role="status" name="taskCreating">Creating task...</span> }
         </form>
+        <button type="button" name="downloadTaskDraft" [disabled]="!draftDownloadReady()" (click)="downloadDraft()">Download new-task form (.json)</button>
+        <p class="muted" name="taskDraftDownloadScope">Backs up only the current local new-task form, including description and selected IDs, not loaded tasks or server state. Choices may be stale or unavailable. This file is not importable and does not create, retry or confirm a task. Unconfirmed creation stays unconfirmed; check tasks before creating again. The file can contain private project text; downloading does not share it.</p>
+        @if (draftDownloadNotice()) { <p role="status" name="taskDraftDownloadNotice">{{draftDownloadNotice()}}</p> }
       </section>
       @if (listError()) { <p class="error" role="alert" name="taskListError">Tasks unavailable. No tasks are shown. Retry this read or reload the page.</p><button type="button" name="retryTaskList" (click)="void fetch()">Retry tasks</button> }
       @if (loading()) { <p role="status" name="taskListLoading">Loading tasks...</p> }
@@ -149,6 +152,21 @@ export class TasksComponent implements OnInit, OnDestroy {
   assigneeId = signal('');
   dependsOnId = signal('');
 
+  private draftDownloadResult=signal<{snapshot:string;message:string}|null>(null);
+  draftDownloadNotice=computed(()=>{const result=this.draftDownloadResult();return result&&result.snapshot===this.draftJson()?result.message:'';});
+  draftDownloadReady(){return !this.destroyed&&!!this.projectId&&!this.creating();}
+  private draftJson(){return JSON.stringify({schemaVersion:1,projectId:this.projectId,scope:'current-local-new-task-form',serverStateConfirmed:false,importable:false,canCreate:false,selectedIdsVerified:false,createOutcomeUnconfirmed:this.createUnknown(),draft:{title:this.title(),description:this.description(),dueDate:this.dueDate(),assigneeSelection:this.assigneeId(),dependsOnId:this.dependsOnId(),keyIds:[...this.selectedKeyIds()],lockKeys:this.lockKeys()}},null,2);}
+  downloadDraft(){
+    if(!this.draftDownloadReady())return;
+    let url:string|undefined;const snapshot=this.draftJson();
+    try{
+      url=URL.createObjectURL(new Blob([snapshot],{type:'application/json;charset=utf-8'}));
+      const anchor=document.createElement('a');anchor.href=url;anchor.download='new-task-form.json';anchor.click();
+      this.draftDownloadResult.set({snapshot,message:'Download requested for the current local new-task form. This does not confirm the file was saved, shared or a task was created.'});
+    }catch{this.draftDownloadResult.set({snapshot,message:'Download could not be started. Copy your form text before leaving.'});}
+    finally{if(url)URL.revokeObjectURL(url);}
+  }
+
   private routeSub?: Subscription;
   private fetchSeq = 0;
   private actionSeq = 0;
@@ -174,7 +192,7 @@ export class TasksComponent implements OnInit, OnDestroy {
   private initForProject(pid: string) {
     if(this.destroyed)return;
     ++this.projectGeneration;
-    this.projectId = pid;
+    this.projectId = pid;this.draftDownloadResult.set(null);
     this.fetchSeq++; // invalidate every in-flight fetch from the previous project
     ++this.mutationEpoch;this.actionUnknown.set(false);this.createUnknown.set(false);this.error.set('');this.createNotice.set('');this.actionNotice.set('');this.creating.set(false);this.updatingIds.set([]);this.deletingIds.set([]);
     this.loaded.set(false);this.downloadNotice.set('');this.tasks.set([]); this.members.set([]); this.groups.set([]); this.keys.set([]);
@@ -304,7 +322,7 @@ export class TasksComponent implements OnInit, OnDestroy {
     const current=()=>!this.destroyed&&scope===this.projectGeneration;
     const draft={title:this.title(),description:this.description(),dueDate:this.dueDate(),
       assigneeId:this.assigneeId(),dependsOnId:this.dependsOnId(),keyIds:[...this.selectedKeyIds()],lockKeys:this.lockKeys()};
-    this.loaded.set(false);this.downloadNotice.set('');++this.mutationEpoch;this.creating.set(true);this.error.set('');this.createNotice.set('');
+    this.draftDownloadResult.set(null);this.loaded.set(false);this.downloadNotice.set('');++this.mutationEpoch;this.creating.set(true);this.error.set('');this.createNotice.set('');
     try {
       await this.api.createTask(projectId, {
         title,

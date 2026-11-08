@@ -1092,3 +1092,10 @@ identify current project problems or verified remote state. Refresh retains the
 filter, project visits reset it; download still includes every loaded record
 regardless of search/attention. No read, apply or sync action from filtering.
 [review0460](docs/reviews/0460-sync-history-attention.md).
+
+Tasks can separately download the current local new-task form as JSON, including
+description and selected IDs, even after an unconfirmed creation or failed list
+read. Pending creation blocks backup. The file preserves uncertainty and does
+not import, create, retry, verify choices or confirm server state. Private form
+text stays local; loaded-task metadata export remains separate.
+[review0461](docs/reviews/0461-tasks-draft-download.md).
