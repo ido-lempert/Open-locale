@@ -1259,3 +1259,13 @@ receipt and permits another deliberate addition. It does not replay the request,
 replace editor columns or local translations, or confirm which request added a
 locale. Newer locale-code text is kept. See
 [review0483](docs/reviews/0483-editor-locale-unknown.md).
+
+### Recover from an unconfirmed key deletion
+
+An unconfirmed deletion now offers "Review retained values before reload" above
+the grid. This keeps local translation values and makes the grid read-only,
+without reading, saving or retrying deletion. Copy the retained values before
+explicitly retrying the key read, which replaces translations with server values.
+Failed reads keep the grid paused. A successful read shows current keys, not
+proof of which request deleted a missing key. See
+[review0484](docs/reviews/0484-editor-key-delete-recovery.md).

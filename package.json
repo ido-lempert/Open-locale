@@ -154,7 +154,8 @@
     "test:editor-tags-unknown-browser": "node scripts/editor-tags-unknown-browser-test.mjs",
     "test:editor-branch-unknown-browser": "node scripts/editor-branch-unknown-browser-test.mjs",
     "test:editor-key-unknown-browser": "node scripts/editor-key-unknown-browser-test.mjs",
-    "test:editor-locale-unknown-browser": "node scripts/editor-locale-unknown-browser-test.mjs"
+    "test:editor-locale-unknown-browser": "node scripts/editor-locale-unknown-browser-test.mjs",
+    "test:editor-key-delete-recovery-browser": "node scripts/editor-key-delete-recovery-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

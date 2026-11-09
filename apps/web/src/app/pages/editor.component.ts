@@ -139,6 +139,9 @@ interface CellState {
             <p class="muted empty" name="branchKeysEmpty">No keys on branch {{ branch() }}. Add one above - for example <code>home.title</code>.</p>
           }
         }
+        @for (k of keys(); track k.id) {
+          @if (keyDeleteErrorFor().includes(k.id)) { <p class="error" role="alert" name="keyDeleteError">Deletion of key "{{ k.name }}" could not be confirmed. Deletion stays paused. Copy retained translation values before reading current keys; this does not retry deletion.</p><button type="button" name="reloadAfterKeyDelete" (mousedown)="$event.preventDefault()" [disabled]="!keyDeleteRecoveryReady(k)" (click)="prepareKeyDeleteReload(k)">Review retained values before reload</button> }
+        }
         <table class="grid" [attr.inert]="keysLoading() || keysError() ? '' : null" [attr.aria-busy]="keysLoading()">
           <thead><tr><th>Key</th>@for (l of p.locales; track l.code) { <th>{{ l.code }}</th> }<th></th></tr></thead>
           <tbody>
@@ -241,7 +244,7 @@ interface CellState {
                 }
                 <td><button class="danger" [attr.aria-label]="'Delete key ' + k.name" title="Delete key (save local drafts and wait for pending work first)" [disabled]="!canRemoveKey(k)" (click)="removeKey(k)">&times;</button></td>
               </tr>
-              @if (keyDeleting().includes(k.id) || keyDeleteErrorFor().includes(k.id)) { <tr><td [attr.colspan]="2 + p.locales.length">@if (keyDeleting().includes(k.id)) { <span role="status" name="keyDeleting">Deleting key "{{ k.name }}"...</span> } @else { <span class="error" role="alert" name="keyDeleteError">Deletion of key "{{ k.name }}" could not be confirmed. Copy local values and reload before trying again.</span> }</td></tr> }
+              @if (keyDeleting().includes(k.id)) { <tr><td [attr.colspan]="2 + p.locales.length"><span role="status" name="keyDeleting">Deleting key "{{ k.name }}"...</span></td></tr> }
               @if (shotsFor() === k.id) {
                 <tr class="history-row shots-row"><td [attr.colspan]="2 + p.locales.length">
                   @if (shotsMutating().includes(k.id)) { <p class="muted" role="status" name="shotsMutating">Screenshot change pending. Closing this pane does not cancel it.</p> }
@@ -883,6 +886,8 @@ export class EditorComponent implements OnInit, OnDestroy {
     } catch { if (!this.destroyed) { ++this.keyCreateEpoch; this.keyCreateError.set(true); } }
     finally { if (!this.destroyed) this.keyCreating.set(false); }
   }
+  keyDeleteRecoveryReady(k:Key) { return !this.destroyed && !this.keysLoading() && !this.keysError() && this.keyDeleteErrorFor().includes(k.id) && !this.keyDeleting().length && !this.tagsSaving().length && this.keys().some(key=>key.id===k.id); }
+  prepareKeyDeleteReload(k:Key) { if(this.keyDeleteRecoveryReady(k))this.prepareSaveReload(); }
   canRemoveKey(k: Key) {
     return !this.destroyed && !this.keysLoading() && !this.keysError() && !this.bulkReviewPending()
       && !this.keyDeleting().includes(k.id) && !this.keyDeleteErrorFor().includes(k.id)
