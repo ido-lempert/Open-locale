@@ -1,7 +1,7 @@
 import { EditorComponent } from './editor.component';
 const key={id:'A'} as any;
 const wait=()=>{let resolve!:(v:any)=>void,reject!:(e:Error)=>void;const promise=new Promise<any>((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
-const make=(api:any)=>{const c=new EditorComponent(api,{snapshot:{paramMap:{get:()=> 'p'}}} as any);c.shotsFor.set('A');c.shots.set([{id:'s'}] as any);c.keys.set([{id:'A',_count:{screenshots:2,comments:3}}] as any);return c;};
+const make=(api:any)=>{const c=new EditorComponent(api,{snapshot:{paramMap:{get:()=> 'p'}}} as any);c.shotsFor.set('A');c.shots.set([{id:'s'}] as any);c.keys.set([{id:'A',_count:{screenshots:2,comments:3}},{id:'B'}] as any);c.keysLoading.set(false);return c;};
 const pick=()=>({target:{files:[{}],value:'file'}} as any);
 describe('screenshot mutation continuation',()=>{
  beforeEach(()=>{URL.revokeObjectURL=jest.fn();});

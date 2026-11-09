@@ -1309,3 +1309,8 @@ Opening or closing comments now keeps a focused translation draft from
 blur-autosaving. The guarded toggle reads only the thread on open and fences
 late results after close. Existing comment-draft reset-on-open is unchanged.
 See [review0490](docs/reviews/0490-editor-comments-toggle.md).
+
+Opening or closing screenshots now keeps a focused translation draft from
+blur-autosaving. The guarded toggle reads only the screenshot list and image
+bytes on open; close revokes image URLs without requests and fences late reads.
+See [review0491](docs/reviews/0491-editor-shots-toggle.md).

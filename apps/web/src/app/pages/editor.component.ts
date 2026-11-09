@@ -164,7 +164,7 @@ interface CellState {
                     (click)="toggleHistory(k)">history</button>
                   <button class="comments-toggle" [attr.aria-expanded]="commentsFor() === k.id" (mousedown)="$event.preventDefault()" [disabled]="!commentsToggleReady(k)"
                     (click)="toggleComments(k)">comments{{ k._count?.comments ? ' (' + k._count.comments + ')' : '' }}</button>
-                  <button class="shots-toggle" [attr.aria-expanded]="shotsFor() === k.id"
+                  <button class="shots-toggle" [attr.aria-expanded]="shotsFor() === k.id" (mousedown)="$event.preventDefault()" [disabled]="!shotsToggleReady(k)"
                     (click)="toggleShots(k)">shots{{ k._count?.screenshots ? ' (' + k._count.screenshots + ')' : '' }}</button>@if (tagsErrorFor().includes(k.id)) { <p class="cell-error-reason" role="alert" name="tagsError" style="white-space:normal;max-width:18rem">Tag result unconfirmed. Editing is paused. Copy retained translation values before reloading current server tags.</p><button type="button" name="reloadAfterTags" [disabled]="tagsSaving().length > 0" (mousedown)="$event.preventDefault()" (click)="prepareTagsReload(k)">Review retained values before reload</button> }</td>
                 @for (l of p.locales; track l.code) {
                   <td [attr.data-locale]="l.code">
@@ -769,7 +769,9 @@ export class EditorComponent implements OnInit, OnDestroy {
     ++this.shotsGeneration; this.shotsFor.set(null); this.shotsLoading.set(false); this.shotsError.set(false);
     this.revokeShots(this.shotUrls()); this.shotUrls.set({}); this.shots.set([]);
   }
+  shotsToggleReady(k:Key) { return !this.destroyed && !this.keysLoading() && !this.keysError() && !this.keyDeleting().includes(k.id) && !this.keyDeleteErrorFor().includes(k.id) && this.keys().some(key=>key.id===k.id); }
   async toggleShots(k: Key) {
+    if(!this.shotsToggleReady(k))return;
     if (this.destroyed) return;
     if (this.shotsFor() === k.id) { this.clearShots(); return; }
     this.shotsFor.set(k.id);
