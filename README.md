@@ -1223,3 +1223,10 @@ blur-autosave a translation. Separate locale reads return at most50 newest
 combined changes, not a snapshot or complete history; nothing is restored.
 Pending/failed/key-uncertain and departed states retain their existing guards
 and recovery. See [review0478](docs/reviews/0478-editor-history-refresh.md).
+
+A settled translation-memory selection can refresh the same empty target's
+suggestions, including after a no-match result. The lookup uses current local
+source text and locale, returns at most three suggestions and never applies or
+saves one. Pointer refresh keeps focus without blur autosave. Pending, stale,
+uncertain or departed selections refuse; failed reads keep existing retry.
+See [review0479](docs/reviews/0479-editor-tm-refresh.md).

@@ -180,6 +180,11 @@ interface CellState {
                         }
                       </div>
                     }
+                    @if (suggestFor() === k.id + ':' + l.code && !tmError()) {
+                      <button type="button" name="refreshTm" (mousedown)="$event.preventDefault()" [disabled]="!tmRefreshReady(k,l.code)" (click)="refreshTm(k,l.code)">Refresh memory</button>
+                      <p class="muted" name="tmRefreshScope" style="white-space:normal">Refresh looks up memory for this locale and the current local source text only, returning at most three suggestions. It does not reload translations, apply a suggestion or save anything.</p>
+                      @if (!tmLoading() && suggestions().length === 0) { <p class="muted" name="tmEmpty">No memory suggestions returned for this source and locale.</p> }
+                    }
                     @if (suggestFor() === k.id + ':' + l.code && tmLoading()) { <p class="muted" role="status" name="tmLoading">Looking in translation memory...</p> }
                     @if (suggestFor() === k.id + ':' + l.code && tmError()) { <p class="error" role="alert" name="tmError">Translation memory unavailable.</p><button type="button" name="retryTm" (click)="onCellFocus(k, l.code)">Retry memory</button> }
                     @if (suggestFor() === k.id + ':' + l.code && suggestions().length > 0) {
@@ -716,6 +721,8 @@ export class EditorComponent implements OnInit, OnDestroy {
     } catch { if (current()) this.tmError.set(true); }
     finally { if (current()) this.tmLoading.set(false); }
   }
+  tmRefreshReady(k:Key,locale:string) { return this.keys().some(key=>key.id===k.id) && this.canApplySuggestion(k,locale); }
+  refreshTm(k:Key,locale:string) { if(this.tmRefreshReady(k,locale))return this.onCellFocus(k,locale);return Promise.resolve(); }
   canApplySuggestion(k: Key, locale: string) {
     if (this.destroyed || this.keysLoading() || this.keysError() || this.bulkReviewPending() || this.importWritePending()
       || this.keyDeleting().includes(k.id) || this.keyDeleteErrorFor().includes(k.id)) return false;
