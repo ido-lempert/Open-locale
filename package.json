@@ -158,7 +158,8 @@
     "test:editor-key-delete-recovery-browser": "node scripts/editor-key-delete-recovery-browser-test.mjs",
     "test:editor-comments-read-recovery-browser": "node scripts/editor-comments-read-recovery-browser-test.mjs",
     "test:editor-shots-read-recovery-browser": "node scripts/editor-shots-read-recovery-browser-test.mjs",
-    "test:editor-history-read-recovery-browser": "node scripts/editor-history-read-recovery-browser-test.mjs"
+    "test:editor-history-read-recovery-browser": "node scripts/editor-history-read-recovery-browser-test.mjs",
+    "test:editor-tm-read-recovery-browser": "node scripts/editor-tm-read-recovery-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

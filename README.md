@@ -1294,3 +1294,8 @@ loaded key, retains local values and refuses pending or unavailable state.
 Separate locale reads still show at most 50 newest returned changes, not complete
 history or one database snapshot. See
 [review0487](docs/reviews/0487-editor-history-read-recovery.md).
+
+Failed translation-memory retry now shares the current empty-target safety checks
+and keeps target focus. It refuses pending or unavailable state and reads saved
+memory without applying or saving a suggestion. See
+[review0488](docs/reviews/0488-editor-tm-read-recovery.md).

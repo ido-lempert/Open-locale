@@ -193,7 +193,7 @@ interface CellState {
                       @if (!tmLoading() && suggestions().length === 0) { <p class="muted" name="tmEmpty">No memory suggestions returned for this source and locale.</p> }
                     }
                     @if (suggestFor() === k.id + ':' + l.code && tmLoading()) { <p class="muted" role="status" name="tmLoading">Looking in translation memory...</p> }
-                    @if (suggestFor() === k.id + ':' + l.code && tmError()) { <p class="error" role="alert" name="tmError">Translation memory unavailable.</p><button type="button" name="retryTm" (click)="onCellFocus(k, l.code)">Retry memory</button> }
+                    @if (suggestFor() === k.id + ':' + l.code && tmError()) { <p class="error" role="alert" name="tmError">Translation memory unavailable.</p><button type="button" name="retryTm" (mousedown)="$event.preventDefault()" [disabled]="!tmRecoveryReady(k,l.code)" (click)="recoverTm(k,l.code)">Retry memory</button> }
                     @if (suggestFor() === k.id + ':' + l.code && suggestions().length > 0) {
                       @if (!canApplySuggestion(k, l.code)) { <p class="muted" name="tmApplyBlocked">Memory apply unavailable. Save local target drafts and wait for pending work, or copy retained values before reloading an unconfirmed result.</p> }
                       <div class="tm-suggest">
@@ -740,11 +740,14 @@ export class EditorComponent implements OnInit, OnDestroy {
   }
   tmRefreshReady(k:Key,locale:string) { return this.keys().some(key=>key.id===k.id) && this.canApplySuggestion(k,locale); }
   refreshTm(k:Key,locale:string) { if(this.tmRefreshReady(k,locale))return this.onCellFocus(k,locale);return Promise.resolve(); }
-  canApplySuggestion(k: Key, locale: string) {
+  tmRecoveryReady(k:Key,locale:string) { return this.keys().some(key=>key.id===k.id) && this.tmError() && this.tmTargetReady(k,locale,true); }
+  recoverTm(k:Key,locale:string) { if(this.tmRecoveryReady(k,locale))return this.onCellFocus(k,locale);return Promise.resolve(); }
+  canApplySuggestion(k: Key, locale: string) { return this.tmTargetReady(k,locale); }
+  private tmTargetReady(k: Key, locale: string, allowReadError=false) {
     if (this.destroyed || this.keysLoading() || this.keysError() || this.bulkReviewPending() || this.importWritePending()
       || this.keyDeleting().includes(k.id) || this.keyDeleteErrorFor().includes(k.id)) return false;
     const base = this.project()?.baseLocale;
-    if (!base || locale === base || this.suggestFor() !== `${k.id}:${locale}` || this.tmLoading() || this.tmError()
+    if (!base || locale === base || this.suggestFor() !== `${k.id}:${locale}` || this.tmLoading() || (!allowReadError && this.tmError())
       || this.cell(k.id, base)().value.trim() !== this.tmSource) return false;
     const c = this.cell(k.id, locale)();
     return !c.value.trim() && c.value === c.saved && this.sameForms(c.forms, c.savedForms)
