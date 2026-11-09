@@ -1299,3 +1299,8 @@ Failed translation-memory retry now shares the current empty-target safety check
 and keeps target focus. It refuses pending or unavailable state and reads saved
 memory without applying or saving a suggestion. See
 [review0488](docs/reviews/0488-editor-tm-read-recovery.md).
+
+Opening or closing a key's translation history now keeps a focused local draft
+from blur-autosaving. The guarded toggle reads saved history only on open, closes
+without a request and fences late history responses after close. See
+[review0489](docs/reviews/0489-editor-history-toggle.md).

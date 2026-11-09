@@ -160,7 +160,7 @@ interface CellState {
                     @if (tagsSaving().includes(k.id)) { <span class="muted" role="status" name="tagsSaving">Saving tags...</span> }
 
                   </span>
-                  <button class="history-toggle" [attr.aria-expanded]="historyFor() === k.id"
+                  <button class="history-toggle" [attr.aria-expanded]="historyFor() === k.id" (mousedown)="$event.preventDefault()" [disabled]="!historyToggleReady(k)"
                     (click)="toggleHistory(k)">history</button>
                   <button class="comments-toggle" [attr.aria-expanded]="commentsFor() === k.id"
                     (click)="toggleComments(k)">comments{{ k._count?.comments ? ' (' + k._count.comments + ')' : '' }}</button>
@@ -847,7 +847,9 @@ export class EditorComponent implements OnInit, OnDestroy {
     ++this.historyGeneration; this.historyFor.set(null); this.historyEntries.set([]);
     this.historyError.set(false); this.historyLoading.set(false);
   }
+  historyToggleReady(k:Key) { return !this.destroyed && !this.keysLoading() && !this.keysError() && !this.keyDeleting().includes(k.id) && !this.keyDeleteErrorFor().includes(k.id) && this.keys().some(key=>key.id===k.id); }
   async toggleHistory(k: Key) {
+    if(!this.historyToggleReady(k))return;
     if(this.destroyed)return;
     if (this.historyFor() === k.id) {
       this.clearHistory(); return;

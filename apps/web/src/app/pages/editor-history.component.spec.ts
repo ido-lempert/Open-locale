@@ -1,7 +1,7 @@
 import { EditorComponent } from './editor.component';
 import { ActivatedRoute } from '@angular/router';
 import { ApiService } from '../api.service';
-const make=(api:any)=>{const c=new EditorComponent(api as ApiService,{snapshot:{paramMap:{get:()=> 'p'}}} as never as ActivatedRoute);c.project.set({locales:[{code:'en'}]} as never);return c;};
+const make=(api:any)=>{const c=new EditorComponent(api as ApiService,{snapshot:{paramMap:{get:()=> 'p'}}} as never as ActivatedRoute);c.project.set({locales:[{code:'en'}]} as never);c.keys.set([{id:'A'},{id:'B'}] as any);c.keysLoading.set(false);return c;};
 const wait=()=>{let resolve!:(v:any)=>void,reject!:(e:Error)=>void;const promise=new Promise<any>((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
 const key=(id:string)=>({id} as any);
 describe('editor selected history read',()=>{
