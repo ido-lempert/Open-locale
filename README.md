@@ -1339,3 +1339,8 @@ Opening tags now keeps a focused translation local without blur-autosave, uses
 current loaded metadata and preserves an already-open tag draft. Mobile tag
 editing wraps without clipping nearby controls. Editing the tag input still
 saves on blur or Enter. See [review0496](docs/reviews/0496-editor-tags-open-focus.md).
+
+Cancel tags discards the current local tag edit without saving. Pointer cancel
+keeps loaded tags and local translation values; another tag editor cannot replace
+an active draft. Submitted tag writes still use their existing pending/unknown
+result handling. See [review0497](docs/reviews/0497-editor-tags-cancel.md).

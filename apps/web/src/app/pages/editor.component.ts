@@ -159,6 +159,7 @@ interface CellState {
                       <input class="tag-edit" aria-label="Edit tags (comma separated)" [disabled]="tagsSaving().includes(k.id) || tagsErrorFor().includes(k.id)"
                         [ngModel]="tagDraft()" (ngModelChange)="tagDraft.set($event)"
                         (blur)="saveTags(k)" (keydown.enter)="saveTags(k)" />
+                      <button type="button" name="cancelTagEdit" title="Discard this local tag edit without saving" (mousedown)="$event.preventDefault()" [disabled]="!tagCancelReady(k)" (click)="cancelTagEdit(k)">Cancel tags</button>
                     } @else {
                       <button class="tags-toggle" (mousedown)="$event.preventDefault()" [disabled]="!tagOpenReady(k)" (click)="openTagEdit(k)">tags</button>
                     }
@@ -621,13 +622,23 @@ export class EditorComponent implements OnInit, OnDestroy {
     return !this.destroyed && !this.keysLoading() && !this.keysError()
       && !this.tagsSaving().includes(k.id) && !this.tagsErrorFor().includes(k.id)
       && !this.keyDeleting().includes(k.id) && !this.keyDeleteErrorFor().includes(k.id)
-      && this.tagEditFor() !== k.id && this.keys().some(key => key.id === k.id);
+      && this.tagEditFor() === null && this.keys().some(key => key.id === k.id);
   }
   openTagEdit(k: Key) {
     if (!this.tagOpenReady(k)) return;
     const current = this.keys().find(key => key.id === k.id)!;
     this.tagEditFor.set(k.id);
     this.tagDraft.set(current.tags.join(', '));
+  }
+  tagCancelReady(k: Key) {
+    return !this.destroyed && !this.keysLoading() && !this.keysError()
+      && !this.tagsSaving().includes(k.id) && !this.tagsErrorFor().includes(k.id)
+      && !this.keyDeleting().includes(k.id) && !this.keyDeleteErrorFor().includes(k.id)
+      && this.tagEditFor() === k.id && this.keys().some(key => key.id === k.id);
+  }
+  cancelTagEdit(k: Key) {
+    if (!this.tagCancelReady(k)) return;
+    this.tagEditFor.set(null); this.tagDraft.set('');
   }
   prepareTagsReload(k:Key) {
     if(this.destroyed || this.keysLoading() || this.keysError() || !this.tagsErrorFor().includes(k.id) || this.tagsSaving().length || !this.keys().some(key=>key.id===k.id))return;

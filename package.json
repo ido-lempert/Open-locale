@@ -164,6 +164,7 @@
     "test:editor-history-read-recovery-browser": "node scripts/editor-history-read-recovery-browser-test.mjs",
     "test:editor-tm-read-recovery-browser": "node scripts/editor-tm-read-recovery-browser-test.mjs",
     "test:editor-history-toggle-browser": "node scripts/editor-history-toggle-browser-test.mjs",
+    "test:editor-tags-cancel-browser": "node scripts/editor-tags-cancel-browser-test.mjs",
     "test:editor-tags-open-focus-browser": "node scripts/editor-tags-open-focus-browser-test.mjs",
     "test:editor-comment-reply-focus-browser": "node scripts/editor-comment-reply-focus-browser-test.mjs",
     "test:editor-comments-toggle-browser": "node scripts/editor-comments-toggle-browser-test.mjs",
