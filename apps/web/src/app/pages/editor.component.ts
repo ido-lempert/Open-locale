@@ -222,7 +222,7 @@ interface CellState {
                         <button type="button" name="saveCellDraft" [disabled]="!canSaveDraft(k, l.code)" (click)="save(k, l.code)">Save draft</button>
                       }
                       @if (cell(k.id, l.code)().status === 'error') {
-                        <span class="cell-status">Save not confirmed. Local draft retained.</span><button type="button" name="reloadAfterSave" (click)="prepareSaveReload()">Review retained values before reload</button>
+                        <span class="cell-status">Save not confirmed. Local draft retained.</span><button type="button" name="reloadAfterSave" (mousedown)="$event.preventDefault()" [disabled]="!cellSaveRecoveryReady(k,l.code)" (click)="prepareCellSaveReload(k,l.code)">Review retained values before reload</button>
                         @if (cell(k.id, l.code)().errorMsg) {
                           <span class="cell-error-reason">{{ cell(k.id, l.code)().errorMsg }}</span>
                         }
@@ -576,6 +576,8 @@ export class EditorComponent implements OnInit, OnDestroy {
         errorMsg: 'The row may have changed or the result may be unknown. Copy retained values and reload before another save.' }));
     }
   }
+  cellSaveRecoveryReady(k:Key,locale:string) { return !this.destroyed && !this.keysLoading() && !this.keysError() && !this.keyDeleting().length && !this.tagsSaving().length && this.keys().some(key=>key.id===k.id) && !!this.project()?.locales.some(l=>l.code===locale) && this.cell(k.id,locale)().status==='error'; }
+  prepareCellSaveReload(k:Key,locale:string) { if(this.cellSaveRecoveryReady(k,locale))this.prepareSaveReload(); }
   prepareSaveReload() {
     ++this.keysGeneration; this.keysLoading.set(false); this.keysError.set(true);
     this.clearHistory(); this.clearShots(); this.clearComments(); this.clearTm();

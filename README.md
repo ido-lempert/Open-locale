@@ -1324,3 +1324,8 @@ Retrying a failed editor branch list now keeps a focused local translation from
 blur-autosaving. The explicit guarded retry reads branches only, without creating
 a branch, switching branches or reloading keys. See
 [review0493](docs/reviews/0493-editor-branches-retry-focus.md).
+
+Reviewing retained values after an unconfirmed cell save no longer blur-saves
+another focused local translation. The guarded preparation makes no requests
+and keeps both drafts available to copy before explicit reload. See
+[review0494](docs/reviews/0494-editor-save-recovery-focus.md).

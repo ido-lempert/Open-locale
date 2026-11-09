@@ -1,0 +1,7 @@
+import { EditorComponent } from './editor.component';
+const k={id:'k'} as any;
+const make=()=>{const c=new EditorComponent({} as any,{snapshot:{paramMap:{get:()=> 'p'}}} as any);c.project.set({locales:[{code:'en'}]} as any);c.keys.set([k]);c.cell('k','en').update(s=>({...s,status:'error',needsReload:true,value:'failed draft'}));return c;};
+describe('explicit cell save recovery',()=>{
+ for(const state of ['healthy','loading','error','delete','tag','absent','locale','departed'])it(`refuses ${state}`,()=>{const c=make();if(state==='healthy')c.cell('k','en').update(s=>({...s,status:'idle'}));if(state==='loading')c.keysLoading.set(true);if(state==='error')c.keysError.set(true);if(state==='delete')c.keyDeleting.set(['other']);if(state==='tag')c.tagsSaving.set(['other']);if(state==='absent')c.keys.set([]);if(state==='locale')c.project.set({locales:[]} as any);if(state==='departed')c.ngOnDestroy();const prepare=jest.spyOn(c,'prepareSaveReload');c.prepareCellSaveReload(k,'en');expect(prepare).not.toHaveBeenCalled();});
+ it('prepares retained values without save or read and preserves other local draft',()=>{const c=make(),other={id:'other'} as any;c.keys.set([k,other]);c.edit(other,'en','other local');c.save=jest.fn();c.reload=jest.fn();c.prepareCellSaveReload(k,'en');expect(c.keysError()).toBe(true);expect(c.retainedGridValues()).toContain('failed draft');expect(c.retainedGridValues()).toContain('other local');expect(c.save).not.toHaveBeenCalled();expect(c.reload).not.toHaveBeenCalled();});
+});
