@@ -1230,3 +1230,9 @@ source text and locale, returns at most three suggestions and never applies or
 saves one. Pointer refresh keeps focus without blur autosave. Pending, stale,
 uncertain or departed selections refuse; failed reads keep existing retry.
 See [review0479](docs/reviews/0479-editor-tm-refresh.md).
+
+An unconfirmed tag write now pauses that key's tag editor and captured save
+handlers until current keys are read. Review retained values opens existing
+read-only grid recovery without reading, saving or discarding translations;
+copy local values before explicitly retrying the key read. Failed reads keep
+the grid paused. See [review0480](docs/reviews/0480-editor-tags-unknown.md).

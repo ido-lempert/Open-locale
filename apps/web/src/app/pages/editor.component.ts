@@ -144,11 +144,11 @@ interface CellState {
                   <span class="tags">
                     @for (t of k.tags; track t) { <span class="tag-chip">{{ t }}</span> }
                     @if (tagEditFor() === k.id) {
-                      <input class="tag-edit" aria-label="Edit tags (comma separated)" [disabled]="tagsSaving().includes(k.id)"
+                      <input class="tag-edit" aria-label="Edit tags (comma separated)" [disabled]="tagsSaving().includes(k.id) || tagsErrorFor().includes(k.id)"
                         [ngModel]="tagDraft()" (ngModelChange)="tagDraft.set($event)"
                         (blur)="saveTags(k)" (keydown.enter)="saveTags(k)" />
                     } @else {
-                      <button class="tags-toggle" [disabled]="tagsSaving().includes(k.id)" (click)="openTagEdit(k)">tags</button>
+                      <button class="tags-toggle" [disabled]="tagsSaving().includes(k.id) || tagsErrorFor().includes(k.id)" (click)="openTagEdit(k)">tags</button>
                     }
                     @if (tagsSaving().includes(k.id)) { <span class="muted" role="status" name="tagsSaving">Saving tags...</span> }
 
@@ -158,7 +158,7 @@ interface CellState {
                   <button class="comments-toggle" [attr.aria-expanded]="commentsFor() === k.id"
                     (click)="toggleComments(k)">comments{{ k._count?.comments ? ' (' + k._count.comments + ')' : '' }}</button>
                   <button class="shots-toggle" [attr.aria-expanded]="shotsFor() === k.id"
-                    (click)="toggleShots(k)">shots{{ k._count?.screenshots ? ' (' + k._count.screenshots + ')' : '' }}</button>@if (tagsErrorFor().includes(k.id)) { <p class="cell-error-reason" role="alert" name="tagsError" style="white-space:normal;max-width:18rem">Tag result unconfirmed. Check current server tags before trying again.</p> }</td>
+                    (click)="toggleShots(k)">shots{{ k._count?.screenshots ? ' (' + k._count.screenshots + ')' : '' }}</button>@if (tagsErrorFor().includes(k.id)) { <p class="cell-error-reason" role="alert" name="tagsError" style="white-space:normal;max-width:18rem">Tag result unconfirmed. Editing is paused. Copy retained translation values before reloading current server tags.</p><button type="button" name="reloadAfterTags" [disabled]="tagsSaving().length > 0" (mousedown)="$event.preventDefault()" (click)="prepareTagsReload(k)">Review retained values before reload</button> }</td>
                 @for (l of p.locales; track l.code) {
                   <td [attr.data-locale]="l.code">
                     <textarea rows="1" [attr.dir]="isRtl(l.code) ? 'rtl' : 'ltr'"
@@ -600,12 +600,16 @@ export class EditorComponent implements OnInit, OnDestroy {
     } finally { sig.update(cur => ({ ...cur, reviewing: false })); }
   }
   openTagEdit(k: Key) {
-    if (this.destroyed || this.keysLoading() || this.keysError() || this.tagsSaving().includes(k.id) || this.keyDeleting().includes(k.id) || this.keyDeleteErrorFor().includes(k.id)) return;
+    if (this.destroyed || this.keysLoading() || this.keysError() || this.tagsSaving().includes(k.id) || this.tagsErrorFor().includes(k.id) || this.keyDeleting().includes(k.id) || this.keyDeleteErrorFor().includes(k.id)) return;
     this.tagEditFor.set(k.id);
     this.tagDraft.set(k.tags.join(', '));
   }
+  prepareTagsReload(k:Key) {
+    if(this.destroyed || this.keysLoading() || this.keysError() || !this.tagsErrorFor().includes(k.id) || this.tagsSaving().length || !this.keys().some(key=>key.id===k.id))return;
+    this.prepareSaveReload();
+  }
   async saveTags(k: Key) {
-    if (this.destroyed || this.keysLoading() || this.keysError() || this.tagsSaving().includes(k.id) || this.tagEditFor() !== k.id || this.keyDeleting().includes(k.id) || this.keyDeleteErrorFor().includes(k.id)) return;
+    if (this.destroyed || this.keysLoading() || this.keysError() || this.tagsSaving().includes(k.id) || this.tagsErrorFor().includes(k.id) || this.tagEditFor() !== k.id || this.keyDeleting().includes(k.id) || this.keyDeleteErrorFor().includes(k.id)) return;
     const tags = this.tagDraft().split(',').map((t) => t.trim()).filter(Boolean);
     const generation = this.keysGeneration, projectId = this.projectId;
     const current = () => !this.destroyed && generation === this.keysGeneration;
