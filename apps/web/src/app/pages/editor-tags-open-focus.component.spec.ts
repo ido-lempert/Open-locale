@@ -1,0 +1,8 @@
+import { EditorComponent } from './editor.component';
+const k={id:'k',tags:['current']} as any;
+const make=()=>{const c=new EditorComponent({} as any,{snapshot:{paramMap:{get:()=> 'p'}}} as any);c.keys.set([k]);return c;};
+describe('explicit local tag opening',()=>{
+ for(const state of ['loading','error','saving','unknown','deleting','unknownDelete','absent','same','departed'])it(`refuses ${state} opening without replacing local state`,()=>{const c=make();if(state==='loading')c.keysLoading.set(true);if(state==='error')c.keysError.set(true);if(state==='saving')c.tagsSaving.set(['k']);if(state==='unknown')c.tagsErrorFor.set(['k']);if(state==='deleting')c.keyDeleting.set(['k']);if(state==='unknownDelete')c.keyDeleteErrorFor.set(['k']);if(state==='absent')c.keys.set([]);if(state==='same')c.tagEditFor.set('k');if(state==='departed')c.ngOnDestroy();c.tagDraft.set('retained draft');const before=c.tagEditFor();expect(c.tagOpenReady(k)).toBe(false);c.openTagEdit(k);expect(c.tagEditFor()).toBe(before);expect(c.tagDraft()).toBe('retained draft');});
+ it('opens current loaded metadata only without translation save',()=>{const c=make();c.edit(k,'en','local translation');c.save=jest.fn();c.saveTags=jest.fn();c.openTagEdit({...k,tags:['stale']});expect(c.tagEditFor()).toBe('k');expect(c.tagDraft()).toBe('current');expect(c.cell('k','en')().value).toBe('local translation');expect(c.save).not.toHaveBeenCalled();expect(c.saveTags).not.toHaveBeenCalled();});
+ it('captured duplicate keeps edited tag draft',()=>{const c=make();c.openTagEdit(k);c.tagDraft.set('local tag draft');c.openTagEdit(k);expect(c.tagDraft()).toBe('local tag draft');});
+});

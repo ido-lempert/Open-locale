@@ -1334,3 +1334,8 @@ Focused comment reply/cancel change only the local reply target and retain the
 translation, comment draft and scope without requests or translation autosave.
 Both refuse unavailable current-thread/key state; reply requires a current root.
 See [review0495](docs/reviews/0495-editor-comment-reply-focus.md).
+
+Opening tags now keeps a focused translation local without blur-autosave, uses
+current loaded metadata and preserves an already-open tag draft. Mobile tag
+editing wraps without clipping nearby controls. Editing the tag input still
+saves on blur or Enter. See [review0496](docs/reviews/0496-editor-tags-open-focus.md).

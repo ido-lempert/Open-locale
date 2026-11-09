@@ -23,6 +23,11 @@ interface CellState {
 
 @Component({
   selector: 'ol-editor',
+  styles: [`@media (max-width: 760px) {
+    .grid td.key { white-space: normal; }
+    .tags { display: flex; margin: .35rem 0; max-width: 100%; }
+    .tag-edit { width: 100%; min-width: 0; flex: 1 1 100%; }
+  }`],
   imports: [FormsModule, RouterLink, DatePipe],
   template: `
     <header class="bar">
@@ -155,7 +160,7 @@ interface CellState {
                         [ngModel]="tagDraft()" (ngModelChange)="tagDraft.set($event)"
                         (blur)="saveTags(k)" (keydown.enter)="saveTags(k)" />
                     } @else {
-                      <button class="tags-toggle" [disabled]="tagsSaving().includes(k.id) || tagsErrorFor().includes(k.id)" (click)="openTagEdit(k)">tags</button>
+                      <button class="tags-toggle" (mousedown)="$event.preventDefault()" [disabled]="!tagOpenReady(k)" (click)="openTagEdit(k)">tags</button>
                     }
                     @if (tagsSaving().includes(k.id)) { <span class="muted" role="status" name="tagsSaving">Saving tags...</span> }
 
@@ -612,10 +617,17 @@ export class EditorComponent implements OnInit, OnDestroy {
         errorMsg: 'Review result could not be confirmed. Copy retained values and reload before another change.' }));
     } finally { sig.update(cur => ({ ...cur, reviewing: false })); }
   }
+  tagOpenReady(k: Key) {
+    return !this.destroyed && !this.keysLoading() && !this.keysError()
+      && !this.tagsSaving().includes(k.id) && !this.tagsErrorFor().includes(k.id)
+      && !this.keyDeleting().includes(k.id) && !this.keyDeleteErrorFor().includes(k.id)
+      && this.tagEditFor() !== k.id && this.keys().some(key => key.id === k.id);
+  }
   openTagEdit(k: Key) {
-    if (this.destroyed || this.keysLoading() || this.keysError() || this.tagsSaving().includes(k.id) || this.tagsErrorFor().includes(k.id) || this.keyDeleting().includes(k.id) || this.keyDeleteErrorFor().includes(k.id)) return;
+    if (!this.tagOpenReady(k)) return;
+    const current = this.keys().find(key => key.id === k.id)!;
     this.tagEditFor.set(k.id);
-    this.tagDraft.set(k.tags.join(', '));
+    this.tagDraft.set(current.tags.join(', '));
   }
   prepareTagsReload(k:Key) {
     if(this.destroyed || this.keysLoading() || this.keysError() || !this.tagsErrorFor().includes(k.id) || this.tagsSaving().length || !this.keys().some(key=>key.id===k.id))return;
