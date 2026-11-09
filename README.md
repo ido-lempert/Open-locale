@@ -1242,3 +1242,10 @@ current branch-list read. Check current branches reads only branch options,
 keeps local branch/translation drafts and does not replay creation or switch
 branches. Failed reads keep creation paused; older reads cannot clear a newer
 unknown outcome. See [review0481](docs/reviews/0481-editor-branch-unknown.md).
+
+Unconfirmed key creation pauses new creates until a fresh unfiltered key read
+on the original creation branch succeeds. Review retained values opens local
+copy-before-reload recovery without reading, saving or discarding translations.
+Other-branch, filtered, failed or older reads cannot clear the pause. A read
+never retries creation or proves a missing key was never created. See
+[review0482](docs/reviews/0482-editor-key-unknown.md).

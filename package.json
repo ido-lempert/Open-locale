@@ -152,7 +152,8 @@
     "test:editor-history-refresh-browser": "node scripts/editor-history-refresh-browser-test.mjs",
     "test:editor-tm-refresh-browser": "node scripts/editor-tm-refresh-browser-test.mjs",
     "test:editor-tags-unknown-browser": "node scripts/editor-tags-unknown-browser-test.mjs",
-    "test:editor-branch-unknown-browser": "node scripts/editor-branch-unknown-browser-test.mjs"
+    "test:editor-branch-unknown-browser": "node scripts/editor-branch-unknown-browser-test.mjs",
+    "test:editor-key-unknown-browser": "node scripts/editor-key-unknown-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

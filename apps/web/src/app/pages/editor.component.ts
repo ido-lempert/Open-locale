@@ -73,9 +73,9 @@ interface CellState {
           }
           <form class="inline" (ngSubmit)="addKey()">
             <input placeholder="new.key.name" aria-label="New key name" [ngModel]="newKey()" (ngModelChange)="newKey.set($event)" name="newKey" required />
-            <button type="submit" name="addKey" [disabled]="keyCreating()">{{ keyCreating() ? 'Creating key...' : 'Add key' }}</button>
+            <button type="submit" name="addKey" [disabled]="keyCreating() || keyCreateError()">{{ keyCreating() ? 'Creating key...' : 'Add key' }}</button>
           </form>
-          @if (keyCreateError()) { <span class="error" name="keyCreateError" role="alert">Key creation could not be confirmed on branch "{{ keyCreateBranch() }}". Check that branch before trying again.</span> }
+          @if (keyCreateError()) { <span class="error" name="keyCreateError" role="alert">Key creation could not be confirmed on branch "{{ keyCreateBranch() }}". Creation is paused. Copy retained translation values, then read that branch without key filters before another create. A read does not retry creation or prove that a missing key was never created.</span><button type="button" name="reloadAfterKeyCreate" (mousedown)="$event.preventDefault()" [disabled]="!keyCreateRecoveryReady()" (click)="prepareKeyCreateReload()">Review retained values before reload</button> }
           <form class="inline" (ngSubmit)="addLocale()">
             <input placeholder="locale (e.g. fr)" aria-label="New locale code" [ngModel]="newLocale()" (ngModelChange)="newLocale.set($event)" name="newLocale" required maxlength="10" />
             <button type="submit" name="addLocale" [disabled]="localeCreating()">{{ localeCreating() ? 'Adding locale...' : 'Add locale' }}</button>
@@ -374,7 +374,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   bulkReviewPending = signal(false);
   keyDeleting = signal<string[]>([]); keyDeleteErrorFor = signal<string[]>([]);
   localeCreating = signal(false); localeCreateError = signal(false);
-  keyCreating = signal(false); keyCreateError = signal(false); keyCreateBranch = signal('');
+  keyCreating = signal(false); keyCreateError = signal(false); keyCreateBranch = signal(''); private keyCreateEpoch=0;
   branchCreateUnknown = signal(false); private branchCreateEpoch=0;
   branchCreating = signal(false); branchListLoading = signal(false); branchListError = signal(false);
   private branchListGeneration = 0;
@@ -468,7 +468,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     if (this.destroyed) return;
     if (this.searchTimer) { clearTimeout(this.searchTimer); this.searchTimer = null; }
     this.cancelMerge(); this.cancelImportPick();
-    const generation = ++this.keysGeneration, projectId = this.projectId;
+    const generation = ++this.keysGeneration, projectId = this.projectId, createEpoch=this.keyCreateEpoch, readBranch=this.branch(), unfiltered=!this.hasKeyFilters();
     const current = () => !this.destroyed && generation === this.keysGeneration;
     this.keysLoading.set(true); this.keysError.set(false);
     this.tagEditFor.set(null); this.tagsErrorFor.set([]); this.keyDeleteErrorFor.set([]);
@@ -483,6 +483,7 @@ export class EditorComponent implements OnInit, OnDestroy {
       });
       if (!current()) return;
       this.keys.set(keys);
+      if(createEpoch===this.keyCreateEpoch && !this.keyCreating() && this.keyCreateError() && readBranch===this.keyCreateBranch() && unfiltered)this.keyCreateError.set(false);
       this.cells.clear();
       for (const k of keys) for (const t of k.translations) {
         this.cells.set(`${k.id}:${t.localeCode}`,
@@ -859,11 +860,13 @@ export class EditorComponent implements OnInit, OnDestroy {
     this.destroyed=true; ++this.importGeneration; ++this.mergeGeneration; ++this.branchListGeneration; ++this.projectGeneration; ++this.keysGeneration; ++this.historyGeneration; this.clearShots(); this.clearComments(); this.clearTm();
     if(this.searchTimer)clearTimeout(this.searchTimer);
   }
+  keyCreateRecoveryReady() { return !this.destroyed && this.keyCreateError() && !this.keyCreating() && !this.keysLoading() && !this.keysError() && this.branch()===this.keyCreateBranch() && !this.hasKeyFilters() && !this.tagsSaving().length; }
+  prepareKeyCreateReload() { if(this.keyCreateRecoveryReady())this.prepareSaveReload(); }
   async addKey() {
     const submitted = this.newKey();
-    if (!submitted.trim() || this.destroyed || this.keyCreating()) return;
+    if (!submitted.trim() || this.destroyed || this.keyCreating() || this.keyCreateError()) return;
     const branch = this.branch(), generation = this.keysGeneration;
-    this.keyCreating.set(true); this.keyCreateError.set(false); this.keyCreateBranch.set(branch); this.notice.set('');
+    ++this.keyCreateEpoch; this.keyCreating.set(true); this.keyCreateError.set(false); this.keyCreateBranch.set(branch); this.notice.set('');
     try {
       const key = await this.api.createKey(this.projectId, { name: submitted, branch });
       if (this.destroyed) return;
@@ -872,7 +875,7 @@ export class EditorComponent implements OnInit, OnDestroy {
         && !this.keysLoading() && !this.keysError() && !this.hasKeyFilters();
       if (insert) this.keys.update(keys => keys.some(k => k.id === key.id) ? keys : [...keys, key].sort((a,b) => a.name.localeCompare(b.name)));
       this.notice.set(`Key "${key.name}" was created on branch "${branch}".${insert ? ' Existing local translation values were kept.' : ' The current grid was kept. Copy any local drafts before clearing key filters or reloading that branch to find it.'}`);
-    } catch { if (!this.destroyed) this.keyCreateError.set(true); }
+    } catch { if (!this.destroyed) { ++this.keyCreateEpoch; this.keyCreateError.set(true); } }
     finally { if (!this.destroyed) this.keyCreating.set(false); }
   }
   canRemoveKey(k: Key) {
