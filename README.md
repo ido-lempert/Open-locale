@@ -1236,3 +1236,9 @@ handlers until current keys are read. Review retained values opens existing
 read-only grid recovery without reading, saving or discarding translations;
 copy local values before explicitly retrying the key read. Failed reads keep
 the grid paused. See [review0480](docs/reviews/0480-editor-tags-unknown.md).
+
+Unconfirmed empty-branch creation pauses further creates until a successful
+current branch-list read. Check current branches reads only branch options,
+keeps local branch/translation drafts and does not replay creation or switch
+branches. Failed reads keep creation paused; older reads cannot clear a newer
+unknown outcome. See [review0481](docs/reviews/0481-editor-branch-unknown.md).

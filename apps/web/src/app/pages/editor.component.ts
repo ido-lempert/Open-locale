@@ -48,9 +48,10 @@ interface CellState {
           </select>
           <form class="branch-form" (ngSubmit)="addBranch()">
             <input placeholder="new-empty-branch" aria-label="New branch name" [ngModel]="newBranch()" (ngModelChange)="newBranch.set($event)" name="newBranch" maxlength="40" />
-            <button type="submit" name="addBranch" [disabled]="branchCreating()">{{ branchCreating() ? 'Creating branch...' : 'Add empty branch' }}</button>
+            <button type="submit" name="addBranch" [disabled]="branchCreating() || branchCreateUnknown()">{{ branchCreating() ? 'Creating branch...' : 'Add empty branch' }}</button>
           </form>
-          @if (branchListError()) { <span class="error" role="alert" name="branchListError">Branch list unavailable. A confirmed new branch may not appear yet.</span><button type="button" name="retryEditorBranches" [disabled]="branchListLoading() || branchCreating()" (click)="loadBranches()">Retry branch list</button> }
+          @if (branchCreateUnknown()) { <p class="error" role="alert" name="branchCreateUnknown">Branch creation could not be confirmed. Creation is paused. Check current branches before another create; this read does not retry creation, switch branches or reload translations.</p><button type="button" name="checkCurrentBranches" (mousedown)="$event.preventDefault()" [disabled]="branchListLoading() || branchCreating()" (click)="checkCurrentBranches()">Check current branches</button> }
+          @if (branchListError()) { <span class="error" role="alert" name="branchListError">Branch list unavailable. A confirmed new branch may not appear yet.</span>@if (!branchCreateUnknown()) { <button type="button" name="retryEditorBranches" [disabled]="branchListLoading() || branchCreating()" (click)="loadBranches()">Retry branch list</button> } }
           @if (branch() !== 'main') {
             <button name="previewMerge" [disabled]="mergePreviewLoading() || mergePending()" (click)="mergeIntoMain()">{{ mergePreviewLoading() ? 'Loading merge preview...' : 'Merge ' + branch() + ' into main' }}</button>
           }
@@ -374,6 +375,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   keyDeleting = signal<string[]>([]); keyDeleteErrorFor = signal<string[]>([]);
   localeCreating = signal(false); localeCreateError = signal(false);
   keyCreating = signal(false); keyCreateError = signal(false); keyCreateBranch = signal('');
+  branchCreateUnknown = signal(false); private branchCreateEpoch=0;
   branchCreating = signal(false); branchListLoading = signal(false); branchListError = signal(false);
   private branchListGeneration = 0;
   branch = signal('main'); branches = signal<BranchInfo[]>([]); newBranch = signal('');
@@ -927,24 +929,28 @@ export class EditorComponent implements OnInit, OnDestroy {
   }
   async loadBranches() {
     if (this.destroyed) return;
-    const generation = ++this.branchListGeneration, projectId = this.projectId;
+    const generation = ++this.branchListGeneration, projectId = this.projectId, createEpoch=this.branchCreateEpoch;
     const current = () => !this.destroyed && generation === this.branchListGeneration;
     this.branchListLoading.set(true); this.branchListError.set(false);
-    try { const branches = await this.api.listBranches(projectId); if (current()) this.branches.set(branches); }
+    try { const branches = await this.api.listBranches(projectId); if (current()) { this.branches.set(branches); if(createEpoch===this.branchCreateEpoch && !this.branchCreating())this.branchCreateUnknown.set(false); } }
     catch { if (current()) this.branchListError.set(true); }
     finally { if (current()) this.branchListLoading.set(false); }
   }
+  checkCurrentBranches() {
+    if(this.destroyed || !this.branchCreateUnknown() || this.branchListLoading() || this.branchCreating())return Promise.resolve();
+    return this.loadBranches();
+  }
   async addBranch() {
     const submitted = this.newBranch(), name = submitted.trim();
-    if (!name || this.destroyed || this.branchCreating()) return;
-    this.branchCreating.set(true); this.error.set('');
+    if (!name || this.destroyed || this.branchCreating() || this.branchCreateUnknown()) return;
+    ++this.branchCreateEpoch; this.branchCreating.set(true); this.error.set('');
     try {
       await this.api.createBranch(this.projectId, name);
       if (this.destroyed) return;
       if (this.newBranch() === submitted) this.newBranch.set('');
       this.notice.set(`Empty branch "${name}" was created. Branches start with no keys - they do not copy another branch. Pick it from the branch list to work there.`);
       await this.loadBranches();
-    } catch { if (!this.destroyed) this.error.set('Branch creation could not be confirmed. Check the branch list before trying again.'); }
+    } catch { if (!this.destroyed) { ++this.branchCreateEpoch; this.branchCreateUnknown.set(true); } }
     finally { if (!this.destroyed) this.branchCreating.set(false); }
   }
   cancelMerge() {
