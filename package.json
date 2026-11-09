@@ -156,7 +156,8 @@
     "test:editor-key-unknown-browser": "node scripts/editor-key-unknown-browser-test.mjs",
     "test:editor-locale-unknown-browser": "node scripts/editor-locale-unknown-browser-test.mjs",
     "test:editor-key-delete-recovery-browser": "node scripts/editor-key-delete-recovery-browser-test.mjs",
-    "test:editor-comments-read-recovery-browser": "node scripts/editor-comments-read-recovery-browser-test.mjs"
+    "test:editor-comments-read-recovery-browser": "node scripts/editor-comments-read-recovery-browser-test.mjs",
+    "test:editor-shots-read-recovery-browser": "node scripts/editor-shots-read-recovery-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

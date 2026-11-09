@@ -248,11 +248,11 @@ interface CellState {
               @if (shotsFor() === k.id) {
                 <tr class="history-row shots-row"><td [attr.colspan]="2 + p.locales.length">
                   @if (shotsMutating().includes(k.id)) { <p class="muted" role="status" name="shotsMutating">Screenshot change pending. Closing this pane does not cancel it.</p> }
-                  @if (shotsMutationError().includes(k.id)) { <p class="error" role="alert" name="shotsMutationError">Screenshot change could not be confirmed. Check current screenshots before another change.</p><button name="checkCurrentShots" [disabled]="shotsMutating().includes(k.id) || shotsLoading()" (click)="readShots(k)">Check current screenshots</button> }
+                  @if (shotsMutationError().includes(k.id)) { <p class="error" role="alert" name="shotsMutationError">Screenshot change could not be confirmed. Check current screenshots before another change.</p><button type="button" name="checkCurrentShots" (mousedown)="$event.preventDefault()" [disabled]="!shotsRecoveryReady(k)" (click)="recoverShots(k)">Check current screenshots</button> }
                   @if (!shotsError() && !shotsMutationError().includes(k.id)) { <button type="button" name="refreshShots" (mousedown)="$event.preventDefault()" [disabled]="!shotsRefreshReady(k)" (click)="refreshShots(k)">Refresh screenshots</button> }
                   <p class="muted" name="shotsRefreshScope" style="white-space:normal;max-width:40rem">Refresh reads this key's current screenshot list and image bytes only. It does not reload translations, discard local values or change screenshots. These separate reads are not one database snapshot.</p>
                   @if (shotsLoading()) { <p class="muted" role="status" name="shotsLoading">Loading screenshots...</p> }
-                  @else if (shotsError()) { <p class="error" role="alert" name="shotsError">Screenshots unavailable. No images are shown.</p><button type="button" name="retryShots" (click)="readShots(k)">Retry screenshots</button> }
+                  @else if (shotsError()) { <p class="error" role="alert" name="shotsError">Screenshots unavailable. No images are shown.</p><button type="button" name="retryShots" (mousedown)="$event.preventDefault()" [disabled]="!shotsRecoveryReady(k)" (click)="recoverShots(k)">Retry screenshots</button> }
                   @else {
                     @if (shots().length === 0) { <p class="muted" name="shotsEmpty">No screenshots yet. Add one to give translators visual context.</p> }
                     <ul class="shots-list">
@@ -774,6 +774,8 @@ export class EditorComponent implements OnInit, OnDestroy {
     return this.canChangeShots(k) && this.keys().some(key=>key.id===k.id);
   }
   refreshShots(k:Key) { if(this.shotsRefreshReady(k))return this.readShots(k);return Promise.resolve(); }
+  shotsRecoveryReady(k:Key) { return !this.destroyed && this.shotsFor()===k.id && !this.shotsLoading() && !this.shotsMutating().includes(k.id) && (this.shotsError() || this.shotsMutationError().includes(k.id)) && !this.keysLoading() && !this.keysError() && !this.keyDeleting().includes(k.id) && !this.keyDeleteErrorFor().includes(k.id) && this.keys().some(key=>key.id===k.id); }
+  recoverShots(k:Key) { if(this.shotsRecoveryReady(k))return this.readShots(k);return Promise.resolve(); }
   async readShots(k: Key) {
     if (this.destroyed || this.shotsFor() !== k.id) return;
     const generation = ++this.shotsGeneration, projectId = this.projectId, keyId = k.id;

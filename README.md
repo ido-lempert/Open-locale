@@ -1278,3 +1278,12 @@ no duplicate read while pending, no read during a comment mutation or unavailabl
 key grid, and no replay of the comment change. Local comment text and locale stay
 in the page; a successful current read clears the mutation pause. See
 [review0485](docs/reviews/0485-editor-comments-read-recovery.md).
+
+### Screenshot recovery reads keep local translations
+
+"Check current screenshots" and "Retry screenshots" now keep focused translation
+inputs from autosaving on pointer click. Guarded recovery reads only the selected
+key's current screenshot list and image bytes, without repeating the unknown
+change or reloading translations. Pending duplicate reads refuse. These separate
+reads are not one database snapshot. See
+[review0486](docs/reviews/0486-editor-shots-read-recovery.md).
