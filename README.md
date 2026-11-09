@@ -1269,3 +1269,12 @@ explicitly retrying the key read, which replaces translations with server values
 Failed reads keep the grid paused. A successful read shows current keys, not
 proof of which request deleted a missing key. See
 [review0484](docs/reviews/0484-editor-key-delete-recovery.md).
+
+### Comment recovery reads keep local translations
+
+"Check current comments" and "Retry comments" now keep a focused translation
+input from autosaving on pointer click. Both use guarded selected-key recovery:
+no duplicate read while pending, no read during a comment mutation or unavailable
+key grid, and no replay of the comment change. Local comment text and locale stay
+in the page; a successful current read clears the mutation pause. See
+[review0485](docs/reviews/0485-editor-comments-read-recovery.md).
