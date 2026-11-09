@@ -78,9 +78,12 @@ interface CellState {
           @if (keyCreateError()) { <span class="error" name="keyCreateError" role="alert">Key creation could not be confirmed on branch "{{ keyCreateBranch() }}". Creation is paused. Copy retained translation values, then read that branch without key filters before another create. A read does not retry creation or prove that a missing key was never created.</span><button type="button" name="reloadAfterKeyCreate" (mousedown)="$event.preventDefault()" [disabled]="!keyCreateRecoveryReady()" (click)="prepareKeyCreateReload()">Review retained values before reload</button> }
           <form class="inline" (ngSubmit)="addLocale()">
             <input placeholder="locale (e.g. fr)" aria-label="New locale code" [ngModel]="newLocale()" (ngModelChange)="newLocale.set($event)" name="newLocale" required maxlength="10" />
-            <button type="submit" name="addLocale" [disabled]="localeCreating()">{{ localeCreating() ? 'Adding locale...' : 'Add locale' }}</button>
+            <button type="submit" name="addLocale" [disabled]="localeCreating() || localeCreateError()">{{ localeCreating() ? 'Adding locale...' : 'Add locale' }}</button>
           </form>
-          @if (localeCreateError()) { <span class="error" role="alert" name="localeCreateError">Locale addition could not be confirmed. Check project settings before trying again.</span> }
+          @if (localeCreateError()) { <span class="error" role="alert" name="localeCreateError">Locale addition could not be confirmed. Additions are paused. Check current locale codes before another addition; this read does not retry addition, reload translations or replace editor columns.</span><button type="button" name="checkCurrentLocales" (mousedown)="$event.preventDefault()" [disabled]="!localeRecoveryReady()" (click)="checkCurrentLocales()">Check current locale codes</button> }
+          @if (localeRecoveryLoading()) { <p class="muted" role="status" name="localeRecoveryLoading">Reading current locale codes...</p> }
+          @if (localeRecoveryError()) { <p class="error" role="alert" name="localeRecoveryError">Current locale codes unavailable. Additions remain paused; retry this read.</p> }
+          @if (localeRecoveryCodes(); as codes) { <p class="muted" name="localeRecoveryCodes">Locale codes from the last check: {{ codes.join(', ') || '(none returned)' }}. Editor columns and local values were kept and may differ. This is not automatic refresh or confirmation of which request added a locale.</p> }
           <select [ngModel]="ioFormat()" (ngModelChange)="onFormatPick($event)" name="ioFormat" aria-label="Import/export format">
             <option value="json">JSON</option>
             <option value="csv">CSV (spreadsheet-safe)</option>
@@ -374,6 +377,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   bulkReviewPending = signal(false);
   keyDeleting = signal<string[]>([]); keyDeleteErrorFor = signal<string[]>([]);
   localeCreating = signal(false); localeCreateError = signal(false);
+  localeRecoveryLoading=signal(false); localeRecoveryError=signal(false); localeRecoveryCodes=signal<string[]|null>(null); private localeRecoveryGeneration=0;
   keyCreating = signal(false); keyCreateError = signal(false); keyCreateBranch = signal(''); private keyCreateEpoch=0;
   branchCreateUnknown = signal(false); private branchCreateEpoch=0;
   branchCreating = signal(false); branchListLoading = signal(false); branchListError = signal(false);
@@ -439,6 +443,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   async ngOnInit() { await this.loadProject(); }
   async loadProject() {
     if (this.destroyed) return;
+    ++this.localeRecoveryGeneration;this.localeRecoveryLoading.set(false);this.localeRecoveryError.set(false);this.localeRecoveryCodes.set(null);
     const generation = ++this.projectGeneration, projectId = this.projectId;
     const current = () => !this.destroyed && generation === this.projectGeneration;
     this.projectLoading.set(true); this.projectError.set(false);
@@ -904,11 +909,21 @@ export class EditorComponent implements OnInit, OnDestroy {
     } catch { if (current()) this.keyDeleteErrorFor.update(ids => [...ids,k.id]); }
     finally { if (!this.destroyed) this.keyDeleting.update(ids => ids.filter(id => id !== k.id)); }
   }
+  localeRecoveryReady() { return !this.destroyed && this.localeCreateError() && !this.localeCreating() && !this.localeRecoveryLoading() && !this.projectLoading() && !this.projectError() && !!this.project(); }
+  async checkCurrentLocales() {
+    if(!this.localeRecoveryReady())return;
+    const generation=++this.localeRecoveryGeneration,projectId=this.projectId,projectGeneration=this.projectGeneration;
+    const current=()=>!this.destroyed && generation===this.localeRecoveryGeneration && projectGeneration===this.projectGeneration && projectId===this.projectId;
+    this.localeRecoveryLoading.set(true);this.localeRecoveryError.set(false);this.localeRecoveryCodes.set(null);
+    try { const project=await this.api.getProject(projectId);if(current()){this.localeRecoveryCodes.set(project.locales.map(l=>l.code));this.localeCreateError.set(false);} }
+    catch { if(current())this.localeRecoveryError.set(true); }
+    finally { if(generation===this.localeRecoveryGeneration&&!this.destroyed)this.localeRecoveryLoading.set(false); }
+  }
   async addLocale() {
     const submitted = this.newLocale(), code = submitted.trim();
-    if (!code || this.destroyed || this.localeCreating()) return;
+    if (!code || this.destroyed || this.localeCreating() || this.localeCreateError()) return;
     const generation = this.projectGeneration;
-    this.localeCreating.set(true); this.localeCreateError.set(false); this.notice.set('');
+    ++this.localeRecoveryGeneration;this.localeRecoveryCodes.set(null);this.localeRecoveryError.set(false);this.localeCreating.set(true); this.localeCreateError.set(false); this.notice.set('');
     try {
       const locale = await this.api.addLocale(this.projectId, code);
       if (this.destroyed) return;

@@ -1249,3 +1249,13 @@ copy-before-reload recovery without reading, saving or discarding translations.
 Other-branch, filtered, failed or older reads cannot clear the pause. A read
 never retries creation or proves a missing key was never created. See
 [review0482](docs/reviews/0482-editor-key-unknown.md).
+
+### Unconfirmed locale addition
+
+An unconfirmed locale addition now pauses another addition, including captured
+form handlers. "Check current locale codes" reads project metadata only. A failed
+read keeps the pause; a fresh successful read shows a separate last-checked code
+receipt and permits another deliberate addition. It does not replay the request,
+replace editor columns or local translations, or confirm which request added a
+locale. Newer locale-code text is kept. See
+[review0483](docs/reviews/0483-editor-locale-unknown.md).
