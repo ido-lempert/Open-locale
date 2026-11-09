@@ -98,9 +98,9 @@ interface CellState {
             <option value="ios">iOS strings</option>
             <option value="stringsdict">iOS .stringsdict (plurals)</option>
           </select>
-          <button name="exportFile" [disabled]="exportPending()" (click)="exportFile()">Export {{ formatLabel() }}</button>
-          <button name="exportBundle" [disabled]="exportPending()" (click)="exportBundleFile()" title="Download every locale as one zip in the selected format">Export all (.zip)</button>
-          <button name="exportTmx" [disabled]="exportPending()" (click)="exportTmxFile()" title="Download the translation memory for the selected locale as TMX 1.4 (export-only)">Export TM (TMX)</button>
+          <button name="exportFile" (mousedown)="$event.preventDefault()" [disabled]="exportPending()" (click)="exportFile()">Export {{ formatLabel() }}</button>
+          <button name="exportBundle" (mousedown)="$event.preventDefault()" [disabled]="exportPending()" (click)="exportBundleFile()" title="Download every locale as one zip in the selected format">Export all (.zip)</button>
+          <button name="exportTmx" (mousedown)="$event.preventDefault()" [disabled]="exportPending()" (click)="exportTmxFile()" title="Download the translation memory for the selected locale as TMX 1.4 (export-only)">Export TM (TMX)</button>
           <label class="import">Import {{ formatLabel() }} <input type="file" name="importFile" [disabled]="importPending()" accept=".json,.csv,.xml,.strings,.stringsdict,.po,.pot,.xlf,.xliff,.properties,.arb,.yaml,.yml,.resx" (change)="importFile($event)" hidden /></label>
           <label class="import">Preview import <input type="file" name="previewFile" [disabled]="importPending()" accept=".json,.csv,.xml,.strings,.stringsdict,.po,.pot,.xlf,.xliff,.properties,.arb,.yaml,.yml,.resx" (change)="previewFile($event)" hidden /></label>
           <label class="import" title="Upload a store-only zip from Export all (.zip); compressed zips from other tools are rejected. Each locale imports independently: skipped entries and failed locales are reported, not rolled back.">Import bundle (.zip) <input type="file" name="bundleFile" [disabled]="importPending()" accept=".zip" (change)="bundleFile($event)" hidden /></label>

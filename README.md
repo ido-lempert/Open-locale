@@ -1314,3 +1314,8 @@ Opening or closing screenshots now keeps a focused translation draft from
 blur-autosaving. The guarded toggle reads only the screenshot list and image
 bytes on open; close revokes image URLs without requests and fences late reads.
 See [review0491](docs/reviews/0491-editor-shots-toggle.md).
+
+File, all-locale bundle and translation-memory exports now keep a focused local
+translation from blur-autosaving before the download. They read saved bytes
+without saving the draft. See
+[review0492](docs/reviews/0492-editor-export-focus.md).
