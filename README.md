@@ -1287,3 +1287,10 @@ key's current screenshot list and image bytes, without repeating the unknown
 change or reloading translations. Pending duplicate reads refuse. These separate
 reads are not one database snapshot. See
 [review0486](docs/reviews/0486-editor-shots-read-recovery.md).
+
+Failed translation-history retry now keeps a focused local translation from
+blur-autosaving. The guarded retry reads only saved history for the selected
+loaded key, retains local values and refuses pending or unavailable state.
+Separate locale reads still show at most 50 newest returned changes, not complete
+history or one database snapshot. See
+[review0487](docs/reviews/0487-editor-history-read-recovery.md).
