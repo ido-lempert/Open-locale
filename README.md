@@ -1319,3 +1319,8 @@ File, all-locale bundle and translation-memory exports now keep a focused local
 translation from blur-autosaving before the download. They read saved bytes
 without saving the draft. See
 [review0492](docs/reviews/0492-editor-export-focus.md).
+
+Retrying a failed editor branch list now keeps a focused local translation from
+blur-autosaving. The explicit guarded retry reads branches only, without creating
+a branch, switching branches or reloading keys. See
+[review0493](docs/reviews/0493-editor-branches-retry-focus.md).

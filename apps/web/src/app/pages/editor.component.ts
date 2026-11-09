@@ -51,7 +51,7 @@ interface CellState {
             <button type="submit" name="addBranch" [disabled]="branchCreating() || branchCreateUnknown()">{{ branchCreating() ? 'Creating branch...' : 'Add empty branch' }}</button>
           </form>
           @if (branchCreateUnknown()) { <p class="error" role="alert" name="branchCreateUnknown">Branch creation could not be confirmed. Creation is paused. Check current branches before another create; this read does not retry creation, switch branches or reload translations.</p><button type="button" name="checkCurrentBranches" (mousedown)="$event.preventDefault()" [disabled]="branchListLoading() || branchCreating()" (click)="checkCurrentBranches()">Check current branches</button> }
-          @if (branchListError()) { <span class="error" role="alert" name="branchListError">Branch list unavailable. A confirmed new branch may not appear yet.</span>@if (!branchCreateUnknown()) { <button type="button" name="retryEditorBranches" [disabled]="branchListLoading() || branchCreating()" (click)="loadBranches()">Retry branch list</button> } }
+          @if (branchListError()) { <span class="error" role="alert" name="branchListError">Branch list unavailable. A confirmed new branch may not appear yet.</span>@if (!branchCreateUnknown()) { <button type="button" name="retryEditorBranches" (mousedown)="$event.preventDefault()" [disabled]="!branchRetryReady()" (click)="retryBranches()">Retry branch list</button> } }
           @if (branch() !== 'main') {
             <button name="previewMerge" [disabled]="mergePreviewLoading() || mergePending()" (click)="mergeIntoMain()">{{ mergePreviewLoading() ? 'Loading merge preview...' : 'Merge ' + branch() + ' into main' }}</button>
           }
@@ -974,6 +974,8 @@ export class EditorComponent implements OnInit, OnDestroy {
     catch { if (current()) this.branchListError.set(true); }
     finally { if (current()) this.branchListLoading.set(false); }
   }
+  branchRetryReady() { return !this.destroyed && this.branchListError() && !this.branchListLoading() && !this.branchCreating() && !this.branchCreateUnknown(); }
+  retryBranches() { if(!this.branchRetryReady())return Promise.resolve(); return this.loadBranches(); }
   checkCurrentBranches() {
     if(this.destroyed || !this.branchCreateUnknown() || this.branchListLoading() || this.branchCreating())return Promise.resolve();
     return this.loadBranches();
