@@ -162,7 +162,7 @@ interface CellState {
                   </span>
                   <button class="history-toggle" [attr.aria-expanded]="historyFor() === k.id" (mousedown)="$event.preventDefault()" [disabled]="!historyToggleReady(k)"
                     (click)="toggleHistory(k)">history</button>
-                  <button class="comments-toggle" [attr.aria-expanded]="commentsFor() === k.id"
+                  <button class="comments-toggle" [attr.aria-expanded]="commentsFor() === k.id" (mousedown)="$event.preventDefault()" [disabled]="!commentsToggleReady(k)"
                     (click)="toggleComments(k)">comments{{ k._count?.comments ? ' (' + k._count.comments + ')' : '' }}</button>
                   <button class="shots-toggle" [attr.aria-expanded]="shotsFor() === k.id"
                     (click)="toggleShots(k)">shots{{ k._count?.screenshots ? ' (' + k._count.screenshots + ')' : '' }}</button>@if (tagsErrorFor().includes(k.id)) { <p class="cell-error-reason" role="alert" name="tagsError" style="white-space:normal;max-width:18rem">Tag result unconfirmed. Editing is paused. Copy retained translation values before reloading current server tags.</p><button type="button" name="reloadAfterTags" [disabled]="tagsSaving().length > 0" (mousedown)="$event.preventDefault()" (click)="prepareTagsReload(k)">Review retained values before reload</button> }</td>
@@ -640,7 +640,9 @@ export class EditorComponent implements OnInit, OnDestroy {
     ++this.commentsGeneration; this.commentsFor.set(null); this.comments.set([]);
     this.commentsLoading.set(false); this.commentsError.set(false); this.replyTo.set(null);
   }
+  commentsToggleReady(k:Key) { return !this.destroyed && !this.keysLoading() && !this.keysError() && !this.keyDeleting().includes(k.id) && !this.keyDeleteErrorFor().includes(k.id) && this.keys().some(key=>key.id===k.id); }
   async toggleComments(k: Key) {
+    if(!this.commentsToggleReady(k))return;
     if (this.destroyed) return;
     if (this.commentsFor() === k.id) { this.clearComments(); return; }
     this.commentsFor.set(k.id);

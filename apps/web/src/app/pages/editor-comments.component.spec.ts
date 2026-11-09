@@ -1,7 +1,7 @@
 import { EditorComponent } from './editor.component';
 const key=(id:string)=>({id} as any);
 const wait=()=>{let resolve!:(v:any)=>void,reject!:(e:Error)=>void;const promise=new Promise<any>((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
-const make=(api:any)=>new EditorComponent(api,{snapshot:{paramMap:{get:()=> 'p'}}} as any);
+const make=(api:any)=>{const c=new EditorComponent(api,{snapshot:{paramMap:{get:()=> 'p'}}} as any);c.keys.set([{id:'A'},{id:'B'}] as any);c.keysLoading.set(false);return c;};
 describe('selected comment thread and mutation continuation',()=>{
  for(const failed of [false,true])it(`late old list ${failed?'failure':'success'} cannot cross selection`,async()=>{const old=wait(),fresh=wait(),c=make({listComments:jest.fn().mockReturnValueOnce(old.promise).mockReturnValueOnce(fresh.promise)});const a=c.toggleComments(key('A')),b=c.toggleComments(key('B'));failed?old.reject(new Error('private')):old.resolve([{id:'old'}]);await a;expect(c.commentsLoading()).toBe(true);expect(c.commentsError()).toBe(false);fresh.resolve([{id:'fresh'}]);await b;expect(c.comments()[0].id).toBe('fresh');});
  it('close reopen same key and reload fence reads',async()=>{const old=wait(),api={listComments:jest.fn().mockReturnValueOnce(old.promise).mockResolvedValue([{id:'fresh'}]),listKeys:async()=>[]},c=make(api);const a=c.toggleComments(key('A'));await c.toggleComments(key('A'));await c.toggleComments(key('A'));old.resolve([{id:'old'}]);await a;expect(c.comments()[0].id).toBe('fresh');await c.reload();expect(c.commentsFor()).toBeNull();expect(c.comments()).toEqual([]);});
