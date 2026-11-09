@@ -1216,3 +1216,10 @@ from the fresh thread is cleared. Focused pointer refresh does not blur-autosave
 a translation. Mobile comment text uses the full form width. Pending/uncertain
 and failed states keep their separate recovery routes. See
 [review0477](docs/reviews/0477-editor-comments-refresh.md).
+
+An open healthy translation-history pane can read newer saved history without
+reloading translations or discarding local values. Pointer refresh does not
+blur-autosave a translation. Separate locale reads return at most50 newest
+combined changes, not a snapshot or complete history; nothing is restored.
+Pending/failed/key-uncertain and departed states retain their existing guards
+and recovery. See [review0478](docs/reviews/0478-editor-history-refresh.md).

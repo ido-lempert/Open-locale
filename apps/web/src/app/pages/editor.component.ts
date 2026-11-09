@@ -313,6 +313,8 @@ interface CellState {
               }
               @if (historyFor() === k.id) {
                 <tr class="history-row"><td [attr.colspan]="2 + p.locales.length">
+                  @if (!historyError()) { <button type="button" name="refreshHistory" (mousedown)="$event.preventDefault()" [disabled]="!historyRefreshReady(k)" (click)="refreshHistory(k)">Refresh history</button> }
+                  <p class="muted" name="historyRefreshScope" style="white-space:normal;max-width:40rem">Refresh reads this key's saved translation history across loaded project locales and shows at most 50 newest returned changes. Separate locale reads are not one database snapshot or complete history. It does not reload translations, discard local values or restore a change.</p>
                   @if (historyLoading()) { <p class="muted" role="status" name="historyLoading">Loading history...</p> }
                   @else if (historyError()) { <p class="error" role="alert" name="historyError">History unavailable. No changes are shown. Retry this read.</p><button type="button" name="retryHistory" (click)="readHistory(k)">Retry history</button> }
                   @else if (historyEntries().length === 0) { <p class="muted" name="historyEmpty">No changes recorded yet.</p> }
@@ -824,6 +826,8 @@ export class EditorComponent implements OnInit, OnDestroy {
     this.historyFor.set(k.id);
     await this.readHistory(k);
   }
+  historyRefreshReady(k:Key) { return !this.destroyed && this.historyFor()===k.id && !this.historyLoading() && !this.historyError() && !this.keysLoading() && !this.keysError() && !this.keyDeleting().includes(k.id) && !this.keyDeleteErrorFor().includes(k.id) && this.keys().some(key=>key.id===k.id); }
+  refreshHistory(k:Key) { if(this.historyRefreshReady(k))return this.readHistory(k);return Promise.resolve(); }
   async readHistory(k: Key) {
     if(this.destroyed||this.historyFor()!==k.id)return;
     const generation=++this.historyGeneration,projectId=this.projectId,keyId=k.id;
