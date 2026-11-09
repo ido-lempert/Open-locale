@@ -289,7 +289,7 @@ interface CellState {
                             -->@if (seg.mention) { <span class="mention">{{ seg.text }}</span> } @else { <span>{{ seg.text }}</span> }<!--
                           --> }</span>
                           <span class="muted">{{ cm.author?.displayName ?? 'unknown' }} · {{ cm.createdAt | date:'short' }}</span>
-                          <button [attr.aria-label]="'Reply to comment'" (click)="replyTo.set(cm.id)">reply</button>
+                          <button [attr.aria-label]="'Reply to comment'" (mousedown)="$event.preventDefault()" [disabled]="!commentReplyReady(k,cm.id)" (click)="selectCommentReply(k,cm.id)">reply</button>
                           <button class="danger" [attr.aria-label]="'Delete comment'" [disabled]="commentsSaving() || commentsMutationError().includes(k.id)" (click)="deleteComment(k, cm.id)">&times;</button>
                           @if (repliesOf(cm.id).length > 0) {
                             <ul class="history-list replies">
@@ -309,7 +309,7 @@ interface CellState {
                       }
                     </ul>
                     @if (replyTo(); as rt) {
-                      <p class="muted">Replying to {{ commentAuthor(rt) }} <button (click)="replyTo.set(null)">cancel</button></p>
+                      <p class="muted">Replying to {{ commentAuthor(rt) }} <button name="cancelCommentReply" (mousedown)="$event.preventDefault()" [disabled]="!commentReplyCancelReady(k)" (click)="cancelCommentReply(k)">cancel</button></p>
                     }
                     <form class="comment-form" (ngSubmit)="addComment(k)">
                       <input aria-label="New comment" placeholder="Add a comment… (@email mentions a member)" maxlength="2000"
@@ -699,6 +699,10 @@ export class EditorComponent implements OnInit, OnDestroy {
       && !this.commentsLoading() && !this.commentsError() && !this.commentsMutationError().includes(k.id)
       && !this.keysLoading() && !this.keysError() && !this.keyDeleting().includes(k.id) && !this.keyDeleteErrorFor().includes(k.id);
   }
+  commentReplyReady(k:Key,id:string) { return this.canChangeComments(k) && this.keys().some(key=>key.id===k.id) && this.comments().some(c=>c.id===id && !c.parentId); }
+  selectCommentReply(k:Key,id:string) { if(this.commentReplyReady(k,id))this.replyTo.set(id); }
+  commentReplyCancelReady(k:Key) { return this.canChangeComments(k) && this.keys().some(key=>key.id===k.id) && !!this.replyTo(); }
+  cancelCommentReply(k:Key) { if(this.commentReplyCancelReady(k))this.replyTo.set(null); }
   async addComment(k: Key) {
     const draft = this.commentDraft(), body = draft.trim(), locale = this.commentLocale(), reply = this.replyTo();
     if (!body || !this.canChangeComments(k) || (reply && !this.comments().some(c => c.id === reply && !c.parentId))) return;

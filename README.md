@@ -1329,3 +1329,8 @@ Reviewing retained values after an unconfirmed cell save no longer blur-saves
 another focused local translation. The guarded preparation makes no requests
 and keeps both drafts available to copy before explicit reload. See
 [review0494](docs/reviews/0494-editor-save-recovery-focus.md).
+
+Focused comment reply/cancel change only the local reply target and retain the
+translation, comment draft and scope without requests or translation autosave.
+Both refuse unavailable current-thread/key state; reply requires a current root.
+See [review0495](docs/reviews/0495-editor-comment-reply-focus.md).
