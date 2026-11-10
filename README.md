@@ -1425,3 +1425,10 @@ rules inside a native "Search rules and loaded context" disclosure. Enter and
 Space open or close it without requerying or changing loaded results. The initial
 390px view includes the Search action; expanded help can still require scrolling.
 See [review0510](docs/reviews/0510-saved-search-help.md).
+
+Each saved-text result has Copy matched value. It copies only that exact loaded
+matched text, not source, description or status, and makes no API request or write.
+Clipboard permission/support depends on the browser; failure offers manual copy.
+The text may be private. Clearing results or leaving cannot cancel a started copy
+or clear the clipboard. Pending copies are serialized in the current page; stale
+feedback is cleared on scope changes. See [review0511](docs/reviews/0511-saved-search-copy.md).

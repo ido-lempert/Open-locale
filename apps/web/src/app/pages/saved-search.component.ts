@@ -30,13 +30,15 @@ import { ApiService, BranchInfo } from '../api.service';
  <button type="button" name="downloadSavedSearch" [disabled]="!canDownload()" (click)="download()">Download loaded matches (.json)</button>
  <p class="muted" name="savedSearchDownloadScope">Downloads only these loaded matches and their query scope, including saved source and matched values. Not a complete project export, import file, plural-form report or newer server snapshot. The file can contain private translation text. Downloading does not upload or share it.</p>
  @if(downloadNotice()){<p role="status" name="savedSearchDownloadNotice">{{downloadNotice()}}</p>}
- @for(row of results();track row.id){<article class="result" name="savedSearchResult"><code>{{row.key}}</code><section name="savedSearchDescription"><h2>Loaded key description</h2>@if(row.description===null){<p class="muted">Description unavailable in these results.</p>}@else if(row.description===''){<p class="muted">No saved key description.</p>}@else{<pre>{{row.description}}</pre>}</section><div class="value-context">@if(sourceLocale()!==locale()){<section name="savedSearchSource"><h2>Saved source ({{sourceLocale()}})</h2>@if(row.sourceValue===null){<p class="muted">No saved source translation row in these results.</p>}@else if(row.sourceValue===''){<p class="muted">Saved source value is empty.</p>}@else{<pre>{{row.sourceValue}}</pre>}</section>}<section name="savedSearchMatched"><h2>Matched saved value ({{locale()}})</h2><p class="muted" name="savedSearchRowStatus">Loaded saved status: {{row.status===null?'not available in these results':row.status}}. Not a live review confirmation.</p><pre>{{row.value}}</pre></section></div></article>}@empty{<p name="savedSearchEmpty">No saved base values match this text, status and tag filter in this branch and locale. Other locales, branches, plural forms or local drafts may differ.</p>}
+ <p class="muted" name="savedSearchCopyScope">Copy puts only the chosen loaded matched value on your clipboard. It may contain private text. Clearing results or leaving does not cancel a copy already started or clear the clipboard.</p>
+ @if(copyNotice()){<p role="status" name="savedSearchCopyNotice">{{copyNotice()}}</p>}
+ @for(row of results();track row.id){<article class="result" name="savedSearchResult"><code>{{row.key}}</code><section name="savedSearchDescription"><h2>Loaded key description</h2>@if(row.description===null){<p class="muted">Description unavailable in these results.</p>}@else if(row.description===''){<p class="muted">No saved key description.</p>}@else{<pre>{{row.description}}</pre>}</section><div class="value-context">@if(sourceLocale()!==locale()){<section name="savedSearchSource"><h2>Saved source ({{sourceLocale()}})</h2>@if(row.sourceValue===null){<p class="muted">No saved source translation row in these results.</p>}@else if(row.sourceValue===''){<p class="muted">Saved source value is empty.</p>}@else{<pre>{{row.sourceValue}}</pre>}</section>}<section name="savedSearchMatched"><h2>Matched saved value ({{locale()}})</h2><p class="muted" name="savedSearchRowStatus">Loaded saved status: {{row.status===null?'not available in these results':row.status}}. Not a live review confirmation.</p><pre>{{row.value}}</pre><button type="button" name="copySavedSearchValue" [disabled]="!canCopy(row.id)||copyPending()" (click)="copyValue(row.id)">Copy matched value</button></section></div></article>}@empty{<p name="savedSearchEmpty">No saved base values match this text, status and tag filter in this branch and locale. Other locales, branches, plural forms or local drafts may differ.</p>}
  }@else if(!loading()&&!error()&&ready()){<p class="muted" name="savedSearchIdle">Choose the scope and enter text, then search. Changing the scope or text clears previous results.</p>}
  </main>`
 })
 export class SavedSearchComponent implements OnInit,OnDestroy {
  projectId='';sourceLocale=signal('');statuses=signal<string[]>([]);status=signal('');tag=signal('');branches=signal<BranchInfo[]>([]);locales=signal<string[]>([]);branch=signal('main');locale=signal('');query=signal('');match=signal<'contains'|'exact'>('contains');
- downloadNotice=signal('');
+ downloadNotice=signal('');copyNotice=signal('');copyPending=signal(false);
  optionsLoading=signal(false);optionsError=signal(false);loading=signal(false);error=signal(false);searched=signal(false);results=signal<{id:string;key:string;value:string;sourceValue:string|null;status:string|null;description:string|null}[]>([]);
  @ViewChild('searchText') private searchText?:ElementRef<HTMLInputElement>;
  @ViewChild('searchOutcome') private searchOutcome?:ElementRef<HTMLElement>;
@@ -50,7 +52,7 @@ export class SavedSearchComponent implements OnInit,OnDestroy {
  canSearch(){return this.ready()&&!this.loading()&&!!this.query().trim()&&this.query().length<=200;}
  canClearFilters(){return this.ready()&&!!(this.query()||this.status()||this.tag()||this.match()!=='contains'||this.searched()||this.loading()||this.error()||this.downloadNotice());}
  clearFilters(){if(!this.canClearFilters())return;this.clear();this.query.set('');this.status.set('');this.tag.set('');this.match.set('contains');this.focusAfterRender('text',this.generation);}
- private clear(){if(this.focusTimer!==undefined)clearTimeout(this.focusTimer);this.focusTimer=undefined;++this.generation;this.downloadNotice.set('');this.loading.set(false);this.error.set(false);this.searched.set(false);this.results.set([]);}
+ private clear(){if(this.focusTimer!==undefined)clearTimeout(this.focusTimer);this.focusTimer=undefined;++this.generation;this.downloadNotice.set('');this.copyNotice.set('');this.loading.set(false);this.error.set(false);this.searched.set(false);this.results.set([]);}
  setTag(value:string){if(this.destroyed)return;this.clear();this.tag.set(value.slice(0,40));}
  setStatus(value:string){if(this.destroyed||(value!==''&&!this.statuses().includes(value)))return;this.clear();this.status.set(value);}
  setMatch(value:string){if(this.destroyed||(value!=='contains'&&value!=='exact'))return;this.clear();this.match.set(value);}
@@ -62,6 +64,15 @@ export class SavedSearchComponent implements OnInit,OnDestroy {
   const current=()=>!this.destroyed&&generation===this.optionsGeneration;
   try{const [project,branches]=await Promise.all([this.api.getProject(projectId),this.api.listBranches(projectId)]);if(current()){this.branches.set(branches);this.locales.set(project.locales.map(l=>l.code));this.locale.set(project.baseLocale);this.sourceLocale.set(project.baseLocale);this.statuses.set([...new Set(['UNVERIFIED','TRANSLATED','REVIEWED',...(project.customStatuses??[])])]);}}
   catch{if(current())this.optionsError.set(true);}finally{if(current())this.optionsLoading.set(false);}
+ }
+ canCopy(id:string){return this.canDownload()&&this.results().some(row=>row.id===id);}
+ async copyValue(id:string){
+  if(!this.canCopy(id)||this.copyPending())return;
+  const row=this.results().find(row=>row.id===id)!;const generation=this.generation;
+  this.copyNotice.set('');this.copyPending.set(true);
+  try{await navigator.clipboard.writeText(row.value);if(!this.destroyed&&generation===this.generation)this.copyNotice.set('Matched value copied to clipboard. Loaded text only, not newer server changes.');}
+  catch{if(!this.destroyed&&generation===this.generation)this.copyNotice.set('Copy could not be confirmed. Select the matched value and copy it manually.');}
+  finally{this.copyPending.set(false);}
  }
  canDownload(){return this.ready()&&!!this.projectId&&this.searched()&&!this.loading()&&!this.error();}
  download(){
@@ -77,7 +88,7 @@ export class SavedSearchComponent implements OnInit,OnDestroy {
  }
  async search(){
   if(!this.canSearch())return;const generation=++this.generation,projectId=this.projectId,branch=this.branch(),locale=this.locale(),query=this.query(),match=this.match(),sourceLocale=this.sourceLocale(),status=this.status(),tag=this.tag();const current=()=>!this.destroyed&&generation===this.generation;
-  this.downloadNotice.set('');this.loading.set(true);this.error.set(false);this.searched.set(false);this.results.set([]);
+  this.downloadNotice.set('');this.copyNotice.set('');this.loading.set(true);this.error.set(false);this.searched.set(false);this.results.set([]);
   try{const keys=await this.api.listKeys(projectId,{branch,locale,valueSearch:query,...(status?{status}:{}),...(tag?{tag}:{}),...(match==='exact'?{valueMatch:'exact' as const}:{})});if(current()){this.results.set(keys.map(k=>({id:k.id,key:k.name,value:k.translations.find(t=>t.localeCode===locale)?.value??'',sourceValue:k.translations.find(t=>t.localeCode===sourceLocale)?.value??null,status:k.translations.find(t=>t.localeCode===locale)?.status??null,description:k.description??null})));this.searched.set(true);}}
   catch{if(current())this.error.set(true);}finally{if(current()){this.loading.set(false);this.focusAfterRender('outcome',generation);}}
  }
