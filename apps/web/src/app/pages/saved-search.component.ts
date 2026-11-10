@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -16,16 +16,16 @@ import { ApiService, BranchInfo } from '../api.service';
  <label>Locale<select name="savedSearchLocale" [disabled]="!ready()" [ngModel]="locale()" (ngModelChange)="setLocale($event)">@for(l of locales();track l){<option [value]="l">{{l}}</option>}</select></label>
  <label>Match<select name="savedSearchMatch" [disabled]="!ready()" [ngModel]="match()" (ngModelChange)="setMatch($event)"><option value="contains">Contains text</option><option value="exact">Whole value</option></select></label>
  <label>Saved status<select name="savedSearchStatus" [disabled]="!ready()" [ngModel]="status()" (ngModelChange)="setStatus($event)"><option value="">Any status</option>@for(s of statuses();track s){<option [value]="s">{{s}}</option>}</select></label>
- <label>Saved text<input type="search" name="savedSearchText" maxlength="200" [disabled]="!ready()" [ngModel]="query()" (ngModelChange)="setQuery($event)" /></label>
+ <label>Saved text<input #searchText type="search" name="savedSearchText" maxlength="200" [disabled]="!ready()" [ngModel]="query()" (ngModelChange)="setQuery($event)" /></label>
  <label>Exact key tag (optional)<input name="savedSearchTag" maxlength="40" [disabled]="!ready()" [ngModel]="tag()" (ngModelChange)="setTag($event)" /></label>
  <button type="submit" name="runSavedSearch" [disabled]="!canSearch()">Search saved values</button>
  <button type="button" name="clearSavedSearchFilters" [disabled]="!canClearFilters()" (click)="clearFilters()">Clear search filters</button>
  </form>
  <p class="muted" name="savedSearchClearScope">Clear text, status and tag filters and return to Contains text. Keeps this branch and locale. Clears loaded results without searching or changing translations.</p>
  @if(loading()){<p role="status" name="savedSearchLoading">Searching saved values...</p>}
- @if(error()){<p role="alert" name="savedSearchError">Saved text search unavailable. No results are shown. Try Search saved values again.</p>}
+ @if(error()){<p #searchOutcome tabindex="-1" role="alert" name="savedSearchError">Saved text search unavailable. No results are shown. Try Search saved values again.</p>}
  @if(searched()&&!loading()&&!error()){
- <p role="status" name="savedSearchCount">{{results().length}} matching key{{results().length===1?'':'s'}} on branch {{branch()}} in {{locale()}} for "{{query()}}" ({{match()==='exact'?'whole value':'contains text'}}; {{status()||'any status'}}; tag: {{tag()||'any tag'}}). Loaded saved values, not newer server changes.</p>
+ <p #searchOutcome tabindex="-1" role="status" name="savedSearchCount">{{results().length}} matching key{{results().length===1?'':'s'}} on branch {{branch()}} in {{locale()}} for "{{query()}}" ({{match()==='exact'?'whole value':'contains text'}}; {{status()||'any status'}}; tag: {{tag()||'any tag'}}). Loaded saved values, not newer server changes.</p>
  <button type="button" name="downloadSavedSearch" [disabled]="!canDownload()" (click)="download()">Download loaded matches (.json)</button>
  <p class="muted" name="savedSearchDownloadScope">Downloads only these loaded matches and their query scope, including saved source and matched values. Not a complete project export, import file, plural-form report or newer server snapshot. The file can contain private translation text. Downloading does not upload or share it.</p>
  @if(downloadNotice()){<p role="status" name="savedSearchDownloadNotice">{{downloadNotice()}}</p>}
@@ -37,15 +37,19 @@ export class SavedSearchComponent implements OnInit,OnDestroy {
  projectId='';sourceLocale=signal('');statuses=signal<string[]>([]);status=signal('');tag=signal('');branches=signal<BranchInfo[]>([]);locales=signal<string[]>([]);branch=signal('main');locale=signal('');query=signal('');match=signal<'contains'|'exact'>('contains');
  downloadNotice=signal('');
  optionsLoading=signal(false);optionsError=signal(false);loading=signal(false);error=signal(false);searched=signal(false);results=signal<{id:string;key:string;value:string;sourceValue:string|null;status:string|null}[]>([]);
+ @ViewChild('searchText') private searchText?:ElementRef<HTMLInputElement>;
+ @ViewChild('searchOutcome') private searchOutcome?:ElementRef<HTMLElement>;
+ private focusTimer:ReturnType<typeof setTimeout>|undefined;
+ private focusAfterRender(destination:'text'|'outcome',generation:number){if(this.focusTimer!==undefined)clearTimeout(this.focusTimer);this.focusTimer=setTimeout(()=>{this.focusTimer=undefined;if(!this.destroyed&&generation===this.generation)(destination==='text'?this.searchText:this.searchOutcome)?.nativeElement.focus();},0);}
  private destroyed=false;private generation=0;private optionsGeneration=0;private subscription?:Subscription;
  constructor(private route:ActivatedRoute,private api:ApiService){}
  ngOnInit(){this.subscription=this.route.paramMap.subscribe(p=>void this.loadProject(p.get('id')??''));}
- ngOnDestroy(){this.destroyed=true;++this.generation;++this.optionsGeneration;this.subscription?.unsubscribe();}
+ ngOnDestroy(){if(this.focusTimer!==undefined)clearTimeout(this.focusTimer);this.destroyed=true;++this.generation;++this.optionsGeneration;this.subscription?.unsubscribe();}
  ready(){return !this.destroyed&&!this.optionsLoading()&&!this.optionsError()&&this.branches().some(b=>b.name===this.branch())&&this.locales().includes(this.locale());}
  canSearch(){return this.ready()&&!this.loading()&&!!this.query().trim()&&this.query().length<=200;}
  canClearFilters(){return this.ready()&&!!(this.query()||this.status()||this.tag()||this.match()!=='contains'||this.searched()||this.loading()||this.error()||this.downloadNotice());}
- clearFilters(){if(!this.canClearFilters())return;this.clear();this.query.set('');this.status.set('');this.tag.set('');this.match.set('contains');}
- private clear(){++this.generation;this.downloadNotice.set('');this.loading.set(false);this.error.set(false);this.searched.set(false);this.results.set([]);}
+ clearFilters(){if(!this.canClearFilters())return;this.clear();this.query.set('');this.status.set('');this.tag.set('');this.match.set('contains');this.focusAfterRender('text',this.generation);}
+ private clear(){if(this.focusTimer!==undefined)clearTimeout(this.focusTimer);this.focusTimer=undefined;++this.generation;this.downloadNotice.set('');this.loading.set(false);this.error.set(false);this.searched.set(false);this.results.set([]);}
  setTag(value:string){if(this.destroyed)return;this.clear();this.tag.set(value.slice(0,40));}
  setStatus(value:string){if(this.destroyed||(value!==''&&!this.statuses().includes(value)))return;this.clear();this.status.set(value);}
  setMatch(value:string){if(this.destroyed||(value!=='contains'&&value!=='exact'))return;this.clear();this.match.set(value);}
@@ -74,6 +78,6 @@ export class SavedSearchComponent implements OnInit,OnDestroy {
   if(!this.canSearch())return;const generation=++this.generation,projectId=this.projectId,branch=this.branch(),locale=this.locale(),query=this.query(),match=this.match(),sourceLocale=this.sourceLocale(),status=this.status(),tag=this.tag();const current=()=>!this.destroyed&&generation===this.generation;
   this.downloadNotice.set('');this.loading.set(true);this.error.set(false);this.searched.set(false);this.results.set([]);
   try{const keys=await this.api.listKeys(projectId,{branch,locale,valueSearch:query,...(status?{status}:{}),...(tag?{tag}:{}),...(match==='exact'?{valueMatch:'exact' as const}:{})});if(current()){this.results.set(keys.map(k=>({id:k.id,key:k.name,value:k.translations.find(t=>t.localeCode===locale)?.value??'',sourceValue:k.translations.find(t=>t.localeCode===sourceLocale)?.value??null,status:k.translations.find(t=>t.localeCode===locale)?.status??null})));this.searched.set(true);}}
-  catch{if(current())this.error.set(true);}finally{if(current())this.loading.set(false);}
+  catch{if(current())this.error.set(true);}finally{if(current()){this.loading.set(false);this.focusAfterRender('outcome',generation);}}
  }
 }

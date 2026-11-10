@@ -1407,3 +1407,9 @@ status, tag and match mode while retaining the selected branch and locale.
 Loaded results and download feedback clear, including a pending read's late
 response. No automatic search or translation change occurs. See
 [review0507](docs/reviews/0507-saved-search-clear.md).
+
+Manual saved-text search now lands keyboard focus on the rendered result count
+(including empty success) or fixed error. Clear search filters returns to text.
+Late prior-scope responses and departure cannot restore obsolete focus. No extra
+read or translation change. Actual Enter-key and focus evidence is in
+[review0508](docs/reviews/0508-saved-search-focus.md).
