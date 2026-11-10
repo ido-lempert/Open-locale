@@ -1372,3 +1372,9 @@ separate labels. This uses the same key-list response, adds no requests or write
 and stacks on narrow screens. Project metadata and key values are separate reads,
 not a synchronized snapshot. See
 [review0502](docs/reviews/0502-saved-search-source.md).
+
+Find saved text can also filter by the matching locale's saved status, including
+loaded project custom statuses. Any status keeps the previous search behavior.
+Changing the status clears results; run the search explicitly. This does not
+change translation status. See
+[review0503](docs/reviews/0503-saved-search-status.md).

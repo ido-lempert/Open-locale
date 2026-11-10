@@ -164,6 +164,7 @@
     "test:editor-history-read-recovery-browser": "node scripts/editor-history-read-recovery-browser-test.mjs",
     "test:editor-tm-read-recovery-browser": "node scripts/editor-tm-read-recovery-browser-test.mjs",
     "test:editor-history-toggle-browser": "node scripts/editor-history-toggle-browser-test.mjs",
+    "test:saved-search-status-browser": "node scripts/saved-search-status-browser-test.mjs",
     "test:saved-search-source-browser": "node scripts/saved-search-source-browser-test.mjs",
     "test:saved-search-exact-browser": "node scripts/saved-search-exact-browser-test.mjs",
     "test:saved-search-browser": "node scripts/saved-search-browser-test.mjs",
