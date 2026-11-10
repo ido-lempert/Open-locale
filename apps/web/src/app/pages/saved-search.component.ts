@@ -19,7 +19,9 @@ import { ApiService, BranchInfo } from '../api.service';
  <label>Saved text<input type="search" name="savedSearchText" maxlength="200" [disabled]="!ready()" [ngModel]="query()" (ngModelChange)="setQuery($event)" /></label>
  <label>Exact key tag (optional)<input name="savedSearchTag" maxlength="40" [disabled]="!ready()" [ngModel]="tag()" (ngModelChange)="setTag($event)" /></label>
  <button type="submit" name="runSavedSearch" [disabled]="!canSearch()">Search saved values</button>
+ <button type="button" name="clearSavedSearchFilters" [disabled]="!canClearFilters()" (click)="clearFilters()">Clear search filters</button>
  </form>
+ <p class="muted" name="savedSearchClearScope">Clear text, status and tag filters and return to Contains text. Keeps this branch and locale. Clears loaded results without searching or changing translations.</p>
  @if(loading()){<p role="status" name="savedSearchLoading">Searching saved values...</p>}
  @if(error()){<p role="alert" name="savedSearchError">Saved text search unavailable. No results are shown. Try Search saved values again.</p>}
  @if(searched()&&!loading()&&!error()){
@@ -41,6 +43,8 @@ export class SavedSearchComponent implements OnInit,OnDestroy {
  ngOnDestroy(){this.destroyed=true;++this.generation;++this.optionsGeneration;this.subscription?.unsubscribe();}
  ready(){return !this.destroyed&&!this.optionsLoading()&&!this.optionsError()&&this.branches().some(b=>b.name===this.branch())&&this.locales().includes(this.locale());}
  canSearch(){return this.ready()&&!this.loading()&&!!this.query().trim()&&this.query().length<=200;}
+ canClearFilters(){return this.ready()&&!!(this.query()||this.status()||this.tag()||this.match()!=='contains'||this.searched()||this.loading()||this.error()||this.downloadNotice());}
+ clearFilters(){if(!this.canClearFilters())return;this.clear();this.query.set('');this.status.set('');this.tag.set('');this.match.set('contains');}
  private clear(){++this.generation;this.downloadNotice.set('');this.loading.set(false);this.error.set(false);this.searched.set(false);this.results.set([]);}
  setTag(value:string){if(this.destroyed)return;this.clear();this.tag.set(value.slice(0,40));}
  setStatus(value:string){if(this.destroyed||(value!==''&&!this.statuses().includes(value)))return;this.clear();this.status.set(value);}

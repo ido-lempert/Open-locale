@@ -1401,3 +1401,9 @@ server changes. This uses the same existing read, makes no writes, and does
 not change the loaded-match JSON report schema. Desktop and390px evidence,
 five review perspectives and staged verification chronology are in
 [review0506](docs/reviews/0506-saved-search-row-status.md).
+
+Saved-text search has a local Clear search filters action. It resets text,
+status, tag and match mode while retaining the selected branch and locale.
+Loaded results and download feedback clear, including a pending read's late
+response. No automatic search or translation change occurs. See
+[review0507](docs/reviews/0507-saved-search-clear.md).
