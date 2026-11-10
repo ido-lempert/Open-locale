@@ -145,7 +145,7 @@ export const OPENAPI = {
       get: p('Translation progress per locale for a branch: translated/untranslated counts, percent, and per-status breakdown (read scope)', 'reports'),
     },
     '/api/projects/{projectId}/keys': {
-      get: p('List keys (supports key-name search, tag, status and branch filters; optional valueSearch up to 200 characters requires a current project locale and matches literal case-insensitive saved base values only, not plural forms or editor drafts)', 'keys'),
+      get: p('List keys (supports key-name search, tag, status and branch filters; optional valueSearch up to 200 characters requires a current project locale and matches literal case-insensitive saved base values only, not plural forms or editor drafts; optional valueMatch contains or exact selects substring or whole-value matching and requires valueSearch)', 'keys'),
       post: p('Create a key', 'keys', true),
     },
     '/api/projects/{projectId}/keys/{keyId}': {

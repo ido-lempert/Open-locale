@@ -1360,3 +1360,8 @@ one branch and locale for a literal, case-insensitive substring in saved base
 values. It does not search plural-form text, key names or unsaved local drafts.
 Scope or query edits clear previous results; search again explicitly. See
 [review0500](docs/reviews/0500-saved-search.md).
+
+Saved-text search offers Contains text or Whole value. Both are literal and
+case-insensitive. Whole value keeps spaces significant and excludes longer
+values. Changing match mode clears results before another manual search. See
+[review0501](docs/reviews/0501-saved-search-exact.md).

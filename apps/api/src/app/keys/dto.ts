@@ -1,4 +1,4 @@
-import { ArrayMaxSize, IsArray, IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength, Min } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsInt, IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, Matches, MaxLength, Min } from 'class-validator';
 
 export class CreateKeyDto {
   @IsString()
@@ -49,6 +49,10 @@ export class UpdateKeyDto {
 }
 
 export class ListKeysQueryDto {
+  @IsOptional()
+  @IsIn(['contains', 'exact'])
+  valueMatch?: 'contains' | 'exact';
+
   @IsOptional()
   @IsString()
   @MaxLength(200)

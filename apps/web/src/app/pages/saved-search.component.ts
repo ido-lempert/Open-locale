@@ -8,25 +8,26 @@ import { ApiService, BranchInfo } from '../api.service';
  styles:[`.search-form {display:flex;flex-wrap:wrap;gap:.75rem;align-items:end;margin:1rem 0;} label {display:flex;flex-direction:column;gap:.25rem;max-width:100%;} input {max-width:100%;box-sizing:border-box;} .result {padding:1rem;background:white;border:1px solid #e5e7eb;border-radius:.5rem;margin:.75rem 0;overflow-wrap:anywhere;} pre {white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;margin:.5rem 0 0;}`],
  template:`<header class="bar"><a [routerLink]="['/projects',projectId]">&larr; Editor</a><h1>Find saved text</h1></header>
  <main>
- <p name="savedSearchScope">Read-only search in saved base translation values for one branch and locale. Literal, case-insensitive substring, up to 200 characters. Does not search key names, plural-form text or unsaved editor drafts. No translations are changed.</p>
+ <p name="savedSearchScope">Read-only search in saved base translation values for one branch and locale. Literal, case-insensitive matching, up to 200 characters. Choose substring or whole value. Whole value includes every space; no trimming is applied. Does not search key names, plural-form text or unsaved editor drafts. No translations are changed.</p>
  @if(optionsLoading()){<p role="status">Loading branch and locale options...</p>}
  @if(optionsError()){<p role="alert">Search options unavailable. Retry to check current branches and locales.</p><button type="button" name="retrySavedOptions" (click)="loadProject(projectId)">Retry options</button>}
  <form class="search-form" (ngSubmit)="search()">
  <label>Branch<select name="savedSearchBranch" [disabled]="!ready()" [ngModel]="branch()" (ngModelChange)="setBranch($event)">@for(b of branches();track b.id){<option [value]="b.name">{{b.name}}</option>}</select></label>
  <label>Locale<select name="savedSearchLocale" [disabled]="!ready()" [ngModel]="locale()" (ngModelChange)="setLocale($event)">@for(l of locales();track l){<option [value]="l">{{l}}</option>}</select></label>
+ <label>Match<select name="savedSearchMatch" [disabled]="!ready()" [ngModel]="match()" (ngModelChange)="setMatch($event)"><option value="contains">Contains text</option><option value="exact">Whole value</option></select></label>
  <label>Saved text<input type="search" name="savedSearchText" maxlength="200" [disabled]="!ready()" [ngModel]="query()" (ngModelChange)="setQuery($event)" /></label>
  <button type="submit" name="runSavedSearch" [disabled]="!canSearch()">Search saved values</button>
  </form>
  @if(loading()){<p role="status" name="savedSearchLoading">Searching saved values...</p>}
  @if(error()){<p role="alert" name="savedSearchError">Saved text search unavailable. No results are shown. Try Search saved values again.</p>}
  @if(searched()&&!loading()&&!error()){
- <p role="status" name="savedSearchCount">{{results().length}} matching key{{results().length===1?'':'s'}} on branch {{branch()}} in {{locale()}} for "{{query()}}". Loaded saved values, not newer server changes.</p>
+ <p role="status" name="savedSearchCount">{{results().length}} matching key{{results().length===1?'':'s'}} on branch {{branch()}} in {{locale()}} for "{{query()}}" ({{match()==='exact'?'whole value':'contains text'}}). Loaded saved values, not newer server changes.</p>
  @for(row of results();track row.id){<article class="result" name="savedSearchResult"><code>{{row.key}}</code><pre>{{row.value}}</pre></article>}@empty{<p name="savedSearchEmpty">No saved base values match this text in this branch and locale. Other locales, branches, plural forms or local drafts may differ.</p>}
  }@else if(!loading()&&!error()&&ready()){<p class="muted" name="savedSearchIdle">Choose the scope and enter text, then search. Changing the scope or text clears previous results.</p>}
  </main>`
 })
 export class SavedSearchComponent implements OnInit,OnDestroy {
- projectId='';branches=signal<BranchInfo[]>([]);locales=signal<string[]>([]);branch=signal('main');locale=signal('');query=signal('');
+ projectId='';branches=signal<BranchInfo[]>([]);locales=signal<string[]>([]);branch=signal('main');locale=signal('');query=signal('');match=signal<'contains'|'exact'>('contains');
  optionsLoading=signal(false);optionsError=signal(false);loading=signal(false);error=signal(false);searched=signal(false);results=signal<{id:string;key:string;value:string}[]>([]);
  private destroyed=false;private generation=0;private optionsGeneration=0;private subscription?:Subscription;
  constructor(private route:ActivatedRoute,private api:ApiService){}
@@ -35,19 +36,20 @@ export class SavedSearchComponent implements OnInit,OnDestroy {
  ready(){return !this.destroyed&&!this.optionsLoading()&&!this.optionsError()&&this.branches().some(b=>b.name===this.branch())&&this.locales().includes(this.locale());}
  canSearch(){return this.ready()&&!this.loading()&&!!this.query().trim()&&this.query().length<=200;}
  private clear(){++this.generation;this.loading.set(false);this.error.set(false);this.searched.set(false);this.results.set([]);}
+ setMatch(value:string){if(this.destroyed||(value!=='contains'&&value!=='exact'))return;this.clear();this.match.set(value);}
  setQuery(value:string){if(this.destroyed)return;this.clear();this.query.set(value.slice(0,200));}
  setBranch(value:string){if(this.destroyed||!this.branches().some(b=>b.name===value))return;this.clear();this.branch.set(value);}
  setLocale(value:string){if(this.destroyed||!this.locales().includes(value))return;this.clear();this.locale.set(value);}
  async loadProject(projectId:string){
-  if(this.destroyed)return;const generation=++this.optionsGeneration;this.projectId=projectId;this.clear();this.branches.set([]);this.locales.set([]);this.branch.set('main');this.locale.set('');this.query.set('');this.optionsLoading.set(true);this.optionsError.set(false);
+  if(this.destroyed)return;const generation=++this.optionsGeneration;this.projectId=projectId;this.clear();this.branches.set([]);this.locales.set([]);this.branch.set('main');this.locale.set('');this.query.set('');this.match.set('contains');this.optionsLoading.set(true);this.optionsError.set(false);
   const current=()=>!this.destroyed&&generation===this.optionsGeneration;
   try{const [project,branches]=await Promise.all([this.api.getProject(projectId),this.api.listBranches(projectId)]);if(current()){this.branches.set(branches);this.locales.set(project.locales.map(l=>l.code));this.locale.set(project.baseLocale);}}
   catch{if(current())this.optionsError.set(true);}finally{if(current())this.optionsLoading.set(false);}
  }
  async search(){
-  if(!this.canSearch())return;const generation=++this.generation,projectId=this.projectId,branch=this.branch(),locale=this.locale(),query=this.query();const current=()=>!this.destroyed&&generation===this.generation;
+  if(!this.canSearch())return;const generation=++this.generation,projectId=this.projectId,branch=this.branch(),locale=this.locale(),query=this.query(),match=this.match();const current=()=>!this.destroyed&&generation===this.generation;
   this.loading.set(true);this.error.set(false);this.searched.set(false);this.results.set([]);
-  try{const keys=await this.api.listKeys(projectId,{branch,locale,valueSearch:query});if(current()){this.results.set(keys.map(k=>({id:k.id,key:k.name,value:k.translations.find(t=>t.localeCode===locale)?.value??''})));this.searched.set(true);}}
+  try{const keys=await this.api.listKeys(projectId,{branch,locale,valueSearch:query,...(match==='exact'?{valueMatch:'exact' as const}:{})});if(current()){this.results.set(keys.map(k=>({id:k.id,key:k.name,value:k.translations.find(t=>t.localeCode===locale)?.value??''})));this.searched.set(true);}}
   catch{if(current())this.error.set(true);}finally{if(current())this.loading.set(false);}
  }
 }

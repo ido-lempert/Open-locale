@@ -21,10 +21,11 @@ export class KeysService {
   ) {}
 
   async list(userId: string, projectId: string, filters: {
-    search?: string; valueSearch?: string; tag?: string; status?: string; locale?: string; branch?: string;
+    search?: string; valueSearch?: string; valueMatch?: 'contains' | 'exact'; tag?: string; status?: string; locale?: string; branch?: string;
   }) {
     const project = await this.projects.getFor(userId, projectId);
-    const { search, valueSearch, tag, status, locale } = filters;
+    const { search, valueSearch, valueMatch, tag, status, locale } = filters;
+    if (valueMatch && !valueSearch) throw new BadRequestException('Value match mode requires a saved value query');
     if (valueSearch && (!locale || !project.locales.some(l => l.code === locale))) throw new BadRequestException('Saved value search requires a current project locale');
     const branch = await this.branches.branchFor(projectId, filters.branch);
     return this.prisma.key.findMany({
@@ -33,7 +34,7 @@ export class KeysService {
         branchId: branch.id,
         ...(search ? { name: { contains: search, mode: 'insensitive' as const } } : {}),
         ...(tag ? { tags: { has: tag } } : {}),
-        ...(valueSearch ? { AND: [{ translations: { some: { localeCode: locale!, value: { contains: valueSearch.replace(/[\\%_]/g, '\\$&'), mode: 'insensitive' as const } } } }] } : {}),
+        ...(valueSearch ? { AND: [{ translations: { some: { localeCode: locale!, value: valueMatch === 'exact' ? { equals: valueSearch.replace(/[\\%_]/g, '\\$&'), mode: 'insensitive' as const } : { contains: valueSearch.replace(/[\\%_]/g, '\\$&'), mode: 'insensitive' as const } } } }] } : {}),
         ...(status && locale
           ? { translations: { some: { localeCode: locale, status: status as never } } }
           : {}),
