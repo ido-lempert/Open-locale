@@ -1384,3 +1384,10 @@ spaces are significant, and blank means any tag. This combines with saved text,
 status, branch and locale without changing any tags or translations. Tag edits
 clear previous results before another manual search. See
 [review0504](docs/reviews/0504-saved-search-tag.md).
+
+Loaded saved-text matches can be downloaded as a local JSON report with the query
+scope and loaded source/matched values. This is not a complete project export,
+import file, plural-form report or newer server snapshot. It can contain private
+translation text. No data is uploaded or shared, and the download notice does not
+confirm the browser saved the file. See
+[review0505](docs/reviews/0505-saved-search-download.md).

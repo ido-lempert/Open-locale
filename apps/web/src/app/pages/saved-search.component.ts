@@ -24,12 +24,16 @@ import { ApiService, BranchInfo } from '../api.service';
  @if(error()){<p role="alert" name="savedSearchError">Saved text search unavailable. No results are shown. Try Search saved values again.</p>}
  @if(searched()&&!loading()&&!error()){
  <p role="status" name="savedSearchCount">{{results().length}} matching key{{results().length===1?'':'s'}} on branch {{branch()}} in {{locale()}} for "{{query()}}" ({{match()==='exact'?'whole value':'contains text'}}; {{status()||'any status'}}; tag: {{tag()||'any tag'}}). Loaded saved values, not newer server changes.</p>
+ <button type="button" name="downloadSavedSearch" [disabled]="!canDownload()" (click)="download()">Download loaded matches (.json)</button>
+ <p class="muted" name="savedSearchDownloadScope">Downloads only these loaded matches and their query scope, including saved source and matched values. Not a complete project export, import file, plural-form report or newer server snapshot. The file can contain private translation text. Downloading does not upload or share it.</p>
+ @if(downloadNotice()){<p role="status" name="savedSearchDownloadNotice">{{downloadNotice()}}</p>}
  @for(row of results();track row.id){<article class="result" name="savedSearchResult"><code>{{row.key}}</code><div class="value-context">@if(sourceLocale()!==locale()){<section name="savedSearchSource"><h2>Saved source ({{sourceLocale()}})</h2>@if(row.sourceValue===null){<p class="muted">No saved source translation row in these results.</p>}@else if(row.sourceValue===''){<p class="muted">Saved source value is empty.</p>}@else{<pre>{{row.sourceValue}}</pre>}</section>}<section name="savedSearchMatched"><h2>Matched saved value ({{locale()}})</h2><pre>{{row.value}}</pre></section></div></article>}@empty{<p name="savedSearchEmpty">No saved base values match this text, status and tag filter in this branch and locale. Other locales, branches, plural forms or local drafts may differ.</p>}
  }@else if(!loading()&&!error()&&ready()){<p class="muted" name="savedSearchIdle">Choose the scope and enter text, then search. Changing the scope or text clears previous results.</p>}
  </main>`
 })
 export class SavedSearchComponent implements OnInit,OnDestroy {
  projectId='';sourceLocale=signal('');statuses=signal<string[]>([]);status=signal('');tag=signal('');branches=signal<BranchInfo[]>([]);locales=signal<string[]>([]);branch=signal('main');locale=signal('');query=signal('');match=signal<'contains'|'exact'>('contains');
+ downloadNotice=signal('');
  optionsLoading=signal(false);optionsError=signal(false);loading=signal(false);error=signal(false);searched=signal(false);results=signal<{id:string;key:string;value:string;sourceValue:string|null}[]>([]);
  private destroyed=false;private generation=0;private optionsGeneration=0;private subscription?:Subscription;
  constructor(private route:ActivatedRoute,private api:ApiService){}
@@ -37,7 +41,7 @@ export class SavedSearchComponent implements OnInit,OnDestroy {
  ngOnDestroy(){this.destroyed=true;++this.generation;++this.optionsGeneration;this.subscription?.unsubscribe();}
  ready(){return !this.destroyed&&!this.optionsLoading()&&!this.optionsError()&&this.branches().some(b=>b.name===this.branch())&&this.locales().includes(this.locale());}
  canSearch(){return this.ready()&&!this.loading()&&!!this.query().trim()&&this.query().length<=200;}
- private clear(){++this.generation;this.loading.set(false);this.error.set(false);this.searched.set(false);this.results.set([]);}
+ private clear(){++this.generation;this.downloadNotice.set('');this.loading.set(false);this.error.set(false);this.searched.set(false);this.results.set([]);}
  setTag(value:string){if(this.destroyed)return;this.clear();this.tag.set(value.slice(0,40));}
  setStatus(value:string){if(this.destroyed||(value!==''&&!this.statuses().includes(value)))return;this.clear();this.status.set(value);}
  setMatch(value:string){if(this.destroyed||(value!=='contains'&&value!=='exact'))return;this.clear();this.match.set(value);}
@@ -50,9 +54,21 @@ export class SavedSearchComponent implements OnInit,OnDestroy {
   try{const [project,branches]=await Promise.all([this.api.getProject(projectId),this.api.listBranches(projectId)]);if(current()){this.branches.set(branches);this.locales.set(project.locales.map(l=>l.code));this.locale.set(project.baseLocale);this.sourceLocale.set(project.baseLocale);this.statuses.set([...new Set(['UNVERIFIED','TRANSLATED','REVIEWED',...(project.customStatuses??[])])]);}}
   catch{if(current())this.optionsError.set(true);}finally{if(current())this.optionsLoading.set(false);}
  }
+ canDownload(){return this.ready()&&!!this.projectId&&this.searched()&&!this.loading()&&!this.error();}
+ download(){
+  if(!this.canDownload())return;
+  let url='';
+  try{
+   const content=JSON.stringify({schemaVersion:1,kind:'loaded-saved-text-matches',scope:'current-loaded-matches-only',completeProject:false,importFile:false,projectId:this.projectId,filters:{branch:this.branch(),locale:this.locale(),query:this.query(),match:this.match(),status:this.status()||null,tag:this.tag()||null},sourceLocale:this.sourceLocale(),matches:this.results().map(row=>({id:row.id,key:row.key,value:row.value,sourceValue:row.sourceValue}))},null,2);
+   url=URL.createObjectURL(new Blob([content],{type:'application/json;charset=utf-8'}));
+   const anchor=document.createElement('a');anchor.href=url;anchor.download='saved-text-matches.json';anchor.click();
+   this.downloadNotice.set('Download requested for loaded matches only. This does not confirm the file was saved or shared.');
+  }catch{this.downloadNotice.set('Download could not be started. Try again from the current results.');}
+  finally{if(url)URL.revokeObjectURL(url);}
+ }
  async search(){
   if(!this.canSearch())return;const generation=++this.generation,projectId=this.projectId,branch=this.branch(),locale=this.locale(),query=this.query(),match=this.match(),sourceLocale=this.sourceLocale(),status=this.status(),tag=this.tag();const current=()=>!this.destroyed&&generation===this.generation;
-  this.loading.set(true);this.error.set(false);this.searched.set(false);this.results.set([]);
+  this.downloadNotice.set('');this.loading.set(true);this.error.set(false);this.searched.set(false);this.results.set([]);
   try{const keys=await this.api.listKeys(projectId,{branch,locale,valueSearch:query,...(status?{status}:{}),...(tag?{tag}:{}),...(match==='exact'?{valueMatch:'exact' as const}:{})});if(current()){this.results.set(keys.map(k=>({id:k.id,key:k.name,value:k.translations.find(t=>t.localeCode===locale)?.value??'',sourceValue:k.translations.find(t=>t.localeCode===sourceLocale)?.value??null})));this.searched.set(true);}}
   catch{if(current())this.error.set(true);}finally{if(current())this.loading.set(false);}
  }
