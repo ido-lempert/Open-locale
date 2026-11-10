@@ -1432,3 +1432,11 @@ Clipboard permission/support depends on the browser; failure offers manual copy.
 The text may be private. Clearing results or leaving cannot cancel a started copy
 or clear the clipboard. Pending copies are serialized in the current page; stale
 feedback is cleared on scope changes. See [review0511](docs/reviews/0511-saved-search-copy.md).
+
+
+Saved-text results show loaded key tags from the same existing response, as
+literal text. Empty and unavailable tags have different labels. These tags may
+differ from newer server changes and only filter through the existing exact
+key tag field. No extra request or write; JSON download and matched-value copy
+projections are unchanged. See
+[review0512](docs/reviews/0512-saved-search-tags-context.md).

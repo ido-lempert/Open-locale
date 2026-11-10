@@ -1,0 +1,10 @@
+import { SavedSearchComponent } from './saved-search.component';
+const deferred=()=>{let resolve!:(v:any)=>void;const promise=new Promise<any>(r=>resolve=r);return{promise,resolve};};
+const api=()=>({getProject:jest.fn().mockResolvedValue({baseLocale:'en',locales:[{code:'en'}]}),listBranches:jest.fn().mockResolvedValue([{id:'b',name:'main'}]),listKeys:jest.fn().mockResolvedValue([{id:'k',name:'key',tags:['Private <literal>',' two words '],translations:[{localeCode:'en',value:'Text'}]}])});
+const make=(a:any)=>new SavedSearchComponent({} as any,a);
+describe('loaded tag context in saved text search',()=>{
+ it('projects literal tag strings from the same one existing key read',async()=>{const a=api(),c=make(a);await c.loadProject('p');c.setQuery('Text');await c.search();expect(c.results()[0].tags).toEqual(['Private <literal>',' two words ']);expect(a.listKeys).toHaveBeenCalledTimes(1);expect(a.listKeys).toHaveBeenCalledWith('p',{branch:'main',locale:'en',valueSearch:'Text'});});
+ for(const tags of [[],undefined])it(`keeps ${tags?'empty':'missing'} tags distinct`,async()=>{const a=api(),c=make(a);a.listKeys.mockResolvedValue([{id:'k',name:'key',tags,translations:[{localeCode:'en',value:'Text'}]}] as any);await c.loadProject('p');c.setQuery('Text');await c.search();expect(c.results()[0].tags).toEqual(tags??null);});
+ it('clear removes old private tags and fences held response',async()=>{const a=api(),c=make(a);await c.loadProject('p');c.setQuery('Text');await c.search();expect(c.results()[0].tags).toContain('Private <literal>');const held=deferred();a.listKeys.mockReturnValueOnce(held.promise);const pending=c.search();c.clearFilters();held.resolve([{id:'old',tags:['OLD_PRIVATE'],translations:[]}]);await pending;expect(c.results()).toEqual([]);});
+ it('project reuse clears tags before next scope',async()=>{const a=api(),c=make(a);await c.loadProject('p');c.setQuery('Text');await c.search();await c.loadProject('q');expect(c.results()).toEqual([]);expect(c.projectId).toBe('q');});
+});
