@@ -21,10 +21,11 @@ export class KeysService {
   ) {}
 
   async list(userId: string, projectId: string, filters: {
-    search?: string; tag?: string; status?: string; locale?: string; branch?: string;
+    search?: string; valueSearch?: string; tag?: string; status?: string; locale?: string; branch?: string;
   }) {
-    await this.projects.getFor(userId, projectId);
-    const { search, tag, status, locale } = filters;
+    const project = await this.projects.getFor(userId, projectId);
+    const { search, valueSearch, tag, status, locale } = filters;
+    if (valueSearch && (!locale || !project.locales.some(l => l.code === locale))) throw new BadRequestException('Saved value search requires a current project locale');
     const branch = await this.branches.branchFor(projectId, filters.branch);
     return this.prisma.key.findMany({
       where: {
@@ -32,6 +33,7 @@ export class KeysService {
         branchId: branch.id,
         ...(search ? { name: { contains: search, mode: 'insensitive' as const } } : {}),
         ...(tag ? { tags: { has: tag } } : {}),
+        ...(valueSearch ? { AND: [{ translations: { some: { localeCode: locale!, value: { contains: valueSearch.replace(/[\\%_]/g, '\\$&'), mode: 'insensitive' as const } } } }] } : {}),
         ...(status && locale
           ? { translations: { some: { localeCode: locale, status: status as never } } }
           : {}),

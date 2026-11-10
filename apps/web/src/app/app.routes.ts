@@ -24,6 +24,7 @@ export const appRoutes: Routes = [
   { path: 'projects/:id/activity', loadComponent: () => import('./pages/activity.component').then(m => m.ActivityComponent), canActivate: [authGuard] },
   { path: 'projects/:id/tasks', loadComponent: () => import('./pages/tasks.component').then(m => m.TasksComponent), canActivate: [authGuard] },
   { path: 'projects/:id/glossary', loadComponent: () => import('./pages/glossary.component').then(m => m.GlossaryComponent), canActivate: [authGuard] },
+  { path: 'projects/:id/find', loadComponent: () => import('./pages/saved-search.component').then(m => m.SavedSearchComponent), canActivate: [authGuard] },
   { path: 'projects/:id/qa', loadComponent: () => import('./pages/qa.component').then(m => m.QaComponent), canActivate: [authGuard] },
   { path: 'projects/:id/snapshots', loadComponent: () => import('./pages/snapshots.component').then(m => m.SnapshotsComponent), canActivate: [authGuard] },
   { path: 'projects/:id/reports', loadComponent: () => import('./pages/reports.component').then(m => m.ReportsComponent), canActivate: [authGuard] },

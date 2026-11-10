@@ -52,6 +52,11 @@ export class ListKeysQueryDto {
   @IsOptional()
   @IsString()
   @MaxLength(200)
+  valueSearch?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
   search?: string;
 
   @IsOptional()

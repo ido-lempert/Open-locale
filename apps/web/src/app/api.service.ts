@@ -326,7 +326,7 @@ export class ApiService {
   removeLocale(projectId: string, code: string) {
     return this.request<{ removed: string }>(`/projects/${projectId}/locales/${code}`, { method: 'DELETE' });
   }
-  listKeys(projectId: string, filters: { search?: string; tag?: string; status?: string; locale?: string; branch?: string } = {}) {
+  listKeys(projectId: string, filters: { search?: string; valueSearch?: string; tag?: string; status?: string; locale?: string; branch?: string } = {}) {
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(filters)) if (v) params.set(k, v);
     const q = params.toString();

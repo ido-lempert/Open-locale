@@ -1354,3 +1354,9 @@ The paused editor can download the retained grid as a local JSON backup before
 retry. It includes plural forms, but is not confirmed saved data, a complete
 project export or an import file. No data is uploaded; check the downloaded file
 before reloading. See [review0499](docs/reviews/0499-editor-retained-download.md).
+
+Find saved text opens a separate read-only page from the editor toolbar. Search
+one branch and locale for a literal, case-insensitive substring in saved base
+values. It does not search plural-form text, key names or unsaved local drafts.
+Scope or query edits clear previous results; search again explicitly. See
+[review0500](docs/reviews/0500-saved-search.md).
