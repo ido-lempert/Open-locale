@@ -1,0 +1,11 @@
+import { SavedSearchComponent } from './saved-search.component';
+const deferred=()=>{let resolve!:(v:any)=>void;const promise=new Promise<any>(r=>resolve=r);return{promise,resolve};};
+const api=()=>({getProject:jest.fn().mockResolvedValue({baseLocale:'en',locales:[{code:'en'},{code:'he'}]}),listBranches:jest.fn().mockResolvedValue([{id:'b',name:'main'}]),listKeys:jest.fn().mockResolvedValue([{id:'k',name:'key',translations:[{localeCode:'en',value:'Source',status:'REVIEWED'},{localeCode:'he',value:'Target',status:'UNVERIFIED'}]}])});
+const make=(a:any)=>new SavedSearchComponent({} as any,a);
+describe('loaded matched translation status',()=>{
+ it('projects matched locale status rather than source status from one existing read',async()=>{const a=api(),c=make(a);await c.loadProject('p');c.setLocale('he');c.setQuery('Target');await c.search();expect(c.results()[0].status).toBe('UNVERIFIED');expect(a.listKeys).toHaveBeenCalledTimes(1);});
+ it('retains custom status text verbatim without promoting it to review confirmation',async()=>{const a=api(),c=make(a);a.listKeys.mockResolvedValue([{id:'k',name:'key',translations:[{localeCode:'en',value:'Text',status:'CUSTOM_<literal>'}]}]);await c.loadProject('p');c.setQuery('Text');await c.search();expect(c.results()[0].status).toBe('CUSTOM_<literal>');});
+ it('missing status stays null rather than fabricated unverified',async()=>{const a=api(),c=make(a);a.listKeys.mockResolvedValue([{id:'k',name:'key',translations:[{localeCode:'en',value:'Text'}]}]);await c.loadProject('p');c.setQuery('Text');await c.search();expect(c.results()[0].status).toBeNull();});
+ it('status clears with old results and cannot reappear after held read and scope edit',async()=>{const a=api(),c=make(a);await c.loadProject('p');c.setQuery('Source');await c.search();expect(c.results()[0].status).toBe('REVIEWED');const held=deferred();a.listKeys.mockReturnValueOnce(held.promise);const pending=c.search();c.setLocale('he');held.resolve([{id:'old',name:'private',translations:[{localeCode:'en',value:'old',status:'REVIEWED'}]}]);await pending;expect(c.results()).toEqual([]);});
+ it('project reuse clears loaded per-row status',async()=>{const a=api(),c=make(a);await c.loadProject('p');c.setQuery('Source');await c.search();await c.loadProject('q');expect(c.results()).toEqual([]);});
+});

@@ -1391,3 +1391,13 @@ import file, plural-form report or newer server snapshot. It can contain private
 translation text. No data is uploaded or shared, and the download notice does not
 confirm the browser saved the file. See
 [review0505](docs/reviews/0505-saved-search-download.md).
+
+### Loaded saved-text result status (continuation440)
+
+Each matched value shows its loaded saved status for the selected locale, not
+its source locale's status. Missing status is labeled unavailable. The label
+is not live review confirmation: explicit Search saved values loads later
+server changes. This uses the same existing read, makes no writes, and does
+not change the loaded-match JSON report schema. Desktop and390px evidence,
+five review perspectives and staged verification chronology are in
+[review0506](docs/reviews/0506-saved-search-row-status.md).
