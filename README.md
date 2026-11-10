@@ -1378,3 +1378,9 @@ loaded project custom statuses. Any status keeps the previous search behavior.
 Changing the status clears results; run the search explicitly. This does not
 change translation status. See
 [review0503](docs/reviews/0503-saved-search-status.md).
+
+Find saved text accepts an optional exact key tag. Tag membership is case-sensitive,
+spaces are significant, and blank means any tag. This combines with saved text,
+status, branch and locale without changing any tags or translations. Tag edits
+clear previous results before another manual search. See
+[review0504](docs/reviews/0504-saved-search-tag.md).

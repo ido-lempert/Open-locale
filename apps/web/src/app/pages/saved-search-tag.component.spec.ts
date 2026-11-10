@@ -1,0 +1,13 @@
+import { SavedSearchComponent } from './saved-search.component';
+const deferred=()=>{let resolve!:(v:any)=>void,reject!:(e:any)=>void;const promise=new Promise<any>((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
+const api=()=>({getProject:jest.fn().mockResolvedValue({baseLocale:'en',locales:[{code:'en'}]}),listBranches:jest.fn().mockResolvedValue([{id:'b',name:'main'}]),listKeys:jest.fn().mockResolvedValue([])});
+const make=(a:any)=>new SavedSearchComponent({} as any,a);
+describe('saved text exact key tag scope',()=>{
+ it('defaults to any tag without a query parameter',async()=>{const a=api(),c=make(a);await c.loadProject('p');c.setQuery('Needle');await c.search();expect(c.tag()).toBe('');expect(a.listKeys).toHaveBeenCalledWith('p',{branch:'main',locale:'en',valueSearch:'Needle'});});
+ it('preserves exact case spaces and punctuation combined with status and whole-value mode',async()=>{const a=api(),c=make(a);await c.loadProject('p');c.setQuery(' Needle ');c.setMatch('exact');c.setStatus('REVIEWED');c.setTag(' Tag_%\\ ');expect(a.listKeys).not.toHaveBeenCalled();await c.search();expect(a.listKeys).toHaveBeenCalledWith('p',{branch:'main',locale:'en',valueSearch:' Needle ',valueMatch:'exact',status:'REVIEWED',tag:' Tag_%\\ '});});
+ it('tag input bounds to existing API40 characters',async()=>{const a=api(),c=make(a);await c.loadProject('p');c.setTag('x'.repeat(41));expect(c.tag()).toHaveLength(40);});
+ for(const success of [true,false])it(`tag edit clears and fences old ${success?'success':'failure'}`,async()=>{const a=api(),c=make(a);await c.loadProject('p');c.setQuery('Needle');const held=deferred();a.listKeys.mockReturnValueOnce(held.promise);const pending=c.search();c.setTag('tag');if(success)held.resolve([{id:'old',name:'PRIVATE',translations:[]}]);else held.reject(new Error('PRIVATE'));await pending;expect(c.results()).toEqual([]);expect(c.loading()).toBe(false);expect(c.error()).toBe(false);expect(c.searched()).toBe(false);});
+ it('clearing tag restores any-tag query',async()=>{const a=api(),c=make(a);await c.loadProject('p');c.setQuery('Needle');c.setTag('tag');await c.search();c.setTag('');await c.search();expect(a.listKeys.mock.calls[1]).toEqual(['p',{branch:'main',locale:'en',valueSearch:'Needle'}]);});
+ it('project reuse resets tag and clears private results',async()=>{const a=api(),c=make(a);await c.loadProject('p');c.setTag('private');await c.loadProject('q');expect(c.tag()).toBe('');expect(c.results()).toEqual([]);});
+ it('departure refuses tag edits',async()=>{const a=api(),c=make(a);await c.loadProject('p');c.setTag('tag');c.ngOnDestroy();c.setTag('changed');expect(c.tag()).toBe('tag');});
+});
