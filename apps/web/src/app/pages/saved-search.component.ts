@@ -5,10 +5,10 @@ import { Subscription } from 'rxjs';
 import { ApiService, BranchInfo } from '../api.service';
 @Component({
  selector:'ol-saved-search',imports:[FormsModule,RouterLink],
- styles:[`.search-form {display:flex;flex-wrap:wrap;gap:.75rem;align-items:end;margin:1rem 0;} label {display:flex;flex-direction:column;gap:.25rem;max-width:100%;} input {max-width:100%;box-sizing:border-box;} .result {padding:1rem;background:white;border:1px solid #e5e7eb;border-radius:.5rem;margin:.75rem 0;overflow-wrap:anywhere;} pre {white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;margin:.5rem 0 0;}`],
+ styles:[`.search-form {display:flex;flex-wrap:wrap;gap:.75rem;align-items:end;margin:1rem 0;} label {display:flex;flex-direction:column;gap:.25rem;max-width:100%;} input {max-width:100%;box-sizing:border-box;} .value-context {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr));gap:1rem;} h2 {font-size:.95rem;margin:.75rem 0 0;} .result {padding:1rem;background:white;border:1px solid #e5e7eb;border-radius:.5rem;margin:.75rem 0;overflow-wrap:anywhere;} pre {white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;margin:.5rem 0 0;}`],
  template:`<header class="bar"><a [routerLink]="['/projects',projectId]">&larr; Editor</a><h1>Find saved text</h1></header>
  <main>
- <p name="savedSearchScope">Read-only search in saved base translation values for one branch and locale. Literal, case-insensitive matching, up to 200 characters. Choose substring or whole value. Whole value includes every space; no trimming is applied. Does not search key names, plural-form text or unsaved editor drafts. No translations are changed.</p>
+ <p name="savedSearchScope">Read-only search in saved base translation values for one branch and locale. Literal, case-insensitive matching, up to 200 characters. Choose substring or whole value. Whole value includes every space; no trimming is applied. Does not search key names, plural-form text or unsaved editor drafts. Matching target values include the loaded saved source-language context when different. Missing and empty source values are labeled. No translations are changed.</p>
  @if(optionsLoading()){<p role="status">Loading branch and locale options...</p>}
  @if(optionsError()){<p role="alert">Search options unavailable. Retry to check current branches and locales.</p><button type="button" name="retrySavedOptions" (click)="loadProject(projectId)">Retry options</button>}
  <form class="search-form" (ngSubmit)="search()">
@@ -22,13 +22,13 @@ import { ApiService, BranchInfo } from '../api.service';
  @if(error()){<p role="alert" name="savedSearchError">Saved text search unavailable. No results are shown. Try Search saved values again.</p>}
  @if(searched()&&!loading()&&!error()){
  <p role="status" name="savedSearchCount">{{results().length}} matching key{{results().length===1?'':'s'}} on branch {{branch()}} in {{locale()}} for "{{query()}}" ({{match()==='exact'?'whole value':'contains text'}}). Loaded saved values, not newer server changes.</p>
- @for(row of results();track row.id){<article class="result" name="savedSearchResult"><code>{{row.key}}</code><pre>{{row.value}}</pre></article>}@empty{<p name="savedSearchEmpty">No saved base values match this text in this branch and locale. Other locales, branches, plural forms or local drafts may differ.</p>}
+ @for(row of results();track row.id){<article class="result" name="savedSearchResult"><code>{{row.key}}</code><div class="value-context">@if(sourceLocale()!==locale()){<section name="savedSearchSource"><h2>Saved source ({{sourceLocale()}})</h2>@if(row.sourceValue===null){<p class="muted">No saved source translation row in these results.</p>}@else if(row.sourceValue===''){<p class="muted">Saved source value is empty.</p>}@else{<pre>{{row.sourceValue}}</pre>}</section>}<section name="savedSearchMatched"><h2>Matched saved value ({{locale()}})</h2><pre>{{row.value}}</pre></section></div></article>}@empty{<p name="savedSearchEmpty">No saved base values match this text in this branch and locale. Other locales, branches, plural forms or local drafts may differ.</p>}
  }@else if(!loading()&&!error()&&ready()){<p class="muted" name="savedSearchIdle">Choose the scope and enter text, then search. Changing the scope or text clears previous results.</p>}
  </main>`
 })
 export class SavedSearchComponent implements OnInit,OnDestroy {
- projectId='';branches=signal<BranchInfo[]>([]);locales=signal<string[]>([]);branch=signal('main');locale=signal('');query=signal('');match=signal<'contains'|'exact'>('contains');
- optionsLoading=signal(false);optionsError=signal(false);loading=signal(false);error=signal(false);searched=signal(false);results=signal<{id:string;key:string;value:string}[]>([]);
+ projectId='';sourceLocale=signal('');branches=signal<BranchInfo[]>([]);locales=signal<string[]>([]);branch=signal('main');locale=signal('');query=signal('');match=signal<'contains'|'exact'>('contains');
+ optionsLoading=signal(false);optionsError=signal(false);loading=signal(false);error=signal(false);searched=signal(false);results=signal<{id:string;key:string;value:string;sourceValue:string|null}[]>([]);
  private destroyed=false;private generation=0;private optionsGeneration=0;private subscription?:Subscription;
  constructor(private route:ActivatedRoute,private api:ApiService){}
  ngOnInit(){this.subscription=this.route.paramMap.subscribe(p=>void this.loadProject(p.get('id')??''));}
@@ -41,15 +41,15 @@ export class SavedSearchComponent implements OnInit,OnDestroy {
  setBranch(value:string){if(this.destroyed||!this.branches().some(b=>b.name===value))return;this.clear();this.branch.set(value);}
  setLocale(value:string){if(this.destroyed||!this.locales().includes(value))return;this.clear();this.locale.set(value);}
  async loadProject(projectId:string){
-  if(this.destroyed)return;const generation=++this.optionsGeneration;this.projectId=projectId;this.clear();this.branches.set([]);this.locales.set([]);this.branch.set('main');this.locale.set('');this.query.set('');this.match.set('contains');this.optionsLoading.set(true);this.optionsError.set(false);
+  if(this.destroyed)return;const generation=++this.optionsGeneration;this.projectId=projectId;this.clear();this.branches.set([]);this.locales.set([]);this.branch.set('main');this.locale.set('');this.sourceLocale.set('');this.query.set('');this.match.set('contains');this.optionsLoading.set(true);this.optionsError.set(false);
   const current=()=>!this.destroyed&&generation===this.optionsGeneration;
-  try{const [project,branches]=await Promise.all([this.api.getProject(projectId),this.api.listBranches(projectId)]);if(current()){this.branches.set(branches);this.locales.set(project.locales.map(l=>l.code));this.locale.set(project.baseLocale);}}
+  try{const [project,branches]=await Promise.all([this.api.getProject(projectId),this.api.listBranches(projectId)]);if(current()){this.branches.set(branches);this.locales.set(project.locales.map(l=>l.code));this.locale.set(project.baseLocale);this.sourceLocale.set(project.baseLocale);}}
   catch{if(current())this.optionsError.set(true);}finally{if(current())this.optionsLoading.set(false);}
  }
  async search(){
-  if(!this.canSearch())return;const generation=++this.generation,projectId=this.projectId,branch=this.branch(),locale=this.locale(),query=this.query(),match=this.match();const current=()=>!this.destroyed&&generation===this.generation;
+  if(!this.canSearch())return;const generation=++this.generation,projectId=this.projectId,branch=this.branch(),locale=this.locale(),query=this.query(),match=this.match(),sourceLocale=this.sourceLocale();const current=()=>!this.destroyed&&generation===this.generation;
   this.loading.set(true);this.error.set(false);this.searched.set(false);this.results.set([]);
-  try{const keys=await this.api.listKeys(projectId,{branch,locale,valueSearch:query,...(match==='exact'?{valueMatch:'exact' as const}:{})});if(current()){this.results.set(keys.map(k=>({id:k.id,key:k.name,value:k.translations.find(t=>t.localeCode===locale)?.value??''})));this.searched.set(true);}}
+  try{const keys=await this.api.listKeys(projectId,{branch,locale,valueSearch:query,...(match==='exact'?{valueMatch:'exact' as const}:{})});if(current()){this.results.set(keys.map(k=>({id:k.id,key:k.name,value:k.translations.find(t=>t.localeCode===locale)?.value??'',sourceValue:k.translations.find(t=>t.localeCode===sourceLocale)?.value??null})));this.searched.set(true);}}
   catch{if(current())this.error.set(true);}finally{if(current())this.loading.set(false);}
  }
 }

@@ -1365,3 +1365,10 @@ Saved-text search offers Contains text or Whole value. Both are literal and
 case-insensitive. Whole value keeps spaces significant and excludes longer
 values. Changing match mode clears results before another manual search. See
 [review0501](docs/reviews/0501-saved-search-exact.md).
+
+Saved-text matches include the loaded saved source-language base value beside the
+matched locale when they differ. Missing source rows and empty saved values have
+separate labels. This uses the same key-list response, adds no requests or writes,
+and stacks on narrow screens. Project metadata and key values are separate reads,
+not a synchronized snapshot. See
+[review0502](docs/reviews/0502-saved-search-source.md).
