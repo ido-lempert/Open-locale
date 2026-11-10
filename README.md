@@ -1419,3 +1419,9 @@ and matched value. Literal multiline text is preserved; empty and unavailable
 descriptions have different labels. Descriptions are not searched, can differ
 from newer server changes, and are not added to the loaded-match JSON report.
 No extra request or write. See [review0509](docs/reviews/0509-saved-search-description.md).
+
+Saved-text search now keeps a concise scope visible and puts its full unchanged
+rules inside a native "Search rules and loaded context" disclosure. Enter and
+Space open or close it without requerying or changing loaded results. The initial
+390px view includes the Search action; expanded help can still require scrolling.
+See [review0510](docs/reviews/0510-saved-search-help.md).
