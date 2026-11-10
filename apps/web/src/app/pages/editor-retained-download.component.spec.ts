@@ -1,0 +1,11 @@
+import { EditorComponent } from './editor.component';
+const k={id:'k',name:'<private>',tags:[]} as any;
+const make=()=>{const c=new EditorComponent({} as any,{snapshot:{paramMap:{get:()=> 'p'}}} as any);c.project.set({locales:[{code:'en'}]} as any);c.keys.set([k]);c.keysError.set(true);c.edit(k,'en','local text');c.editForm(k,'en','other','plural local');return c;};
+describe('paused-grid local backup',()=>{
+ let click:jest.SpyInstance,create:jest.Mock,revoke:jest.Mock;
+ beforeEach(()=>{click=jest.spyOn(HTMLAnchorElement.prototype,'click').mockImplementation(()=>{});create=jest.fn().mockReturnValue('blob:test');revoke=jest.fn();URL.createObjectURL=create;URL.revokeObjectURL=revoke;});afterEach(()=>jest.restoreAllMocks());
+ for(const state of ['healthy','loading','empty','noProject','departed'])it(`refuses ${state} backup`,()=>{const c=make();if(state==='healthy')c.keysError.set(false);if(state==='loading')c.keysLoading.set(true);if(state==='empty')c.keys.set([]);if(state==='noProject')c.project.set(null);if(state==='departed')c.ngOnDestroy();c.downloadRetainedGrid();expect(create).not.toHaveBeenCalled();expect(click).not.toHaveBeenCalled();});
+ it('downloads local displayed values without changing cells or saving',()=>{const c=make();c.save=jest.fn();c.reload=jest.fn();const before=c.retainedGridValues();c.downloadRetainedGrid();expect(create).toHaveBeenCalledTimes(1);expect(click).toHaveBeenCalledTimes(1);expect(revoke).toHaveBeenCalledWith('blob:test');expect(c.retainedGridValues()).toBe(before);expect(c.save).not.toHaveBeenCalled();expect(c.reload).not.toHaveBeenCalled();expect(c.retainedDownloadNotice()).toContain('does not confirm');});
+ it('anchor failure revokes URL and gives fixed copy fallback',()=>{const c=make();click.mockImplementation(()=>{throw new Error('PRIVATE');});c.downloadRetainedGrid();expect(revoke).toHaveBeenCalledWith('blob:test');expect(c.retainedDownloadNotice()).toContain('copy the retained values');expect(c.retainedDownloadNotice()).not.toContain('PRIVATE');});
+ it('Blob URL failure keeps local values and fixed copy fallback',()=>{const c=make();create.mockImplementation(()=>{throw new Error('PRIVATE');});c.downloadRetainedGrid();expect(c.cell('k','en')().value).toBe('local text');expect(c.retainedDownloadNotice()).toContain('copy the retained values');expect(click).not.toHaveBeenCalled();});
+});

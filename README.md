@@ -1349,3 +1349,8 @@ Press Escape in the focused tag field to cancel without blur-saving. The cancel
 button names the shortcut; Enter or leaving the field still saves as before.
 Desktop key controls wrap without covering translation columns. See
 [review0498](docs/reviews/0498-editor-tags-escape.md).
+
+The paused editor can download the retained grid as a local JSON backup before
+retry. It includes plural forms, but is not confirmed saved data, a complete
+project export or an import file. No data is uploaded; check the downloaded file
+before reloading. See [review0499](docs/reviews/0499-editor-retained-download.md).

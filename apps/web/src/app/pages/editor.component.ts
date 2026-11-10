@@ -135,7 +135,7 @@ interface CellState {
         @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
         @if (keysLoading()) { <p class="muted" role="status" name="keysLoading">Loading keys. The previous grid may remain below, read-only until the current read succeeds.</p> }
         @else if (keysError()) { <p class="error" role="alert" name="keysError">Keys unavailable. The previous grid may remain below, read-only. Retry replaces it with the current server result; keep any unsaved work first.</p><button type="button" name="retryKeys" (click)="reload()">Retry keys</button>
-          @if (keys().length) { <details><summary>Copy retained grid values before retry</summary><p class="muted">Local displayed values only, not confirmed saved data or an import file. Includes plural forms. Select and copy this text before retry.</p><textarea name="retainedKeyDrafts" aria-label="Retained grid values" readonly rows="8" style="width:100%;box-sizing:border-box" [value]="retainedGridValues()"></textarea></details> }
+          @if (keys().length) { <details><summary>Copy retained grid values before retry</summary><p class="muted">Local displayed values only, not confirmed saved data or an import file. Includes plural forms. Select and copy this text before retry.</p><textarea name="retainedKeyDrafts" aria-label="Retained grid values" readonly rows="8" style="width:100%;box-sizing:border-box" [value]="retainedGridValues()"></textarea><button type="button" name="downloadRetainedGrid" (mousedown)="$event.preventDefault()" [disabled]="!retainedDownloadReady()" (click)="downloadRetainedGrid()">Download retained values (.json)</button><p class="muted" name="retainedDownloadScope">Local backup of this retained grid only, including plural forms. Not confirmed saved data, not all project keys and not an import file. May contain private translation text; it is not uploaded or shared.</p>@if (retainedDownloadNotice()) { <p role="status" name="retainedDownloadNotice">{{ retainedDownloadNotice() }}</p> }</details> }
         }
         @if (!keysLoading() && !keysError() && keys().length === 0) {
           @if (hasKeyFilters()) {
@@ -485,7 +485,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     this.cancelMerge(); this.cancelImportPick();
     const generation = ++this.keysGeneration, projectId = this.projectId, createEpoch=this.keyCreateEpoch, readBranch=this.branch(), unfiltered=!this.hasKeyFilters();
     const current = () => !this.destroyed && generation === this.keysGeneration;
-    this.keysLoading.set(true); this.keysError.set(false);
+    this.keysLoading.set(true); this.keysError.set(false); this.retainedDownloadNotice.set('');
     this.tagEditFor.set(null); this.tagsErrorFor.set([]); this.keyDeleteErrorFor.set([]);
     this.clearHistory(); this.clearShots(); this.clearComments(); this.clearTm();
     try {
@@ -514,6 +514,19 @@ export class EditorComponent implements OnInit, OnDestroy {
     if (this.destroyed || this.keysLoading() || this.keysError() || !this.hasKeyFilters()) return;
     this.search.set(''); this.filterTag.set(''); this.filterStatus.set('');
     await this.reload();
+  }
+  retainedDownloadNotice = signal('');
+  retainedDownloadReady() { return !this.destroyed && !!this.project() && this.keysError() && !this.keysLoading() && this.keys().length > 0; }
+  downloadRetainedGrid() {
+    if (!this.retainedDownloadReady()) return;
+    this.retainedDownloadNotice.set('');
+    try {
+      const content = JSON.stringify({schemaVersion: 1, kind: 'unverified-retained-grid-values', scope: 'currently-retained-grid-only', projectId: this.projectId, confirmedSaved: false, importFile: false, values: JSON.parse(this.retainedGridValues())}, null, 2);
+      const url = URL.createObjectURL(new Blob([content], {type: 'application/json'}));
+      try { const a = document.createElement('a'); a.href = url; a.download = 'open-locale-retained-values.json'; a.click(); }
+      finally { URL.revokeObjectURL(url); }
+      this.retainedDownloadNotice.set('Local backup download requested. Check the file before reloading; this does not confirm that your browser saved it.');
+    } catch { this.retainedDownloadNotice.set('Local backup could not be started. Keep this page open and copy the retained values above.'); }
   }
   retainedGridValues() {
     return JSON.stringify(this.keys().map(key => ({ key: key.name, values: (this.project()?.locales ?? []).map(locale => {
