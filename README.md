@@ -1413,3 +1413,9 @@ Manual saved-text search now lands keyboard focus on the rendered result count
 Late prior-scope responses and departure cannot restore obsolete focus. No extra
 read or translation change. Actual Enter-key and focus evidence is in
 [review0508](docs/reviews/0508-saved-search-focus.md).
+
+Saved-text results show each key's loaded description as context above the source
+and matched value. Literal multiline text is preserved; empty and unavailable
+descriptions have different labels. Descriptions are not searched, can differ
+from newer server changes, and are not added to the loaded-match JSON report.
+No extra request or write. See [review0509](docs/reviews/0509-saved-search-description.md).

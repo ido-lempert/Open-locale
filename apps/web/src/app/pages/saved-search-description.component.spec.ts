@@ -1,0 +1,10 @@
+import { SavedSearchComponent } from './saved-search.component';
+const deferred=()=>{let resolve!:(v:any)=>void;const promise=new Promise<any>(r=>resolve=r);return{promise,resolve};};
+const api=()=>({getProject:jest.fn().mockResolvedValue({baseLocale:'en',locales:[{code:'en'}]}),listBranches:jest.fn().mockResolvedValue([{id:'b',name:'main'}]),listKeys:jest.fn().mockResolvedValue([{id:'k',name:'key',description:'Private <literal>\ncontext',translations:[{localeCode:'en',value:'Text'}]}])});
+const make=(a:any)=>new SavedSearchComponent({} as any,a);
+describe('loaded description context in saved text search',()=>{
+ it('projects literal multiline description from the same one existing key read',async()=>{const a=api(),c=make(a);await c.loadProject('p');c.setQuery('Text');await c.search();expect(c.results()[0].description).toBe('Private <literal>\ncontext');expect(a.listKeys).toHaveBeenCalledTimes(1);expect(a.listKeys).toHaveBeenCalledWith('p',{branch:'main',locale:'en',valueSearch:'Text'});});
+ for(const description of ['',undefined])it(`keeps ${description===''?'empty':'missing'} description distinct`,async()=>{const a=api(),c=make(a);a.listKeys.mockResolvedValue([{id:'k',name:'key',description,translations:[{localeCode:'en',value:'Text'}]}] as any);await c.loadProject('p');c.setQuery('Text');await c.search();expect(c.results()[0].description).toBe(description??null);});
+ it('clear removes old private description and fences held response',async()=>{const a=api(),c=make(a);await c.loadProject('p');c.setQuery('Text');await c.search();expect(c.results()[0].description).toContain('Private');const held=deferred();a.listKeys.mockReturnValueOnce(held.promise);const pending=c.search();c.clearFilters();held.resolve([{id:'old',description:'OLD_PRIVATE',translations:[]}]);await pending;expect(c.results()).toEqual([]);});
+ it('project reuse clears descriptions before next scope',async()=>{const a=api(),c=make(a);await c.loadProject('p');c.setQuery('Text');await c.search();await c.loadProject('q');expect(c.results()).toEqual([]);expect(c.projectId).toBe('q');});
+});
