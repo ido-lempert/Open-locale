@@ -1344,3 +1344,8 @@ Cancel tags discards the current local tag edit without saving. Pointer cancel
 keeps loaded tags and local translation values; another tag editor cannot replace
 an active draft. Submitted tag writes still use their existing pending/unknown
 result handling. See [review0497](docs/reviews/0497-editor-tags-cancel.md).
+
+Press Escape in the focused tag field to cancel without blur-saving. The cancel
+button names the shortcut; Enter or leaving the field still saves as before.
+Desktop key controls wrap without covering translation columns. See
+[review0498](docs/reviews/0498-editor-tags-escape.md).

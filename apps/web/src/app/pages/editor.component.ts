@@ -23,8 +23,9 @@ interface CellState {
 
 @Component({
   selector: 'ol-editor',
-  styles: [`@media (max-width: 760px) {
-    .grid td.key { white-space: normal; }
+  styles: [`.grid td.key { white-space: normal; max-width: 22rem; }
+  @media (max-width: 760px) {
+    .grid td.key { max-width: none; }
     .tags { display: flex; margin: .35rem 0; max-width: 100%; }
     .tag-edit { width: 100%; min-width: 0; flex: 1 1 100%; }
   }`],
@@ -156,10 +157,10 @@ interface CellState {
                   <span class="tags">
                     @for (t of k.tags; track t) { <span class="tag-chip">{{ t }}</span> }
                     @if (tagEditFor() === k.id) {
-                      <input class="tag-edit" aria-label="Edit tags (comma separated)" [disabled]="tagsSaving().includes(k.id) || tagsErrorFor().includes(k.id)"
+                      <input class="tag-edit" aria-label="Edit tags (comma separated)" title="Enter or leave this field to save; Escape cancels without saving" [disabled]="tagsSaving().includes(k.id) || tagsErrorFor().includes(k.id)"
                         [ngModel]="tagDraft()" (ngModelChange)="tagDraft.set($event)"
-                        (blur)="saveTags(k)" (keydown.enter)="saveTags(k)" />
-                      <button type="button" name="cancelTagEdit" title="Discard this local tag edit without saving" (mousedown)="$event.preventDefault()" [disabled]="!tagCancelReady(k)" (click)="cancelTagEdit(k)">Cancel tags</button>
+                        (blur)="saveTags(k)" (keydown.enter)="saveTags(k)" (keydown.escape)="$event.preventDefault(); cancelTagEdit(k)" />
+                      <button type="button" name="cancelTagEdit" title="Discard this local tag edit without saving" (mousedown)="$event.preventDefault()" [disabled]="!tagCancelReady(k)" (click)="cancelTagEdit(k)">Cancel tags (Esc)</button>
                     } @else {
                       <button class="tags-toggle" (mousedown)="$event.preventDefault()" [disabled]="!tagOpenReady(k)" (click)="openTagEdit(k)">tags</button>
                     }
