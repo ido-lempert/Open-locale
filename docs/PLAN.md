@@ -1807,3 +1807,10 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Non-blurring summary and download action; no save, retry, read, wait, restore,
   automatic persistence or navigation guard. Same bounded schema1 local copy.
 - Evidence and chronology: [review0523](reviews/0523-editor-local-backup.md).
+
+## Local backup loaded-read scope
+- Capture current successful key-read project/branch/effective filters with the
+  grid; failed/late reads and changed toolbar cannot retarget retained scope.
+- Schema2 download and adjacent guidance; null is unavailable, never inferred.
+  Still local unverified values, not saved-state/import/restore authority.
+- Evidence and chronology: [review0524](reviews/0524-editor-backup-loaded-scope.md).

@@ -140,7 +140,7 @@ interface CellState {
         @if (keysLoading()) { <p class="muted" role="status" name="keysLoading">Loading keys. The previous grid may remain below, read-only until the current read succeeds.</p> }
         @else if (keysError()) { <p class="error" role="alert" name="keysError">Keys unavailable. The previous grid may remain below, read-only. Retry replaces it with the current server result; keep any unsaved work first.</p><button type="button" name="retryKeys" (click)="reload()">Retry keys</button>
         }
-          @if (retainedDownloadReady()) { <details><summary name="localGridBackupToggle" (mousedown)="$event.preventDefault()">Copy or download local grid values before leaving or reloading</summary><p class="muted">Local displayed values only, not confirmed saved data or an import file. Includes plural forms. Select and copy this text before leaving or reloading. Pending work may still finish; this copy does not wait for it.</p><textarea name="retainedKeyDrafts" aria-label="Retained grid values" readonly rows="8" style="width:100%;box-sizing:border-box" [value]="retainedGridValues()"></textarea><button type="button" name="downloadRetainedGrid" (mousedown)="$event.preventDefault()" [disabled]="!retainedDownloadReady()" (click)="downloadRetainedGrid()">Download retained values (.json)</button><p class="muted" name="retainedDownloadScope">Local backup of this retained grid only, including plural forms. Not confirmed saved data, not all project keys and not an import file. May contain private translation text; it is not uploaded or shared.</p>@if (retainedDownloadNotice()) { <p role="status" name="retainedDownloadNotice">{{ retainedDownloadNotice() }}</p> }</details> }
+          @if (retainedDownloadReady()) { <details><summary name="localGridBackupToggle" (mousedown)="$event.preventDefault()">Copy or download local grid values before leaving or reloading</summary><p class="muted">Local displayed values only, not confirmed saved data or an import file. Includes plural forms. Select and copy this text before leaving or reloading. Pending work may still finish; this copy does not wait for it.</p>@if(loadedGridScope(); as scope){<p class="muted" name="localBackupLoadedScope">Last successful grid read: branch {{scope.branch}}; key search: {{scope.search===null?'any':scope.search}}; tag: {{scope.tag===null?'any':scope.tag}}; status: {{scope.status===null?'any':scope.status}}; status locale: {{scope.locale===null?'not applied':scope.locale}}. This can differ from current toolbar choices and does not confirm these local values were saved.</p>}@else{<p class="muted" name="localBackupLoadedScope">Last successful grid scope is unavailable. Do not infer its branch or filters from the current toolbar.</p>}<textarea name="retainedKeyDrafts" aria-label="Retained grid values" readonly rows="8" style="width:100%;box-sizing:border-box" [value]="retainedGridValues()"></textarea><button type="button" name="downloadRetainedGrid" (mousedown)="$event.preventDefault()" [disabled]="!retainedDownloadReady()" (click)="downloadRetainedGrid()">Download retained values (.json)</button><p class="muted" name="retainedDownloadScope">Local backup of this retained grid only, including plural forms and the last successful read scope (schema version 2; null scope is unavailable). Not confirmed saved data, not all project keys and not an import file. May contain private translation text; it is not uploaded or shared.</p>@if (retainedDownloadNotice()) { <p role="status" name="retainedDownloadNotice">{{ retainedDownloadNotice() }}</p> }</details> }
         @if (!keysLoading() && !keysError() && keys().length === 0) {
           @if (hasKeyFilters()) {
             <p class="muted empty" name="filteredKeysEmpty">No keys match the current filters on branch {{ branch() }}. Other keys may still exist.</p>
@@ -501,25 +501,27 @@ export class EditorComponent implements OnInit, OnDestroy {
       void this.reload();
     }, 250);
   }
+  loadedGridScope = signal<{projectId:string;branch:string;search:string|null;tag:string|null;status:string|null;locale:string|null}|null>(null);
   async reload() {
     if (this.destroyed) return;
     if (this.searchTimer) { clearTimeout(this.searchTimer); this.searchTimer = null; }
     this.cancelMerge(); this.cancelImportPick();
     const generation = ++this.keysGeneration, projectId = this.projectId, createEpoch=this.keyCreateEpoch, readBranch=this.branch(), unfiltered=!this.hasKeyFilters();
     const current = () => !this.destroyed && generation === this.keysGeneration;
+    const readScope={projectId,branch:readBranch,search:this.search()||null,tag:this.filterTag()||null,status:this.filterStatus()||null,locale:this.filterStatus()?this.ioLocale():null};
     this.keysLoading.set(true); this.keysError.set(false); this.retainedDownloadNotice.set('');
     this.tagEditFor.set(null); this.tagsErrorFor.set([]); this.keyDeleteErrorFor.set([]);
     this.clearHistory(); this.clearShots(); this.clearComments(); this.clearTm();
     try {
       const keys = await this.api.listKeys(projectId, {
-        search: this.search() || undefined,
-        tag: this.filterTag() || undefined,
-        status: this.filterStatus() || undefined,
-        locale: this.filterStatus() ? this.ioLocale() : undefined,
-        branch: this.branch(),
+        search: readScope.search || undefined,
+        tag: readScope.tag || undefined,
+        status: readScope.status || undefined,
+        locale: readScope.locale || undefined,
+        branch: readScope.branch,
       });
       if (!current()) return;
-      this.keys.set(keys);
+      this.keys.set(keys);this.loadedGridScope.set(readScope);
       if(createEpoch===this.keyCreateEpoch && !this.keyCreating() && this.keyCreateError() && readBranch===this.keyCreateBranch() && unfiltered)this.keyCreateError.set(false);
       this.cells.clear();
       for (const k of keys) for (const t of k.translations) {
@@ -543,7 +545,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     if (!this.retainedDownloadReady()) return;
     this.retainedDownloadNotice.set('');
     try {
-      const content = JSON.stringify({schemaVersion: 1, kind: 'unverified-retained-grid-values', scope: 'currently-retained-grid-only', projectId: this.projectId, confirmedSaved: false, importFile: false, values: JSON.parse(this.retainedGridValues())}, null, 2);
+      const content = JSON.stringify({schemaVersion: 2, loadedGridScope:this.loadedGridScope(), scopeMeaning:'last-successful-key-read-not-current-toolbar-or-save-confirmation', kind: 'unverified-retained-grid-values', scope: 'currently-retained-grid-only', projectId: this.projectId, confirmedSaved: false, importFile: false, values: JSON.parse(this.retainedGridValues())}, null, 2);
       const url = URL.createObjectURL(new Blob([content], {type: 'application/json'}));
       try { const a = document.createElement('a'); a.href = url; a.download = 'open-locale-retained-values.json'; a.click(); }
       finally { URL.revokeObjectURL(url); }

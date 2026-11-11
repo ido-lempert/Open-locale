@@ -1518,3 +1518,10 @@ request JSON. It does not save, wait for pending work, upload, share or restore
 anything. Check the file before leaving; it is unverified current-grid text,
 not all project keys or an import file. See
 [review0523](docs/reviews/0523-editor-local-backup.md).
+
+Local grid backup JSON schema2 also records `loadedGridScope`: the project,
+branch and effective key filters of the last successful grid read. A failed read
+keeps that scope with the retained grid even when toolbar choices differ. Null
+means scope unavailable. Adjacent guidance distinguishes read scope from local
+value save confirmation. No additional read, import/restore or upload. Evidence:
+[review0524](docs/reviews/0524-editor-backup-loaded-scope.md).
