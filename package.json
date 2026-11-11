@@ -192,7 +192,8 @@
     "test:editor-shots-toggle-browser": "node scripts/editor-shots-toggle-browser-test.mjs",
     "test:editor-search-departure-browser": "node scripts/editor-search-departure-browser-test.mjs",
     "test:editor-branch-drafts-browser": "node scripts/editor-branch-drafts-browser-test.mjs",
-    "test:editor-filter-drafts-browser": "node scripts/editor-filter-drafts-browser-test.mjs"
+    "test:editor-filter-drafts-browser": "node scripts/editor-filter-drafts-browser-test.mjs",
+    "test:saved-search-report-context-browser": "node scripts/saved-search-report-context-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

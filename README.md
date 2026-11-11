@@ -1501,3 +1501,11 @@ drafts, pending saves/reviews or unconfirmed results remain. Save and wait,
 or copy retained values before an explicit reload. Clean filters still debounce
 and retain the current branch. No automatic save, retry or draft storage.
 See [review0521](docs/reviews/0521-editor-filter-drafts.md).
+
+
+Loaded saved-search reports use schema version 2 and also include matching-locale
+saved status, key description/tags and key-wide comment/screenshot counts.
+Null means unavailable, not empty or zero. These are the loaded results, not
+newer server changes; comment/screenshot contents are not included. All loaded
+matches are downloaded regardless of the local key-name filter. No extra read
+or upload/share. See [review0522](docs/reviews/0522-saved-search-report-context.md).

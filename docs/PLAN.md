@@ -1792,3 +1792,11 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Preserve normal clean debounce/current branch and stale-response fencing.
 - No global navigation/reload guard, auto-save/retry or persistent draft storage.
 - Evidence and verification chronology: [review0521](reviews/0521-editor-filter-drafts.md).
+
+## Loaded search report context
+- Schema2 includes allowlisted loaded matching-locale status, key description/tags
+  and key-wide comment/screenshot counts, with explicit context/count scope.
+- Null unavailable differs from empty/zero. All loaded matches remain, even when
+  local key-name filtering hides them. No newer read, contents, complete project
+  export, import authority or upload/share.
+- Evidence and chronology: [review0522](reviews/0522-saved-search-report-context.md).
