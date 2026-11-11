@@ -23,7 +23,7 @@ import { ApiService, BranchInfo } from '../api.service';
  <button type="button" name="clearSavedSearchFilters" [disabled]="!canClearFilters()" (click)="clearFilters()">Clear search filters</button>
  </form>
  <p class="muted" name="savedSearchClearScope">Clear text, status and tag filters and return to Contains text. Keeps this branch and locale. Clears loaded results without searching or changing translations.</p>
- @if(loading()){<p role="status" name="savedSearchLoading">Searching saved values...</p>}
+ @if(loading()){<p role="status" name="savedSearchLoading">Searching saved values...</p><button type="button" name="cancelSavedSearch" (click)="cancelSearch()">Cancel search</button><p class="muted" name="savedSearchCancelScope">Stops waiting in this page and keeps your filters. The network request may still finish; its results will not be shown. No translations are changed.</p>}
  @if(error()){<p #searchOutcome tabindex="-1" role="alert" name="savedSearchError">Saved text search unavailable. No results are shown. Try Search saved values again.</p>}
  @if(searched()&&!loading()&&!error()){
  <p #searchOutcome tabindex="-1" role="status" name="savedSearchCount">{{results().length}} matching key{{results().length===1?'':'s'}} on branch {{branch()}} in {{locale()}} for "{{query()}}" ({{match()==='exact'?'whole value':'contains text'}}; {{status()||'any status'}}; tag: {{tag()||'any tag'}}). Loaded saved values, not newer server changes.</p>
@@ -51,6 +51,7 @@ export class SavedSearchComponent implements OnInit,OnDestroy {
  ready(){return !this.destroyed&&!this.optionsLoading()&&!this.optionsError()&&this.branches().some(b=>b.name===this.branch())&&this.locales().includes(this.locale());}
  canSearch(){return this.ready()&&!this.loading()&&!!this.query().trim()&&this.query().length<=200;}
  canClearFilters(){return this.ready()&&!!(this.query()||this.status()||this.tag()||this.match()!=='contains'||this.searched()||this.loading()||this.error()||this.downloadNotice());}
+ cancelSearch(){if(!this.ready()||!this.loading())return;this.clear();this.focusAfterRender('text',this.generation);}
  clearFilters(){if(!this.canClearFilters())return;this.clear();this.query.set('');this.status.set('');this.tag.set('');this.match.set('contains');this.focusAfterRender('text',this.generation);}
  private clear(){if(this.focusTimer!==undefined)clearTimeout(this.focusTimer);this.focusTimer=undefined;++this.generation;this.downloadNotice.set('');this.copyNotice.set('');this.loading.set(false);this.error.set(false);this.searched.set(false);this.results.set([]);}
  setTag(value:string){if(this.destroyed)return;this.clear();this.tag.set(value.slice(0,40));}

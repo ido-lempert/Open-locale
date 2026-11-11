@@ -1440,3 +1440,9 @@ differ from newer server changes and only filter through the existing exact
 key tag field. No extra request or write; JSON download and matched-value copy
 projections are unchanged. See
 [review0512](docs/reviews/0512-saved-search-tags-context.md).
+
+
+A pending saved-text search can be canceled without losing its scope or filters.
+Cancel search returns focus to text and ignores late replies. It stops waiting
+in this page, not necessarily the network request; another search is explicit.
+No translations change. See [review0513](docs/reviews/0513-saved-search-cancel.md).
