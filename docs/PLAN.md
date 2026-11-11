@@ -1814,3 +1814,10 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Schema2 download and adjacent guidance; null is unavailable, never inferred.
   Still local unverified values, not saved-state/import/restore authority.
 - Evidence and chronology: [review0524](reviews/0524-editor-backup-loaded-scope.md).
+
+## Editor tool visibility
+- Explicit Hide/Show editor tools, default expanded; keep tool DOM/form state and
+  pending work, translation grid/local backup and general feedback outside.
+- Collapsed guidance names hidden tool feedback and independent pending work.
+  No automatic collapse/storage/save/cancel/discard/navigation guard.
+- Evidence and chronology: [review0525](reviews/0525-editor-tools-visibility.md).

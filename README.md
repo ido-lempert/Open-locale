@@ -1525,3 +1525,9 @@ keeps that scope with the retained grid even when toolbar choices differ. Null
 means scope unavailable. Adjacent guidance distinguishes read scope from local
 value save confirmation. No additional read, import/restore or upload. Evidence:
 [review0524](docs/reviews/0524-editor-backup-loaded-scope.md).
+
+Use "Hide editor tools" above the translation toolbar to leave more room for the
+grid. "Show editor tools" restores the same controls and form values. Tools start
+expanded each visit. Pending work can still finish, and tool-specific feedback
+is hidden until you reopen it. This does not save, discard or cancel work.
+[review0525](docs/reviews/0525-editor-tools-visibility.md).

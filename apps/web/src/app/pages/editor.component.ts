@@ -23,7 +23,8 @@ interface CellState {
 
 @Component({
   selector: 'ol-editor',
-  styles: [`.grid td.key { white-space: normal; max-width: 22rem; }
+  styles: [`.toolbar[hidden] { display:none; }
+  .grid td.key { white-space: normal; max-width: 22rem; }
   @media (max-width: 760px) {
     .grid td.key { max-width: none; }
     .tags { display: flex; margin: .35rem 0; max-width: 100%; }
@@ -48,7 +49,9 @@ interface CellState {
       @if (projectLoading()) { <p class="muted" role="status" name="projectLoading">Loading project and branches.</p> }
       @else if (projectError()) { <p class="error" role="alert" name="projectError">Project unavailable. Check your access or connection, then retry.</p><button type="button" name="retryProject" (click)="loadProject()">Retry project</button> }
       @if (project(); as p) {
-        <section class="toolbar">
+        <button type="button" name="toggleEditorTools" (mousedown)="$event.preventDefault()" [attr.aria-expanded]="editorToolsExpanded()" aria-controls="editorTools" (click)="toggleEditorTools()">{{editorToolsExpanded()?'Hide editor tools':'Show editor tools'}}</button>
+        @if(!editorToolsExpanded()){<p class="muted" name="editorToolsCollapsed">Editor tools and their action feedback are hidden. Pending work can still finish. Show editor tools to check creation, import, export and branch feedback. Hiding tools does not save, cancel or discard work.</p>}
+        <section class="toolbar" id="editorTools" [hidden]="!editorToolsExpanded()">
           <select #branchPicker aria-label="Branch" [disabled]="!canSwitchBranch()" [attr.aria-describedby]="!canSwitchBranch()?'branchSwitchScope':null" [ngModel]="branch()" (ngModelChange)="pickBranch($event,branchPicker)" name="branch">
             @for (b of branches(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }
           </select>
@@ -484,6 +487,8 @@ export class EditorComponent implements OnInit, OnDestroy {
     if(!this.canOpenSavedSearch())return;
     void this.router?.navigate(['/projects',this.projectId,'find'],{queryParams:{branch:this.branch()}});
   }
+  editorToolsExpanded=signal(true);
+  toggleEditorTools(){if(!this.destroyed)this.editorToolsExpanded.update(v=>!v);}
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
   canChangeKeyFilters(){return this.canSwitchBranch();}
   pickKeyFilter(field:'search'|'filterTag'|'filterStatus',value:string,input:HTMLInputElement|HTMLSelectElement){
