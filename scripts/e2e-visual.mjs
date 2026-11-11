@@ -1631,7 +1631,8 @@ try {
   const lockTaskId = lockTasks.find((t) => t.title === 'Lock home.title').id;
   await fetch(`http://127.0.0.1:${API_PORT}/api/projects/${projId}/tasks/${lockTaskId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ownerJwt}` }, body: JSON.stringify({ status: 'DONE' }) });
   await page.click('[name=reloadAfterSave]');
-  await page.waitForSelector('[name=retainedKeyDrafts]');
+  // Local backup may already exist before the explicit recovery action.
+  await page.waitForSelector('[name=retryKeys]',{visible:true});
   await page.click('[name=retryKeys]');
   await page.waitForFunction(()=>!document.querySelector('[name=keysLoading]'));
   const lockCells2 = await page.$$(`.grid tbody tr:nth-child(${lockRowIdx + 1}) textarea`);

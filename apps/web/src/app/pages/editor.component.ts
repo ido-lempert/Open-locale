@@ -139,8 +139,8 @@ interface CellState {
         @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
         @if (keysLoading()) { <p class="muted" role="status" name="keysLoading">Loading keys. The previous grid may remain below, read-only until the current read succeeds.</p> }
         @else if (keysError()) { <p class="error" role="alert" name="keysError">Keys unavailable. The previous grid may remain below, read-only. Retry replaces it with the current server result; keep any unsaved work first.</p><button type="button" name="retryKeys" (click)="reload()">Retry keys</button>
-          @if (keys().length) { <details><summary>Copy retained grid values before retry</summary><p class="muted">Local displayed values only, not confirmed saved data or an import file. Includes plural forms. Select and copy this text before retry.</p><textarea name="retainedKeyDrafts" aria-label="Retained grid values" readonly rows="8" style="width:100%;box-sizing:border-box" [value]="retainedGridValues()"></textarea><button type="button" name="downloadRetainedGrid" (mousedown)="$event.preventDefault()" [disabled]="!retainedDownloadReady()" (click)="downloadRetainedGrid()">Download retained values (.json)</button><p class="muted" name="retainedDownloadScope">Local backup of this retained grid only, including plural forms. Not confirmed saved data, not all project keys and not an import file. May contain private translation text; it is not uploaded or shared.</p>@if (retainedDownloadNotice()) { <p role="status" name="retainedDownloadNotice">{{ retainedDownloadNotice() }}</p> }</details> }
         }
+          @if (retainedDownloadReady()) { <details><summary name="localGridBackupToggle" (mousedown)="$event.preventDefault()">Copy or download local grid values before leaving or reloading</summary><p class="muted">Local displayed values only, not confirmed saved data or an import file. Includes plural forms. Select and copy this text before leaving or reloading. Pending work may still finish; this copy does not wait for it.</p><textarea name="retainedKeyDrafts" aria-label="Retained grid values" readonly rows="8" style="width:100%;box-sizing:border-box" [value]="retainedGridValues()"></textarea><button type="button" name="downloadRetainedGrid" (mousedown)="$event.preventDefault()" [disabled]="!retainedDownloadReady()" (click)="downloadRetainedGrid()">Download retained values (.json)</button><p class="muted" name="retainedDownloadScope">Local backup of this retained grid only, including plural forms. Not confirmed saved data, not all project keys and not an import file. May contain private translation text; it is not uploaded or shared.</p>@if (retainedDownloadNotice()) { <p role="status" name="retainedDownloadNotice">{{ retainedDownloadNotice() }}</p> }</details> }
         @if (!keysLoading() && !keysError() && keys().length === 0) {
           @if (hasKeyFilters()) {
             <p class="muted empty" name="filteredKeysEmpty">No keys match the current filters on branch {{ branch() }}. Other keys may still exist.</p>
@@ -538,7 +538,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     await this.reload();
   }
   retainedDownloadNotice = signal('');
-  retainedDownloadReady() { return !this.destroyed && !!this.project() && this.keysError() && !this.keysLoading() && this.keys().length > 0; }
+  retainedDownloadReady() { return !this.destroyed && !!this.project() && !this.keysLoading() && this.keys().length > 0 && (this.keysError() || !this.canSwitchBranch()); }
   downloadRetainedGrid() {
     if (!this.retainedDownloadReady()) return;
     this.retainedDownloadNotice.set('');

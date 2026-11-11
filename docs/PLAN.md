@@ -1800,3 +1800,10 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
   local key-name filtering hides them. No newer read, contents, complete project
   export, import authority or upload/share.
 - Evidence and chronology: [review0522](reviews/0522-saved-search-report-context.md).
+
+## Healthy editor local grid backup
+- Offer existing local JSON/selectable text for retained translation work before
+  key-read failure, not only during failed-key recovery.
+- Non-blurring summary and download action; no save, retry, read, wait, restore,
+  automatic persistence or navigation guard. Same bounded schema1 local copy.
+- Evidence and chronology: [review0523](reviews/0523-editor-local-backup.md).

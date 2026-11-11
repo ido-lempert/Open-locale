@@ -1509,3 +1509,12 @@ Null means unavailable, not empty or zero. These are the loaded results, not
 newer server changes; comment/screenshot contents are not included. All loaded
 matches are downloaded regardless of the local key-name filter. No extra read
 or upload/share. See [review0522](docs/reviews/0522-saved-search-report-context.md).
+
+
+The editor's local grid backup is also available before a failed key read while
+translation drafts, pending saves/reviews or unconfirmed results remain. Expand
+"Copy or download local grid values before leaving or reloading" to copy text or
+request JSON. It does not save, wait for pending work, upload, share or restore
+anything. Check the file before leaving; it is unverified current-grid text,
+not all project keys or an import file. See
+[review0523](docs/reviews/0523-editor-local-backup.md).
