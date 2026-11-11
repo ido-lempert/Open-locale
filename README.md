@@ -1494,3 +1494,10 @@ pending saves/reviews or unconfirmed translation results remain. Save and wait,
 or copy retained values before choosing reload. Clean branch reads can still
 supersede an earlier read. Other navigation and key filters are not protected
 by this control. See [review0520](docs/reviews/0520-editor-branch-drafts.md).
+
+
+Key-name, tag and review-status filters also pause while local translation
+drafts, pending saves/reviews or unconfirmed results remain. Save and wait,
+or copy retained values before an explicit reload. Clean filters still debounce
+and retain the current branch. No automatic save, retry or draft storage.
+See [review0521](docs/reviews/0521-editor-filter-drafts.md).

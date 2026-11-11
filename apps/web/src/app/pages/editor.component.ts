@@ -64,12 +64,13 @@ interface CellState {
           }
           <button type="button" name="findSavedText" (mousedown)="$event.preventDefault()" [disabled]="!canOpenSavedSearch()" (click)="openSavedSearch()" [attr.aria-describedby]="!canOpenSavedSearch()?'savedSearchDepartureScope':null">Find saved text</button>
           @if(!canOpenSavedSearch()){<span class="muted" name="savedSearchDepartureBlocked" id="savedSearchDepartureScope">Find saved text unavailable. Save local translation drafts and wait for pending work. If a result is unconfirmed, copy retained values before reloading. Other navigation is not protected by this action.</span>}
-          <input class="search" placeholder="Search keys" aria-label="Search keys" [ngModel]="search()" (ngModelChange)="search.set($event); onSearch()" />
-          <input class="tag-filter" placeholder="tag" aria-label="Filter by tag" [ngModel]="filterTag()" (ngModelChange)="filterTag.set($event); onSearch()" />
-          <select aria-label="Filter by review status" [ngModel]="filterStatus()" (ngModelChange)="filterStatus.set($event); onSearch()">
+          <input #keyNameFilter class="search" placeholder="Search keys" aria-label="Search keys" [disabled]="!canChangeKeyFilters()" [attr.aria-describedby]="!canChangeKeyFilters()?'keyFiltersScope':null" [ngModel]="search()" (ngModelChange)="pickKeyFilter('search',$event,keyNameFilter)" />
+          <input #keyTagFilter class="tag-filter" placeholder="tag" aria-label="Filter by tag" [disabled]="!canChangeKeyFilters()" [attr.aria-describedby]="!canChangeKeyFilters()?'keyFiltersScope':null" [ngModel]="filterTag()" (ngModelChange)="pickKeyFilter('filterTag',$event,keyTagFilter)" />
+          <select #keyStatusFilter aria-label="Filter by review status" [disabled]="!canChangeKeyFilters()" [attr.aria-describedby]="!canChangeKeyFilters()?'keyFiltersScope':null" [ngModel]="filterStatus()" (ngModelChange)="pickKeyFilter('filterStatus',$event,keyStatusFilter)">
             <option value="">all statuses</option>
             @for (st of statuses; track st) { <option [value]="st">{{ st.toLowerCase() }}</option> }
           </select>
+          @if(!canChangeKeyFilters()){<p class="muted" name="keyFiltersBlocked" id="keyFiltersScope">Key filters are paused. Save local translation drafts and wait for pending saves or reviews. For unconfirmed results, copy retained values before reloading. Other navigation and explicit reload are not protected by these filters.</p>}
           @if (filterStatus()) {
             <span class="review-queue">
               queue: {{ ioLocale() }}
@@ -143,7 +144,7 @@ interface CellState {
         @if (!keysLoading() && !keysError() && keys().length === 0) {
           @if (hasKeyFilters()) {
             <p class="muted empty" name="filteredKeysEmpty">No keys match the current filters on branch {{ branch() }}. Other keys may still exist.</p>
-            <button type="button" name="clearKeyFilters" (click)="clearKeyFilters()">Clear key filters</button>
+            <button type="button" name="clearKeyFilters" [disabled]="!canChangeKeyFilters()" (click)="clearKeyFilters()">Clear key filters</button>
           } @else {
             <p class="muted empty" name="branchKeysEmpty">No keys on branch {{ branch() }}. Add one above - for example <code>home.title</code>.</p>
           }
@@ -484,12 +485,21 @@ export class EditorComponent implements OnInit, OnDestroy {
     void this.router?.navigate(['/projects',this.projectId,'find'],{queryParams:{branch:this.branch()}});
   }
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
+  canChangeKeyFilters(){return this.canSwitchBranch();}
+  pickKeyFilter(field:'search'|'filterTag'|'filterStatus',value:string,input:HTMLInputElement|HTMLSelectElement){
+    if(!this.canChangeKeyFilters()){input.value=this[field]();return;}
+    this[field].set(value);this.onSearch();
+  }
   onSearch() {
-    if (this.destroyed) return;
+    if (!this.canChangeKeyFilters()) return;
     ++this.keysGeneration; this.keysLoading.set(true); this.keysError.set(false);
     this.clearHistory(); this.clearShots(); this.clearComments(); this.clearTm();
     if (this.searchTimer) clearTimeout(this.searchTimer);
-    this.searchTimer = setTimeout(() => void this.reload(), 250);
+    this.searchTimer = setTimeout(() => {
+      this.searchTimer=null;
+      if(!this.canChangeKeyFilters()){this.keysLoading.set(false);return;}
+      void this.reload();
+    }, 250);
   }
   async reload() {
     if (this.destroyed) return;
@@ -523,7 +533,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   }
   hasKeyFilters() { return !!(this.search() || this.filterTag() || this.filterStatus()); }
   async clearKeyFilters() {
-    if (this.destroyed || this.keysLoading() || this.keysError() || !this.hasKeyFilters()) return;
+    if (!this.canChangeKeyFilters() || this.keysLoading() || this.keysError() || !this.hasKeyFilters()) return;
     this.search.set(''); this.filterTag.set(''); this.filterStatus.set('');
     await this.reload();
   }
