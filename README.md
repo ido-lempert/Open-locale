@@ -1487,3 +1487,10 @@ translation drafts, pending translation work or unconfirmed translation results
 remain. Save drafts and wait, or copy retained values before choosing reload.
 It does not save or retry for you, preserve drafts on other navigation, or guard
 browser close/reload. See [review0519](docs/reviews/0519-editor-search-departure.md).
+
+
+The editor branch picker also blocks changes while local translation drafts,
+pending saves/reviews or unconfirmed translation results remain. Save and wait,
+or copy retained values before choosing reload. Clean branch reads can still
+supersede an earlier read. Other navigation and key filters are not protected
+by this control. See [review0520](docs/reviews/0520-editor-branch-drafts.md).

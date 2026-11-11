@@ -49,9 +49,10 @@ interface CellState {
       @else if (projectError()) { <p class="error" role="alert" name="projectError">Project unavailable. Check your access or connection, then retry.</p><button type="button" name="retryProject" (click)="loadProject()">Retry project</button> }
       @if (project(); as p) {
         <section class="toolbar">
-          <select aria-label="Branch" [ngModel]="branch()" (ngModelChange)="switchBranch($event)" name="branch">
+          <select #branchPicker aria-label="Branch" [disabled]="!canSwitchBranch()" [attr.aria-describedby]="!canSwitchBranch()?'branchSwitchScope':null" [ngModel]="branch()" (ngModelChange)="pickBranch($event,branchPicker)" name="branch">
             @for (b of branches(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }
           </select>
+          @if(!canSwitchBranch()){<p class="muted" name="branchSwitchBlocked" id="branchSwitchScope">Branch switching unavailable. Save local translation drafts and wait for pending saves or reviews. For unconfirmed results, copy retained values before reloading. Other navigation and filters are not protected by this control.</p>}
           <form class="branch-form" (ngSubmit)="addBranch()">
             <input placeholder="new-empty-branch" aria-label="New branch name" [ngModel]="newBranch()" (ngModelChange)="newBranch.set($event)" name="newBranch" maxlength="40" />
             <button type="submit" name="addBranch" [disabled]="branchCreating() || branchCreateUnknown()">{{ branchCreating() ? 'Creating branch...' : 'Add empty branch' }}</button>
@@ -1012,7 +1013,18 @@ export class EditorComponent implements OnInit, OnDestroy {
   }
   async exportJson() { await this.downloadExport('file', 'json'); }
   private invalidateExport() { ++this.exportGeneration; this.exportError.set(false); this.exportNotice.set(''); }
+  canSwitchBranch() {
+    return !this.destroyed && ![...this.cells.values()].some(sig=>{
+      const c=sig();return c.needsReload || c.reviewing || c.status==='saving'
+        || c.value!==c.saved || !this.sameForms(c.forms,c.savedForms);
+    });
+  }
+  pickBranch(name:string,picker:HTMLSelectElement) {
+    if(!this.canSwitchBranch()){picker.value=this.branch();return;}
+    void this.switchBranch(name);
+  }
   async switchBranch(name: string) {
+    if(!this.canSwitchBranch())return;
     this.invalidateExport();
     this.branch.set(name);
     this.notice.set('');

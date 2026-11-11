@@ -190,7 +190,8 @@
     "test:editor-comment-reply-focus-browser": "node scripts/editor-comment-reply-focus-browser-test.mjs",
     "test:editor-comments-toggle-browser": "node scripts/editor-comments-toggle-browser-test.mjs",
     "test:editor-shots-toggle-browser": "node scripts/editor-shots-toggle-browser-test.mjs",
-    "test:editor-search-departure-browser": "node scripts/editor-search-departure-browser-test.mjs"
+    "test:editor-search-departure-browser": "node scripts/editor-search-departure-browser-test.mjs",
+    "test:editor-branch-drafts-browser": "node scripts/editor-branch-drafts-browser-test.mjs"
   },
   "private": true,
   "dependencies": {
