@@ -27,7 +27,7 @@ import { ApiService, BranchInfo } from '../api.service';
  @if(error()){<p #searchOutcome tabindex="-1" role="alert" name="savedSearchError">Saved text search unavailable. No results are shown. Try Search saved values again.</p>}
  @if(searched()&&!loading()&&!error()){
  <p #searchOutcome tabindex="-1" role="status" name="savedSearchCount">{{results().length}} matching key{{results().length===1?'':'s'}} on branch {{branch()}} in {{locale()}} for "{{query()}}" ({{match()==='exact'?'whole value':'contains text'}}; {{status()||'any status'}}; tag: {{tag()||'any tag'}}). Loaded saved values, not newer server changes.</p>
- <label>Find key name in loaded matches<input type="search" name="savedSearchLoadedKey" maxlength="200" [ngModel]="loadedKeyQuery()" (ngModelChange)="setLoadedKeyQuery($event)" /></label><button type="button" name="clearSavedSearchLoadedKey" [disabled]="!loadedKeyQuery()" (click)="setLoadedKeyQuery('')">Clear key-name filter</button><p class="muted" role="status" name="savedSearchLoadedKeyCount">{{visibleResults().length}} of {{results().length}} loaded matches shown. Local key-name filtering is a literal, case-insensitive substring, keeps spaces, and does not search saved values again or read newer server changes.</p>
+ <label>Find key name in loaded matches<input #loadedKeyText type="search" name="savedSearchLoadedKey" title="Escape clears only this local key-name filter." (keydown.escape)="$event.preventDefault();clearLoadedKeyQuery()" maxlength="200" [ngModel]="loadedKeyQuery()" (ngModelChange)="setLoadedKeyQuery($event)" /></label><button type="button" name="clearSavedSearchLoadedKey" [disabled]="!loadedKeyQuery()" (click)="clearLoadedKeyQuery()">Clear key-name filter (Esc)</button><p class="muted" role="status" name="savedSearchLoadedKeyCount">{{visibleResults().length}} of {{results().length}} loaded matches shown. Local key-name filtering is a literal, case-insensitive substring, keeps spaces, and does not search saved values again or read newer server changes.</p>
  <button type="button" name="downloadSavedSearch" [disabled]="!canDownload()" (click)="download()">Download loaded matches (.json)</button>
  <p class="muted" name="savedSearchDownloadScope">Downloads all loaded matches regardless of the local key-name filter, and their query scope, including saved source and matched values. Not a complete project export, import file, plural-form report or newer server snapshot. The file can contain private translation text. Downloading does not upload or share it.</p>
  @if(downloadNotice()){<p role="status" name="savedSearchDownloadNotice">{{downloadNotice()}}</p>}
@@ -44,10 +44,12 @@ export class SavedSearchComponent implements OnInit,OnDestroy {
  loadedKeyQuery=signal('');
  visibleResults=computed(()=>{const query=this.loadedKeyQuery().toLowerCase();return query?this.results().filter(row=>row.key.toLowerCase().includes(query)):this.results();});
  setLoadedKeyQuery(value:string){if(!this.canDownload())return;++this.generation;this.loadedKeyQuery.set(value.slice(0,200));this.downloadNotice.set('');this.copyNotice.set('');}
+ clearLoadedKeyQuery(){if(!this.canDownload()||!this.loadedKeyQuery())return;this.setLoadedKeyQuery('');this.focusAfterRender('loadedKey',this.generation);}
+ @ViewChild('loadedKeyText') private loadedKeyText?:ElementRef<HTMLInputElement>;
  @ViewChild('searchText') private searchText?:ElementRef<HTMLInputElement>;
  @ViewChild('searchOutcome') private searchOutcome?:ElementRef<HTMLElement>;
  private focusTimer:ReturnType<typeof setTimeout>|undefined;
- private focusAfterRender(destination:'text'|'outcome',generation:number){if(this.focusTimer!==undefined)clearTimeout(this.focusTimer);this.focusTimer=setTimeout(()=>{this.focusTimer=undefined;if(!this.destroyed&&generation===this.generation)(destination==='text'?this.searchText:this.searchOutcome)?.nativeElement.focus();},0);}
+ private focusAfterRender(destination:'text'|'outcome'|'loadedKey',generation:number){if(this.focusTimer!==undefined)clearTimeout(this.focusTimer);this.focusTimer=setTimeout(()=>{this.focusTimer=undefined;if(!this.destroyed&&generation===this.generation)(destination==='text'?this.searchText:destination==='loadedKey'?this.loadedKeyText:this.searchOutcome)?.nativeElement.focus();},0);}
  private destroyed=false;private generation=0;private optionsGeneration=0;private subscription?:Subscription;
  constructor(private route:ActivatedRoute,private api:ApiService){}
  ngOnInit(){this.subscription=this.route.paramMap.subscribe(p=>void this.loadProject(p.get('id')??''));}

@@ -1460,3 +1460,9 @@ same response, without loading their contents or making another request. Zero
 and unavailable counts are distinct. Counts are not matching-locale totals or
 a live server snapshot; search again explicitly to refresh them. See
 [review0515](docs/reviews/0515-saved-search-context-counts.md).
+
+
+Clear key-name filter returns keyboard focus to the local key-name input.
+Escape in that input does the same, restoring all loaded matches without
+re-running the saved-value search or changing its scope. See
+[review0516](docs/reviews/0516-saved-search-loaded-key-clear.md).
