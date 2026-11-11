@@ -164,6 +164,7 @@
     "test:editor-history-read-recovery-browser": "node scripts/editor-history-read-recovery-browser-test.mjs",
     "test:editor-tm-read-recovery-browser": "node scripts/editor-tm-read-recovery-browser-test.mjs",
     "test:editor-history-toggle-browser": "node scripts/editor-history-toggle-browser-test.mjs",
+    "test:saved-search-whitespace-browser": "node scripts/saved-search-whitespace-browser-test.mjs",
     "test:saved-search-loaded-key-clear-browser": "node scripts/saved-search-loaded-key-clear-browser-test.mjs",
     "test:saved-search-context-counts-browser": "node scripts/saved-search-context-counts-browser-test.mjs",
     "test:saved-search-loaded-key-browser": "node scripts/saved-search-loaded-key-browser-test.mjs",

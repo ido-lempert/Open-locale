@@ -1466,3 +1466,10 @@ Clear key-name filter returns keyboard focus to the local key-name input.
 Escape in that input does the same, restoring all loaded matches without
 re-running the saved-value search or changing its scope. See
 [review0516](docs/reviews/0516-saved-search-loaded-key-clear.md).
+
+
+Whole value search accepts nonempty whitespace-only text; Contains text still
+needs a non-whitespace character, and an empty query cannot search. Loaded
+whitespace-only matched values have an explicit code-unit count label; copying
+and JSON reports keep the exact text. See
+[review0517](docs/reviews/0517-saved-search-whitespace.md).
