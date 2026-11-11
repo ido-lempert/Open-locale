@@ -23,7 +23,8 @@ interface CellState {
 
 @Component({
   selector: 'ol-editor',
-  styles: [`.collapsed-grid-scope { overflow-wrap:anywhere; }
+  styles: [`.key-description { white-space:pre-wrap; overflow-wrap:anywhere; margin:.4rem 0; }
+  .collapsed-grid-scope { overflow-wrap:anywhere; }
   .toolbar[hidden] { display:none; }
   .grid td.key { white-space: normal; max-width: 22rem; }
   @media (max-width: 760px) {
@@ -166,6 +167,7 @@ interface CellState {
             @for (k of keys(); track k.id) {
               <tr [attr.inert]="keyDeleting().includes(k.id) ? '' : null">
                 <td class="key"><code>{{ k.name }}</code>
+                  @if(k.description){<details name="keyDescription"><summary name="keyDescriptionToggle" (mousedown)="$event.preventDefault()">Key description</summary><p class="key-description" name="keyDescriptionText">{{k.description}}</p><p class="muted" name="keyDescriptionScope">Context from the loaded key read, not a fresh read or translation save confirmation. Reloading keys replaces the grid and can discard local work.</p></details>}
                   <span class="tags">
                     @for (t of k.tags; track t) { <span class="tag-chip">{{ t }}</span> }
                     @if (tagEditFor() === k.id) {

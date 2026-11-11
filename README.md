@@ -1536,3 +1536,15 @@ With editor tools hidden, a compact line keeps the last successful grid-read
 branch and effective filters visible. It can differ from current toolbar choices
 after a failed read. This is read scope, not confirmation that local values were
 saved. Unavailable scope is explicit. [review0526](docs/reviews/0526-collapsed-grid-read-scope.md).
+
+Open "Key description" under a key name in the translation grid to read its
+loaded guidance. Multiline text is literal and wraps on narrow screens. Empty
+descriptions have no control. This does not fetch newer context or edit metadata;
+reloading keys replaces the grid and can discard local work.
+[review0527](docs/reviews/0527-editor-key-description.md).
+
+461 verification: all 154 browser suites first RC0, 1697 assertions/zero FAIL;
+full web/API units and builds RC0 (web unit actual, API unit cached, final builds
+cached after initial actual web build). API and isolated sync/native stages,
+config/docs/reaper checks RC0. See review0527 for focused negative discriminator,
+staged chronology and retained external acceptance limits.

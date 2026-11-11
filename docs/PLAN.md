@@ -1827,3 +1827,15 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
   tools are hidden, with explicit unavailable/not-save/current-toolbar caveats.
 - Template only, no reads/state/schema changes; long strings wrap at390px.
 - Evidence and chronology: [review0526](reviews/0526-collapsed-grid-read-scope.md).
+
+## Editor loaded key description
+- Native per-key details for nonempty description already returned by key read;
+  literal multiline wrapping and loaded/notfresh/notsave/reloadcandiscard caveat.
+- No editing, additional reads, schema or backend change; failed retained grid
+  remains inert. Evidence: [review0527](reviews/0527-editor-key-description.md).
+
+461 verification: all 154 browser suites first RC0, 1697 assertions/zero FAIL;
+full web/API units and builds RC0 (web unit actual, API unit cached, final builds
+cached after initial actual web build). API and isolated sync/native stages,
+config/docs/reaper checks RC0. See review0527 for focused negative discriminator,
+staged chronology and retained external acceptance limits.
