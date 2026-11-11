@@ -1821,3 +1821,9 @@ NoAPI/worker/coverage change. Sync239/native244242unique explicitlySTAGED final0
 - Collapsed guidance names hidden tool feedback and independent pending work.
   No automatic collapse/storage/save/cancel/discard/navigation guard.
 - Evidence and chronology: [review0525](reviews/0525-editor-tools-visibility.md).
+
+## Collapsed editor grid scope
+- Keep captured last-successful-read branch/effective key filters visible while
+  tools are hidden, with explicit unavailable/not-save/current-toolbar caveats.
+- Template only, no reads/state/schema changes; long strings wrap at390px.
+- Evidence and chronology: [review0526](reviews/0526-collapsed-grid-read-scope.md).

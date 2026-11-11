@@ -1531,3 +1531,8 @@ grid. "Show editor tools" restores the same controls and form values. Tools star
 expanded each visit. Pending work can still finish, and tool-specific feedback
 is hidden until you reopen it. This does not save, discard or cancel work.
 [review0525](docs/reviews/0525-editor-tools-visibility.md).
+
+With editor tools hidden, a compact line keeps the last successful grid-read
+branch and effective filters visible. It can differ from current toolbar choices
+after a failed read. This is read scope, not confirmation that local values were
+saved. Unavailable scope is explicit. [review0526](docs/reviews/0526-collapsed-grid-read-scope.md).

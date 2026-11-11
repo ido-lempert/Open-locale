@@ -23,7 +23,8 @@ interface CellState {
 
 @Component({
   selector: 'ol-editor',
-  styles: [`.toolbar[hidden] { display:none; }
+  styles: [`.collapsed-grid-scope { overflow-wrap:anywhere; }
+  .toolbar[hidden] { display:none; }
   .grid td.key { white-space: normal; max-width: 22rem; }
   @media (max-width: 760px) {
     .grid td.key { max-width: none; }
@@ -51,6 +52,10 @@ interface CellState {
       @if (project(); as p) {
         <button type="button" name="toggleEditorTools" (mousedown)="$event.preventDefault()" [attr.aria-expanded]="editorToolsExpanded()" aria-controls="editorTools" (click)="toggleEditorTools()">{{editorToolsExpanded()?'Hide editor tools':'Show editor tools'}}</button>
         @if(!editorToolsExpanded()){<p class="muted" name="editorToolsCollapsed">Editor tools and their action feedback are hidden. Pending work can still finish. Show editor tools to check creation, import, export and branch feedback. Hiding tools does not save, cancel or discard work.</p>}
+        @if(!editorToolsExpanded()){
+          @if(loadedGridScope(); as scope){<p class="muted collapsed-grid-scope" name="collapsedGridScope">Last successful grid read: branch {{scope.branch}}; key search: {{scope.search===null?'any':scope.search}}; tag: {{scope.tag===null?'any':scope.tag}}; status: {{scope.status===null?'any':scope.status}}; status locale: {{scope.locale===null?'not applied':scope.locale}}. Read scope only, not save confirmation or current toolbar choices.</p>}
+          @else{<p class="muted collapsed-grid-scope" name="collapsedGridScope">Last successful grid scope is unavailable. Show editor tools to check current choices; those choices do not identify retained values.</p>}
+        }
         <section class="toolbar" id="editorTools" [hidden]="!editorToolsExpanded()">
           <select #branchPicker aria-label="Branch" [disabled]="!canSwitchBranch()" [attr.aria-describedby]="!canSwitchBranch()?'branchSwitchScope':null" [ngModel]="branch()" (ngModelChange)="pickBranch($event,branchPicker)" name="branch">
             @for (b of branches(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }

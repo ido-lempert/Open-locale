@@ -196,7 +196,8 @@
     "test:saved-search-report-context-browser": "node scripts/saved-search-report-context-browser-test.mjs",
     "test:editor-local-backup-browser": "node scripts/editor-local-backup-browser-test.mjs",
     "test:editor-backup-scope-browser": "node scripts/editor-backup-scope-browser-test.mjs",
-    "test:editor-tools-toggle-browser": "node scripts/editor-tools-toggle-browser-test.mjs"
+    "test:editor-tools-toggle-browser": "node scripts/editor-tools-toggle-browser-test.mjs",
+    "test:editor-collapsed-scope-browser": "node scripts/editor-collapsed-scope-browser-test.mjs"
   },
   "private": true,
   "dependencies": {
