@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnDestroy, OnInit, ViewChild, signal } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -27,12 +27,13 @@ import { ApiService, BranchInfo } from '../api.service';
  @if(error()){<p #searchOutcome tabindex="-1" role="alert" name="savedSearchError">Saved text search unavailable. No results are shown. Try Search saved values again.</p>}
  @if(searched()&&!loading()&&!error()){
  <p #searchOutcome tabindex="-1" role="status" name="savedSearchCount">{{results().length}} matching key{{results().length===1?'':'s'}} on branch {{branch()}} in {{locale()}} for "{{query()}}" ({{match()==='exact'?'whole value':'contains text'}}; {{status()||'any status'}}; tag: {{tag()||'any tag'}}). Loaded saved values, not newer server changes.</p>
+ <label>Find key name in loaded matches<input type="search" name="savedSearchLoadedKey" maxlength="200" [ngModel]="loadedKeyQuery()" (ngModelChange)="setLoadedKeyQuery($event)" /></label><button type="button" name="clearSavedSearchLoadedKey" [disabled]="!loadedKeyQuery()" (click)="setLoadedKeyQuery('')">Clear key-name filter</button><p class="muted" role="status" name="savedSearchLoadedKeyCount">{{visibleResults().length}} of {{results().length}} loaded matches shown. Local key-name filtering is a literal, case-insensitive substring, keeps spaces, and does not search saved values again or read newer server changes.</p>
  <button type="button" name="downloadSavedSearch" [disabled]="!canDownload()" (click)="download()">Download loaded matches (.json)</button>
- <p class="muted" name="savedSearchDownloadScope">Downloads only these loaded matches and their query scope, including saved source and matched values. Not a complete project export, import file, plural-form report or newer server snapshot. The file can contain private translation text. Downloading does not upload or share it.</p>
+ <p class="muted" name="savedSearchDownloadScope">Downloads all loaded matches regardless of the local key-name filter, and their query scope, including saved source and matched values. Not a complete project export, import file, plural-form report or newer server snapshot. The file can contain private translation text. Downloading does not upload or share it.</p>
  @if(downloadNotice()){<p role="status" name="savedSearchDownloadNotice">{{downloadNotice()}}</p>}
  <p class="muted" name="savedSearchCopyScope">Copy puts only the chosen loaded matched value on your clipboard. It may contain private text. Clearing results or leaving does not cancel a copy already started or clear the clipboard.</p>
  @if(copyNotice()){<p role="status" name="savedSearchCopyNotice">{{copyNotice()}}</p>}
- @for(row of results();track row.id){<article class="result" name="savedSearchResult"><code>{{row.key}}</code><section name="savedSearchTags"><h2>Loaded key tags</h2>@if(row.tags===null){<p class="muted">Tags unavailable in these results.</p>}@else if(!row.tags.length){<p class="muted">No saved key tags.</p>}@else{<ul>@for(tag of row.tags;track $index){<li>{{tag}}</li>}</ul>}</section><section name="savedSearchDescription"><h2>Loaded key description</h2>@if(row.description===null){<p class="muted">Description unavailable in these results.</p>}@else if(row.description===''){<p class="muted">No saved key description.</p>}@else{<pre>{{row.description}}</pre>}</section><div class="value-context">@if(sourceLocale()!==locale()){<section name="savedSearchSource"><h2>Saved source ({{sourceLocale()}})</h2>@if(row.sourceValue===null){<p class="muted">No saved source translation row in these results.</p>}@else if(row.sourceValue===''){<p class="muted">Saved source value is empty.</p>}@else{<pre>{{row.sourceValue}}</pre>}</section>}<section name="savedSearchMatched"><h2>Matched saved value ({{locale()}})</h2><p class="muted" name="savedSearchRowStatus">Loaded saved status: {{row.status===null?'not available in these results':row.status}}. Not a live review confirmation.</p><pre>{{row.value}}</pre><button type="button" name="copySavedSearchValue" [disabled]="!canCopy(row.id)||copyPending()" (click)="copyValue(row.id)">Copy matched value</button></section></div></article>}@empty{<p name="savedSearchEmpty">No saved base values match this text, status and tag filter in this branch and locale. Other locales, branches, plural forms or local drafts may differ.</p>}
+ @for(row of visibleResults();track row.id){<article class="result" name="savedSearchResult"><code>{{row.key}}</code><section name="savedSearchTags"><h2>Loaded key tags</h2>@if(row.tags===null){<p class="muted">Tags unavailable in these results.</p>}@else if(!row.tags.length){<p class="muted">No saved key tags.</p>}@else{<ul>@for(tag of row.tags;track $index){<li>{{tag}}</li>}</ul>}</section><section name="savedSearchDescription"><h2>Loaded key description</h2>@if(row.description===null){<p class="muted">Description unavailable in these results.</p>}@else if(row.description===''){<p class="muted">No saved key description.</p>}@else{<pre>{{row.description}}</pre>}</section><div class="value-context">@if(sourceLocale()!==locale()){<section name="savedSearchSource"><h2>Saved source ({{sourceLocale()}})</h2>@if(row.sourceValue===null){<p class="muted">No saved source translation row in these results.</p>}@else if(row.sourceValue===''){<p class="muted">Saved source value is empty.</p>}@else{<pre>{{row.sourceValue}}</pre>}</section>}<section name="savedSearchMatched"><h2>Matched saved value ({{locale()}})</h2><p class="muted" name="savedSearchRowStatus">Loaded saved status: {{row.status===null?'not available in these results':row.status}}. Not a live review confirmation.</p><pre>{{row.value}}</pre><button type="button" name="copySavedSearchValue" [disabled]="!canCopy(row.id)||copyPending()" (click)="copyValue(row.id)">Copy matched value</button></section></div></article>}@empty{<p name="savedSearchEmpty">{{loadedKeyQuery()?'No loaded key names match this local filter. Clear the key-name filter to show all loaded matches.':'No saved base values match this text, status and tag filter in this branch and locale. Other locales, branches, plural forms or local drafts may differ.'}}</p>}
  }@else if(!loading()&&!error()&&ready()){<p class="muted" name="savedSearchIdle">Choose the scope and enter text, then search. Changing the scope or text clears previous results.</p>}
  </main>`
 })
@@ -40,6 +41,9 @@ export class SavedSearchComponent implements OnInit,OnDestroy {
  projectId='';sourceLocale=signal('');statuses=signal<string[]>([]);status=signal('');tag=signal('');branches=signal<BranchInfo[]>([]);locales=signal<string[]>([]);branch=signal('main');locale=signal('');query=signal('');match=signal<'contains'|'exact'>('contains');
  downloadNotice=signal('');copyNotice=signal('');copyPending=signal(false);
  optionsLoading=signal(false);optionsError=signal(false);loading=signal(false);error=signal(false);searched=signal(false);results=signal<{id:string;key:string;value:string;sourceValue:string|null;status:string|null;description:string|null;tags:string[]|null}[]>([]);
+ loadedKeyQuery=signal('');
+ visibleResults=computed(()=>{const query=this.loadedKeyQuery().toLowerCase();return query?this.results().filter(row=>row.key.toLowerCase().includes(query)):this.results();});
+ setLoadedKeyQuery(value:string){if(!this.canDownload())return;++this.generation;this.loadedKeyQuery.set(value.slice(0,200));this.downloadNotice.set('');this.copyNotice.set('');}
  @ViewChild('searchText') private searchText?:ElementRef<HTMLInputElement>;
  @ViewChild('searchOutcome') private searchOutcome?:ElementRef<HTMLElement>;
  private focusTimer:ReturnType<typeof setTimeout>|undefined;
@@ -53,7 +57,7 @@ export class SavedSearchComponent implements OnInit,OnDestroy {
  canClearFilters(){return this.ready()&&!!(this.query()||this.status()||this.tag()||this.match()!=='contains'||this.searched()||this.loading()||this.error()||this.downloadNotice());}
  cancelSearch(){if(!this.ready()||!this.loading())return;this.clear();this.focusAfterRender('text',this.generation);}
  clearFilters(){if(!this.canClearFilters())return;this.clear();this.query.set('');this.status.set('');this.tag.set('');this.match.set('contains');this.focusAfterRender('text',this.generation);}
- private clear(){if(this.focusTimer!==undefined)clearTimeout(this.focusTimer);this.focusTimer=undefined;++this.generation;this.downloadNotice.set('');this.copyNotice.set('');this.loading.set(false);this.error.set(false);this.searched.set(false);this.results.set([]);}
+ private clear(){if(this.focusTimer!==undefined)clearTimeout(this.focusTimer);this.focusTimer=undefined;++this.generation;this.loadedKeyQuery.set('');this.downloadNotice.set('');this.copyNotice.set('');this.loading.set(false);this.error.set(false);this.searched.set(false);this.results.set([]);}
  setTag(value:string){if(this.destroyed)return;this.clear();this.tag.set(value.slice(0,40));}
  setStatus(value:string){if(this.destroyed||(value!==''&&!this.statuses().includes(value)))return;this.clear();this.status.set(value);}
  setMatch(value:string){if(this.destroyed||(value!=='contains'&&value!=='exact'))return;this.clear();this.match.set(value);}
@@ -66,7 +70,7 @@ export class SavedSearchComponent implements OnInit,OnDestroy {
   try{const [project,branches]=await Promise.all([this.api.getProject(projectId),this.api.listBranches(projectId)]);if(current()){this.branches.set(branches);this.locales.set(project.locales.map(l=>l.code));this.locale.set(project.baseLocale);this.sourceLocale.set(project.baseLocale);this.statuses.set([...new Set(['UNVERIFIED','TRANSLATED','REVIEWED',...(project.customStatuses??[])])]);}}
   catch{if(current())this.optionsError.set(true);}finally{if(current())this.optionsLoading.set(false);}
  }
- canCopy(id:string){return this.canDownload()&&this.results().some(row=>row.id===id);}
+ canCopy(id:string){return this.canDownload()&&this.visibleResults().some(row=>row.id===id);}
  async copyValue(id:string){
   if(!this.canCopy(id)||this.copyPending())return;
   const row=this.results().find(row=>row.id===id)!;const generation=this.generation;
@@ -89,7 +93,7 @@ export class SavedSearchComponent implements OnInit,OnDestroy {
  }
  async search(){
   if(!this.canSearch())return;const generation=++this.generation,projectId=this.projectId,branch=this.branch(),locale=this.locale(),query=this.query(),match=this.match(),sourceLocale=this.sourceLocale(),status=this.status(),tag=this.tag();const current=()=>!this.destroyed&&generation===this.generation;
-  this.downloadNotice.set('');this.copyNotice.set('');this.loading.set(true);this.error.set(false);this.searched.set(false);this.results.set([]);
+  this.loadedKeyQuery.set('');this.downloadNotice.set('');this.copyNotice.set('');this.loading.set(true);this.error.set(false);this.searched.set(false);this.results.set([]);
   try{const keys=await this.api.listKeys(projectId,{branch,locale,valueSearch:query,...(status?{status}:{}),...(tag?{tag}:{}),...(match==='exact'?{valueMatch:'exact' as const}:{})});if(current()){this.results.set(keys.map(k=>({id:k.id,key:k.name,value:k.translations.find(t=>t.localeCode===locale)?.value??'',sourceValue:k.translations.find(t=>t.localeCode===sourceLocale)?.value??null,status:k.translations.find(t=>t.localeCode===locale)?.status??null,description:k.description??null,tags:Array.isArray(k.tags)?[...k.tags]:null})));this.searched.set(true);}}
   catch{if(current())this.error.set(true);}finally{if(current()){this.loading.set(false);this.focusAfterRender('outcome',generation);}}
  }

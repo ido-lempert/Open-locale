@@ -1446,3 +1446,10 @@ A pending saved-text search can be canceled without losing its scope or filters.
 Cancel search returns focus to text and ignores late replies. It stops waiting
 in this page, not necessarily the network request; another search is explicit.
 No translations change. See [review0513](docs/reviews/0513-saved-search-cancel.md).
+
+
+Saved-text results can be narrowed locally by key name, without running another
+server search. The literal case-insensitive filter keeps spaces, shows visible
+versus loaded counts, and resets on a new saved-value search or scope change.
+Downloads still include all loaded matches regardless of this local filter.
+See [review0514](docs/reviews/0514-saved-search-loaded-key.md).
