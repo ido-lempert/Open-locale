@@ -1,0 +1,11 @@
+import { SavedSearchComponent } from './saved-search.component';
+const deferred=()=>{let resolve!:(v:any)=>void;const promise=new Promise<any>(r=>resolve=r);return{promise,resolve};};
+const api=()=>({getProject:jest.fn().mockResolvedValue({baseLocale:'en',locales:[{code:'en'}]}),listBranches:jest.fn().mockResolvedValue([{id:'b',name:'main'}]),listKeys:jest.fn().mockResolvedValue([{id:'k',name:'key',_count:{comments:2,screenshots:1},translations:[{localeCode:'en',value:'Text'}]}])});
+const make=(a:any)=>new SavedSearchComponent({} as any,a);
+describe('loaded key-wide context counts in saved text search',()=>{
+ it('projects numeric counts from the same existing read',async()=>{const a=api(),c=make(a);await c.loadProject('p');c.setQuery('Text');await c.search();expect(c.results()[0].commentCount).toBe(2);expect(c.results()[0].screenshotCount).toBe(1);expect(a.listKeys).toHaveBeenCalledTimes(1);c.ngOnDestroy();});
+ for(const count of [0,undefined,-1,1.2,'3',Number.MAX_SAFE_INTEGER+1])it(`keeps valid zero distinct from unavailable ${String(count)}`,async()=>{const a=api(),c=make(a);a.listKeys.mockResolvedValue([{id:'k',name:'key',_count:{comments:count,screenshots:count},translations:[]}] as any);await c.loadProject('p');c.setQuery('Text');await c.search();expect(c.results()[0].commentCount).toBe(count===0?0:null);expect(c.results()[0].screenshotCount).toBe(count===0?0:null);c.ngOnDestroy();});
+ it('missing count object is unavailable',async()=>{const a=api(),c=make(a);a.listKeys.mockResolvedValue([{id:'k',name:'key',translations:[]}] as any);await c.loadProject('p');c.setQuery('Text');await c.search();expect(c.results()[0].commentCount).toBeNull();expect(c.results()[0].screenshotCount).toBeNull();c.ngOnDestroy();});
+ it('clear removes old counts and fences held reply',async()=>{const a=api(),c=make(a);await c.loadProject('p');c.setQuery('Text');await c.search();const d=deferred();a.listKeys.mockReturnValue(d.promise);const pending=c.search();c.clearFilters();d.resolve([{id:'old',_count:{comments:99,screenshots:99},translations:[]}]);await pending;expect(c.results()).toEqual([]);c.ngOnDestroy();});
+ it('project reuse clears old counts',async()=>{const a=api(),c=make(a);await c.loadProject('p');c.setQuery('Text');await c.search();await c.loadProject('q');expect(c.results()).toEqual([]);c.ngOnDestroy();});
+});

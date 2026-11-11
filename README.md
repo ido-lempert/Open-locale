@@ -1453,3 +1453,10 @@ server search. The literal case-insensitive filter keeps spaces, shows visible
 versus loaded counts, and resets on a new saved-value search or scope change.
 Downloads still include all loaded matches regardless of this local filter.
 See [review0514](docs/reviews/0514-saved-search-loaded-key.md).
+
+
+Saved-text results show loaded key-wide comment and screenshot counts from the
+same response, without loading their contents or making another request. Zero
+and unavailable counts are distinct. Counts are not matching-locale totals or
+a live server snapshot; search again explicitly to refresh them. See
+[review0515](docs/reviews/0515-saved-search-context-counts.md).
