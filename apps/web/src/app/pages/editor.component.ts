@@ -1,7 +1,7 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnDestroy, OnInit, signal, WritableSignal } from '@angular/core';
+import { Component, OnDestroy, OnInit, Optional, signal, WritableSignal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { hintsForTarget, GlossaryHint } from '../glossary-match';
 import { detectImportFormat, IoFormat } from '../import-format';
 import { mergeFormsForSave, pluralCategories } from '../plural-forms';
@@ -61,7 +61,8 @@ interface CellState {
           @if (branch() !== 'main') {
             <button name="previewMerge" [disabled]="mergePreviewLoading() || mergePending()" (click)="mergeIntoMain()">{{ mergePreviewLoading() ? 'Loading merge preview...' : 'Merge ' + branch() + ' into main' }}</button>
           }
-          <a name="findSavedText" [routerLink]="['/projects', projectId, 'find']" [queryParams]="{branch:branch()}">Find saved text</a>
+          <button type="button" name="findSavedText" (mousedown)="$event.preventDefault()" [disabled]="!canOpenSavedSearch()" (click)="openSavedSearch()" [attr.aria-describedby]="!canOpenSavedSearch()?'savedSearchDepartureScope':null">Find saved text</button>
+          @if(!canOpenSavedSearch()){<span class="muted" name="savedSearchDepartureBlocked" id="savedSearchDepartureScope">Find saved text unavailable. Save local translation drafts and wait for pending work. If a result is unconfirmed, copy retained values before reloading. Other navigation is not protected by this action.</span>}
           <input class="search" placeholder="Search keys" aria-label="Search keys" [ngModel]="search()" (ngModelChange)="search.set($event); onSearch()" />
           <input class="tag-filter" placeholder="tag" aria-label="Filter by tag" [ngModel]="filterTag()" (ngModelChange)="filterTag.set($event); onSearch()" />
           <select aria-label="Filter by review status" [ngModel]="filterStatus()" (ngModelChange)="filterStatus.set($event); onSearch()">
@@ -448,7 +449,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   projectError = signal(false);
   private projectGeneration = 0;
 
-  constructor(private api: ApiService, route: ActivatedRoute) {
+  constructor(private api: ApiService, route: ActivatedRoute, @Optional() private router: Router|null=null) {
     this.projectId = route.snapshot.paramMap.get('id') ?? '';
   }
   async ngOnInit() { await this.loadProject(); }
@@ -471,6 +472,15 @@ export class EditorComponent implements OnInit, OnDestroy {
       await this.reload();
     } catch { if (current()) this.projectError.set(true); }
     finally { if (current()) this.projectLoading.set(false); }
+  }
+  canOpenSavedSearch() {
+    return !!this.project() && !this.projectLoading() && !this.projectError()
+      && this.branches().some(b=>b.name===this.branch()) && this.canBulkReview()
+      && !this.bulkReviewPending() && !this.importWritePending();
+  }
+  openSavedSearch() {
+    if(!this.canOpenSavedSearch())return;
+    void this.router?.navigate(['/projects',this.projectId,'find'],{queryParams:{branch:this.branch()}});
   }
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
   onSearch() {

@@ -1480,3 +1480,10 @@ options. Unknown or empty linked branches require an explicit branch choice;
 main is not silently substituted. Locale still starts at the project base locale.
 This does not preserve unsaved editor drafts or restore editor scope on return.
 See [review0518](docs/reviews/0518-saved-search-linked-branch.md).
+
+
+Find saved text is a guarded editor action. It is unavailable while local
+translation drafts, pending translation work or unconfirmed translation results
+remain. Save drafts and wait, or copy retained values before choosing reload.
+It does not save or retry for you, preserve drafts on other navigation, or guard
+browser close/reload. See [review0519](docs/reviews/0519-editor-search-departure.md).
