@@ -1,7 +1,7 @@
 import { Component, ElementRef, OnDestroy, OnInit, ViewChild, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { Subscription, combineLatest } from 'rxjs';
 import { ApiService, BranchInfo } from '../api.service';
 @Component({
  selector:'ol-saved-search',imports:[FormsModule,RouterLink],
@@ -11,9 +11,10 @@ import { ApiService, BranchInfo } from '../api.service';
  <p name="savedSearchQuickScope">Find saved base values in one branch and locale. Read-only; local drafts and plural-form text are not searched.</p>
  <details name="savedSearchHelp"><summary name="savedSearchHelpToggle">Search rules and loaded context</summary><p name="savedSearchScope">Read-only search in saved base translation values for one branch and locale. Literal, case-insensitive matching, up to 200 characters. Choose substring or whole value. Whole value includes every space; no trimming is applied. Whole value can find whitespace-only text; an empty query cannot search. Contains text requires at least one non-whitespace character. Does not search key names, plural-form text or unsaved editor drafts. Matching target values include the loaded saved source-language context when different. Missing and empty source values are labeled. Optional status filtering applies to the selected matching locale, not the source locale. Optional key tag is an exact, case-sensitive tag (up to 40 characters); spaces are not trimmed. Leave blank for any tag. Key descriptions and displayed tags are loaded context only and may differ from newer server changes. Descriptions are not searched; tags only filter through the optional exact key tag field. No translations are changed.</p></details>
  @if(optionsLoading()){<p role="status">Loading branch and locale options...</p>}
- @if(optionsError()){<p role="alert">Search options unavailable. Retry to check current branches and locales.</p><button type="button" name="retrySavedOptions" (click)="loadProject(projectId)">Retry options</button>}
+ @if(optionsError()){<p role="alert">Search options unavailable. Retry to check current branches and locales.</p><button type="button" name="retrySavedOptions" (click)="retryOptions()">Retry options</button>}
+ @if(linkedBranchUnavailable()){<p role="alert" name="savedSearchLinkedBranchUnavailable">The linked branch is unavailable in the current options. Choose a branch explicitly before searching; main was not selected instead.</p>}
  <form class="search-form" (ngSubmit)="search()">
- <label>Branch<select name="savedSearchBranch" [disabled]="!ready()" [ngModel]="branch()" (ngModelChange)="setBranch($event)">@for(b of branches();track b.id){<option [value]="b.name">{{b.name}}</option>}</select></label>
+ <label>Branch<select name="savedSearchBranch" [disabled]="optionsLoading()||optionsError()" [ngModel]="branch()" (ngModelChange)="setBranch($event)">@if(linkedBranchUnavailable()){<option value="">Choose current branch</option>}@for(b of branches();track b.id){<option [value]="b.name">{{b.name}}</option>}</select></label>
  <label>Locale<select name="savedSearchLocale" [disabled]="!ready()" [ngModel]="locale()" (ngModelChange)="setLocale($event)">@for(l of locales();track l){<option [value]="l">{{l}}</option>}</select></label>
  <label>Match<select name="savedSearchMatch" [disabled]="!ready()" [ngModel]="match()" (ngModelChange)="setMatch($event)"><option value="contains">Contains text</option><option value="exact">Whole value</option></select></label>
  <label>Saved status<select name="savedSearchStatus" [disabled]="!ready()" [ngModel]="status()" (ngModelChange)="setStatus($event)"><option value="">Any status</option>@for(s of statuses();track s){<option [value]="s">{{s}}</option>}</select></label>
@@ -50,9 +51,10 @@ export class SavedSearchComponent implements OnInit,OnDestroy {
  @ViewChild('searchOutcome') private searchOutcome?:ElementRef<HTMLElement>;
  private focusTimer:ReturnType<typeof setTimeout>|undefined;
  private focusAfterRender(destination:'text'|'outcome'|'loadedKey',generation:number){if(this.focusTimer!==undefined)clearTimeout(this.focusTimer);this.focusTimer=setTimeout(()=>{this.focusTimer=undefined;if(!this.destroyed&&generation===this.generation)(destination==='text'?this.searchText:destination==='loadedKey'?this.loadedKeyText:this.searchOutcome)?.nativeElement.focus();},0);}
+ linkedBranchUnavailable=signal(false);private requestedBranch:string|null=null;
  private destroyed=false;private generation=0;private optionsGeneration=0;private subscription?:Subscription;
  constructor(private route:ActivatedRoute,private api:ApiService){}
- ngOnInit(){this.subscription=this.route.paramMap.subscribe(p=>void this.loadProject(p.get('id')??''));}
+ ngOnInit(){this.subscription=combineLatest([this.route.paramMap,this.route.queryParamMap]).subscribe(([p,q])=>void this.loadProject(p.get('id')??'',q.get('branch')));}
  ngOnDestroy(){if(this.focusTimer!==undefined)clearTimeout(this.focusTimer);this.destroyed=true;++this.generation;++this.optionsGeneration;this.subscription?.unsubscribe();}
  ready(){return !this.destroyed&&!this.optionsLoading()&&!this.optionsError()&&this.branches().some(b=>b.name===this.branch())&&this.locales().includes(this.locale());}
  canSearch(){return this.ready()&&!this.loading()&&!!(this.match()==='exact'?this.query().length:this.query().trim())&&this.query().length<=200;}
@@ -64,12 +66,13 @@ export class SavedSearchComponent implements OnInit,OnDestroy {
  setStatus(value:string){if(this.destroyed||(value!==''&&!this.statuses().includes(value)))return;this.clear();this.status.set(value);}
  setMatch(value:string){if(this.destroyed||(value!=='contains'&&value!=='exact'))return;this.clear();this.match.set(value);}
  setQuery(value:string){if(this.destroyed)return;this.clear();this.query.set(value.slice(0,200));}
- setBranch(value:string){if(this.destroyed||!this.branches().some(b=>b.name===value))return;this.clear();this.branch.set(value);}
+ setBranch(value:string){if(this.destroyed||!this.branches().some(b=>b.name===value))return;this.clear();this.linkedBranchUnavailable.set(false);this.branch.set(value);}
  setLocale(value:string){if(this.destroyed||!this.locales().includes(value))return;this.clear();this.locale.set(value);}
- async loadProject(projectId:string){
-  if(this.destroyed)return;const generation=++this.optionsGeneration;this.projectId=projectId;this.clear();this.branches.set([]);this.locales.set([]);this.branch.set('main');this.locale.set('');this.sourceLocale.set('');this.statuses.set([]);this.status.set('');this.tag.set('');this.query.set('');this.match.set('contains');this.optionsLoading.set(true);this.optionsError.set(false);
+ retryOptions(){return this.loadProject(this.projectId,this.requestedBranch);}
+ async loadProject(projectId:string,requestedBranch:string|null=null){
+  if(this.destroyed)return;const generation=++this.optionsGeneration;this.requestedBranch=requestedBranch;this.linkedBranchUnavailable.set(false);this.projectId=projectId;this.clear();this.branches.set([]);this.locales.set([]);this.branch.set('main');this.locale.set('');this.sourceLocale.set('');this.statuses.set([]);this.status.set('');this.tag.set('');this.query.set('');this.match.set('contains');this.optionsLoading.set(true);this.optionsError.set(false);
   const current=()=>!this.destroyed&&generation===this.optionsGeneration;
-  try{const [project,branches]=await Promise.all([this.api.getProject(projectId),this.api.listBranches(projectId)]);if(current()){this.branches.set(branches);this.locales.set(project.locales.map(l=>l.code));this.locale.set(project.baseLocale);this.sourceLocale.set(project.baseLocale);this.statuses.set([...new Set(['UNVERIFIED','TRANSLATED','REVIEWED',...(project.customStatuses??[])])]);}}
+  try{const [project,branches]=await Promise.all([this.api.getProject(projectId),this.api.listBranches(projectId)]);if(current()){this.branches.set(branches);if(requestedBranch!==null){const available=branches.some(b=>b.name===requestedBranch);this.branch.set(available?requestedBranch:'');this.linkedBranchUnavailable.set(!available);}this.locales.set(project.locales.map(l=>l.code));this.locale.set(project.baseLocale);this.sourceLocale.set(project.baseLocale);this.statuses.set([...new Set(['UNVERIFIED','TRANSLATED','REVIEWED',...(project.customStatuses??[])])]);}}
   catch{if(current())this.optionsError.set(true);}finally{if(current())this.optionsLoading.set(false);}
  }
  canCopy(id:string){return this.canDownload()&&this.visibleResults().some(row=>row.id===id);}

@@ -1473,3 +1473,10 @@ needs a non-whitespace character, and an empty query cannot search. Loaded
 whitespace-only matched values have an explicit code-unit count label; copying
 and JSON reports keep the exact text. See
 [review0517](docs/reviews/0517-saved-search-whitespace.md).
+
+
+The editor's Find saved text link carries its current branch into fresh search
+options. Unknown or empty linked branches require an explicit branch choice;
+main is not silently substituted. Locale still starts at the project base locale.
+This does not preserve unsaved editor drafts or restore editor scope on return.
+See [review0518](docs/reviews/0518-saved-search-linked-branch.md).
