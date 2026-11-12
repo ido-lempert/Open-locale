@@ -1566,3 +1566,8 @@ The glossary new-term reset browser harness now fails closed on incomplete
 startup/cleanup, with a real occupied PostgreSQL-port negative probe and unchanged
 healthy12-check browser flow. This is a bounded harness fix, not a claim about
 all legacy suites. [Review0529](docs/reviews/0529-glossary-reset-harness.md).
+
+### Loaded length guidance
+Translation editor shows local base/plural UTF-16 code-unit counts against an
+available loaded key limit. Advisory only, no truncation/save blocker or fresh QA
+confirmation. [Review0530](docs/reviews/0530-editor-length-guidance.md).

@@ -1858,3 +1858,9 @@ chronology; no external acceptance promotion.
   this harness; controlled fixture-port override and real occupied-port probe.
 - Original false-green reproduced, restored3/0 and healthy12/0. No app changes.
 - Evidence: [review0529](reviews/0529-glossary-reset-harness.md).
+
+## Editor loaded length guidance
+- Existing loaded positive key limit with current local base/displayed-plural
+  UTF-16 code-unit counts and over-limit advisory, no additional read/write.
+- No truncation, save/review blocker, fresh QA or complete hidden-form report.
+- Evidence and chronology: [review0530](reviews/0530-editor-length-guidance.md).

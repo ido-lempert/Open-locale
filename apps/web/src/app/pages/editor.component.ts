@@ -23,7 +23,10 @@ interface CellState {
 
 @Component({
   selector: 'ol-editor',
-  styles: [`.key-create { display:grid; grid-template-columns:minmax(10rem,1fr) minmax(12rem,2fr) auto; gap:.5rem; align-items:start; }
+  styles: [`.plural-field:has([name=pluralLengthGuidance]) { flex-wrap:wrap; }
+  .plural-field [name=pluralLengthGuidance] { flex-basis:100%; }
+  .length-guidance { white-space:normal; overflow-wrap:anywhere; margin:.3rem 0; }
+  .key-create { display:grid; grid-template-columns:minmax(10rem,1fr) minmax(12rem,2fr) auto; gap:.5rem; align-items:start; }
   .key-create label { min-width:0; }
   .key-create input,.key-create textarea { width:100%; box-sizing:border-box; }
   .key-create [name=newKeyDescriptionScope] { grid-column:1/-1; grid-row:2; }
@@ -203,6 +206,7 @@ interface CellState {
                       (focus)="onCellFocus(k, l.code)"
                       (blur)="save(k, l.code)"
                       [attr.aria-label]="k.name + ' in ' + l.code"></textarea>
+                    @if (loadedLengthLimit(k); as limit) { <p class="muted length-guidance" name="baseLengthGuidance">Local base value: {{cell(k.id,l.code)().value.length}} / {{limit}} UTF-16 code units.@if(cell(k.id,l.code)().value.length > limit){<span> Over loaded limit.</span>} Loaded key limit only, not fresh QA or save confirmation. Text is not truncated or blocked.</p> }
                     @if (k.isPlural) {
                       <div class="plural-forms">
                         @for (cat of pluralCategories(l.code); track cat) {
@@ -212,6 +216,7 @@ interface CellState {
                               (ngModelChange)="editForm(k, l.code, cat, $event)"
                               (blur)="save(k, l.code)"
                               [attr.aria-label]="k.name + ' ' + cat + ' form in ' + l.code" />
+                            @if (loadedLengthLimit(k); as limit) { <span class="muted length-guidance" name="pluralLengthGuidance">Local {{cat}} form: {{(cell(k.id,l.code)().forms[cat] ?? '').length}} / {{limit}} UTF-16 code units.@if((cell(k.id,l.code)().forms[cat] ?? '').length > limit){<span> Over loaded limit.</span>} Advisory only.</span> }
                           </label>
                         }
                       </div>
@@ -594,6 +599,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     this.clearTm();
     this.cell(k.id, locale).update((c) => ({ ...c, forms: { ...c.forms, [category]: value } }));
   }
+  loadedLengthLimit(k: Key): number | null { return Number.isSafeInteger(k.maxLength) && k.maxLength! > 0 ? k.maxLength : null; }
   pluralCategories(locale: string): string[] { return pluralCategories(locale); }
   private sameForms(a: Record<string, string>, b: Record<string, string>): boolean {
     const ka = Object.keys(a), kb = Object.keys(b);
