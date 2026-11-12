@@ -1952,3 +1952,9 @@ chronology; no external acceptance promotion.
   Invalid raw text kept; correction needs no reload. Busy duplicate guard.
 - Existing valid success refresh/failure behavior unchanged. No registry,
   availability or permission claim. [Review0544](reviews/0544-settings-locale-code-validation.md).
+
+## Settings custom-status local preflight
+- Existing trimmed uppercase candidate checked for2-24 ASCII syntax/base names;
+  no native24 truncation, invalid raw input kept and direct/busy guards.
+- Existing loaded wholearray update/refresh behavior unchanged; not newer server
+  choices or concurrency validation. [Review0545](reviews/0545-settings-status-validation.md).

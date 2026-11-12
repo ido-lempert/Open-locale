@@ -1630,3 +1630,7 @@ native UTF-16 truncation. Invalid labels stay local without a capture or restore
 Settings add-locale now uses the same API syntax check as the editor without the
 old10-character truncation. Invalid raw codes stay local; valid success still
 refreshes Settings. [Review0544](docs/reviews/0544-settings-locale-code-validation.md).
+
+Settings custom-status names are checked against the existing service syntax and
+reserved base names after the existing trim/uppercase transform. Invalid full
+input stays local. [Review0545](docs/reviews/0545-settings-status-validation.md).
