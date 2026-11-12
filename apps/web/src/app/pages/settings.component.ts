@@ -44,9 +44,11 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           </ul>
           @if (isTeamAdmin()) {
           <form class="inline" (ngSubmit)="addLocale()">
-            <input aria-label="Add locale" placeholder="Add locale (e.g. fr)" [ngModel]="newLocale()" (ngModelChange)="newLocale.set($event)" name="newLocale" required maxlength="10" />
-            <button type="submit" [disabled]="busy()">Add</button>
+            <input aria-label="Add locale" placeholder="Add locale (e.g. fr)" [ngModel]="newLocale()" (ngModelChange)="newLocale.set($event)" name="newLocale" required aria-describedby="settingsLocaleRules" [attr.aria-invalid]="newLocale()!=='' && !validNewLocaleCode()" />
+            <button type="submit" name="addSettingsLocale" [disabled]="busy() || !validNewLocaleCode()">Add</button>
           </form>
+          <p class="muted" id="settingsLocaleRules" name="settingsLocaleRules">Locale code: 2-3 lowercase letters, optionally followed by dash-separated groups of 2-8 letters or digits (for example en, pt-BR, zh-Hant-HK). Outer whitespace is trimmed when adding; text is not truncated or otherwise rewritten. This checks API syntax, not a language registry, availability or permission. A successful addition refreshes Settings.</p>
+          @if(newLocale()!=='' && !validNewLocaleCode()){<p role="status" name="settingsLocaleInvalid">Correct the locale code before adding. Your full code stays here and is not sent.</p>}
           }
         </section>
         <section class="panel">
@@ -516,7 +518,9 @@ export class SettingsComponent implements OnInit {
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }
+  validNewLocaleCode():boolean {return /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(this.newLocale().trim());}
   async addLocale() {
+    if(this.busy() || !this.validNewLocaleCode())return;
     this.busy.set(true); this.error.set('');
     try { await this.api.addLocale(this.projectId, this.newLocale().trim()); this.newLocale.set(''); await this.reload(); }
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }

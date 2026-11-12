@@ -1946,3 +1946,9 @@ chronology; no external acceptance promotion.
   Raw invalid label kept; valid capture/restore/recovery unchanged.
 - Linked rules/correction/disabled Take/direct guard, not contents selection.
   [Review0543](reviews/0543-snapshot-label-validation.md).
+
+## Settings locale-code syntax
+- Existing trimmed API syntax before busy/error/write, no native10 truncation.
+  Invalid raw text kept; correction needs no reload. Busy duplicate guard.
+- Existing valid success refresh/failure behavior unchanged. No registry,
+  availability or permission claim. [Review0544](reviews/0544-settings-locale-code-validation.md).

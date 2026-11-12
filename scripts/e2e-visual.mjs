@@ -1180,7 +1180,10 @@ try {
   await page.click('.panel button.primary');
   try {
     await page.waitForFunction(() => document.querySelector('input[name=name]')?.value === 'Demo Shop IL', { timeout: 10000 });
-    check('project renamed via settings', true);
+    console.log('DIAG legacy rename value readiness:', JSON.stringify(await page.evaluate(()=>({busy:ng.getComponent(document.querySelector('ol-settings')).busy(),name:document.querySelector('input[name=name]')?.value}))));
+    await page.waitForFunction(() => !ng.getComponent(document.querySelector('ol-settings')).busy(), { timeout: 10000 });
+    const renamed = await page.evaluate(async id => fetch(`/api/projects/${id}`, {headers:{Authorization:`Bearer ${localStorage.getItem('ol_token')}`}}).then(r=>r.json()), projId);
+    check('project renamed via settings', renamed.name === 'Demo Shop IL');
   } catch {
     const val = await page.$eval('input[name=name]', (el) => el.value);
     const err = await page.evaluate(() => document.querySelector('.error')?.textContent ?? '');

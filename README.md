@@ -1626,3 +1626,7 @@ raw name and slug stay unchanged. [Review0542](docs/reviews/0542-project-create-
 Manual snapshot labels use the existing trimmed 200-character API count without
 native UTF-16 truncation. Invalid labels stay local without a capture or restore.
 [Review0543](docs/reviews/0543-snapshot-label-validation.md).
+
+Settings add-locale now uses the same API syntax check as the editor without the
+old10-character truncation. Invalid raw codes stay local; valid success still
+refreshes Settings. [Review0544](docs/reviews/0544-settings-locale-code-validation.md).
