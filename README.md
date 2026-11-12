@@ -1614,3 +1614,7 @@ does not confirm a valid image. [Review0539](docs/reviews/0539-screenshot-size-p
 New glossary terms check the existing trimmed term200/notes1000 API limits before
 sending, without native UTF-16 truncation. Invalid raw text and do-not-translate
 choice stay editable. [Review0540](docs/reviews/0540-glossary-create-validation.md).
+
+New-task title/description limits match the existing trimmed API counts without
+native title truncation. Invalid text and other form choices stay local; dates,
+IDs and locks still need server validation. [Review0541](docs/reviews/0541-task-create-text-validation.md).

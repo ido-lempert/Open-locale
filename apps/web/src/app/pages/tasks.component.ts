@@ -41,9 +41,9 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
         @if (keysError()) { <p role="alert" class="error" name="taskKeysError">Lockable key options unavailable.</p><button type="button" name="retryTaskKeys" [disabled]="keysLoading()" (click)="void loadKeys()">Retry lockable key options</button> }
         @if (hasLocalDraft()) { <p role="status" name="taskLocalDraft">{{ localDraftLabel() }}</p> }
         <form class="task-form" [attr.aria-busy]="creating()" (ngSubmit)="create()">
-          <input aria-label="Task title" placeholder="e.g. Translate checkout to Hebrew" maxlength="200"
+          <input aria-label="Task title" placeholder="e.g. Translate checkout to Hebrew" aria-describedby="newTaskTextRules" [attr.aria-invalid]="!!title() && !validNewTitle()"
             [ngModel]="title()" (ngModelChange)="formDraftEdited();title.set($event)" name="taskTitle" required />
-          <input aria-label="Description (optional)" placeholder="Details, key names, context"
+          <input aria-label="Description (optional)" placeholder="Details, key names, context" aria-describedby="newTaskTextRules" [attr.aria-invalid]="!validNewDescription()"
             [ngModel]="description()" (ngModelChange)="formDraftEdited();description.set($event)" name="taskDescription" />
           <input aria-label="Due date (optional)" type="date"
             [ngModel]="dueDate()" (ngModelChange)="formDraftEdited();dueDate.set($event)" name="taskDue" />
@@ -69,9 +69,11 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
             lock the selected keys while this task is open
           </label>
           <span class="muted lock-scope-note">A lock blocks editor saves, status changes, MT fills, branch merges, snapshot restores and key deletion for everyone except the assignee and team admins. Imports skip locked keys and report them in the run; other keys still import.</span>
-          <button class="primary" type="submit" [disabled]="creating() || createUnknown()">Create task</button>
+          <button class="primary" type="submit" [disabled]="!validNewTitle() || !validNewDescription() || creating() || createUnknown()">Create task</button>
           @if (creating()) { <span role="status" name="taskCreating">Creating task...</span> }
         </form>
+        <p class="muted" id="newTaskTextRules" name="newTaskTextRules">New task title: 1-200 characters; optional description: up to 2,000 characters using the API count. Outer whitespace is trimmed when creating. Text is not truncated or automatically submitted. These checks do not verify dates, selected IDs, assignments or locks.</p>
+        @if((title() && !validNewTitle()) || !validNewDescription()){<p role="status" name="newTaskTextInvalid">Correct the title or description before creating. Invalid text and your other form choices are kept here and not sent.</p>}
         <button type="button" name="downloadTaskDraft" [disabled]="!draftDownloadReady()" (click)="downloadDraft()">Download new-task form (.json)</button>
         <p class="muted" name="taskDraftDownloadScope">Backs up only the current local new-task form, including description and selected IDs, not loaded tasks or server state. Choices may be stale or unavailable. This file is not importable and does not create, retry or confirm a task. Unconfirmed creation stays unconfirmed; check tasks before creating again. The file can contain private project text; downloading does not share it.</p>
         @if (draftDownloadNotice()) { <p role="status" name="taskDraftDownloadNotice">{{draftDownloadNotice()}}</p> }
@@ -355,9 +357,15 @@ export class TasksComponent implements OnInit, OnDestroy {
     return names.length > 3 ? names.slice(0, 3).join(', ') + ', …' : names.join(', ');
   }
 
+  private apiTextLength(value:string):number {
+    // Match installed class-validator/validator isLength, not UTF-16 or grapheme length.
+    return value.length-(value.match(/[^\uFE0F\uFE0E][\uFE0F\uFE0E]/g)||[]).length-(value.match(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g)||[]).length;
+  }
+  validNewTitle():boolean {const value=this.title().trim();return !!value && this.apiTextLength(value)<=200;}
+  validNewDescription():boolean {return this.apiTextLength(this.description().trim())<=2000;}
   async create() {
     const title = this.title().trim();
-    if (!title||this.creating()||this.createUnknown()||this.destroyed) return;
+    if (!this.validNewTitle() || !this.validNewDescription() || this.creating()||this.createUnknown()||this.destroyed) return;
     const scope=this.projectGeneration,projectId=this.projectId;
     const current=()=>!this.destroyed&&scope===this.projectGeneration;
     const draft={title:this.title(),description:this.description(),dueDate:this.dueDate(),

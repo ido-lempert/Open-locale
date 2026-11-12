@@ -1928,3 +1928,9 @@ chronology; no external acceptance promotion.
   counting semantics; no native term truncation. Raw form/choice retained.
 - Linked rules/correction/disabled Add/direct-submit guard; valid creation/row
   state/unknownrecovery unchanged. [Review0540](reviews/0540-glossary-create-validation.md).
+
+## New-task text limits
+- Existing trimmed title1-200/optional description0-2000 checked with backend
+  count before create state. Raw text/date/ID/lock choices retained; no truncation.
+- Linked rules/correction/disabled Create/direct guard, not date/ID/permission
+  validation. [Review0541](reviews/0541-task-create-text-validation.md).
