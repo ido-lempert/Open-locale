@@ -1882,3 +1882,10 @@ chronology; no external acceptance promotion.
   inline rules, correct then create without reload. No duplicate prediction.
 - Server/auth/network unknown-result pause unchanged.
 - Evidence: [review0533](reviews/0533-new-key-name-validation.md).
+
+## Local locale-code syntax validation
+- Existing API syntax checked against existing trimmed submission before write;
+  raw invalid code retained, correction without reload/unknown-result pause.
+- Removed mismatched10char UI truncation; no language registry/availability claim.
+- Server/auth/network pause and targeted insertion unchanged.
+- Evidence: [review0534](reviews/0534-locale-code-validation.md).

@@ -1584,3 +1584,8 @@ New-key names are checked locally against existing API syntax: 1-200 ASCII
 letters, digits, dot, dash or underscore. Invalid text stays editable and is not
 sent or rewritten; server/unknown-result recovery is unchanged.
 [Review0533](docs/reviews/0533-new-key-name-validation.md).
+
+Locale addition checks the existing API code syntax locally before sending.
+Invalid raw text stays editable; existing leading/trailing whitespace trim on
+submit is explicit. Longer segmented codes are no longer truncated at10 characters.
+This is not a language registry or availability check. [Review0534](docs/reviews/0534-locale-code-validation.md).

@@ -37,6 +37,7 @@ interface CellState {
   .key-description { white-space:pre-wrap; overflow-wrap:anywhere; margin:.4rem 0; }
   .collapsed-grid-scope { overflow-wrap:anywhere; }
   .toolbar[hidden] { display:none; }
+  .toolbar [name=newLocaleInvalid] { flex-basis:100%; }
   .grid td.key { white-space: normal; max-width: 22rem; }
   @media (max-width: 760px) {
     .grid td.key { max-width: none; }
@@ -111,9 +112,11 @@ interface CellState {
           </form>
           @if (keyCreateError()) { <span class="error" name="keyCreateError" role="alert">Key creation could not be confirmed on branch "{{ keyCreateBranch() }}". Creation is paused. Copy retained translation values, then read that branch without key filters before another create. A read does not retry creation or prove that a missing key was never created.</span><button type="button" name="reloadAfterKeyCreate" (mousedown)="$event.preventDefault()" [disabled]="!keyCreateRecoveryReady()" (click)="prepareKeyCreateReload()">Review retained values before reload</button> }
           <form class="inline" (ngSubmit)="addLocale()">
-            <input placeholder="locale (e.g. fr)" aria-label="New locale code" [ngModel]="newLocale()" (ngModelChange)="newLocale.set($event)" name="newLocale" required maxlength="10" />
-            <button type="submit" name="addLocale" [disabled]="localeCreating() || localeCreateError()">{{ localeCreating() ? 'Adding locale...' : 'Add locale' }}</button>
+            <input placeholder="locale (e.g. fr)" aria-label="New locale code" [ngModel]="newLocale()" (ngModelChange)="newLocale.set($event)" name="newLocale" required aria-describedby="newLocaleRules" [attr.aria-invalid]="newLocale()!=='' && !validNewLocaleCode()" />
+            <button type="submit" name="addLocale" [disabled]="!validNewLocaleCode() || localeCreating() || localeCreateError()">{{ localeCreating() ? 'Adding locale...' : 'Add locale' }}</button>
           </form>
+          <span class="muted" id="newLocaleRules" name="newLocaleRules">Locale code: 2-3 lowercase letters, optionally followed by dash-separated groups of 2-8 letters or digits (for example en, pt-BR, zh-Hant-HK). Leading and trailing whitespace is ignored when adding; other text is not rewritten. This checks API syntax, not a language registry or availability.</span>
+          @if(newLocale()!=='' && !validNewLocaleCode()){<span role="status" name="newLocaleInvalid">Correct the locale code before adding.</span>}
           @if (localeCreateError()) { <span class="error" role="alert" name="localeCreateError">Locale addition could not be confirmed. Additions are paused. Check current locale codes before another addition; this read does not retry addition, reload translations or replace editor columns.</span><button type="button" name="checkCurrentLocales" (mousedown)="$event.preventDefault()" [disabled]="!localeRecoveryReady()" (click)="checkCurrentLocales()">Check current locale codes</button> }
           @if (localeRecoveryLoading()) { <p class="muted" role="status" name="localeRecoveryLoading">Reading current locale codes...</p> }
           @if (localeRecoveryError()) { <p class="error" role="alert" name="localeRecoveryError">Current locale codes unavailable. Additions remain paused; retry this read.</p> }
@@ -1043,9 +1046,10 @@ export class EditorComponent implements OnInit, OnDestroy {
     catch { if(current())this.localeRecoveryError.set(true); }
     finally { if(generation===this.localeRecoveryGeneration&&!this.destroyed)this.localeRecoveryLoading.set(false); }
   }
+  validNewLocaleCode(): boolean { return /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(this.newLocale().trim()); }
   async addLocale() {
     const submitted = this.newLocale(), code = submitted.trim();
-    if (!code || this.destroyed || this.localeCreating() || this.localeCreateError()) return;
+    if (!this.validNewLocaleCode() || this.destroyed || this.localeCreating() || this.localeCreateError()) return;
     const generation = this.projectGeneration;
     ++this.localeRecoveryGeneration;this.localeRecoveryCodes.set(null);this.localeRecoveryError.set(false);this.localeCreating.set(true); this.localeCreateError.set(false); this.notice.set('');
     try {
