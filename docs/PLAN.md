@@ -1940,3 +1940,9 @@ chronology; no external acceptance promotion.
   array checked before create state. Raw form retained without repair or send.
 - Not locale syntax/uniqueness/availability; valid raw bytes and failure recovery
   unchanged. [Review0542](reviews/0542-project-create-validation.md).
+
+## Manual snapshot label limits
+- Trimmed nonblank/max200 API count before capture state; no native truncation.
+  Raw invalid label kept; valid capture/restore/recovery unchanged.
+- Linked rules/correction/disabled Take/direct guard, not contents selection.
+  [Review0543](reviews/0543-snapshot-label-validation.md).

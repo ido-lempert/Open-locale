@@ -1622,3 +1622,7 @@ IDs and locks still need server validation. [Review0541](docs/reviews/0541-task-
 New-project forms check raw name count, the existing slug pattern and at least
 one parsed locale entry before sending. No locale-syntax or availability check;
 raw name and slug stay unchanged. [Review0542](docs/reviews/0542-project-create-validation.md).
+
+Manual snapshot labels use the existing trimmed 200-character API count without
+native UTF-16 truncation. Invalid labels stay local without a capture or restore.
+[Review0543](docs/reviews/0543-snapshot-label-validation.md).

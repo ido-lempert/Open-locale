@@ -22,9 +22,11 @@ import { ApiService, SnapshotMeta } from '../api.service';
       @if (notice(); as n) { <p class="notice" role="status">{{ n }}</p> }
       <form class="snapshot-create" (ngSubmit)="create($event)">
         <input aria-label="Snapshot label" [(ngModel)]="label" name="label"
-               placeholder="Label, e.g. before release 1.4" maxlength="200" />
-        <button type="submit" [disabled]="creating() || restoring() || restoreUnknown() || captureUnknown() || !label.trim()" [attr.aria-busy]="creating() || restoring()">Take snapshot</button>
+               placeholder="Label, e.g. before release 1.4" aria-describedby="snapshotLabelRules" [attr.aria-invalid]="!!label && !validLabel()" />
+        <button type="submit" [disabled]="creating() || restoring() || restoreUnknown() || captureUnknown() || !validLabel()" [attr.aria-busy]="creating() || restoring()">Take snapshot</button>
       </form>
+      <p class="muted" id="snapshotLabelRules" name="snapshotLabelRules">Manual snapshot label: 1-200 characters using the API count after outer whitespace is trimmed. Text is not truncated or automatically captured. A label does not change the snapshot contents or restore the project.</p>
+      @if(label && !validLabel()){<p role="status" name="snapshotLabelInvalid">Correct the label before capturing. Your full label stays here and is not sent.</p>}
       @if (listError()) { <p class="error" role="alert" name="snapshotListError">Snapshots unavailable. No snapshots are shown. Retry this read or reload the page.</p><button type="button" name="retrySnapshotList" (click)="void reload()">Retry snapshots</button> }
       @if (!listError()) { <button type="button" name="refreshSnapshots" [disabled]="loading() || creating() || restoring()" (click)="refresh()">Refresh snapshots</button> }
       <button type="button" name="downloadSnapshots" [disabled]="!downloadReady()" (click)="download()">Download loaded snapshot inventory (.json)</button>
@@ -129,10 +131,16 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
     }
   }
 
+  validLabel():boolean {
+    const value=this.label.trim();
+    // Match installed class-validator/validator isLength, not UTF-16 or grapheme length.
+    const length=value.length-(value.match(/[^\uFE0F\uFE0E][\uFE0F\uFE0E]/g)||[]).length-(value.match(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g)||[]).length;
+    return !!value && length<=200;
+  }
   async create(event: Event) {
     event.preventDefault();
     const label = this.label.trim();
-    if (!label || this.destroyed || this.creating() || this.restoring() || this.restoreUnknown() || this.captureUnknown()) return;
+    if (!this.validLabel() || this.destroyed || this.creating() || this.restoring() || this.restoreUnknown() || this.captureUnknown()) return;
     const draft=this.label,scope=this.projectGeneration,projectId=this.projectId;
     this.downloadNotice.set('');++this.captureEpoch;this.creating.set(true);
     this.error.set('');this.notice.set('');

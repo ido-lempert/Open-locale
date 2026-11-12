@@ -213,7 +213,8 @@
     "test:editor-shot-size-browser": "node scripts/editor-shot-size-browser-test.mjs",
     "test:glossary-create-validation-browser": "node scripts/glossary-create-validation-browser-test.mjs",
     "test:task-create-validation-browser": "node scripts/task-create-validation-browser-test.mjs",
-    "test:project-create-validation-browser": "node scripts/project-create-validation-browser-test.mjs"
+    "test:project-create-validation-browser": "node scripts/project-create-validation-browser-test.mjs",
+    "test:snapshot-label-validation-browser": "node scripts/snapshot-label-validation-browser-test.mjs"
   },
   "private": true,
   "dependencies": {
