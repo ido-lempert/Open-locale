@@ -1896,3 +1896,10 @@ chronology; no external acceptance promotion.
 - Branch picker constrained to toolbar width after real40char mobile overflow.
 - Empty-branch/listrefresh/unknownpause semantics unchanged, not availability.
 - Evidence: [review0535](reviews/0535-branch-name-validation.md).
+
+## Local tag-draft limits
+- Existing comma-split/trim/empty-filtered outgoing array checked before save,
+  max20 entries/max40 using backend character-count semantics; no early dedup.
+- Invalid raw text/edit mode retained, correction or Cancel without reload.
+- Valid save/concurrency/unknownpause unchanged; no backend/schema change.
+- Evidence: [review0536](reviews/0536-tag-draft-validation.md).

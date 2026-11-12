@@ -36,6 +36,7 @@ interface CellState {
   @media(max-width:760px) { .key-create { grid-template-columns:minmax(0,1fr); } .key-create button,.key-create [name=newKeyDescriptionScope],.key-create .plural-create { grid-column:1; grid-row:auto; } }
   .key-description { white-space:pre-wrap; overflow-wrap:anywhere; margin:.4rem 0; }
   .collapsed-grid-scope { overflow-wrap:anywhere; }
+  .tag-rules { flex-basis:100%; white-space:normal; overflow-wrap:anywhere; }
   .toolbar[hidden] { display:none; }
   .toolbar [name=branch] { max-width:100%; }
   .toolbar [name=newLocaleInvalid],.toolbar [name=newBranchInvalid] { flex-basis:100%; }
@@ -192,9 +193,11 @@ interface CellState {
                   <span class="tags">
                     @for (t of k.tags; track t) { <span class="tag-chip">{{ t }}</span> }
                     @if (tagEditFor() === k.id) {
-                      <input class="tag-edit" aria-label="Edit tags (comma separated)" title="Enter or leave this field to save; Escape cancels without saving" [disabled]="tagsSaving().includes(k.id) || tagsErrorFor().includes(k.id)"
+                      <input class="tag-edit" aria-label="Edit tags (comma separated)" title="Enter or leave this field to save valid tags; Escape cancels without saving" [attr.aria-describedby]="'tagRules-'+k.id" [attr.aria-invalid]="!validTagDraft()" [disabled]="tagsSaving().includes(k.id) || tagsErrorFor().includes(k.id)"
                         [ngModel]="tagDraft()" (ngModelChange)="tagDraft.set($event)"
                         (blur)="saveTags(k)" (keydown.enter)="saveTags(k)" (keydown.escape)="$event.preventDefault(); cancelTagEdit(k)" />
+                      <span class="muted tag-rules" name="tagRules" [id]="'tagRules-'+k.id">Comma-separated tags: at most 20 nonempty entries, up to 40 characters per tag using the API count. Outer whitespace is trimmed and empty entries ignored before sending. Duplicates count toward 20; the server merges duplicates. Enter or leave this field to save valid tags; Escape or Cancel discards this edit.</span>
+                      @if(!validTagDraft()){<span class="tag-rules" role="status" name="tagDraftInvalid">Too many tags or a tag is too long. Correct this draft before saving; invalid text is kept and not sent.</span>}
                       <button type="button" name="cancelTagEdit" title="Discard this local tag edit without saving" (mousedown)="$event.preventDefault()" [disabled]="!tagCancelReady(k)" (click)="cancelTagEdit(k)">Cancel tags (Esc)</button>
                     } @else {
                       <button class="tags-toggle" (mousedown)="$event.preventDefault()" [disabled]="!tagOpenReady(k)" (click)="openTagEdit(k)">tags</button>
@@ -718,9 +721,16 @@ export class EditorComponent implements OnInit, OnDestroy {
     if(this.destroyed || this.keysLoading() || this.keysError() || !this.tagsErrorFor().includes(k.id) || this.tagsSaving().length || !this.keys().some(key=>key.id===k.id))return;
     this.prepareSaveReload();
   }
+  parsedTagDraft(): string[] { return this.tagDraft().split(',').map(t=>t.trim()).filter(Boolean); }
+  validTagDraft(): boolean {
+    const tags=this.parsedTagDraft();
+    // Match class-validator/validator isLength: surrogate and presentation-selector pairs count once.
+    return tags.length<=20 && tags.every(t=>t.length-(t.match(/[^\uFE0F\uFE0E][\uFE0F\uFE0E]/g)||[]).length-(t.match(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g)||[]).length<=40);
+  }
   async saveTags(k: Key) {
     if (this.destroyed || this.keysLoading() || this.keysError() || this.tagsSaving().includes(k.id) || this.tagsErrorFor().includes(k.id) || this.tagEditFor() !== k.id || this.keyDeleting().includes(k.id) || this.keyDeleteErrorFor().includes(k.id)) return;
-    const tags = this.tagDraft().split(',').map((t) => t.trim()).filter(Boolean);
+    if (!this.validTagDraft()) return;
+    const tags = this.parsedTagDraft();
     const generation = this.keysGeneration, projectId = this.projectId;
     const current = () => !this.destroyed && generation === this.keysGeneration;
     this.tagEditFor.set(null);

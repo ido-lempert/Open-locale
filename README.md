@@ -1593,3 +1593,8 @@ This is not a language registry or availability check. [Review0534](docs/reviews
 New empty-branch names are checked against existing backend syntax before sending.
 Invalid raw names stay editable instead of being truncated; existing outer trim
 on submit is explicit. Branches still start empty, not copies. [Review0535](docs/reviews/0535-branch-name-validation.md).
+
+Tag editing checks the existing outgoing20-entry/40-character API limits locally.
+Invalid comma-separated drafts stay editable on Enter or blur, without a request
+or unknown-result pause. Existing trim/empty filtering, server deduplication and
+Cancel remain unchanged. [Review0536](docs/reviews/0536-tag-draft-validation.md).
