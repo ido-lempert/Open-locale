@@ -585,7 +585,7 @@ export class ApiService {
       method: 'PATCH', body: JSON.stringify({ tags }),
     });
   }
-  createKey(projectId: string, input: { name: string; description?: string; branch?: string; maxLength?: number }) {
+  createKey(projectId: string, input: { name: string; description?: string; branch?: string; maxLength?: number; isPlural?: boolean }) {
     return this.request<Key>(`/projects/${projectId}/keys`, { method: 'POST', body: JSON.stringify(input) });
   }
   deleteKey(projectId: string, keyId: string) {

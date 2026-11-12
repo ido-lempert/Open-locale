@@ -202,7 +202,8 @@
     "test:editor-key-description-create-browser": "node scripts/editor-key-description-create-browser-test.mjs",
     "test:glossary-reset-harness": "node scripts/glossary-reset-harness-test.mjs",
     "test:editor-length-guidance-browser": "node scripts/editor-length-guidance-browser-test.mjs",
-    "test:editor-key-length-create-browser": "node scripts/editor-key-length-create-browser-test.mjs"
+    "test:editor-key-length-create-browser": "node scripts/editor-key-length-create-browser-test.mjs",
+    "test:editor-key-plural-create-browser": "node scripts/editor-key-plural-create-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

@@ -1870,3 +1870,9 @@ chronology; no external acceptance promotion.
   name/description/rawlimit triple only clears when unchanged after confirmation.
 - Loaded QA metadata, not a typing/save blocker or existing-key editor.
 - Evidence/chronology: [review0531](reviews/0531-new-key-maximum-length.md).
+
+## New plural key
+- Optional new-key type checkbox through existing API; defaultfalse omits.
+- Complete captured metadata/type tuple clears only unchanged, unknownpause and
+  retained local grid unchanged; returned key opens existing plural editor.
+- No existing-key conversion/automatic translation. [Review0532](reviews/0532-new-plural-key.md).

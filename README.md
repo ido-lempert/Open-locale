@@ -1575,3 +1575,7 @@ confirmation. [Review0530](docs/reviews/0530-editor-length-guidance.md).
 New-key form can submit an optional maximum length through the existing API.
 Blank means no limit; whole digits1..2147483647, UTF-16 code units checked by QA,
 not a typing/save blocker or existing-key edit. [Review0531](docs/reviews/0531-new-key-maximum-length.md).
+
+New-key form also offers a plural-key checkbox. Unchecked keeps a plain key;
+checked creates locale-specific plural form inputs through the existing API.
+No existing-key conversion or automatic translation. [Review0532](docs/reviews/0532-new-plural-key.md).
