@@ -1889,3 +1889,10 @@ chronology; no external acceptance promotion.
 - Removed mismatched10char UI truncation; no language registry/availability claim.
 - Server/auth/network pause and targeted insertion unchanged.
 - Evidence: [review0534](reviews/0534-locale-code-validation.md).
+
+## Local new-branch name validation
+- Existing backend1-40 ASCII syntax checked before write against existing trimmed
+  submission. Raw invalid text retained/no truncation/correction without reload.
+- Branch picker constrained to toolbar width after real40char mobile overflow.
+- Empty-branch/listrefresh/unknownpause semantics unchanged, not availability.
+- Evidence: [review0535](reviews/0535-branch-name-validation.md).

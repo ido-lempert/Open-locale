@@ -1589,3 +1589,7 @@ Locale addition checks the existing API code syntax locally before sending.
 Invalid raw text stays editable; existing leading/trailing whitespace trim on
 submit is explicit. Longer segmented codes are no longer truncated at10 characters.
 This is not a language registry or availability check. [Review0534](docs/reviews/0534-locale-code-validation.md).
+
+New empty-branch names are checked against existing backend syntax before sending.
+Invalid raw names stay editable instead of being truncated; existing outer trim
+on submit is explicit. Branches still start empty, not copies. [Review0535](docs/reviews/0535-branch-name-validation.md).

@@ -345,7 +345,10 @@ try {
   const keyInput2 = await page.$('input[name=newKey]');
   await keyInput2.evaluate((el) => { el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); });
   await page.type('input[name=newKey]', 'cart.note');
-  await page.click('.inline button');
+  await page.$eval('[name=addKey]',e=>e.scrollIntoView({block:'center'}));
+  console.log('THIRD_KEY_CLICK_TARGET',await page.$eval('[name=addKey]',e=>{const r=e.getBoundingClientRect();return {top:r.top,bottom:r.bottom,hit:e===document.elementFromPoint(r.left+r.width/2,r.top+r.height/2),disabled:e.disabled};}));
+  await shot('editor-15b-third-key-click-target.png');
+  await page.click('[name=addKey]');
   check('third key added', await waitText('cart.note'));
   const noteCells = await page.$$('.grid tbody tr:nth-child(2) textarea');
   await noteCells[0].type('Welcome to the shop');

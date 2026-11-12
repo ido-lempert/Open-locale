@@ -37,7 +37,8 @@ interface CellState {
   .key-description { white-space:pre-wrap; overflow-wrap:anywhere; margin:.4rem 0; }
   .collapsed-grid-scope { overflow-wrap:anywhere; }
   .toolbar[hidden] { display:none; }
-  .toolbar [name=newLocaleInvalid] { flex-basis:100%; }
+  .toolbar [name=branch] { max-width:100%; }
+  .toolbar [name=newLocaleInvalid],.toolbar [name=newBranchInvalid] { flex-basis:100%; }
   .grid td.key { white-space: normal; max-width: 22rem; }
   @media (max-width: 760px) {
     .grid td.key { max-width: none; }
@@ -75,9 +76,11 @@ interface CellState {
           </select>
           @if(!canSwitchBranch()){<p class="muted" name="branchSwitchBlocked" id="branchSwitchScope">Branch switching unavailable. Save local translation drafts and wait for pending saves or reviews. For unconfirmed results, copy retained values before reloading. Other navigation and filters are not protected by this control.</p>}
           <form class="branch-form" (ngSubmit)="addBranch()">
-            <input placeholder="new-empty-branch" aria-label="New branch name" [ngModel]="newBranch()" (ngModelChange)="newBranch.set($event)" name="newBranch" maxlength="40" />
-            <button type="submit" name="addBranch" [disabled]="branchCreating() || branchCreateUnknown()">{{ branchCreating() ? 'Creating branch...' : 'Add empty branch' }}</button>
+            <input placeholder="new-empty-branch" aria-label="New branch name" [ngModel]="newBranch()" (ngModelChange)="newBranch.set($event)" name="newBranch" aria-describedby="newBranchRules" [attr.aria-invalid]="newBranch()!=='' && !validNewBranchName()" />
+            <button type="submit" name="addBranch" [disabled]="!validNewBranchName() || branchCreating() || branchCreateUnknown()">{{ branchCreating() ? 'Creating branch...' : 'Add empty branch' }}</button>
           </form>
+          <span class="muted" id="newBranchRules" name="newBranchRules">New branch name: 1-40 ASCII letters, digits, dot, dash or underscore; start with a letter or digit. Leading and trailing whitespace is ignored when creating. Invalid text is kept, not sent or truncated. Checks syntax only, not availability. New branches start empty.</span>
+          @if(newBranch()!=='' && !validNewBranchName()){<span role="status" name="newBranchInvalid">Correct the branch name before creating.</span>}
           @if (branchCreateUnknown()) { <p class="error" role="alert" name="branchCreateUnknown">Branch creation could not be confirmed. Creation is paused. Check current branches before another create; this read does not retry creation, switch branches or reload translations.</p><button type="button" name="checkCurrentBranches" (mousedown)="$event.preventDefault()" [disabled]="branchListLoading() || branchCreating()" (click)="checkCurrentBranches()">Check current branches</button> }
           @if (branchListError()) { <span class="error" role="alert" name="branchListError">Branch list unavailable. A confirmed new branch may not appear yet.</span>@if (!branchCreateUnknown()) { <button type="button" name="retryEditorBranches" (mousedown)="$event.preventDefault()" [disabled]="!branchRetryReady()" (click)="retryBranches()">Retry branch list</button> } }
           @if (branch() !== 'main') {
@@ -1099,9 +1102,10 @@ export class EditorComponent implements OnInit, OnDestroy {
     if(this.destroyed || !this.branchCreateUnknown() || this.branchListLoading() || this.branchCreating())return Promise.resolve();
     return this.loadBranches();
   }
+  validNewBranchName(): boolean { return /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,39}$/.test(this.newBranch().trim()); }
   async addBranch() {
     const submitted = this.newBranch(), name = submitted.trim();
-    if (!name || this.destroyed || this.branchCreating() || this.branchCreateUnknown()) return;
+    if (!this.validNewBranchName() || this.destroyed || this.branchCreating() || this.branchCreateUnknown()) return;
     ++this.branchCreateEpoch; this.branchCreating.set(true); this.error.set('');
     try {
       await this.api.createBranch(this.projectId, name);

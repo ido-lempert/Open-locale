@@ -205,7 +205,8 @@
     "test:editor-key-length-create-browser": "node scripts/editor-key-length-create-browser-test.mjs",
     "test:editor-key-plural-create-browser": "node scripts/editor-key-plural-create-browser-test.mjs",
     "test:editor-key-name-validation-browser": "node scripts/editor-key-name-validation-browser-test.mjs",
-    "test:editor-locale-code-validation-browser": "node scripts/editor-locale-code-validation-browser-test.mjs"
+    "test:editor-locale-code-validation-browser": "node scripts/editor-locale-code-validation-browser-test.mjs",
+    "test:editor-branch-name-validation-browser": "node scripts/editor-branch-name-validation-browser-test.mjs"
   },
   "private": true,
   "dependencies": {
