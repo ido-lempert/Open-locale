@@ -1864,3 +1864,9 @@ chronology; no external acceptance promotion.
   UTF-16 code-unit counts and over-limit advisory, no additional read/write.
 - No truncation, save/review blocker, fresh QA or complete hidden-form report.
 - Evidence and chronology: [review0530](reviews/0530-editor-length-guidance.md).
+
+## New-key maximum length
+- Optional bounded integer through existing create API, blank omits; captured
+  name/description/rawlimit triple only clears when unchanged after confirmation.
+- Loaded QA metadata, not a typing/save blocker or existing-key editor.
+- Evidence/chronology: [review0531](reviews/0531-new-key-maximum-length.md).

@@ -1571,3 +1571,7 @@ all legacy suites. [Review0529](docs/reviews/0529-glossary-reset-harness.md).
 Translation editor shows local base/plural UTF-16 code-unit counts against an
 available loaded key limit. Advisory only, no truncation/save blocker or fresh QA
 confirmation. [Review0530](docs/reviews/0530-editor-length-guidance.md).
+
+New-key form can submit an optional maximum length through the existing API.
+Blank means no limit; whole digits1..2147483647, UTF-16 code units checked by QA,
+not a typing/save blocker or existing-key edit. [Review0531](docs/reviews/0531-new-key-maximum-length.md).

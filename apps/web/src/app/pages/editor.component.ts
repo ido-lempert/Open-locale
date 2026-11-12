@@ -26,11 +26,11 @@ interface CellState {
   styles: [`.plural-field:has([name=pluralLengthGuidance]) { flex-wrap:wrap; }
   .plural-field [name=pluralLengthGuidance] { flex-basis:100%; }
   .length-guidance { white-space:normal; overflow-wrap:anywhere; margin:.3rem 0; }
-  .key-create { display:grid; grid-template-columns:minmax(10rem,1fr) minmax(12rem,2fr) auto; gap:.5rem; align-items:start; }
+  .key-create { display:grid; grid-template-columns:minmax(8rem,1fr) minmax(10rem,2fr) minmax(8rem,1fr) auto; gap:.5rem; align-items:start; }
   .key-create label { min-width:0; }
   .key-create input,.key-create textarea { width:100%; box-sizing:border-box; }
   .key-create [name=newKeyDescriptionScope] { grid-column:1/-1; grid-row:2; }
-  .key-create button { grid-column:3; grid-row:1; justify-self:start; }
+  .key-create button { grid-column:4; grid-row:1; justify-self:start; }
   @media(max-width:760px) { .key-create { grid-template-columns:minmax(0,1fr); } .key-create button,.key-create [name=newKeyDescriptionScope] { grid-column:1; grid-row:auto; } }
   .key-description { white-space:pre-wrap; overflow-wrap:anywhere; margin:.4rem 0; }
   .collapsed-grid-scope { overflow-wrap:anywhere; }
@@ -102,8 +102,9 @@ interface CellState {
           <form class="inline key-create" (ngSubmit)="addKey()">
             <input placeholder="new.key.name" aria-label="New key name" [ngModel]="newKey()" (ngModelChange)="newKey.set($event)" name="newKey" required />
             <label>Key description (optional)<textarea rows="2" name="newKeyDescription" aria-label="New key description" maxlength="2000" [ngModel]="newKeyDescription()" (ngModelChange)="newKeyDescription.set($event)"></textarea></label>
+            <label>Maximum length (optional)<input type="text" inputmode="numeric" name="newKeyMaxLength" aria-label="New key maximum length" [ngModel]="newKeyMaxLength()" (ngModelChange)="newKeyMaxLength.set($event)" /><span class="muted" name="newKeyMaxLengthScope">Blank means no limit. Otherwise use whole digits from 1 to 2147483647. UTF-16 code units, checked by QA, not a typing or save blocker. Submitted with this new key only.</span></label>
             <span class="muted" name="newKeyDescriptionScope">Up to 2,000 characters. Submitted with this new key only, not an edit to an existing key. Local form text is not automatically saved.</span>
-            <button type="submit" name="addKey" [disabled]="keyCreating() || keyCreateError() || newKeyDescription().length > 2000">{{ keyCreating() ? 'Creating key...' : 'Add key' }}</button>
+            <button type="submit" name="addKey" [disabled]="keyCreating() || keyCreateError() || newKeyDescription().length > 2000 || parsedNewKeyMaxLength() === null">{{ keyCreating() ? 'Creating key...' : 'Add key' }}</button>
           </form>
           @if (keyCreateError()) { <span class="error" name="keyCreateError" role="alert">Key creation could not be confirmed on branch "{{ keyCreateBranch() }}". Creation is paused. Copy retained translation values, then read that branch without key filters before another create. A read does not retry creation or prove that a missing key was never created.</span><button type="button" name="reloadAfterKeyCreate" (mousedown)="$event.preventDefault()" [disabled]="!keyCreateRecoveryReady()" (click)="prepareKeyCreateReload()">Review retained values before reload</button> }
           <form class="inline" (ngSubmit)="addLocale()">
@@ -410,7 +411,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   keysError = signal(false);
   private keysGeneration = 0;
   cells = new Map<string, WritableSignal<CellState>>();
-  search = signal(''); newKey = signal(''); newKeyDescription = signal(''); newLocale = signal(''); ioLocale = signal('en'); bulkStatus = signal('REVIEWED');
+  search = signal(''); newKey = signal(''); newKeyDescription = signal(''); newKeyMaxLength = signal(''); newLocale = signal(''); ioLocale = signal('en'); bulkStatus = signal('REVIEWED');
   bulkReviewPending = signal(false);
   keyDeleting = signal<string[]>([]); keyDeleteErrorFor = signal<string[]>([]);
   localeCreating = signal(false); localeCreateError = signal(false);
@@ -978,15 +979,21 @@ export class EditorComponent implements OnInit, OnDestroy {
   }
   keyCreateRecoveryReady() { return !this.destroyed && this.keyCreateError() && !this.keyCreating() && !this.keysLoading() && !this.keysError() && this.branch()===this.keyCreateBranch() && !this.hasKeyFilters() && !this.tagsSaving().length; }
   prepareKeyCreateReload() { if(this.keyCreateRecoveryReady())this.prepareSaveReload(); }
+  parsedNewKeyMaxLength(): number | undefined | null {
+    const raw=this.newKeyMaxLength();
+    if(raw==='')return undefined;
+    if(!/^[0-9]+$/.test(raw)||raw.length>10)return null;
+    const value=Number(raw);return Number.isInteger(value)&&value>=1&&value<=2147483647?value:null;
+  }
   async addKey() {
-    const submitted = this.newKey(), description = this.newKeyDescription();
-    if (description.length > 2000 || !submitted.trim() || this.destroyed || this.keyCreating() || this.keyCreateError()) return;
+    const submitted = this.newKey(), description = this.newKeyDescription(), rawLimit = this.newKeyMaxLength(), maxLength = this.parsedNewKeyMaxLength();
+    if (maxLength === null || description.length > 2000 || !submitted.trim() || this.destroyed || this.keyCreating() || this.keyCreateError()) return;
     const branch = this.branch(), generation = this.keysGeneration;
     ++this.keyCreateEpoch; this.keyCreating.set(true); this.keyCreateError.set(false); this.keyCreateBranch.set(branch); this.notice.set('');
     try {
-      const key = await this.api.createKey(this.projectId, { name: submitted, branch, ...(description!==''?{description}:{}) });
+      const key = await this.api.createKey(this.projectId, { name: submitted, branch, ...(description!==''?{description}:{}), ...(maxLength!==undefined?{maxLength}:{}) });
       if (this.destroyed) return;
-      if (this.newKey() === submitted && this.newKeyDescription() === description) { this.newKey.set(''); this.newKeyDescription.set(''); }
+      if (this.newKey() === submitted && this.newKeyDescription() === description && this.newKeyMaxLength() === rawLimit) { this.newKey.set(''); this.newKeyDescription.set(''); this.newKeyMaxLength.set(''); }
       const insert = generation === this.keysGeneration && branch === this.branch()
         && !this.keysLoading() && !this.keysError() && !this.hasKeyFilters();
       if (insert) this.keys.update(keys => keys.some(k => k.id === key.id) ? keys : [...keys, key].sort((a,b) => a.name.localeCompare(b.name)));
