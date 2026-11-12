@@ -1610,3 +1610,7 @@ editable with correction guidance. [Review0538](docs/reviews/0538-key-descriptio
 Screenshot files larger than 2,097,152 bytes are rejected locally without an
 upload or unknown-result pause. Choose a smaller file to try again; size alone
 does not confirm a valid image. [Review0539](docs/reviews/0539-screenshot-size-preflight.md).
+
+New glossary terms check the existing trimmed term200/notes1000 API limits before
+sending, without native UTF-16 truncation. Invalid raw text and do-not-translate
+choice stay editable. [Review0540](docs/reviews/0540-glossary-create-validation.md).

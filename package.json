@@ -210,7 +210,8 @@
     "test:editor-tag-validation-browser": "node scripts/editor-tag-validation-browser-test.mjs",
     "test:editor-comment-validation-browser": "node scripts/editor-comment-validation-browser-test.mjs",
     "test:editor-key-description-validation-browser": "node scripts/editor-key-description-validation-browser-test.mjs",
-    "test:editor-shot-size-browser": "node scripts/editor-shot-size-browser-test.mjs"
+    "test:editor-shot-size-browser": "node scripts/editor-shot-size-browser-test.mjs",
+    "test:glossary-create-validation-browser": "node scripts/glossary-create-validation-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

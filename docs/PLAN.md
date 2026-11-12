@@ -1922,3 +1922,9 @@ chronology; no external acceptance promotion.
   reusable chooser; no write/read/pause. Close clears local feedback.
 - Size alone is not image validation; server checks and valid-upload uncertainty
   remain unchanged. [Review0539](reviews/0539-screenshot-size-preflight.md).
+
+## Glossary new-term limits
+- Existing trimmed outgoing term1-200/optional notes0-1000 checked with backend
+  counting semantics; no native term truncation. Raw form/choice retained.
+- Linked rules/correction/disabled Add/direct-submit guard; valid creation/row
+  state/unknownrecovery unchanged. [Review0540](reviews/0540-glossary-create-validation.md).

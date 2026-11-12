@@ -8,6 +8,7 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
   selector: 'ol-glossary',
   imports: [FormsModule, RouterLink],
   styles: [`
+    .new-term-rules { white-space:normal; overflow-wrap:anywhere; }
     @media (max-width: 600px) {
       .glossary-table, .glossary-table tbody, .glossary-table tr, .glossary-table td { display:block; width:100%; box-sizing:border-box; }
       .glossary-table thead { display:none; }
@@ -30,15 +31,17 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
         <h2>New term</h2>
         @if (hasNewTermDraft()) { <p role="status" name="glossaryNewTermDraft">{{ newTermDraftLabel() }}</p> }
         <form class="task-form" [attr.aria-busy]="creating()" (ngSubmit)="create()">
-          <input aria-label="Term" placeholder="e.g. checkout" maxlength="200" name="gTerm"
+          <input aria-label="Term" placeholder="e.g. checkout" aria-describedby="newGlossaryTermRules" [attr.aria-invalid]="!!term() && !validNewTerm()" name="gTerm"
             [ngModel]="term()" (ngModelChange)="formDraftEdited();draftDownloadNotice.set('');term.set($event)" required />
-          <input aria-label="Notes (optional)" placeholder="Context for translators" name="gNotes"
+          <input aria-label="Notes (optional)" placeholder="Context for translators" aria-describedby="newGlossaryTermRules" [attr.aria-invalid]="!validNewNotes()" name="gNotes"
             [ngModel]="notes()" (ngModelChange)="formDraftEdited();draftDownloadNotice.set('');notes.set($event)" />
           <label class="dnt"><input type="checkbox" name="gDnt"
             [ngModel]="doNotTranslate()" (ngModelChange)="formDraftEdited();draftDownloadNotice.set('');doNotTranslate.set($event)" /> do not translate</label>
-          <button class="primary" type="submit" [disabled]="creating() || createUnknown()">Add term</button>
+          <button class="primary" type="submit" [disabled]="!validNewTerm() || !validNewNotes() || creating() || createUnknown()">Add term</button>
           @if (creating()) { <span role="status" name="glossaryCreating">Adding term...</span> }
         </form>
+        <p class="muted new-term-rules" id="newGlossaryTermRules" name="newGlossaryTermRules">New term: 1-200 characters; optional notes: up to 1,000 characters using the API count. Outer whitespace is trimmed when adding. Text is not truncated or automatically added. These fields create a new glossary term, not an edit to loaded terms.</p>
+        @if((term() && !validNewTerm()) || !validNewNotes()){<p class="new-term-rules" role="status" name="newGlossaryTermInvalid">Correct the term or notes before adding. Invalid text and your do-not-translate choice are kept here and not sent.</p>}
         <button type="button" name="downloadNewTermDraft" (pointerdown)="$event.preventDefault()" [disabled]="!newTermDownloadReady()" (click)="downloadNewTermDraft()">Download new-term form (.json)</button>
         <p class="muted" name="newTermDownloadScope">Backs up only the current local term, notes and do-not-translate choice, not loaded terms or translations. Available independently of glossary reads and row saves. Not imported here; does not add, retry or confirm a term. Unconfirmed creation stays unconfirmed. The file can contain private text; downloading does not share it.</p>
         @if (newTermDownloadNotice()) { <p role="status" name="newTermDownloadNotice">{{newTermDownloadNotice()}}</p> }
@@ -209,9 +212,15 @@ export class GlossaryComponent implements OnInit, OnDestroy {
     finally { if(seq===this.fetchSeq)this.loading.set(false); }
   }
 
+  private apiTextLength(value:string):number {
+    // Match installed class-validator/validator isLength, not UTF-16 or grapheme length.
+    return value.length-(value.match(/[^\uFE0F\uFE0E][\uFE0F\uFE0E]/g)||[]).length-(value.match(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g)||[]).length;
+  }
+  validNewTerm():boolean {const value=this.term().trim();return !!value && this.apiTextLength(value)<=200;}
+  validNewNotes():boolean {return this.apiTextLength(this.notes().trim())<=1000;}
   async create() {
     const term = this.term().trim();
-    if (!term||this.destroyed||this.creating()||this.createUnknown()) return;
+    if (!this.validNewTerm() || !this.validNewNotes() || this.destroyed||this.creating()||this.createUnknown()) return;
     const scope=this.projectGeneration,pid=this.projectId,listGeneration=this.fetchSeq;
     const draft={term:this.term(),notes:this.notes(),doNotTranslate:this.doNotTranslate()};
     this.cancelNewTermReset();this.newTermResetResult.set(null);this.newTermDownloadResult.set(null);this.draftDownloadNotice.set('');++this.createEpoch;this.creating.set(true);this.error.set('');this.createNotice.set('');
