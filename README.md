@@ -1602,3 +1602,7 @@ Cancel remain unchanged. [Review0536](docs/reviews/0536-tag-draft-validation.md)
 Comment posting checks trimmed nonempty/2,000-character API limits locally without
 native UTF-16 truncation. Invalid raw text, reply and language scope stay editable;
 valid failures still pause. [Review0537](docs/reviews/0537-comment-draft-validation.md).
+
+Optional new-key descriptions use the existing API's 2,000-character count without
+native UTF-16 truncation. Exact whitespace is kept; invalid raw context stays
+editable with correction guidance. [Review0538](docs/reviews/0538-key-description-api-count.md).

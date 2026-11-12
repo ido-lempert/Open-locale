@@ -208,7 +208,8 @@
     "test:editor-locale-code-validation-browser": "node scripts/editor-locale-code-validation-browser-test.mjs",
     "test:editor-branch-name-validation-browser": "node scripts/editor-branch-name-validation-browser-test.mjs",
     "test:editor-tag-validation-browser": "node scripts/editor-tag-validation-browser-test.mjs",
-    "test:editor-comment-validation-browser": "node scripts/editor-comment-validation-browser-test.mjs"
+    "test:editor-comment-validation-browser": "node scripts/editor-comment-validation-browser-test.mjs",
+    "test:editor-key-description-validation-browser": "node scripts/editor-key-description-validation-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

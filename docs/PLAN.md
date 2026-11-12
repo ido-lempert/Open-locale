@@ -1910,3 +1910,9 @@ chronology; no external acceptance promotion.
   direct submit guarded without write/read/pause. Cancel reply keeps text.
 - Existing valid-post refresh and unknown/concurrency behavior unchanged.
 - Evidence: [review0537](reviews/0537-comment-draft-validation.md).
+
+## New-key description API-count fidelity
+- Replace native UTF16 truncation/guard with existing backend2000 count on exact
+  untrimmed context. Invalid raw form retained, linked rules/correction.
+- Unicode2000 accepted; valid creation/unknown/concurrency behavior unchanged.
+- Evidence: [review0538](reviews/0538-key-description-api-count.md).

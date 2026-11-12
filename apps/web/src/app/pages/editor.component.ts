@@ -34,6 +34,7 @@ interface CellState {
   .key-create [name=newKeyDescriptionScope] { grid-column:1/-1; grid-row:2; }
   .key-create button { grid-column:4; grid-row:1; justify-self:start; }
   @media(max-width:760px) { .key-create { grid-template-columns:minmax(0,1fr); } .key-create button,.key-create [name=newKeyDescriptionScope],.key-create .plural-create { grid-column:1; grid-row:auto; } }
+  [name=newKeyDescriptionRules],[name=newKeyDescriptionInvalid] { display:block; margin-top:.3rem; }
   .key-description { white-space:pre-wrap; overflow-wrap:anywhere; margin:.4rem 0; }
   .collapsed-grid-scope { overflow-wrap:anywhere; }
   .comment-form { flex-wrap:wrap; }
@@ -111,11 +112,11 @@ interface CellState {
           }
           <form class="inline key-create" (ngSubmit)="addKey()">
             <input placeholder="new.key.name" aria-label="New key name" [ngModel]="newKey()" (ngModelChange)="newKey.set($event)" name="newKey" required aria-describedby="newKeyNameRules" [attr.aria-invalid]="newKey()!=='' && !validNewKeyName()" />
-            <label>Key description (optional)<textarea rows="2" name="newKeyDescription" aria-label="New key description" maxlength="2000" [ngModel]="newKeyDescription()" (ngModelChange)="newKeyDescription.set($event)"></textarea></label>
+            <label>Key description (optional)<textarea rows="2" name="newKeyDescription" aria-label="New key description" aria-describedby="newKeyDescriptionRules" [attr.aria-invalid]="!validNewKeyDescription()" [ngModel]="newKeyDescription()" (ngModelChange)="newKeyDescription.set($event)"></textarea></label>
             <label>Maximum length (optional)<input type="text" inputmode="numeric" name="newKeyMaxLength" aria-label="New key maximum length" [ngModel]="newKeyMaxLength()" (ngModelChange)="newKeyMaxLength.set($event)" /><span class="muted" name="newKeyMaxLengthScope">Blank means no limit. Otherwise use whole digits from 1 to 2147483647. UTF-16 code units, checked by QA, not a typing or save blocker. Submitted with this new key only.</span></label>
             <label class="plural-create"><input type="checkbox" name="newKeyPlural" [ngModel]="newKeyPlural()" (ngModelChange)="newKeyPlural.set($event)" />Plural key (show locale-specific plural forms). This chooses the new key type, not an existing-key conversion or automatic translation.</label>
-            <span class="muted" name="newKeyDescriptionScope"><span id="newKeyNameRules" name="newKeyNameRules">Key name: 1-200 ASCII letters, digits, dot, dash or underscore. No spaces. Invalid text is kept, not sent or rewritten.</span>@if(newKey()!=='' && !validNewKeyName()){<span role="status" name="newKeyNameInvalid"> Correct the key name before adding.</span>} Key description: up to 2,000 characters. Submitted with this new key only, not an edit to an existing key. Local form text is not automatically saved.</span>
-            <button type="submit" name="addKey" [disabled]="!validNewKeyName() || keyCreating() || keyCreateError() || newKeyDescription().length > 2000 || parsedNewKeyMaxLength() === null">{{ keyCreating() ? 'Creating key...' : 'Add key' }}</button>
+            <span class="muted" name="newKeyDescriptionScope"><span id="newKeyNameRules" name="newKeyNameRules">Key name: 1-200 ASCII letters, digits, dot, dash or underscore. No spaces. Invalid text is kept, not sent or rewritten.</span>@if(newKey()!=='' && !validNewKeyName()){<span role="status" name="newKeyNameInvalid"> Correct the key name before adding.</span>} <span id="newKeyDescriptionRules" name="newKeyDescriptionRules">Key description: optional, up to 2,000 characters using the API count. Whitespace is kept; text is not truncated or automatically saved. Submitted with this new key only, not an edit to an existing key.</span>@if(!validNewKeyDescription()){<span role="status" name="newKeyDescriptionInvalid"> Correct this description before adding. Invalid text is kept and not sent.</span>}</span>
+            <button type="submit" name="addKey" [disabled]="!validNewKeyName() || keyCreating() || keyCreateError() || !validNewKeyDescription() || parsedNewKeyMaxLength() === null">{{ keyCreating() ? 'Creating key...' : 'Add key' }}</button>
           </form>
           @if (keyCreateError()) { <span class="error" name="keyCreateError" role="alert">Key creation could not be confirmed on branch "{{ keyCreateBranch() }}". Creation is paused. Copy retained translation values, then read that branch without key filters before another create. A read does not retry creation or prove that a missing key was never created.</span><button type="button" name="reloadAfterKeyCreate" (mousedown)="$event.preventDefault()" [disabled]="!keyCreateRecoveryReady()" (click)="prepareKeyCreateReload()">Review retained values before reload</button> }
           <form class="inline" (ngSubmit)="addLocale()">
@@ -1009,6 +1010,11 @@ export class EditorComponent implements OnInit, OnDestroy {
   }
   keyCreateRecoveryReady() { return !this.destroyed && this.keyCreateError() && !this.keyCreating() && !this.keysLoading() && !this.keysError() && this.branch()===this.keyCreateBranch() && !this.hasKeyFilters() && !this.tagsSaving().length; }
   prepareKeyCreateReload() { if(this.keyCreateRecoveryReady())this.prepareSaveReload(); }
+  validNewKeyDescription(): boolean {
+    const value=this.newKeyDescription();
+    // Match installed class-validator/validator isLength without trimming optional context.
+    return value.length-(value.match(/[^\uFE0F\uFE0E][\uFE0F\uFE0E]/g)||[]).length-(value.match(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g)||[]).length<=2000;
+  }
   validNewKeyName(): boolean { return /^[\w.-]{1,200}$/.test(this.newKey()); }
   parsedNewKeyMaxLength(): number | undefined | null {
     const raw=this.newKeyMaxLength();
@@ -1018,7 +1024,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   }
   async addKey() {
     const submitted = this.newKey(), description = this.newKeyDescription(), rawLimit = this.newKeyMaxLength(), maxLength = this.parsedNewKeyMaxLength(), isPlural = this.newKeyPlural();
-    if (typeof isPlural !== 'boolean' || maxLength === null || description.length > 2000 || !this.validNewKeyName() || this.destroyed || this.keyCreating() || this.keyCreateError()) return;
+    if (typeof isPlural !== 'boolean' || maxLength === null || !this.validNewKeyDescription() || !this.validNewKeyName() || this.destroyed || this.keyCreating() || this.keyCreateError()) return;
     const branch = this.branch(), generation = this.keysGeneration;
     ++this.keyCreateEpoch; this.keyCreating.set(true); this.keyCreateError.set(false); this.keyCreateBranch.set(branch); this.notice.set('');
     try {
