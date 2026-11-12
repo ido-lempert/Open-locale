@@ -1876,3 +1876,9 @@ chronology; no external acceptance promotion.
 - Complete captured metadata/type tuple clears only unchanged, unknownpause and
   retained local grid unchanged; returned key opens existing plural editor.
 - No existing-key conversion/automatic translation. [Review0532](reviews/0532-new-plural-key.md).
+
+## Local new-key name validation
+- Mirror existing API syntax before sending; raw invalid input retained with
+  inline rules, correct then create without reload. No duplicate prediction.
+- Server/auth/network unknown-result pause unchanged.
+- Evidence: [review0533](reviews/0533-new-key-name-validation.md).

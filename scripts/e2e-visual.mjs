@@ -126,13 +126,13 @@ try {
   await page.waitForSelector('.toolbar', { timeout: 10000 });
   await page.type('input[name=newKey]', 'home.title');
   await page.click('.inline button');
-  await page.waitForFunction(()=>[...document.querySelectorAll('.grid tbody tr')].some(e=>e.textContent.includes('home.title'))&&!document.querySelector('.inline button')?.disabled,{timeout:10000});
+  await page.waitForFunction(()=>[...document.querySelectorAll('.grid tbody tr')].some(e=>e.textContent.includes('home.title'))&&document.querySelector('input[name=newKey]')?.value==='',{timeout:10000});
   check('first key added', true);
   const keyInput = await page.$('input[name=newKey]');
   await keyInput.evaluate((el) => { el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); });
   await page.type('input[name=newKey]', 'cart.checkout');
   await page.click('.inline button');
-  await page.waitForFunction(()=>[...document.querySelectorAll('.grid tbody tr')].some(e=>e.textContent.includes('cart.checkout'))&&!document.querySelector('.inline button')?.disabled,{timeout:10000});
+  await page.waitForFunction(()=>[...document.querySelectorAll('.grid tbody tr')].some(e=>e.textContent.includes('cart.checkout'))&&document.querySelector('input[name=newKey]')?.value==='',{timeout:10000});
   check('second key added', true);
   const cells = await page.$$('.grid tbody tr:first-child textarea');
   await cells[0].type('Welcome to the shop');
@@ -1921,6 +1921,9 @@ try {
   );
   // Merge: preview modal shows the diff with an explicit overwrite warning.
   const mergeHandle = await page.evaluateHandle(() => [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Merge feature-x into main')));
+  await mergeHandle.asElement().evaluate(e=>e.scrollIntoView({block:'center'}));
+  console.log('MERGE_CLICK_TARGET',await mergeHandle.asElement().evaluate(e=>{const r=e.getBoundingClientRect();return {top:r.top,bottom:r.bottom,hit:e===document.elementFromPoint(r.left+r.width/2,r.top+r.height/2),disabled:e.disabled};}));
+  await shot('editor-21b-merge-click-target.png');
   await mergeHandle.asElement().click();
   let modalUp = await page.waitForSelector('.modal .merge-diff', { timeout: 10000 }).then(() => true).catch(() => false);
   if (!modalUp) {

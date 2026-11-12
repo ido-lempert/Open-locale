@@ -1579,3 +1579,8 @@ not a typing/save blocker or existing-key edit. [Review0531](docs/reviews/0531-n
 New-key form also offers a plural-key checkbox. Unchecked keeps a plain key;
 checked creates locale-specific plural form inputs through the existing API.
 No existing-key conversion or automatic translation. [Review0532](docs/reviews/0532-new-plural-key.md).
+
+New-key names are checked locally against existing API syntax: 1-200 ASCII
+letters, digits, dot, dash or underscore. Invalid text stays editable and is not
+sent or rewritten; server/unknown-result recovery is unchanged.
+[Review0533](docs/reviews/0533-new-key-name-validation.md).
