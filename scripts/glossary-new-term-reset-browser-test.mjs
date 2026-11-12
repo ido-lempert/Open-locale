@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55742, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.GLOSSARY_NEW_TERM_RESET_TEST_PG_PORT ?? 55742), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+// Incomplete cleanup can leave an unresolved await and an empty event loop.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-glossary-create-browser-'));
@@ -46,8 +48,8 @@ try {
   // Remove only the fixture-local row edit without blur before testing creation.
   await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-glossary'));const t=c.terms().find(t=>t.term==='Existing');c.setTranslation(t,'he','Saved');});await page.type('[name=gTerm]','Committed unseen reset');hold=true;await page.$eval('.task-form',e=>e.requestSubmit());for(let n=0;n<100&&!held;n++)await new Promise(r=>setTimeout(r,20));await page.waitForFunction(()=>document.querySelector('[name=resetNewTermDraft]')?.disabled);await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-glossary'));c.askNewTermReset();c.confirmNewTermReset();});check('actual held creation refuses local discard',writes===1&&(await form())[0]==='Committed unseen reset');hold=false;const response=await fetch(held.url(),{method:'POST',headers:held.headers(),body:held.postData()});if(!response.ok)throw new Error('fixture commit failed');await response.json();await held.abort('failed');held=null;await page.waitForSelector('[name=glossaryCreateUnknown]');await ask();await confirm();check('real committed then lost creation stays unknown after local discard without replay/read',writes===1&&reads===0&&JSON.stringify(await form())===JSON.stringify(['','',false])&&!!await page.$('[name=glossaryCreateUnknown]')&&await page.$eval('.task-form button[type=submit]',e=>e.disabled)&&(await call(`${P}/glossary`,null,token)).filter(t=>t.term==='Committed unseen reset').length===1);
   failRead=true;await page.click('[name=refreshGlossaryList]');await page.waitForSelector('[name=glossaryListError]');await page.type('[name=gNotes]','Only local notes');await ask();await confirm();check('failed read permits form discard without clearing creation uncertainty',writes===1&&reads===1&&!!await page.$('[name=glossaryCreateUnknown]')&&(await form())[1]==='');failRead=false;await page.click('[name=retryGlossaryList]');await page.waitForFunction(()=>!document.querySelector('[name=glossaryListLoading]')&&!document.querySelector('[name=glossaryCreateUnknown]'));check('explicit current recovery alone resolves creation uncertainty',writes===1&&reads===2);
-  await page.type('[name=gTerm]','Old project');await ask();await page.evaluate(p=>{history.pushState({},'',p);dispatchEvent(new PopStateEvent('popstate'));},`/projects/${next.id}/glossary`);await page.waitForFunction(()=>document.querySelector('[name=gTerm]')?.value===''&&!ng.getComponent(document.querySelector('ol-glossary')).loading());await page.type('[name=gTerm]','New project');await page.evaluate(()=>ng.getComponent(document.querySelector('ol-glossary')).confirmNewTermReset());check('reused project cannot apply old confirmation',(await form())[0]==='New project'&&!await page.$('[name=newTermResetNotice]'));await ask();await page.evaluate(()=>{window.oldGlossary=ng.getComponent(document.querySelector('ol-glossary'));history.pushState({},'','/projects');dispatchEvent(new PopStateEvent('popstate'));});await page.waitForFunction(()=>!document.querySelector('ol-glossary'));check('departed captured confirmation cannot discard',await page.evaluate(()=>{window.oldGlossary.confirmNewTermReset();return window.oldGlossary.term()==='New project'&&!window.oldGlossary.newTermResetPending();}));check('no new-term reset runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  await page.type('[name=gTerm]','Old project');await ask();await page.evaluate(p=>{history.pushState({},'',p);dispatchEvent(new PopStateEvent('popstate'));},`/projects/${next.id}/glossary`);await page.waitForFunction(()=>document.querySelector('[name=gTerm]')?.value===''&&!ng.getComponent(document.querySelector('ol-glossary')).loading());await page.type('[name=gTerm]','New project');await page.evaluate(()=>ng.getComponent(document.querySelector('ol-glossary')).confirmNewTermReset());check('reused project cannot apply old confirmation',(await form())[0]==='New project'&&!await page.$('[name=newTermResetNotice]'));await ask();await page.evaluate(()=>{window.oldGlossary=ng.getComponent(document.querySelector('ol-glossary'));history.pushState({},'','/projects');dispatchEvent(new PopStateEvent('popstate'));});await page.waitForFunction(()=>!document.querySelector('ol-glossary'));check('departed captured confirmation cannot discard',await page.evaluate(()=>{window.oldGlossary.confirmNewTermReset();return window.oldGlossary.term()==='New project'&&!window.oldGlossary.newTermResetPending();}));check('no new-term reset runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -62,4 +64,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

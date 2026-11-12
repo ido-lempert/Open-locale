@@ -199,7 +199,8 @@
     "test:editor-tools-toggle-browser": "node scripts/editor-tools-toggle-browser-test.mjs",
     "test:editor-collapsed-scope-browser": "node scripts/editor-collapsed-scope-browser-test.mjs",
     "test:editor-key-description-browser": "node scripts/editor-key-description-browser-test.mjs",
-    "test:editor-key-description-create-browser": "node scripts/editor-key-description-create-browser-test.mjs"
+    "test:editor-key-description-create-browser": "node scripts/editor-key-description-create-browser-test.mjs",
+    "test:glossary-reset-harness": "node scripts/glossary-reset-harness-test.mjs"
   },
   "private": true,
   "dependencies": {

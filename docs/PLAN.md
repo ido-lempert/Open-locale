@@ -1852,3 +1852,9 @@ staged chronology and retained external acceptance limits.
 Final current-source web1563/153 actual/API265/31 cached units and web actual/API
 cached buildsRC0. Review0528 records native compatibility fix and staged/source
 chronology; no external acceptance promotion.
+
+## Glossary reset harness failure accounting
+- Completion/failure-owned exit and synchronous incomplete-run exit guard for
+  this harness; controlled fixture-port override and real occupied-port probe.
+- Original false-green reproduced, restored3/0 and healthy12/0. No app changes.
+- Evidence: [review0529](reviews/0529-glossary-reset-harness.md).

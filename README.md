@@ -1560,3 +1560,9 @@ existing-description editor or autosave. [Review0528](docs/reviews/0528-new-key-
 Final current-source web1563/153 actual/API265/31 cached units and web actual/API
 cached buildsRC0. Review0528 records native compatibility fix and staged/source
 chronology; no external acceptance promotion.
+
+### Glossary reset verification
+The glossary new-term reset browser harness now fails closed on incomplete
+startup/cleanup, with a real occupied PostgreSQL-port negative probe and unchanged
+healthy12-check browser flow. This is a bounded harness fix, not a claim about
+all legacy suites. [Review0529](docs/reviews/0529-glossary-reset-harness.md).
