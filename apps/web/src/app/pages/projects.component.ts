@@ -16,12 +16,14 @@ import { ApiService, Project } from '../api.service';
       @if (createNotice(); as message) { <p role="status" name="projectCreateNotice">{{ message }}</p> }
       @if (hasProjectDraft()) { <p role="status" name="projectLocalDraft">{{ projectDraftLabel() }}</p> }
       <form class="create" [attr.aria-busy]="creating()" (ngSubmit)="create()">
-        <input placeholder="Project name" aria-label="Project name" [ngModel]="name()" (ngModelChange)="formDraftEdited();name.set($event)" name="name" required />
-        <input placeholder="slug" aria-label="Project slug" [ngModel]="slug()" (ngModelChange)="formDraftEdited();slug.set($event)" name="slug" required pattern="[a-z0-9-]+" />
-        <input placeholder="Locales (e.g. en, he, ar)" aria-label="Locales" [ngModel]="locales()" (ngModelChange)="formDraftEdited();locales.set($event)" name="locales" required />
-        <button class="primary" type="submit" [disabled]="busy() || createUnknown()">New project</button>
+        <input placeholder="Project name" aria-label="Project name" aria-describedby="newProjectRules" [attr.aria-invalid]="!!name() && !validNewName()" [ngModel]="name()" (ngModelChange)="formDraftEdited();name.set($event)" name="name" required />
+        <input placeholder="slug" aria-label="Project slug" aria-describedby="newProjectRules" [attr.aria-invalid]="!!slug() && !validNewSlug()" [ngModel]="slug()" (ngModelChange)="formDraftEdited();slug.set($event)" name="slug" required />
+        <input placeholder="Locales (e.g. en, he, ar)" aria-label="Locales" aria-describedby="newProjectRules" [attr.aria-invalid]="!!locales() && !validNewLocales()" [ngModel]="locales()" (ngModelChange)="formDraftEdited();locales.set($event)" name="locales" required />
+        <button class="primary" type="submit" [disabled]="!validNewName() || !validNewSlug() || !validNewLocales() || busy() || createUnknown()">New project</button>
         @if (creating()) { <span role="status" name="projectCreating">Creating project...</span> }
       </form>
+      <p class="muted" id="newProjectRules" name="newProjectRules">New project: a nonblank name up to 120 characters using the API count, a 2-61 character lowercase letter/digit/dash slug starting with a letter or digit, and at least one nonblank comma-separated locale entry. Name and slug are sent as entered, not trimmed or repaired. These checks do not verify locale syntax, uniqueness or availability.</p>
+      @if((name() && !validNewName()) || (slug() && !validNewSlug()) || (locales() && !validNewLocales())){<p role="status" name="newProjectInvalid">Correct the name, slug or locale entries before creating. Your full form stays here and is not sent.</p>}
       <button type="button" name="downloadProjectDraft" [disabled]="!draftDownloadReady()" (click)="downloadDraft()">Download new-project form (.json)</button>
       <p class="muted" name="projectDraftDownloadScope">Backs up only the current local name, slug and raw locale text, not loaded projects or security settings. Not importable and does not create, retry or confirm a project. Unconfirmed creation stays unconfirmed; check projects before creating again. May contain private project text; downloading does not share it.</p>
       @if (draftDownloadNotice()) { <p role="status" name="projectDraftDownloadNotice">{{draftDownloadNotice()}}</p> }
@@ -196,10 +198,17 @@ export class ProjectsComponent implements OnInit, OnDestroy {
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }
+  private apiTextLength(value:string):number {
+    // Match installed class-validator/validator isLength, not UTF-16 or grapheme length.
+    return value.length-(value.match(/[^\uFE0F\uFE0E][\uFE0F\uFE0E]/g)||[]).length-(value.match(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g)||[]).length;
+  }
+  validNewName():boolean {return !!this.name().trim() && this.apiTextLength(this.name())<=120;}
+  validNewSlug():boolean {return /^[a-z0-9][a-z0-9-]{1,60}$/.test(this.slug());}
+  validNewLocales():boolean {return this.locales().split(',').some(value=>!!value.trim());}
   async create() {
     if(this.destroyed || this.busy() || this.createUnknown())return;
     const submitted = { name: this.name(), slug: this.slug(), locales: this.locales() };
-    if(!submitted.name.trim() || !submitted.slug.trim() || !submitted.locales.trim())return;
+    if(!this.validNewName() || !this.validNewSlug() || !this.validNewLocales())return;
     this.cancelDraftReset();this.draftResetResult.set(null);this.draftDownloadResult.set(null);++this.createEpoch;this.busy.set(true);this.creating.set(true);this.error.set('');this.createNotice.set('');
     try {
       const codes = submitted.locales.split(',').map((s) => s.trim()).filter(Boolean);

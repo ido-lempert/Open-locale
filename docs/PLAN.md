@@ -1934,3 +1934,9 @@ chronology; no external acceptance promotion.
   count before create state. Raw text/date/ID/lock choices retained; no truncation.
 - Linked rules/correction/disabled Create/direct guard, not date/ID/permission
   validation. [Review0541](reviews/0541-task-create-text-validation.md).
+
+## New-project local preflight
+- Raw name max120/nonblank, exact backend slug pattern and nonempty parsed locale
+  array checked before create state. Raw form retained without repair or send.
+- Not locale syntax/uniqueness/availability; valid raw bytes and failure recovery
+  unchanged. [Review0542](reviews/0542-project-create-validation.md).
