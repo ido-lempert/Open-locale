@@ -1598,3 +1598,7 @@ Tag editing checks the existing outgoing20-entry/40-character API limits locally
 Invalid comma-separated drafts stay editable on Enter or blur, without a request
 or unknown-result pause. Existing trim/empty filtering, server deduplication and
 Cancel remain unchanged. [Review0536](docs/reviews/0536-tag-draft-validation.md).
+
+Comment posting checks trimmed nonempty/2,000-character API limits locally without
+native UTF-16 truncation. Invalid raw text, reply and language scope stay editable;
+valid failures still pause. [Review0537](docs/reviews/0537-comment-draft-validation.md).

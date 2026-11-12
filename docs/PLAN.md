@@ -1903,3 +1903,10 @@ chronology; no external acceptance promotion.
 - Invalid raw text/edit mode retained, correction or Cancel without reload.
 - Valid save/concurrency/unknownpause unchanged; no backend/schema change.
 - Evidence: [review0536](reviews/0536-tag-draft-validation.md).
+
+## Local comment-draft limits
+- Remove native UTF16 truncation; match backend2000 count after existing trim.
+- Invalid raw text/reply/scope retained with rules/correction and disabled Post;
+  direct submit guarded without write/read/pause. Cancel reply keeps text.
+- Existing valid-post refresh and unknown/concurrency behavior unchanged.
+- Evidence: [review0537](reviews/0537-comment-draft-validation.md).

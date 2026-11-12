@@ -36,6 +36,9 @@ interface CellState {
   @media(max-width:760px) { .key-create { grid-template-columns:minmax(0,1fr); } .key-create button,.key-create [name=newKeyDescriptionScope],.key-create .plural-create { grid-column:1; grid-row:auto; } }
   .key-description { white-space:pre-wrap; overflow-wrap:anywhere; margin:.4rem 0; }
   .collapsed-grid-scope { overflow-wrap:anywhere; }
+  .comment-form { flex-wrap:wrap; }
+  .comment-form input { min-width:0; }
+  .comment-rules { flex-basis:100%; white-space:normal; overflow-wrap:anywhere; margin:.3rem 0; }
   .tag-rules { flex-basis:100%; white-space:normal; overflow-wrap:anywhere; }
   .toolbar[hidden] { display:none; }
   .toolbar [name=branch] { max-width:100%; }
@@ -359,13 +362,15 @@ interface CellState {
                       <p class="muted">Replying to {{ commentAuthor(rt) }} <button name="cancelCommentReply" (mousedown)="$event.preventDefault()" [disabled]="!commentReplyCancelReady(k)" (click)="cancelCommentReply(k)">cancel</button></p>
                     }
                     <form class="comment-form" (ngSubmit)="addComment(k)">
-                      <input aria-label="New comment" placeholder="Add a comment… (@email mentions a member)" maxlength="2000"
+                      <input aria-label="New comment" placeholder="Add a comment… (@email mentions a member)" [attr.aria-describedby]="'commentRules-'+k.id" [attr.aria-invalid]="!!commentDraft() && !validCommentDraft()"
                         [ngModel]="commentDraft()" (ngModelChange)="commentDraft.set($event)" name="commentDraft" required />
                       <select aria-label="Comment scope" [ngModel]="commentLocale()" (ngModelChange)="commentLocale.set($event)" name="commentLocale">
                         <option value="">all languages</option>
                         @for (l of p.locales; track l.code) { <option [value]="l.code">{{ l.code }}</option> }
                       </select>
-                      <button type="submit" [disabled]="commentsSaving() || commentsMutationError().includes(k.id)">{{ commentsSaving() ? 'Posting or deleting...' : 'Post' }}</button>
+                      <button type="submit" [disabled]="!validCommentDraft() || commentsSaving() || commentsMutationError().includes(k.id)">{{ commentsSaving() ? 'Posting or deleting...' : 'Post' }}</button>
+                      <p class="muted comment-rules" name="commentRules" [id]="'commentRules-'+k.id">Comment: nonempty after outer whitespace is trimmed, up to 2,000 characters using the API count. Text is not truncated or automatically posted. Post sends this comment to the selected thread and language scope.</p>
+                      @if(commentDraft() && !validCommentDraft()){<p class="comment-rules" role="status" name="commentDraftInvalid">Enter a nonempty comment of at most 2,000 characters before posting. Invalid text is kept and not sent.</p>}
                     </form>
                   }
                 </td></tr>
@@ -810,9 +815,15 @@ export class EditorComponent implements OnInit, OnDestroy {
   selectCommentReply(k:Key,id:string) { if(this.commentReplyReady(k,id))this.replyTo.set(id); }
   commentReplyCancelReady(k:Key) { return this.canChangeComments(k) && this.keys().some(key=>key.id===k.id) && !!this.replyTo(); }
   cancelCommentReply(k:Key) { if(this.commentReplyCancelReady(k))this.replyTo.set(null); }
+  validCommentDraft(): boolean {
+    const body=this.commentDraft().trim();
+    // Match installed class-validator/validator isLength, not UTF-16 or grapheme length.
+    const length=body.length-(body.match(/[^\uFE0F\uFE0E][\uFE0F\uFE0E]/g)||[]).length-(body.match(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g)||[]).length;
+    return !!body && length<=2000;
+  }
   async addComment(k: Key) {
     const draft = this.commentDraft(), body = draft.trim(), locale = this.commentLocale(), reply = this.replyTo();
-    if (!body || !this.canChangeComments(k) || (reply && !this.comments().some(c => c.id === reply && !c.parentId))) return;
+    if (!this.validCommentDraft() || !this.canChangeComments(k) || (reply && !this.comments().some(c => c.id === reply && !c.parentId))) return;
     await this.changeComments(k, () => this.api.addComment(this.projectId, k.id, body, locale || undefined, reply ?? undefined), () => {
       if (this.commentDraft() === draft && this.commentLocale() === locale && this.replyTo() === reply) { this.commentDraft.set(''); this.replyTo.set(null); }
     });
