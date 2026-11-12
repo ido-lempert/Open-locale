@@ -23,7 +23,13 @@ interface CellState {
 
 @Component({
   selector: 'ol-editor',
-  styles: [`.key-description { white-space:pre-wrap; overflow-wrap:anywhere; margin:.4rem 0; }
+  styles: [`.key-create { display:grid; grid-template-columns:minmax(10rem,1fr) minmax(12rem,2fr) auto; gap:.5rem; align-items:start; }
+  .key-create label { min-width:0; }
+  .key-create input,.key-create textarea { width:100%; box-sizing:border-box; }
+  .key-create [name=newKeyDescriptionScope] { grid-column:1/-1; grid-row:2; }
+  .key-create button { grid-column:3; grid-row:1; justify-self:start; }
+  @media(max-width:760px) { .key-create { grid-template-columns:minmax(0,1fr); } .key-create button,.key-create [name=newKeyDescriptionScope] { grid-column:1; grid-row:auto; } }
+  .key-description { white-space:pre-wrap; overflow-wrap:anywhere; margin:.4rem 0; }
   .collapsed-grid-scope { overflow-wrap:anywhere; }
   .toolbar[hidden] { display:none; }
   .grid td.key { white-space: normal; max-width: 22rem; }
@@ -90,9 +96,11 @@ interface CellState {
               @if (!canBulkReview()) { <span name="bulkReviewBlocked" class="muted">Bulk review unavailable. Save local drafts and wait for pending work, or copy retained values before reloading an unconfirmed result.</span> }
             </span>
           }
-          <form class="inline" (ngSubmit)="addKey()">
+          <form class="inline key-create" (ngSubmit)="addKey()">
             <input placeholder="new.key.name" aria-label="New key name" [ngModel]="newKey()" (ngModelChange)="newKey.set($event)" name="newKey" required />
-            <button type="submit" name="addKey" [disabled]="keyCreating() || keyCreateError()">{{ keyCreating() ? 'Creating key...' : 'Add key' }}</button>
+            <label>Key description (optional)<textarea rows="2" name="newKeyDescription" aria-label="New key description" maxlength="2000" [ngModel]="newKeyDescription()" (ngModelChange)="newKeyDescription.set($event)"></textarea></label>
+            <span class="muted" name="newKeyDescriptionScope">Up to 2,000 characters. Submitted with this new key only, not an edit to an existing key. Local form text is not automatically saved.</span>
+            <button type="submit" name="addKey" [disabled]="keyCreating() || keyCreateError() || newKeyDescription().length > 2000">{{ keyCreating() ? 'Creating key...' : 'Add key' }}</button>
           </form>
           @if (keyCreateError()) { <span class="error" name="keyCreateError" role="alert">Key creation could not be confirmed on branch "{{ keyCreateBranch() }}". Creation is paused. Copy retained translation values, then read that branch without key filters before another create. A read does not retry creation or prove that a missing key was never created.</span><button type="button" name="reloadAfterKeyCreate" (mousedown)="$event.preventDefault()" [disabled]="!keyCreateRecoveryReady()" (click)="prepareKeyCreateReload()">Review retained values before reload</button> }
           <form class="inline" (ngSubmit)="addLocale()">
@@ -397,7 +405,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   keysError = signal(false);
   private keysGeneration = 0;
   cells = new Map<string, WritableSignal<CellState>>();
-  search = signal(''); newKey = signal(''); newLocale = signal(''); ioLocale = signal('en'); bulkStatus = signal('REVIEWED');
+  search = signal(''); newKey = signal(''); newKeyDescription = signal(''); newLocale = signal(''); ioLocale = signal('en'); bulkStatus = signal('REVIEWED');
   bulkReviewPending = signal(false);
   keyDeleting = signal<string[]>([]); keyDeleteErrorFor = signal<string[]>([]);
   localeCreating = signal(false); localeCreateError = signal(false);
@@ -965,14 +973,14 @@ export class EditorComponent implements OnInit, OnDestroy {
   keyCreateRecoveryReady() { return !this.destroyed && this.keyCreateError() && !this.keyCreating() && !this.keysLoading() && !this.keysError() && this.branch()===this.keyCreateBranch() && !this.hasKeyFilters() && !this.tagsSaving().length; }
   prepareKeyCreateReload() { if(this.keyCreateRecoveryReady())this.prepareSaveReload(); }
   async addKey() {
-    const submitted = this.newKey();
-    if (!submitted.trim() || this.destroyed || this.keyCreating() || this.keyCreateError()) return;
+    const submitted = this.newKey(), description = this.newKeyDescription();
+    if (description.length > 2000 || !submitted.trim() || this.destroyed || this.keyCreating() || this.keyCreateError()) return;
     const branch = this.branch(), generation = this.keysGeneration;
     ++this.keyCreateEpoch; this.keyCreating.set(true); this.keyCreateError.set(false); this.keyCreateBranch.set(branch); this.notice.set('');
     try {
-      const key = await this.api.createKey(this.projectId, { name: submitted, branch });
+      const key = await this.api.createKey(this.projectId, { name: submitted, branch, ...(description!==''?{description}:{}) });
       if (this.destroyed) return;
-      if (this.newKey() === submitted) this.newKey.set('');
+      if (this.newKey() === submitted && this.newKeyDescription() === description) { this.newKey.set(''); this.newKeyDescription.set(''); }
       const insert = generation === this.keysGeneration && branch === this.branch()
         && !this.keysLoading() && !this.keysError() && !this.hasKeyFilters();
       if (insert) this.keys.update(keys => keys.some(k => k.id === key.id) ? keys : [...keys, key].sort((a,b) => a.name.localeCompare(b.name)));

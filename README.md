@@ -1548,3 +1548,15 @@ full web/API units and builds RC0 (web unit actual, API unit cached, final build
 cached after initial actual web build). API and isolated sync/native stages,
 config/docs/reaper checks RC0. See review0527 for focused negative discriminator,
 staged chronology and retained external acceptance limits.
+
+### Optional new-key description
+New-key form accepts optional literal multiline context (up to2,000 characters)
+through the existing create endpoint. Confirmation clears only an unchanged
+name/description pair; newer edits and unconfirmed results remain local. Not an
+existing-description editor or autosave. [Review0528](docs/reviews/0528-new-key-description.md).
+
+462 verification:155 browser suites finalRC0/1707PASS/zeroFAIL,154first-pass;
+098third-pass after documented TIME_WAIT port collision, failed logs preserved.
+Final current-source web1563/153 actual/API265/31 cached units and web actual/API
+cached buildsRC0. Review0528 records native compatibility fix and staged/source
+chronology; no external acceptance promotion.

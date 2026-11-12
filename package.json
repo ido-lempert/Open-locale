@@ -198,7 +198,8 @@
     "test:editor-backup-scope-browser": "node scripts/editor-backup-scope-browser-test.mjs",
     "test:editor-tools-toggle-browser": "node scripts/editor-tools-toggle-browser-test.mjs",
     "test:editor-collapsed-scope-browser": "node scripts/editor-collapsed-scope-browser-test.mjs",
-    "test:editor-key-description-browser": "node scripts/editor-key-description-browser-test.mjs"
+    "test:editor-key-description-browser": "node scripts/editor-key-description-browser-test.mjs",
+    "test:editor-key-description-create-browser": "node scripts/editor-key-description-create-browser-test.mjs"
   },
   "private": true,
   "dependencies": {
