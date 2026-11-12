@@ -316,9 +316,11 @@ interface CellState {
                       }
                     </ul>
                     <label class="shot-upload">Add screenshot (PNG, JPEG, GIF or WebP, max 2 MB)
-                      <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" aria-label="Upload screenshot" [disabled]="shotsMutating().includes(k.id) || shotsMutationError().includes(k.id)"
+                      <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" aria-label="Upload screenshot" [attr.aria-describedby]="'shotUploadRules-'+k.id" [disabled]="shotsMutating().includes(k.id) || shotsMutationError().includes(k.id)"
                         (change)="uploadShot(k, $event)" />
                     </label>
+                    <p class="muted" name="shotUploadRules" [id]="'shotUploadRules-'+k.id" style="white-space:normal;overflow-wrap:anywhere;max-width:40rem">Maximum file size: 2,097,152 bytes (2 MiB). Larger files are not uploaded. Choose a smaller file to try again. Size alone does not confirm a supported or valid image; the server checks the selected file.</p>
+                    @if(shotUploadTooLargeFor()===k.id){<p role="status" name="shotUploadTooLarge" style="white-space:normal;overflow-wrap:anywhere;max-width:40rem">This file is too large and was not uploaded. Choose a file of at most 2,097,152 bytes. No screenshot change was sent.</p>}
                   }
                 </td></tr>
               }
@@ -462,6 +464,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   private tmGeneration = 0;
   private tmSource = '';
   Math = Math;
+  shotUploadTooLargeFor = signal<string|null>(null);
   shotsFor = signal<string | null>(null);
   shots = signal<ScreenshotMeta[]>([]);
   shotUrls = signal<Record<string, string>>({});
@@ -891,6 +894,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     for (const url of Object.values(urls)) URL.revokeObjectURL(url);
   }
   private clearShots() {
+    this.shotUploadTooLargeFor.set(null);
     ++this.shotsGeneration; this.shotsFor.set(null); this.shotsLoading.set(false); this.shotsError.set(false);
     this.revokeShots(this.shotUrls()); this.shotUrls.set({}); this.shots.set([]);
   }
@@ -949,6 +953,8 @@ export class EditorComponent implements OnInit, OnDestroy {
     const input = ev.target as HTMLInputElement, file = input.files?.[0];
     input.value = '';
     if (!file || !this.canChangeShots(k)) return;
+    if (file.size > 2 * 1024 * 1024) { this.shotUploadTooLargeFor.set(k.id); return; }
+    this.shotUploadTooLargeFor.set(null);
     await this.changeShots(k, () => this.api.uploadScreenshot(this.projectId, k.id, file), 1);
   }
   async deleteShot(k: Key, shotId: string) {

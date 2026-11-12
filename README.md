@@ -1606,3 +1606,7 @@ valid failures still pause. [Review0537](docs/reviews/0537-comment-draft-validat
 Optional new-key descriptions use the existing API's 2,000-character count without
 native UTF-16 truncation. Exact whitespace is kept; invalid raw context stays
 editable with correction guidance. [Review0538](docs/reviews/0538-key-description-api-count.md).
+
+Screenshot files larger than 2,097,152 bytes are rejected locally without an
+upload or unknown-result pause. Choose a smaller file to try again; size alone
+does not confirm a valid image. [Review0539](docs/reviews/0539-screenshot-size-preflight.md).

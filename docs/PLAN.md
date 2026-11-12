@@ -1916,3 +1916,9 @@ chronology; no external acceptance promotion.
   untrimmed context. Invalid raw form retained, linked rules/correction.
 - Unicode2000 accepted; valid creation/unknown/concurrency behavior unchanged.
 - Evidence: [review0538](reviews/0538-key-description-api-count.md).
+
+## Screenshot size preflight
+- Known oversized files stay local with fixed linked byte-limit guidance and a
+  reusable chooser; no write/read/pause. Close clears local feedback.
+- Size alone is not image validation; server checks and valid-upload uncertainty
+  remain unchanged. [Review0539](reviews/0539-screenshot-size-preflight.md).
