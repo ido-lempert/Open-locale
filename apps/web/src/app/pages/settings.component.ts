@@ -187,6 +187,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             <button type="submit" name="addSettingsMtProvider" [disabled]="busy() || !validNewMtName()">Add provider</button>
           </form>
           <p class="muted" id="settingsMtNameRules" name="settingsMtNameRules">Provider name: up to 120 characters using the API count after trimming outer whitespace. Empty names are allowed by the API. Full text is kept without truncation. This checks the name only, not permission, duplicate names or provider availability. Adding this offline pseudo provider does not run pre-translation.</p>
+          @if(mtDraftNotice()){<p role="status" name="settingsMtDraftNotice">{{ mtDraftNotice() }}</p>}
           @if(!validNewMtName()){<p role="status" name="settingsMtNameInvalid">Shorten the provider name before adding. Your full name and provider type stay here and are not sent.</p>}
           }
           @if (mtProviders().length) {
@@ -592,13 +593,19 @@ export class SettingsComponent implements OnInit {
     finally { this.busy.set(false); }
   }
 
+  mtDraftNotice = signal('');
   validNewMtName():boolean {return this.generalTextLength(this.newMtName().trim())<=120;}
   async addMtProvider() {
     if(this.busy() || !this.validNewMtName())return;
-    this.busy.set(true); this.error.set('');
+    const submitted={name:this.newMtName(),type:this.newMtType()};
+    this.busy.set(true); this.error.set(''); this.mtDraftNotice.set('');
     try {
-      await this.api.createMtProvider(this.projectId, this.newMtName().trim(), this.newMtType());
-      this.newMtName.set('');
+      await this.api.createMtProvider(this.projectId, submitted.name.trim(), submitted.type);
+      if(this.newMtName()===submitted.name && this.newMtType()===submitted.type) {
+        this.newMtName.set('');
+      } else {
+        this.mtDraftNotice.set('The submitted provider was added. Your newer provider draft is kept here and has not been added. Review it before adding another provider.');
+      }
       this.mtProviders.set(await this.api.listMtProviders(this.projectId));
       if (!this.mtProviderId() && this.mtProviders().length) this.mtProviderId.set(this.mtProviders()[0].id);
     } catch (e) { this.error.set(e instanceof Error ? e.message : String(e)); } finally { this.busy.set(false); }

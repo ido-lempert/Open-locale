@@ -2002,3 +2002,9 @@ chronology; no external acceptance promotion.
 - Explicit saved-submission/unsaved-newer-draft receipt; no auto retry. Existing
   guards, selector choices, failure handling and valid effects stay unchanged.
   [Review0552](reviews/0552-settings-rule-pending-draft.md).
+
+## Pending pseudo-provider draft retention
+- Submit fixed raw name/type snapshot, clear name only if both still match after
+  POST. Preserve entire newer draft with added-submission/unadded-draft receipt.
+- Existing guards, refresh/selection and unchanged clear stay the same. No auto
+  second POST or translation run. [Review0553](reviews/0553-settings-mt-pending-draft.md).

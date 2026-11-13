@@ -1669,3 +1669,8 @@ Automation Add now preserves the whole draft if any field changes while its
 POST is pending. A receipt distinguishes the saved submitted rule from the newer
 unsaved draft; no automatic second submission. Unchanged successful drafts still
 clear as before. [Review0552](docs/reviews/0552-settings-rule-pending-draft.md).
+
+Pseudo-provider Add keeps a newer name/type draft when an earlier POST succeeds,
+with an explicit added-submission/unadded-draft receipt. No automatic second Add
+or pretranslation run. Existing unchanged clear and selection behavior remain.
+[Review0553](docs/reviews/0553-settings-mt-pending-draft.md).
