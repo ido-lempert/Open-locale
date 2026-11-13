@@ -1995,3 +1995,10 @@ chronology; no external acceptance promotion.
 - Valid create/refresh/clear/selection unchanged, direct busy guard. Name checks
   are not permission/duplicate/provider availability checks and do not run MT.
   [Review0551](reviews/0551-settings-mt-name-validation.md).
+
+## Pending automation draft retention
+- Submit a fixed snapshot; clear only if the complete draft still matches after
+  successful POST. Any newer field change keeps all draft fields together.
+- Explicit saved-submission/unsaved-newer-draft receipt; no auto retry. Existing
+  guards, selector choices, failure handling and valid effects stay unchanged.
+  [Review0552](reviews/0552-settings-rule-pending-draft.md).

@@ -252,6 +252,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             <button type="submit" name="addSettingsRule" [disabled]="busy() || !validNewRuleName() || !validNewRulePayload()">Add rule</button>
           </form>
           <p class="muted" id="settingsRuleNameRules" name="settingsRuleNameRules">Rule name: up to 120 characters using the API count after trimming outer whitespace. Empty names are allowed by the API. Full text is kept without truncation. This checks the name only, not permission, provider, locales or delivery; the active title or message also has limits below.</p>
+          @if(ruleDraftNotice()){<p role="status" name="settingsRuleDraftNotice">{{ ruleDraftNotice() }}</p>}
           @if(!validNewRuleName()){<p role="status" name="settingsRuleNameInvalid">Shorten the rule name before adding. Your full name and rule choices stay here and are not sent.</p>}
           @if(newRuleAction()==='task.create' || newRuleAction()==='notify'){
             <p class="muted" id="settingsRulePayloadRules" name="settingsRulePayloadRules">Task title or notification message: nonblank and up to 200 UTF-16 units, as checked by the API. Some characters use two units. Outer whitespace counts and is kept; full text is not truncated. This checks the active text template only, not the rule name, permission, provider, locales or delivery. A valid rule can act on future edits as described above.</p>
@@ -645,6 +646,8 @@ export class SettingsComponent implements OnInit {
       : [...this.newRuleLocales(), code]);
   }
 
+  ruleDraftNotice = signal('');
+  private ruleDraft() {return {name:this.newRuleName(),trigger:this.newRuleTrigger(),action:this.newRuleAction(),provider:this.newRuleProvider(),locales:[...this.newRuleLocales()],title:this.newRuleTitle(),message:this.newRuleMessage()};}
   validNewRuleName():boolean {return this.generalTextLength(this.newRuleName().trim())<=120;}
   validNewRulePayload():boolean {
     const action=this.newRuleAction();
@@ -654,17 +657,22 @@ export class SettingsComponent implements OnInit {
   }
   async addRule() {
     if(this.busy() || !this.validNewRuleName() || !this.validNewRulePayload())return;
-    this.busy.set(true); this.error.set('');
+    const submitted=this.ruleDraft();
+    this.busy.set(true); this.error.set(''); this.ruleDraftNotice.set('');
     try {
-      const config = this.newRuleAction() === 'pretranslate'
-        ? { providerId: this.newRuleProvider(), locales: this.newRuleLocales() }
-        : this.newRuleAction() === 'notify'
-          ? { message: this.newRuleMessage() }
-          : { title: this.newRuleTitle() };
+      const config = submitted.action === 'pretranslate'
+        ? { providerId: submitted.provider, locales: submitted.locales }
+        : submitted.action === 'notify'
+          ? { message: submitted.message }
+          : { title: submitted.title };
       await this.api.createAutomationRule(this.projectId, {
-        name: this.newRuleName().trim(), trigger: this.newRuleTrigger(), action: this.newRuleAction(), config,
+        name: submitted.name.trim(), trigger: submitted.trigger, action: submitted.action, config,
       });
-      this.newRuleName.set(''); this.newRuleTitle.set(''); this.newRuleMessage.set(''); this.newRuleLocales.set([]);
+      if(JSON.stringify(this.ruleDraft())===JSON.stringify(submitted)) {
+        this.newRuleName.set(''); this.newRuleTitle.set(''); this.newRuleMessage.set(''); this.newRuleLocales.set([]);
+      } else {
+        this.ruleDraftNotice.set('The submitted rule was saved. Your newer rule draft is kept here and has not been saved. Review it before adding another rule.');
+      }
       this.autoRules.set(await this.api.listAutomationRules(this.projectId));
     } catch (e) { this.error.set(e instanceof Error ? e.message : String(e)); } finally { this.busy.set(false); }
   }

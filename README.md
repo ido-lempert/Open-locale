@@ -1664,3 +1664,8 @@ Settings pseudo-provider names now get trimmed max120 API-count preflight, keepi
 full invalid text/type local with correction. Empty names remain API-valid;
 existing create/list/selection behavior stays the same. This adds no external MT
 engine or translation run. [Review0551](docs/reviews/0551-settings-mt-name-validation.md).
+
+Automation Add now preserves the whole draft if any field changes while its
+POST is pending. A receipt distinguishes the saved submitted rule from the newer
+unsaved draft; no automatic second submission. Unchanged successful drafts still
+clear as before. [Review0552](docs/reviews/0552-settings-rule-pending-draft.md).
