@@ -2038,3 +2038,9 @@ chronology; no external acceptance promotion.
   match after POST, otherwise keep whole newer draft with saved/unsaved receipt.
 - Review grant before explicit Add. Existing team membership upsert/guards/reload
   remain, no auto submit. [Review0558](reviews/0558-settings-member-pending-draft.md).
+
+## Pending General Save draft retention
+- Fixed raw name/description submission; preserve whole newer pair during that
+  Save's project and later list refresh reads, with saved/unsaved receipt.
+- Existing count guards/server refresh remain, no auto second PATCH. Other
+  reload behavior unchanged. [Review0559](reviews/0559-settings-general-pending-draft.md).

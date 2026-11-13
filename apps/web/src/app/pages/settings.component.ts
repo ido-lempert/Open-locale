@@ -23,6 +23,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             <button class="primary" type="submit" name="saveSettingsGeneral" [disabled]="busy() || !validGeneralName() || !validGeneralDescription()">Save</button>
           </form>
           <p class="muted" id="settingsGeneralRules" name="settingsGeneralRules">Project name: up to 120 characters; description: up to 2,000 characters using the API count. Empty text is allowed by the update API. Outer whitespace is kept; text is not truncated or automatically saved. These checks do not verify permission or newer server changes. A successful save refreshes Settings.</p>
+          @if(generalDraftNotice()){<p role="status" name="settingsGeneralDraftNotice">{{ generalDraftNotice() }}</p>}
           @if(!validGeneralName() || !validGeneralDescription()){<p role="status" name="settingsGeneralInvalid">Correct the name or description before saving. Your full text stays here and is not sent.</p>}
           }
           <p class="muted">Slug: <code>{{ p.slug }}</code> · Base locale: <code>{{ p.baseLocale }}</code></p>
@@ -435,11 +436,17 @@ export class SettingsComponent implements OnInit {
     this.projectId = route.snapshot.paramMap.get('id') ?? '';
   }
   async ngOnInit() { await this.reload(); }
-  async reload() {
+  async reload(generalSubmission?: {name:string;description:string}) {
+    let loadedGeneral: {name:string;description:string}|undefined;
     try {
       const p = await this.api.getProject(this.projectId);
       this.project.set(p);
-      this.name.set(p.name); this.description.set(p.description);
+      loadedGeneral={name:p.name,description:p.description};
+      if(!generalSubmission || (this.name()===generalSubmission.name && this.description()===generalSubmission.description)) {
+        this.name.set(p.name); this.description.set(p.description);
+      } else {
+        this.generalDraftNotice.set(this.generalDraftMessage);
+      }
       this.tokens.set(await this.api.listTokens());
       this.webhooks.set(await this.api.listWebhooks(this.projectId));
       this.members.set(await this.api.listMembers(this.projectId));
@@ -456,6 +463,12 @@ export class SettingsComponent implements OnInit {
         if (first) this.mtLocale.set(first.code);
       }
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed to load'); }
+    finally {
+      if(generalSubmission) {
+        const saved=loadedGeneral??generalSubmission;
+        this.generalDraftNotice.set(this.name()!==saved.name || this.description()!==saved.description ? this.generalDraftMessage : '');
+      }
+    }
   }
   async publishOta() {
     this.busy.set(true); this.error.set(''); this.otaNotice.set('');
@@ -539,12 +552,16 @@ export class SettingsComponent implements OnInit {
   }
   validGeneralName():boolean {return this.generalTextLength(this.name())<=120;}
   validGeneralDescription():boolean {return this.generalTextLength(this.description())<=2000;}
+  generalDraftNotice = signal('');
+  private readonly generalDraftMessage = 'The submitted project details were saved. Your newer name and description draft is kept here and has not been saved. Review both fields before saving again.';
   async rename() {
     if(this.busy() || !this.validGeneralName() || !this.validGeneralDescription())return;
-    this.busy.set(true); this.error.set('');
+    const submitted={name:this.name(),description:this.description()};
+    this.busy.set(true); this.error.set(''); this.generalDraftNotice.set('');
     try {
-      await this.api.updateProject(this.projectId, { name: this.name(), description: this.description() });
-      await this.reload();
+      await this.api.updateProject(this.projectId, submitted);
+      if(this.name()!==submitted.name || this.description()!==submitted.description)this.generalDraftNotice.set(this.generalDraftMessage);
+      await this.reload(submitted);
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }

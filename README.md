@@ -1699,3 +1699,8 @@ Member Add preserves the whole newer email/role/locales draft when an earlier
 POST succeeds. A saved-membership/unsaved-draft receipt prompts grant review
 before another explicit Add. Existing team membership upsert behavior stays the
 same; no automatic second POST. [Review0558](docs/reviews/0558-settings-member-pending-draft.md).
+
+General Save keeps the whole newer name/description draft through its pending
+PATCH and refresh, with a saved-submission/unsaved-draft receipt and explicit
+second Save. Other Settings reloads keep their existing form replacement behavior;
+this is not a server-merge fix. [Review0559](docs/reviews/0559-settings-general-pending-draft.md).
