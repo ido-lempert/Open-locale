@@ -358,6 +358,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             <button type="submit" name="addSettingsGroup" [disabled]="busy() || !validNewGroupName()">Add group</button>
           </form>
           <p class="muted" id="settingsGroupRules" name="settingsGroupRules">Group name: 1-100 characters using the API count after trimming outer whitespace. Full input is kept without truncation. This checks the name only, not role, locale grants, permission or newer server changes. A successful addition refreshes Settings.</p>
+          @if(groupDraftNotice()){<p role="status" name="settingsGroupDraftNotice">{{ groupDraftNotice() }}</p>}
           @if(groupName()!=='' && !validNewGroupName()){<p role="status" name="settingsGroupInvalid">Correct the group name before adding. Your full name, role and locales stay here and are not sent.</p>}
           }
         </section>
@@ -776,14 +777,20 @@ export class SettingsComponent implements OnInit {
     if (union.length === m.allowedLocales.length && union.every((l) => m.allowedLocales.includes(l))) return null;
     return `effective locales: ${union.join(', ')}`;
   }
+  groupDraftNotice = signal('');
   validNewGroupName():boolean {const name=this.groupName().trim();return name.length>0 && this.generalTextLength(name)<=100;}
   async addGroup() {
     if(this.busy() || !this.validNewGroupName())return;
-    this.busy.set(true); this.error.set('');
+    const submitted={name:this.groupName(),role:this.groupRole(),locales:this.groupLocales()};
+    this.busy.set(true); this.error.set(''); this.groupDraftNotice.set('');
     try {
-      const locales = this.groupLocales().split(',').map((l) => l.trim()).filter(Boolean);
-      await this.api.createGroup(this.projectId, this.groupName().trim(), this.groupRole(), locales);
-      this.groupName.set(''); this.groupLocales.set('');
+      const locales = submitted.locales.split(',').map((l) => l.trim()).filter(Boolean);
+      await this.api.createGroup(this.projectId, submitted.name.trim(), submitted.role, locales);
+      if(this.groupName()===submitted.name && this.groupRole()===submitted.role && this.groupLocales()===submitted.locales) {
+        this.groupName.set(''); this.groupLocales.set('');
+      } else {
+        this.groupDraftNotice.set('The submitted group was created. Your newer group draft is kept here and has not been created. Review its role and locales before adding another group.');
+      }
       await this.reload();
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }

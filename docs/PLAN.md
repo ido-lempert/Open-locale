@@ -2008,3 +2008,9 @@ chronology; no external acceptance promotion.
   POST. Preserve entire newer draft with added-submission/unadded-draft receipt.
 - Existing guards, refresh/selection and unchanged clear stay the same. No auto
   second POST or translation run. [Review0553](reviews/0553-settings-mt-pending-draft.md).
+
+## Pending new-group draft retention
+- Fixed name/role/raw-locales submission; clear name/locales only when all still
+  match after POST. Preserve entire newer draft with created/uncreated receipt.
+- Existing parsed grants/guards/reload and unchanged clear stay the same. No auto
+  submit/membership change. [Review0554](reviews/0554-settings-group-pending-draft.md).

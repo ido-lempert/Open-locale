@@ -1674,3 +1674,8 @@ Pseudo-provider Add keeps a newer name/type draft when an earlier POST succeeds,
 with an explicit added-submission/unadded-draft receipt. No automatic second Add
 or pretranslation run. Existing unchanged clear and selection behavior remain.
 [Review0553](docs/reviews/0553-settings-mt-pending-draft.md).
+
+New-group Add preserves the whole newer name/role/locales draft when an earlier
+POST succeeds. A receipt separates created submitted group from uncreated newer
+draft, with role/locale review before another Add. No automatic second submit or
+membership change. [Review0554](docs/reviews/0554-settings-group-pending-draft.md).
