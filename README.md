@@ -1679,3 +1679,8 @@ New-group Add preserves the whole newer name/role/locales draft when an earlier
 POST succeeds. A receipt separates created submitted group from uncreated newer
 draft, with role/locale review before another Add. No automatic second submit or
 membership change. [Review0554](docs/reviews/0554-settings-group-pending-draft.md).
+
+New-locale Add keeps a newer raw code edited during an earlier POST, with an
+added-submission/unadded-draft receipt. Invalid newer text stays local and needs
+correction before another explicit Add. No auto submit or registry claim.
+[Review0555](docs/reviews/0555-settings-locale-pending-draft.md).

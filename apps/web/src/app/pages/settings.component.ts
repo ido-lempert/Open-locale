@@ -50,6 +50,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             <button type="submit" name="addSettingsLocale" [disabled]="busy() || !validNewLocaleCode()">Add</button>
           </form>
           <p class="muted" id="settingsLocaleRules" name="settingsLocaleRules">Locale code: 2-3 lowercase letters, optionally followed by dash-separated groups of 2-8 letters or digits (for example en, pt-BR, zh-Hant-HK). Outer whitespace is trimmed when adding; text is not truncated or otherwise rewritten. This checks API syntax, not a language registry, availability or permission. A successful addition refreshes Settings.</p>
+          @if(localeDraftNotice()){<p role="status" name="settingsLocaleDraftNotice">{{ localeDraftNotice() }}</p>}
           @if(newLocale()!=='' && !validNewLocaleCode()){<p role="status" name="settingsLocaleInvalid">Correct the locale code before adding. Your full code stays here and is not sent.</p>}
           }
         </section>
@@ -544,11 +545,18 @@ export class SettingsComponent implements OnInit {
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }
+  localeDraftNotice = signal('');
   validNewLocaleCode():boolean {return /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(this.newLocale().trim());}
   async addLocale() {
     if(this.busy() || !this.validNewLocaleCode())return;
-    this.busy.set(true); this.error.set('');
-    try { await this.api.addLocale(this.projectId, this.newLocale().trim()); this.newLocale.set(''); await this.reload(); }
+    const submitted=this.newLocale();
+    this.busy.set(true); this.error.set(''); this.localeDraftNotice.set('');
+    try {
+      await this.api.addLocale(this.projectId, submitted.trim());
+      if(this.newLocale()===submitted)this.newLocale.set('');
+      else this.localeDraftNotice.set('The submitted locale was added. Your newer locale draft is kept here and has not been added. Review it before adding another locale.');
+      await this.reload();
+    }
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }

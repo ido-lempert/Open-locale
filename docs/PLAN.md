@@ -2014,3 +2014,9 @@ chronology; no external acceptance promotion.
   match after POST. Preserve entire newer draft with created/uncreated receipt.
 - Existing parsed grants/guards/reload and unchanged clear stay the same. No auto
   submit/membership change. [Review0554](reviews/0554-settings-group-pending-draft.md).
+
+## Pending new-locale draft retention
+- Fixed raw-code submission; clear only if still matching after POST, otherwise
+  preserve newer raw code with an added-submission/unadded-draft receipt.
+- Existing syntax/busy/server/reload checks remain; no auto second Add or registry
+  claim. [Review0555](reviews/0555-settings-locale-pending-draft.md).
