@@ -2026,3 +2026,9 @@ chronology; no external acceptance promotion.
   newer draft with saved-submission/unsaved-draft receipt. No auto second update.
 - Existing syntax/trim/uppercase/loadedwholearray/reload checks remain, not a
   server-merge fix. [Review0556](reviews/0556-settings-status-pending-draft.md).
+
+## Pending embed-origin draft retention
+- Fixed raw submission; clear only if still matching after PATCH, otherwise keep
+  newer text with saved-submission/unsaved-draft receipt. No auto second update.
+- Existing canonical syntax/trim/loadedwholearray/reload stay unchanged, not a
+  server-merge or site-trust claim. [Review0557](reviews/0557-settings-origin-pending-draft.md).

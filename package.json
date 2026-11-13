@@ -221,6 +221,7 @@
     "test:settings-mt-name-validation-browser": "node scripts/settings-mt-name-validation-browser-test.mjs",
     "test:settings-rule-pending-draft-browser": "node scripts/settings-rule-pending-draft-browser-test.mjs",
     "test:settings-mt-pending-draft-browser": "node scripts/settings-mt-pending-draft-browser-test.mjs",
+    "test:settings-origin-pending-draft-browser": "node scripts/settings-origin-pending-draft-browser-test.mjs",
     "test:settings-status-pending-draft-browser": "node scripts/settings-status-pending-draft-browser-test.mjs",
     "test:settings-locale-pending-draft-browser": "node scripts/settings-locale-pending-draft-browser-test.mjs",
     "test:settings-group-pending-draft-browser": "node scripts/settings-group-pending-draft-browser-test.mjs",

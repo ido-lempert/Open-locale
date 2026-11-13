@@ -1689,3 +1689,8 @@ New custom-status Add keeps newer raw text edited while an earlier PATCH runs,
 with a saved-submission/unsaved-draft receipt. Existing syntax and loaded-array
 update semantics stay unchanged; no auto submit or server-merge claim.
 [Review0556](docs/reviews/0556-settings-status-pending-draft.md).
+
+Embed-origin Add keeps a newer raw draft edited during an earlier PATCH, with a
+saved-submission/unsaved-draft receipt. Existing canonical-origin and loaded-array
+checks remain; no automatic second update or site-trust claim.
+[Review0557](docs/reviews/0557-settings-origin-pending-draft.md).
