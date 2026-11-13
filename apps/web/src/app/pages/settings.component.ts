@@ -223,7 +223,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           </ul>
           @if (isTeamAdmin()) {
           <form class="inline" (ngSubmit)="addRule()">
-            <input aria-label="Rule name" placeholder="Rule name" [ngModel]="newRuleName()" (ngModelChange)="newRuleName.set($event)" name="newRuleName" required />
+            <input aria-label="Rule name" placeholder="Rule name" [ngModel]="newRuleName()" (ngModelChange)="newRuleName.set($event)" name="newRuleName" aria-describedby="settingsRuleNameRules" [attr.aria-invalid]="!validNewRuleName()" />
             <select aria-label="Trigger" [ngModel]="newRuleTrigger()" (ngModelChange)="newRuleTrigger.set($event)" name="newRuleTrigger">
               <option value="translation.value">base-locale write (main)</option>
               <option value="key.created">key created (main)</option>
@@ -247,8 +247,10 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             } @else {
               <input aria-label="Notification message" placeholder="Message ({key} = key name)" [ngModel]="newRuleMessage()" (ngModelChange)="newRuleMessage.set($event)" name="newRuleMessage" aria-describedby="settingsRulePayloadRules" [attr.aria-invalid]="!validNewRulePayload()" />
             }
-            <button type="submit" name="addSettingsRule" [disabled]="busy() || !validNewRulePayload()">Add rule</button>
+            <button type="submit" name="addSettingsRule" [disabled]="busy() || !validNewRuleName() || !validNewRulePayload()">Add rule</button>
           </form>
+          <p class="muted" id="settingsRuleNameRules" name="settingsRuleNameRules">Rule name: up to 120 characters using the API count after trimming outer whitespace. Empty names are allowed by the API. Full text is kept without truncation. This checks the name only, not permission, provider, locales or delivery; the active title or message also has limits below.</p>
+          @if(!validNewRuleName()){<p role="status" name="settingsRuleNameInvalid">Shorten the rule name before adding. Your full name and rule choices stay here and are not sent.</p>}
           @if(newRuleAction()==='task.create' || newRuleAction()==='notify'){
             <p class="muted" id="settingsRulePayloadRules" name="settingsRulePayloadRules">Task title or notification message: nonblank and up to 200 UTF-16 units, as checked by the API. Some characters use two units. Outer whitespace counts and is kept; full text is not truncated. This checks the active text template only, not the rule name, permission, provider, locales or delivery. A valid rule can act on future edits as described above.</p>
             @if(!validNewRulePayload()){<p role="status" name="settingsRulePayloadInvalid">Correct the active title or message before adding the rule. Your full text and rule choices stay here and are not sent.</p>}
@@ -639,6 +641,7 @@ export class SettingsComponent implements OnInit {
       : [...this.newRuleLocales(), code]);
   }
 
+  validNewRuleName():boolean {return this.generalTextLength(this.newRuleName().trim())<=120;}
   validNewRulePayload():boolean {
     const action=this.newRuleAction();
     if(action!=='task.create' && action!=='notify')return true;
@@ -646,7 +649,7 @@ export class SettingsComponent implements OnInit {
     return text.trim().length>0 && text.length<=200;
   }
   async addRule() {
-    if(this.busy() || !this.validNewRulePayload())return;
+    if(this.busy() || !this.validNewRuleName() || !this.validNewRulePayload())return;
     this.busy.set(true); this.error.set('');
     try {
       const config = this.newRuleAction() === 'pretranslate'

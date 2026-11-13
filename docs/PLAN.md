@@ -1982,3 +1982,9 @@ chronology; no external acceptance promotion.
   no silent repair. Invalid raw text stays local with linked correction guidance.
 - Valid loaded-array update/refresh unchanged, not ownership/trust/permission or
   newer-state validation. [Review0549](reviews/0549-settings-origin-validation.md).
+
+## Automation rule-name limits
+- Existing trimmed max120 API count before busy/error/write, full invalid name and
+  choices retained. DTO permits empty names; native required removed to match.
+- Combined active-template checks; valid create/effects unchanged, not permission
+  validation. [Review0550](reviews/0550-settings-rule-name-validation.md).
