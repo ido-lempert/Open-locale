@@ -217,6 +217,7 @@
     "test:snapshot-label-validation-browser": "node scripts/snapshot-label-validation-browser-test.mjs",
     "test:settings-locale-code-validation-browser": "node scripts/settings-locale-code-validation-browser-test.mjs",
     "test:settings-status-validation-browser": "node scripts/settings-status-validation-browser-test.mjs",
+    "test:settings-origin-validation-browser": "node scripts/settings-origin-validation-browser-test.mjs",
     "test:settings-rule-payload-validation-browser": "node scripts/settings-rule-payload-validation-browser-test.mjs",
     "test:settings-group-validation-browser": "node scripts/settings-group-validation-browser-test.mjs",
     "test:settings-general-validation-browser": "node scripts/settings-general-validation-browser-test.mjs"

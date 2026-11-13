@@ -158,9 +158,11 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           </ul>
           @if (isTeamAdmin()) {
           <form class="inline" (ngSubmit)="addOrigin()">
-            <input aria-label="New embed origin" placeholder="https://app.example.com" [ngModel]="newOrigin()" (ngModelChange)="newOrigin.set($event)" name="newOrigin" required />
-            <button type="submit" [disabled]="busy()">Add origin</button>
+            <input aria-label="New embed origin" placeholder="https://app.example.com" [ngModel]="newOrigin()" (ngModelChange)="newOrigin.set($event)" name="newOrigin" required aria-describedby="settingsOriginRules" [attr.aria-invalid]="newOrigin()!=='' && !validNewOrigin()" />
+            <button type="submit" name="addSettingsOrigin" [disabled]="busy() || !validNewOrigin()">Add origin</button>
           </form>
+          <p class="muted" id="settingsOriginRules" name="settingsOriginRules">Use a canonical http:// or https:// bare origin, such as https://app.example.com or http://localhost:4200. No path, trailing slash, query, fragment or credentials. Outer whitespace is trimmed when adding; other text is not repaired or truncated. This checks the new origin's syntax only, not site ownership, trust, permission or newer server settings. Adding an origin allows it to embed this project's editor as described above; a successful addition refreshes Settings.</p>
+          @if(newOrigin()!=='' && !validNewOrigin()){<p role="status" name="settingsOriginInvalid">Correct the origin before adding. Your full text stays here and is not sent.</p>}
           }
         </section>
         <section class="panel">
@@ -557,9 +559,14 @@ export class SettingsComponent implements OnInit {
   newRuleName = signal(''); newRuleTrigger = signal('translation.value'); newRuleAction = signal('pretranslate');
   newRuleProvider = signal(''); newRuleLocales = signal<string[]>([]); newRuleTitle = signal(''); newRuleMessage = signal('');
 
+  validNewOrigin():boolean {
+    const origin=this.newOrigin().trim();
+    try {const url=new URL(origin);return (url.protocol==='https:' || url.protocol==='http:') && url.origin===origin;}
+    catch {return false;}
+  }
   async addOrigin() {
+    if(this.busy() || !this.validNewOrigin())return;
     const origin = this.newOrigin().trim();
-    if (!origin) return;
     this.busy.set(true); this.error.set('');
     try {
       const current = this.project()?.embedOrigins ?? [];

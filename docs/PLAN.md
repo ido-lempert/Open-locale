@@ -1976,3 +1976,9 @@ chronology; no external acceptance promotion.
   message truncation. Invalid full template/rule choices stay local with correction.
 - Active action only/direct+busyguard; valid create/pretranslate/effects unchanged.
   [Review0548](reviews/0548-settings-rule-payload-validation.md).
+
+## Settings embed-origin syntax preflight
+- Trimmed new candidate must exactly match canonical http(s) bare-origin syntax;
+  no silent repair. Invalid raw text stays local with linked correction guidance.
+- Valid loaded-array update/refresh unchanged, not ownership/trust/permission or
+  newer-state validation. [Review0549](reviews/0549-settings-origin-validation.md).

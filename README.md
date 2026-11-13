@@ -1649,3 +1649,8 @@ Automation task-title/notification-message preflight now matches the API's raw
 no native message truncation. Only the active template is checked, not permission,
 provider/locale validity or delivery. Existing valid effects are unchanged.
 [Review0548](docs/reviews/0548-settings-rule-payload-validation.md).
+
+Settings embed-origin preflight now checks the new trimmed candidate against the
+API's canonical http(s) bare-origin syntax before saving. Full invalid text stays
+local; no silent repair. This is not site ownership/trust/permission validation or
+a change to existing embedding effects. [Review0549](docs/reviews/0549-settings-origin-validation.md).
