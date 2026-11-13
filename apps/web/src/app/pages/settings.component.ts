@@ -241,12 +241,16 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                 }
               }
             } @else if (newRuleAction() === 'task.create') {
-              <input aria-label="Task title" placeholder="Task title ({key} = key name)" [ngModel]="newRuleTitle()" (ngModelChange)="newRuleTitle.set($event)" name="newRuleTitle" />
+              <input aria-label="Task title" placeholder="Task title ({key} = key name)" [ngModel]="newRuleTitle()" (ngModelChange)="newRuleTitle.set($event)" name="newRuleTitle" aria-describedby="settingsRulePayloadRules" [attr.aria-invalid]="!validNewRulePayload()" />
             } @else {
-              <input aria-label="Notification message" placeholder="Message ({key} = key name)" [ngModel]="newRuleMessage()" (ngModelChange)="newRuleMessage.set($event)" name="newRuleMessage" maxlength="200" />
+              <input aria-label="Notification message" placeholder="Message ({key} = key name)" [ngModel]="newRuleMessage()" (ngModelChange)="newRuleMessage.set($event)" name="newRuleMessage" aria-describedby="settingsRulePayloadRules" [attr.aria-invalid]="!validNewRulePayload()" />
             }
-            <button type="submit" [disabled]="busy()">Add rule</button>
+            <button type="submit" name="addSettingsRule" [disabled]="busy() || !validNewRulePayload()">Add rule</button>
           </form>
+          @if(newRuleAction()==='task.create' || newRuleAction()==='notify'){
+            <p class="muted" id="settingsRulePayloadRules" name="settingsRulePayloadRules">Task title or notification message: nonblank and up to 200 UTF-16 units, as checked by the API. Some characters use two units. Outer whitespace counts and is kept; full text is not truncated. This checks the active text template only, not the rule name, permission, provider, locales or delivery. A valid rule can act on future edits as described above.</p>
+            @if(!validNewRulePayload()){<p role="status" name="settingsRulePayloadInvalid">Correct the active title or message before adding the rule. Your full text and rule choices stay here and are not sent.</p>}
+          }
           }
         </section>
         <section class="panel">
@@ -628,7 +632,14 @@ export class SettingsComponent implements OnInit {
       : [...this.newRuleLocales(), code]);
   }
 
+  validNewRulePayload():boolean {
+    const action=this.newRuleAction();
+    if(action!=='task.create' && action!=='notify')return true;
+    const text=action==='notify'?this.newRuleMessage():this.newRuleTitle();
+    return text.trim().length>0 && text.length<=200;
+  }
   async addRule() {
+    if(this.busy() || !this.validNewRulePayload())return;
     this.busy.set(true); this.error.set('');
     try {
       const config = this.newRuleAction() === 'pretranslate'

@@ -1643,3 +1643,9 @@ Settings new-group names now get local nonempty/max100 API-count checks after
 existing outer trim. Invalid full name, role and locale choices stay local with
 linked correction guidance. Valid creation and team-wide permission semantics
 are unchanged. See [review0547](docs/reviews/0547-settings-group-validation.md).
+
+Automation task-title/notification-message preflight now matches the API's raw
+200 UTF-16-unit/nonblank checks. Full invalid templates and rule choices stay local;
+no native message truncation. Only the active template is checked, not permission,
+provider/locale validity or delivery. Existing valid effects are unchanged.
+[Review0548](docs/reviews/0548-settings-rule-payload-validation.md).

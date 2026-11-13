@@ -1970,3 +1970,9 @@ chronology; no external acceptance promotion.
   name/role/locales retained, correction without reload; no native truncation.
 - Valid create/trim/parsed grants/refresh unchanged, not permission validation.
   [Review0547](reviews/0547-settings-group-validation.md).
+
+## Automation active text-template limits
+- Raw nonblank title/message<=200 UTF16units as existing service checks, no native
+  message truncation. Invalid full template/rule choices stay local with correction.
+- Active action only/direct+busyguard; valid create/pretranslate/effects unchanged.
+  [Review0548](reviews/0548-settings-rule-payload-validation.md).
