@@ -1659,3 +1659,8 @@ Automation rule names now get local max120 API-count checks after existing outer
 trim. Full invalid names and choices stay local, alongside the active-template
 checks. Empty names remain API-valid; valid rule effects are unchanged.
 [Review0550](docs/reviews/0550-settings-rule-name-validation.md).
+
+Settings pseudo-provider names now get trimmed max120 API-count preflight, keeping
+full invalid text/type local with correction. Empty names remain API-valid;
+existing create/list/selection behavior stays the same. This adds no external MT
+engine or translation run. [Review0551](docs/reviews/0551-settings-mt-name-validation.md).

@@ -180,12 +180,14 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           </ul>
           @if (isTeamAdmin()) {
           <form class="inline" (ngSubmit)="addMtProvider()">
-            <input aria-label="New provider name" placeholder="Provider name" [ngModel]="newMtName()" (ngModelChange)="newMtName.set($event)" name="newMtName" required />
+            <input aria-label="New provider name" placeholder="Provider name" [ngModel]="newMtName()" (ngModelChange)="newMtName.set($event)" name="newMtName" aria-describedby="settingsMtNameRules" [attr.aria-invalid]="!validNewMtName()" />
             <select aria-label="Provider type" [ngModel]="newMtType()" (ngModelChange)="newMtType.set($event)" name="newMtType">
               <option value="pseudo">pseudo (built-in, offline)</option>
             </select>
-            <button type="submit" [disabled]="busy()">Add provider</button>
+            <button type="submit" name="addSettingsMtProvider" [disabled]="busy() || !validNewMtName()">Add provider</button>
           </form>
+          <p class="muted" id="settingsMtNameRules" name="settingsMtNameRules">Provider name: up to 120 characters using the API count after trimming outer whitespace. Empty names are allowed by the API. Full text is kept without truncation. This checks the name only, not permission, duplicate names or provider availability. Adding this offline pseudo provider does not run pre-translation.</p>
+          @if(!validNewMtName()){<p role="status" name="settingsMtNameInvalid">Shorten the provider name before adding. Your full name and provider type stay here and are not sent.</p>}
           }
           @if (mtProviders().length) {
             @if (isTeamAdmin()) {
@@ -589,7 +591,9 @@ export class SettingsComponent implements OnInit {
     finally { this.busy.set(false); }
   }
 
+  validNewMtName():boolean {return this.generalTextLength(this.newMtName().trim())<=120;}
   async addMtProvider() {
+    if(this.busy() || !this.validNewMtName())return;
     this.busy.set(true); this.error.set('');
     try {
       await this.api.createMtProvider(this.projectId, this.newMtName().trim(), this.newMtType());

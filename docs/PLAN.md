@@ -1988,3 +1988,10 @@ chronology; no external acceptance promotion.
   choices retained. DTO permits empty names; native required removed to match.
 - Combined active-template checks; valid create/effects unchanged, not permission
   validation. [Review0550](reviews/0550-settings-rule-name-validation.md).
+
+## Settings pseudo-provider name limits
+- Existing trimmed max120 API count before busy/error/write, full invalid name/type
+  retained. DTO permits empty; inconsistent native required removed.
+- Valid create/refresh/clear/selection unchanged, direct busy guard. Name checks
+  are not permission/duplicate/provider availability checks and do not run MT.
+  [Review0551](reviews/0551-settings-mt-name-validation.md).
