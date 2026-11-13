@@ -311,8 +311,9 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
               <option value="ADMIN">admin</option>
             </select>
             <input aria-label="Allowed locales" placeholder="Locales (e.g. he,fr) - blank = all" [ngModel]="memberLocales()" (ngModelChange)="memberLocales.set($event)" name="memberLocales" />
-            <button type="submit" [disabled]="busy()">Add</button>
+            <button name="addSettingsMember" type="submit" [disabled]="busy()">Add</button>
           </form>
+          @if(memberDraftNotice()){<p role="status" name="settingsMemberDraftNotice">{{ memberDraftNotice() }}</p>}
           }
           <p class="muted">Members join this team and can access every project in it. A locale list limits their translation writes across all of the team's projects. Project administration (settings, locales, webhooks, restores, members) requires admin.</p>
         </section>
@@ -741,12 +742,19 @@ export class SettingsComponent implements OnInit {
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }
+  memberDraftNotice = signal('');
   async addMember() {
-    this.busy.set(true); this.error.set('');
+    if(this.busy())return;
+    const submitted={email:this.memberEmail(),role:this.memberRole(),locales:this.memberLocales()};
+    this.busy.set(true); this.error.set(''); this.memberDraftNotice.set('');
     try {
-      const locales = this.memberLocales().split(',').map((l) => l.trim()).filter(Boolean);
-      await this.api.addMember(this.projectId, this.memberEmail().trim(), this.memberRole(), locales);
-      this.memberEmail.set(''); this.memberLocales.set('');
+      const locales = submitted.locales.split(',').map((l) => l.trim()).filter(Boolean);
+      await this.api.addMember(this.projectId, submitted.email.trim(), submitted.role, locales);
+      if(this.memberEmail()===submitted.email && this.memberRole()===submitted.role && this.memberLocales()===submitted.locales) {
+        this.memberEmail.set(''); this.memberLocales.set('');
+      } else {
+        this.memberDraftNotice.set('The submitted membership was saved. Your newer member draft is kept here and has not been saved. Review the email, role and locales before adding again.');
+      }
       await this.reload();
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }

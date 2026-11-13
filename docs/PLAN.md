@@ -2032,3 +2032,9 @@ chronology; no external acceptance promotion.
   newer text with saved-submission/unsaved-draft receipt. No auto second update.
 - Existing canonical syntax/trim/loadedwholearray/reload stay unchanged, not a
   server-merge or site-trust claim. [Review0557](reviews/0557-settings-origin-pending-draft.md).
+
+## Pending member draft retention
+- Fixed raw email/role/locales snapshot; clear email/locales only if all still
+  match after POST, otherwise keep whole newer draft with saved/unsaved receipt.
+- Review grant before explicit Add. Existing team membership upsert/guards/reload
+  remain, no auto submit. [Review0558](reviews/0558-settings-member-pending-draft.md).

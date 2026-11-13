@@ -1694,3 +1694,8 @@ Embed-origin Add keeps a newer raw draft edited during an earlier PATCH, with a
 saved-submission/unsaved-draft receipt. Existing canonical-origin and loaded-array
 checks remain; no automatic second update or site-trust claim.
 [Review0557](docs/reviews/0557-settings-origin-pending-draft.md).
+
+Member Add preserves the whole newer email/role/locales draft when an earlier
+POST succeeds. A saved-membership/unsaved-draft receipt prompts grant review
+before another explicit Add. Existing team membership upsert behavior stays the
+same; no automatic second POST. [Review0558](docs/reviews/0558-settings-member-pending-draft.md).
