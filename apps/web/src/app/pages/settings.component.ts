@@ -337,14 +337,16 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           </ul>
           @if (isTeamAdmin()) {
           <form class="inline" (ngSubmit)="addGroup()">
-            <input aria-label="Group name" placeholder="Group name" [ngModel]="groupName()" (ngModelChange)="groupName.set($event)" name="groupName" required />
+            <input aria-label="Group name" placeholder="Group name" [ngModel]="groupName()" (ngModelChange)="groupName.set($event)" name="groupName" required aria-describedby="settingsGroupRules" [attr.aria-invalid]="groupName()!=='' && !validNewGroupName()" />
             <select aria-label="New group role" [ngModel]="groupRole()" (ngModelChange)="groupRole.set($event)" name="groupRole">
               <option value="MEMBER">member</option>
               @if (isTeamOwner()) { <option value="ADMIN">admin</option> }
             </select>
             <input aria-label="Group locales" placeholder="Locales (e.g. he,fr) - blank = all" [ngModel]="groupLocales()" (ngModelChange)="groupLocales.set($event)" name="groupLocales" />
-            <button type="submit" [disabled]="busy()">Add group</button>
+            <button type="submit" name="addSettingsGroup" [disabled]="busy() || !validNewGroupName()">Add group</button>
           </form>
+          <p class="muted" id="settingsGroupRules" name="settingsGroupRules">Group name: 1-100 characters using the API count after trimming outer whitespace. Full input is kept without truncation. This checks the name only, not role, locale grants, permission or newer server changes. A successful addition refreshes Settings.</p>
+          @if(groupName()!=='' && !validNewGroupName()){<p role="status" name="settingsGroupInvalid">Correct the group name before adding. Your full name, role and locales stay here and are not sent.</p>}
           }
         </section>
         <section class="panel">
@@ -734,7 +736,9 @@ export class SettingsComponent implements OnInit {
     if (union.length === m.allowedLocales.length && union.every((l) => m.allowedLocales.includes(l))) return null;
     return `effective locales: ${union.join(', ')}`;
   }
+  validNewGroupName():boolean {const name=this.groupName().trim();return name.length>0 && this.generalTextLength(name)<=100;}
   async addGroup() {
+    if(this.busy() || !this.validNewGroupName())return;
     this.busy.set(true); this.error.set('');
     try {
       const locales = this.groupLocales().split(',').map((l) => l.trim()).filter(Boolean);

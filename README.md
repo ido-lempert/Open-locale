@@ -1638,3 +1638,8 @@ input stays local. [Review0545](docs/reviews/0545-settings-status-validation.md)
 Settings General checks raw name120/description2000 API counts before saving.
 Invalid full text stays local; empty update text and whitespace follow the existing
 API. [Review0546](docs/reviews/0546-settings-general-validation.md).
+
+Settings new-group names now get local nonempty/max100 API-count checks after
+existing outer trim. Invalid full name, role and locale choices stay local with
+linked correction guidance. Valid creation and team-wide permission semantics
+are unchanged. See [review0547](docs/reviews/0547-settings-group-validation.md).

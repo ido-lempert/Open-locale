@@ -1964,3 +1964,9 @@ chronology; no external acceptance promotion.
   retained. Empty update text permitted; no new trimming or truncation.
 - Existing valid update/refresh/failure unchanged, not concurrency validation.
   [Review0546](reviews/0546-settings-general-validation.md).
+
+## Settings new-group name limits
+- Existing trimmed nonempty/max100 API count before busy/error/write. Invalid raw
+  name/role/locales retained, correction without reload; no native truncation.
+- Valid create/trim/parsed grants/refresh unchanged, not permission validation.
+  [Review0547](reviews/0547-settings-group-validation.md).

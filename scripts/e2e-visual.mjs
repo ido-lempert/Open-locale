@@ -1477,7 +1477,13 @@ try {
   // Failed mutation surfaces a visible error and changes nothing.
   await page.type('input[aria-label="Group name"]', 'dup');
   await page.evaluate(() => { document.querySelector('input[aria-label="Group name"]').closest('form').requestSubmit(); });
-  await page.waitForFunction(() => (document.body.textContent || '').includes('dup'), { timeout: 10000 });
+  // Body text alone does not prove the create/refresh cycle finished. Wait
+  // for the persisted group row and completed form before retrying.
+  await page.waitForFunction(() => {
+    const c = ng.getComponent(document.querySelector('ol-settings'));
+    return !c.busy() && document.querySelector('input[aria-label="Group name"]').value === '' &&
+      [...document.querySelectorAll('.locale-list li strong')].some(el => el.textContent === 'dup');
+  }, { timeout: 10000 });
   await page.type('input[aria-label="Group name"]', 'dup');
   await page.evaluate(() => { document.querySelector('input[aria-label="Group name"]').closest('form').requestSubmit(); });
   const dupErr = await page.waitForFunction(() => {
