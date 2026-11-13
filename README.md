@@ -1634,3 +1634,7 @@ refreshes Settings. [Review0544](docs/reviews/0544-settings-locale-code-validati
 Settings custom-status names are checked against the existing service syntax and
 reserved base names after the existing trim/uppercase transform. Invalid full
 input stays local. [Review0545](docs/reviews/0545-settings-status-validation.md).
+
+Settings General checks raw name120/description2000 API counts before saving.
+Invalid full text stays local; empty update text and whitespace follow the existing
+API. [Review0546](docs/reviews/0546-settings-general-validation.md).

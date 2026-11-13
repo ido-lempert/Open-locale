@@ -216,7 +216,8 @@
     "test:project-create-validation-browser": "node scripts/project-create-validation-browser-test.mjs",
     "test:snapshot-label-validation-browser": "node scripts/snapshot-label-validation-browser-test.mjs",
     "test:settings-locale-code-validation-browser": "node scripts/settings-locale-code-validation-browser-test.mjs",
-    "test:settings-status-validation-browser": "node scripts/settings-status-validation-browser-test.mjs"
+    "test:settings-status-validation-browser": "node scripts/settings-status-validation-browser-test.mjs",
+    "test:settings-general-validation-browser": "node scripts/settings-general-validation-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

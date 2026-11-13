@@ -18,10 +18,12 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           <h2>General</h2>
           @if (isTeamAdmin()) {
           <form (ngSubmit)="rename()">
-            <label>Name <input [ngModel]="name()" (ngModelChange)="name.set($event)" name="name" required /></label>
-            <label>Description <input [ngModel]="description()" (ngModelChange)="description.set($event)" name="description" /></label>
-            <button class="primary" type="submit" [disabled]="busy()">Save</button>
+            <label>Name <input [ngModel]="name()" (ngModelChange)="name.set($event)" name="name" aria-describedby="settingsGeneralRules" [attr.aria-invalid]="!validGeneralName()" /></label>
+            <label>Description <input [ngModel]="description()" (ngModelChange)="description.set($event)" name="description" aria-describedby="settingsGeneralRules" [attr.aria-invalid]="!validGeneralDescription()" /></label>
+            <button class="primary" type="submit" name="saveSettingsGeneral" [disabled]="busy() || !validGeneralName() || !validGeneralDescription()">Save</button>
           </form>
+          <p class="muted" id="settingsGeneralRules" name="settingsGeneralRules">Project name: up to 120 characters; description: up to 2,000 characters using the API count. Empty text is allowed by the update API. Outer whitespace is kept; text is not truncated or automatically saved. These checks do not verify permission or newer server changes. A successful save refreshes Settings.</p>
+          @if(!validGeneralName() || !validGeneralDescription()){<p role="status" name="settingsGeneralInvalid">Correct the name or description before saving. Your full text stays here and is not sent.</p>}
           }
           <p class="muted">Slug: <code>{{ p.slug }}</code> · Base locale: <code>{{ p.baseLocale }}</code></p>
         </section>
@@ -512,7 +514,14 @@ export class SettingsComponent implements OnInit {
       this.confirmingLocale.set(code);
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
   }
+  private generalTextLength(value:string):number {
+    // Match installed class-validator/validator isLength, not UTF-16 or grapheme length.
+    return value.length-(value.match(/[^\uFE0F\uFE0E][\uFE0F\uFE0E]/g)||[]).length-(value.match(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g)||[]).length;
+  }
+  validGeneralName():boolean {return this.generalTextLength(this.name())<=120;}
+  validGeneralDescription():boolean {return this.generalTextLength(this.description())<=2000;}
   async rename() {
+    if(this.busy() || !this.validGeneralName() || !this.validGeneralDescription())return;
     this.busy.set(true); this.error.set('');
     try {
       await this.api.updateProject(this.projectId, { name: this.name(), description: this.description() });

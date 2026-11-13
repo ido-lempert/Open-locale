@@ -1958,3 +1958,9 @@ chronology; no external acceptance promotion.
   no native24 truncation, invalid raw input kept and direct/busy guards.
 - Existing loaded wholearray update/refresh behavior unchanged; not newer server
   choices or concurrency validation. [Review0545](reviews/0545-settings-status-validation.md).
+
+## Settings General raw-text limits
+- Raw name120/description2000 API count before busy/error/write, full invalidtext
+  retained. Empty update text permitted; no new trimming or truncation.
+- Existing valid update/refresh/failure unchanged, not concurrency validation.
+  [Review0546](reviews/0546-settings-general-validation.md).
