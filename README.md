@@ -1684,3 +1684,8 @@ New-locale Add keeps a newer raw code edited during an earlier POST, with an
 added-submission/unadded-draft receipt. Invalid newer text stays local and needs
 correction before another explicit Add. No auto submit or registry claim.
 [Review0555](docs/reviews/0555-settings-locale-pending-draft.md).
+
+New custom-status Add keeps newer raw text edited while an earlier PATCH runs,
+with a saved-submission/unsaved-draft receipt. Existing syntax and loaded-array
+update semantics stay unchanged; no auto submit or server-merge claim.
+[Review0556](docs/reviews/0556-settings-status-pending-draft.md).

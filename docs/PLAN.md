@@ -2020,3 +2020,9 @@ chronology; no external acceptance promotion.
   preserve newer raw code with an added-submission/unadded-draft receipt.
 - Existing syntax/busy/server/reload checks remain; no auto second Add or registry
   claim. [Review0555](reviews/0555-settings-locale-pending-draft.md).
+
+## Pending custom-status draft retention
+- Fixed raw submission; clear only if still matching after PATCH, otherwise keep
+  newer draft with saved-submission/unsaved-draft receipt. No auto second update.
+- Existing syntax/trim/uppercase/loadedwholearray/reload checks remain, not a
+  server-merge fix. [Review0556](reviews/0556-settings-status-pending-draft.md).

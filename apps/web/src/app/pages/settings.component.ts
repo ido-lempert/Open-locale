@@ -141,6 +141,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             <button type="submit" name="addSettingsStatus" [disabled]="busy() || !validNewStatus()">Add</button>
           </form>
           <p class="muted" id="settingsStatusRules" name="settingsStatusRules">New custom status: 2-24 characters, starting with a letter, then letters, digits or underscores. Outer whitespace is trimmed and text is uppercased when adding, as before. UNVERIFIED, TRANSLATED and REVIEWED are base statuses, not custom names. Full input is kept without truncation. This checks the new name only, not newer server status choices or permission. A successful addition refreshes Settings.</p>
+          @if(statusDraftNotice()){<p role="status" name="settingsStatusDraftNotice">{{ statusDraftNotice() }}</p>}
           @if(newStatus()!=='' && !validNewStatus()){<p role="status" name="settingsStatusInvalid">Correct the custom status before adding. Your full text stays here and is not sent.</p>}
           }
           <p class="muted">Custom statuses appear in the editor status dropdowns and the review queue. Removing one does not change translations already carrying it.</p>
@@ -709,17 +710,20 @@ export class SettingsComponent implements OnInit {
     } catch (e) { this.error.set(e instanceof Error ? e.message : String(e)); } finally { this.busy.set(false); }
   }
 
+  statusDraftNotice = signal('');
   validNewStatus():boolean {
     const value=this.newStatus().trim().toUpperCase();
     return /^[A-Z][A-Z0-9_]{1,23}$/.test(value) && !['UNVERIFIED','TRANSLATED','REVIEWED'].includes(value);
   }
   async addStatus() {
     if(this.busy() || !this.validNewStatus())return;
-    this.busy.set(true); this.error.set('');
+    const submitted=this.newStatus();
+    this.busy.set(true); this.error.set(''); this.statusDraftNotice.set('');
     try {
       const current = this.project()?.customStatuses ?? [];
-      await this.api.updateProject(this.projectId, { customStatuses: [...current, this.newStatus().trim().toUpperCase()] });
-      this.newStatus.set('');
+      await this.api.updateProject(this.projectId, { customStatuses: [...current, submitted.trim().toUpperCase()] });
+      if(this.newStatus()===submitted)this.newStatus.set('');
+      else this.statusDraftNotice.set('The submitted custom status was saved. Your newer custom status draft is kept here and has not been saved. Review it before adding another status.');
       await this.reload();
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
