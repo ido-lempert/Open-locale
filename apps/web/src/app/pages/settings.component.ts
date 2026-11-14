@@ -359,6 +359,8 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                     @if(!validGroupLocales(g)){<p role="status">Use only locale codes from this project, separated by commas without empty entries. Leave the field completely blank only to grant all locales.</p>}
                     @if(groupLocalesNotice()[g.id]){<p role="status" [attr.name]="'group-locales-notice-'+g.id">{{ groupLocalesNotice()[g.id] }}</p>}
                   }
+                  <button type="button" [attr.name]="'group-discard-'+g.id" (click)="discardGroupDrafts(g.id)" [disabled]="!canDiscardGroupDrafts(g.id)">Discard unsaved edits</button>
+                  <span class="muted">Discard only clears this group's local name, role, locale and add-member drafts. It uses the last loaded or accepted values, does not refresh the server and does not undo saved changes.</span>
                   <button class="danger" (click)="removeGroup(g)">Delete</button>
                 }
               </li>
@@ -935,6 +937,17 @@ export class SettingsComponent implements OnInit {
     }
     catch(e){this.error.set(e instanceof Error?e.message:'Failed');}
     finally{this.groupNamePending.set({ ...this.groupNamePending(), [g.id]: false });}
+  }
+
+  canDiscardGroupDrafts(groupId: string): boolean {
+    if(this.groupNamePending()[groupId] || this.groupRolePending()[groupId] || this.groupLocalesPending()[groupId] || this.groupMemberPending()[groupId])return false;
+    return this.groupNamePick()[groupId]!==undefined || this.groupRolePick()[groupId]!==undefined || this.groupLocalesPick()[groupId]!==undefined || !!this.groupPick()[groupId];
+  }
+  discardGroupDrafts(groupId: string) {
+    if(!this.canDiscardGroupDrafts(groupId))return;
+    for(const state of [this.groupNamePick,this.groupRolePick,this.groupLocalesPick,this.groupPick]) {
+      const next={...state()};delete next[groupId];state.set(next);
+    }
   }
 
   async removeGroup(g: GroupInfo) {

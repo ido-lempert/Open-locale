@@ -2094,3 +2094,9 @@ chronology; no external acceptance promotion.
 - Local raw draft, explicit Save name, trimmed nonempty100-character check, newer
   text retention, accepted receipt and role/scope pending guard; duplicate409
   keeps unsaved text. [Review0567](reviews/0567-settings-group-name-explicit.md).
+
+## Discard one group's unsaved edits
+- Explicit local reset for the target group's name, role, locale and add-member
+  drafts, without refresh or undoing saved changes. Other groups are preserved.
+- Pending writes block reset; saved receipts/errors and accepted fallback stay.
+  [Review0568](reviews/0568-settings-group-discard.md).

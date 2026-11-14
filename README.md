@@ -1741,3 +1741,8 @@ Existing groups can be renamed in Settings with explicit Save name. Names are
 trimmed and limited to100 characters using the API count. Renaming preserves
 members, grants and task assignments; typing does not save, and duplicate names
 keep the unsaved text for correction.
+
+Settings offers Discard unsaved edits per group. It clears that group's local
+name, role, locale and add-member drafts using last loaded or accepted values,
+without refreshing or undoing saved changes. Pending writes block discard;
+other groups' drafts and saved receipts stay intact.
