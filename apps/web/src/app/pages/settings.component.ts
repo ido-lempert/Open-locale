@@ -84,8 +84,9 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
               <option value="read">read-only</option>
               <option value="read,write">read + write</option>
             </select>
-            <button type="submit" [disabled]="busy()">Create</button>
+            <button name="createSettingsToken" type="submit" [disabled]="busy()">Create</button>
           </form>
+          @if(tokenDraftNotice()){<p role="status" name="settingsTokenDraftNotice">{{ tokenDraftNotice() }}</p>}
         </section>
         <section class="panel">
           <h2>Webhooks</h2>
@@ -480,14 +481,20 @@ export class SettingsComponent implements OnInit {
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Publish failed'); }
     finally { this.busy.set(false); }
   }
+  tokenDraftNotice = signal('');
   async createToken() {
-    this.busy.set(true); this.error.set('');
-    const submitted = this.tokenName();
+    if(this.busy())return;
+    const submitted={name:this.tokenName(),scope:this.tokenScope()};
+    this.busy.set(true); this.error.set(''); this.tokenDraftNotice.set('');
     try {
-      const scopes = this.tokenScope().split(',');
-      const res = await this.api.createToken(submitted, scopes);
+      const scopes = submitted.scope.split(',');
+      const res = await this.api.createToken(submitted.name, scopes);
       this.createdToken.set({ id: res.id, name: res.name, token: res.token });
-      if (this.tokenName() === submitted) this.tokenName.set('');
+      if(this.tokenName()===submitted.name && this.tokenScope()===submitted.scope) {
+        this.tokenName.set('');
+      } else {
+        this.tokenDraftNotice.set('The submitted token was created. Your newer name and access draft is kept here and has not been created. Review the name and access before creating again. The token revealed above belongs to the submitted token, not this newer draft.');
+      }
       await this.reload();
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }

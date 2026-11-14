@@ -1709,3 +1709,8 @@ Webhook Create preserves a newer whole URL/event draft when an earlier POST
 succeeds. A created-submission/uncreated-draft receipt prompts endpoint/event
 review and identifies the signing secret as the submitted webhook's secret.
 No automatic second Create or delivery. [Review0560](docs/reviews/0560-settings-webhook-pending-draft.md).
+
+API-token Create keeps the whole newer name/access draft when an earlier POST
+succeeds, including access-only edits. A receipt separates created submission from
+uncreated draft and identifies the actual token reveal. No automatic second Create
+or default-access change. [Review0561](docs/reviews/0561-settings-token-pending-draft.md).

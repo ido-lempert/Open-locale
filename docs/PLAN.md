@@ -2050,3 +2050,9 @@ chronology; no external acceptance promotion.
   otherwise keep whole newer draft with created/uncreated receipt.
 - Existing validation/reveal/reload remain, no auto Create or delivery trigger.
   [Review0560](reviews/0560-settings-webhook-pending-draft.md).
+
+## Pending token Create draft retention
+- Fixed raw name/access snapshot; clear name only if both still match after POST,
+  otherwise keep whole newer draft with created/uncreated receipt and reveal cue.
+- Existing raw name/scopes/default/reload remain, no auto second Create.
+  [Review0561](reviews/0561-settings-token-pending-draft.md).
