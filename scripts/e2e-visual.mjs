@@ -1441,8 +1441,10 @@ try {
   await page.goto(`${WEB}/projects/${projId}/settings`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('select[aria-label="Add member to group"]', { timeout: 10000 });
 
-  // Add member via the UI dropdown.
+  // Selection is a draft; Add member explicitly applies the grant.
   await page.select('select[aria-label="Add member to group"]', user2.user.id);
+  await page.click('button[name^="gadd-submit-"]');
+  await page.waitForFunction(() => Object.values(ng.getComponent(document.querySelector('ol-settings')).groupMemberPending()).every(v => !v), { timeout: 10000 });
   // Wait for the actual chip (its remove button), not the dropdown option,
   // which already contains the member's name before the add completes.
   const chipShown = await page.waitForFunction(() => !!document.querySelector('button[aria-label="Remove from group"]'), { timeout: 10000 }).then(() => true).catch(() => false);

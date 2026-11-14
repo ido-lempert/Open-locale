@@ -2056,3 +2056,9 @@ chronology; no external acceptance promotion.
   otherwise keep whole newer draft with created/uncreated receipt and reveal cue.
 - Existing raw name/scopes/default/reload remain, no auto second Create.
   [Review0561](reviews/0561-settings-token-pending-draft.md).
+
+## Explicit group member Add
+- Selecting a member stays local; explicit Add applies the group's existing grant.
+- Per-group pending guard, fixed submitted user and newer selection retention,
+  actual-success receipt even if later refresh fails. No server grant change.
+  [Review0562](reviews/0562-settings-group-member-explicit.md).

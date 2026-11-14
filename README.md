@@ -1714,3 +1714,7 @@ API-token Create keeps the whole newer name/access draft when an earlier POST
 succeeds, including access-only edits. A receipt separates created submission from
 uncreated draft and identifies the actual token reveal. No automatic second Create
 or default-access change. [Review0561](docs/reviews/0561-settings-token-pending-draft.md).
+
+Group membership now uses a draft selection and explicit Add member instead of
+applying a grant on selection. Pending Add blocks duplicates for that group and
+keeps a newer selection unsubmitted. [Review0562](docs/reviews/0562-settings-group-member-explicit.md).

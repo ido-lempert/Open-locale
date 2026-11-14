@@ -221,6 +221,7 @@
     "test:settings-mt-name-validation-browser": "node scripts/settings-mt-name-validation-browser-test.mjs",
     "test:settings-rule-pending-draft-browser": "node scripts/settings-rule-pending-draft-browser-test.mjs",
     "test:settings-mt-pending-draft-browser": "node scripts/settings-mt-pending-draft-browser-test.mjs",
+    "test:settings-group-member-explicit-browser": "node scripts/settings-group-member-explicit-browser-test.mjs",
     "test:settings-token-pending-draft-browser": "node scripts/settings-token-pending-draft-browser-test.mjs",
     "test:settings-webhook-pending-draft-browser": "node scripts/settings-webhook-pending-draft-browser-test.mjs",
     "test:settings-general-pending-draft-browser": "node scripts/settings-general-pending-draft-browser-test.mjs",

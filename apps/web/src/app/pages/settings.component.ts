@@ -343,12 +343,15 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                   <span>{{ gm.user.displayName }} @if (canManageGroup(g)) { <button class="danger" aria-label="Remove from group" (click)="removeGroupMember(g, gm.userId)">x</button> }</span>
                 }
                 @if (canManageGroup(g)) {
-                  <select aria-label="Add member to group" name="gadd-{{g.id}}" [ngModel]="groupPick()[g.id] ?? ''" (ngModelChange)="addGroupMember(g, $event)">
+                  <select aria-label="Add member to group" [attr.name]="'gadd-'+g.id" [ngModel]="groupPick()[g.id] ?? ''" (ngModelChange)="pickGroupMember(g.id, $event)">
                     <option value="">add member…</option>
                     @for (m of members(); track m.id) {
                       @if (!g.members.some((gm) => gm.userId === m.id)) { <option [value]="m.id">{{ m.displayName }}</option> }
                     }
                   </select>
+                  <button type="button" name="gadd-submit-{{g.id}}" (click)="addGroupMember(g)" [disabled]="!groupPick()[g.id] || groupMemberPending()[g.id]">{{ groupMemberPending()[g.id] ? 'Adding member...' : 'Add member' }}</button>
+                  <span class="muted">Selection alone does not add access. Choose Add member to apply this group's grant.</span>
+                  @if(groupMemberNotice()[g.id]){<p role="status" [attr.name]="'gadd-notice-'+g.id">{{ groupMemberNotice()[g.id] }}</p>}
                 }
               </li>
             }
@@ -863,11 +866,25 @@ export class SettingsComponent implements OnInit {
     try { await this.api.deleteGroup(this.projectId, g.id); await this.reload(); }
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
   }
-  async addGroupMember(g: GroupInfo, userId: string) {
-    if (!userId) return;
+  groupMemberPending = signal<Record<string, boolean>>({});
+  groupMemberNotice = signal<Record<string, string>>({});
+  pickGroupMember(groupId: string, userId: string) {
+    this.groupPick.set({ ...this.groupPick(), [groupId]: userId });
+  }
+  async addGroupMember(g: GroupInfo) {
+    const userId=this.groupPick()[g.id];
+    if (!userId || this.groupMemberPending()[g.id]) return;
+    this.groupMemberPending.set({ ...this.groupMemberPending(), [g.id]: true });
+    this.groupMemberNotice.set({ ...this.groupMemberNotice(), [g.id]: '' });
     this.error.set('');
-    try { await this.api.addGroupMember(this.projectId, g.id, userId); this.groupPick.set({ ...this.groupPick(), [g.id]: '' }); await this.reload(); }
+    try {
+      await this.api.addGroupMember(this.projectId, g.id, userId);
+      if(this.groupPick()[g.id]===userId)this.groupPick.set({ ...this.groupPick(), [g.id]: '' });
+      this.groupMemberNotice.set({ ...this.groupMemberNotice(), [g.id]: 'The submitted member was added. Any selection shown here has not been added by this request. Choose Add member to apply it.' });
+      await this.reload();
+    }
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+    finally { this.groupMemberPending.set({ ...this.groupMemberPending(), [g.id]: false }); }
   }
   async removeGroupMember(g: GroupInfo, userId: string) {
     this.error.set('');
