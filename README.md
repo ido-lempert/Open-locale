@@ -1718,3 +1718,7 @@ or default-access change. [Review0561](docs/reviews/0561-settings-token-pending-
 Group membership now uses a draft selection and explicit Add member instead of
 applying a grant on selection. Pending Add blocks duplicates for that group and
 keeps a newer selection unsubmitted. [Review0562](docs/reviews/0562-settings-group-member-explicit.md).
+
+Group role selection is a draft, with explicit Save role before applying its
+team-wide grant. Pending Save blocks duplicates and keeps a newer role choice
+unsubmitted. [Review0563](docs/reviews/0563-settings-group-role-explicit.md).

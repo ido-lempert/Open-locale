@@ -2062,3 +2062,9 @@ chronology; no external acceptance promotion.
 - Per-group pending guard, fixed submitted user and newer selection retention,
   actual-success receipt even if later refresh fails. No server grant change.
   [Review0562](reviews/0562-settings-group-member-explicit.md).
+
+## Explicit group role Save
+- Role selection stays local; explicit Save role applies existing team-wide grant.
+- Per-group pending guard and saved/unsaved receipt, retain newer role draft.
+  Accepted PATCH updates local role even if refresh fails, enabling explicit revert.
+  [Review0563](reviews/0563-settings-group-role-explicit.md).

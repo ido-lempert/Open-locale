@@ -330,10 +330,13 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                 <span class="role-badge">{{ g.role.toLowerCase() }}</span>
                 <span class="muted">{{ g.role === 'MEMBER' && g.allowedLocales.length ? 'locales: ' + g.allowedLocales.join(', ') : 'all locales' }}</span>
                 @if (canManageGroup(g)) {
-                  <select aria-label="Group role" [ngModel]="g.role" (ngModelChange)="setGroupRole(g, $event)" name="grole-{{g.id}}">
+                  <select aria-label="Group role" [ngModel]="groupRolePick()[g.id] ?? g.role" (ngModelChange)="pickGroupRole(g.id, $event)" [attr.name]="'grole-'+g.id">
                     <option value="MEMBER">member</option>
                     <option value="ADMIN">admin</option>
                   </select>
+                  <button type="button" name="grole-save-{{g.id}}" (click)="setGroupRole(g)" [disabled]="!canSaveGroupRole(g)">{{ groupRolePending()[g.id] ? 'Saving role...' : 'Save role' }}</button>
+                  <span class="muted">Selection alone does not change access. Save role applies this group's team-wide grant.</span>
+                  @if(groupRoleNotice()[g.id]){<p role="status" [attr.name]="'grole-notice-'+g.id">{{ groupRoleNotice()[g.id] }}</p>}
                   <button class="danger" (click)="removeGroup(g)">Delete</button>
                 }
               </li>
@@ -855,10 +858,31 @@ export class SettingsComponent implements OnInit {
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }
-  async setGroupRole(g: GroupInfo, role: string) {
+  groupRolePick = signal<Record<string, string>>({});
+  groupRolePending = signal<Record<string, boolean>>({});
+  groupRoleNotice = signal<Record<string, string>>({});
+  pickGroupRole(groupId: string, role: string) {
+    this.groupRolePick.set({ ...this.groupRolePick(), [groupId]: role });
+  }
+  canSaveGroupRole(g: GroupInfo): boolean {
+    const role=this.groupRolePick()[g.id];
+    return !this.groupRolePending()[g.id] && (role==='MEMBER' || role==='ADMIN') && role!==g.role;
+  }
+  async setGroupRole(g: GroupInfo) {
+    if(!this.canSaveGroupRole(g))return;
+    const role=this.groupRolePick()[g.id];
+    this.groupRolePending.set({ ...this.groupRolePending(), [g.id]: true });
+    this.groupRoleNotice.set({ ...this.groupRoleNotice(), [g.id]: '' });
     this.error.set('');
-    try { await this.api.updateGroup(this.projectId, g.id, { role }); await this.reload(); }
+    try {
+      await this.api.updateGroup(this.projectId, g.id, { role });
+      this.groups.set(this.groups().map(row=>row.id===g.id?{...row,role}:row));
+      if(this.groupRolePick()[g.id]===role){const next={...this.groupRolePick()};delete next[g.id];this.groupRolePick.set(next);}
+      this.groupRoleNotice.set({ ...this.groupRoleNotice(), [g.id]: 'The submitted group role was saved. Any newer role selection has not been saved by this request. Review the current group role before saving again.' });
+      await this.reload();
+    }
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+    finally { this.groupRolePending.set({ ...this.groupRolePending(), [g.id]: false }); }
   }
   async removeGroup(g: GroupInfo) {
     if (!confirm(`Delete group ${g.name}? Its members keep their direct team access but lose this grant immediately.`)) return;
