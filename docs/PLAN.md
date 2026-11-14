@@ -2111,3 +2111,8 @@ chronology; no external acceptance promotion.
   independent forms. Accepted PATCH updates fallback before a failed refresh.
 - Saved receipt distinguishes discarded drafts from retained newer text.
   [Review0570](reviews/0570-settings-general-discard.md).
+
+## Discard local add-locale draft
+- Explicit local code clear without GET/write/removal, with busy direct guard.
+- Other forms/errors/saved locales preserved, saved receipt updated accurately.
+  [Review0571](reviews/0571-settings-locale-discard.md).

@@ -52,6 +52,8 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             <input aria-label="Add locale" placeholder="Add locale (e.g. fr)" [ngModel]="newLocale()" (ngModelChange)="newLocale.set($event)" name="newLocale" required aria-describedby="settingsLocaleRules" [attr.aria-invalid]="newLocale()!=='' && !validNewLocaleCode()" />
             <button type="submit" name="addSettingsLocale" [disabled]="busy() || !validNewLocaleCode()">Add</button>
           </form>
+          <button type="button" name="discardSettingsLocale" (click)="discardLocaleDraft()" [disabled]="!canDiscardLocaleDraft()">Discard locale draft</button>
+          <p class="muted">Discard only clears the local add-locale field. It does not refresh Settings or remove any saved locale; other forms stay as they are.</p>
           <p class="muted" id="settingsLocaleRules" name="settingsLocaleRules">Locale code: 2-3 lowercase letters, optionally followed by dash-separated groups of 2-8 letters or digits (for example en, pt-BR, zh-Hant-HK). Outer whitespace is trimmed when adding; text is not truncated or otherwise rewritten. This checks API syntax, not a language registry, availability or permission. A successful addition refreshes Settings.</p>
           @if(localeDraftNotice()){<p role="status" name="settingsLocaleDraftNotice">{{ localeDraftNotice() }}</p>}
           @if(newLocale()!=='' && !validNewLocaleCode()){<p role="status" name="settingsLocaleInvalid">Correct the locale code before adding. Your full code stays here and is not sent.</p>}
@@ -624,6 +626,12 @@ export class SettingsComponent implements OnInit {
       await this.reload(submitted);
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
+  }
+  canDiscardLocaleDraft():boolean {return !this.busy() && this.newLocale()!=='';}
+  discardLocaleDraft() {
+    if(!this.canDiscardLocaleDraft())return;
+    this.newLocale.set('');
+    if(this.localeDraftNotice())this.localeDraftNotice.set('The submitted locale was added. The local add-locale draft was discarded without refreshing Settings or removing any saved locale.');
   }
   localeDraftNotice = signal('');
   validNewLocaleCode():boolean {return /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(this.newLocale().trim());}

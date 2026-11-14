@@ -1754,3 +1754,7 @@ undo. Pending member writes block reset; other members and saved receipts stay.
 General project details have a local Discard unsaved edits action for name and
 description. It uses last loaded or accepted values without refreshing or undoing
 saved changes. Busy work blocks reset, while other forms and errors stay intact.
+
+The add-locale field has Discard locale draft. It clears only the local code,
+without refreshing Settings or removing saved locales. Busy work blocks reset;
+other forms and errors remain, with accurate saved-add/discard wording.
