@@ -1296,6 +1296,9 @@ try {
     (await page.$eval('.token-reveal code', (el) => el.textContent)).length >= 32);
   await page.waitForFunction(() => [...document.querySelectorAll('.locale-list li')].some((el) => el.textContent.includes('hooks.example.com') && el.textContent.includes('translation.updated + project.restored')), { timeout: 10000 });
   check('webhook listed with URL and both events', true);
+  // A listed row can precede completion of the create-triggered Settings reload.
+  // Wait for completion before a dependent second submission.
+  await page.waitForFunction(()=>!ng.getComponent(document.querySelector('ol-settings')).busy(),{timeout:10000});
 
   // Failed create: a denied address is refused with visible feedback, the
   // typed URL is retained for correction, and no row appears. This verifies

@@ -121,8 +121,9 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             <input type="url" aria-label="Webhook URL" placeholder="https://example.com/hook" [ngModel]="hookUrl()" (ngModelChange)="hookUrl.set($event)" name="hookUrl" required />
             <label><input type="checkbox" [ngModel]="hookTranslationUpdated()" (ngModelChange)="hookTranslationUpdated.set($event)" name="hookEvTx" /> translation.updated</label>
             <label><input type="checkbox" [ngModel]="hookProjectRestored()" (ngModelChange)="hookProjectRestored.set($event)" name="hookEvRestore" /> project.restored</label>
-            <button type="submit" [disabled]="busy()">Create</button>
+            <button name="createSettingsWebhook" type="submit" [disabled]="busy()">Create</button>
           </form>
+          @if(hookDraftNotice()){<p role="status" name="settingsWebhookDraftNotice">{{ hookDraftNotice() }}</p>}
           }
         </section>
         <section class="panel">
@@ -494,17 +495,25 @@ export class SettingsComponent implements OnInit {
   async copyToken(value: string) {
     try { await navigator.clipboard.writeText(value); } catch { /* clipboard unavailable */ }
   }
+  hookDraftNotice = signal('');
   async createWebhook() {
+    if(this.busy())return;
+    const submitted={url:this.hookUrl(),translationUpdated:this.hookTranslationUpdated(),projectRestored:this.hookProjectRestored()};
     this.busy.set(true); this.error.set('');
     const events = [
-      ...(this.hookTranslationUpdated() ? ['translation.updated'] : []),
-      ...(this.hookProjectRestored() ? ['project.restored'] : []),
+      ...(submitted.translationUpdated ? ['translation.updated'] : []),
+      ...(submitted.projectRestored ? ['project.restored'] : []),
     ];
     if (!events.length) { this.error.set('Pick at least one event'); this.busy.set(false); return; }
+    this.hookDraftNotice.set('');
     try {
-      const res = await this.api.createWebhook(this.projectId, { url: this.hookUrl().trim(), events });
+      const res = await this.api.createWebhook(this.projectId, { url: submitted.url.trim(), events });
       this.createdWebhook.set({ id: res.id, secret: res.secret });
-      this.hookUrl.set('');
+      if(this.hookUrl()===submitted.url && this.hookTranslationUpdated()===submitted.translationUpdated && this.hookProjectRestored()===submitted.projectRestored) {
+        this.hookUrl.set('');
+      } else {
+        this.hookDraftNotice.set('The submitted webhook was created. Your newer URL and event draft is kept here and has not been created. Review the URL and events before creating again. The signing secret above belongs to the submitted webhook, not this newer draft.');
+      }
       await this.reload();
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }

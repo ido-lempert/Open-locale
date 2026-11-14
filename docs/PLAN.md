@@ -2044,3 +2044,9 @@ chronology; no external acceptance promotion.
   Save's project and later list refresh reads, with saved/unsaved receipt.
 - Existing count guards/server refresh remain, no auto second PATCH. Other
   reload behavior unchanged. [Review0559](reviews/0559-settings-general-pending-draft.md).
+
+## Pending webhook Create draft retention
+- Fixed raw URL/event snapshot; clear URL only if all still match after POST,
+  otherwise keep whole newer draft with created/uncreated receipt.
+- Existing validation/reveal/reload remain, no auto Create or delivery trigger.
+  [Review0560](reviews/0560-settings-webhook-pending-draft.md).

@@ -1704,3 +1704,8 @@ General Save keeps the whole newer name/description draft through its pending
 PATCH and refresh, with a saved-submission/unsaved-draft receipt and explicit
 second Save. Other Settings reloads keep their existing form replacement behavior;
 this is not a server-merge fix. [Review0559](docs/reviews/0559-settings-general-pending-draft.md).
+
+Webhook Create preserves a newer whole URL/event draft when an earlier POST
+succeeds. A created-submission/uncreated-draft receipt prompts endpoint/event
+review and identifies the signing secret as the submitted webhook's secret.
+No automatic second Create or delivery. [Review0560](docs/reviews/0560-settings-webhook-pending-draft.md).
