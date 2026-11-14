@@ -1457,11 +1457,15 @@ try {
 
   // Promote group to ADMIN via UI: inherited role becomes visible.
   await page.select('select[aria-label="Group role"]', 'ADMIN');
+  // The taller scope editor can leave this button under the sticky header.
+  await page.$eval('button[name^="grole-save-"]',e=>e.scrollIntoView({block:'center'}));
   await page.click('button[name^="grole-save-"]');
   await page.waitForFunction(() => Object.values(ng.getComponent(document.querySelector('ol-settings')).groupRolePending()).every(v => !v), { timeout: 10000 });
   const promoted = await page.waitForFunction(() => (document.body.textContent || '').includes('effective: admin via group'), { timeout: 10000 }).then(() => true).catch(() => false);
   check('promotion via UI shows inherited admin on member', promoted);
   await page.select('select[aria-label="Group role"]', 'MEMBER');
+  // The taller scope editor can leave this button under the sticky header.
+  await page.$eval('button[name^="grole-save-"]',e=>e.scrollIntoView({block:'center'}));
   await page.click('button[name^="grole-save-"]');
   await page.waitForFunction(() => Object.values(ng.getComponent(document.querySelector('ol-settings')).groupRolePending()).every(v => !v), { timeout: 10000 });
   const demoted = await page.waitForFunction(() => (document.body.textContent || '').includes('effective locales: ar, he'), { timeout: 10000 }).then(() => true).catch(() => false);

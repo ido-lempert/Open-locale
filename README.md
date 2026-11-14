@@ -1731,3 +1731,8 @@ Direct member write-locale scope can now be edited in Settings with explicit
 Save locales. Blank grants all locales across the team; group grants can widen
 access. Unknown codes and empty comma entries are rejected locally, newer unsaved
 text stays after Save, and the server still checks permission.
+
+MEMBER-group write-locale scope can be revised with explicit Save locales in
+Settings, using codes from the current project. Blank grants all locales for
+every group member across team projects; other direct/group grants still combine.
+Membership is preserved. Typing alone does not change access.

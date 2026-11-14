@@ -2081,3 +2081,10 @@ chronology; no external acceptance promotion.
   inherited union cue, snapshot/newer-text retention and cross-role pending guard.
 - Empty comma entries cannot silently broaden to all locales. Actual PG writes
   verify saved and inherited access. [Review0565](reviews/0565-settings-member-locales-explicit.md).
+
+## Explicit MEMBER-group locale scope Save
+- Revise group translation-write scope with existing locale-only PATCH, preserving
+  membership and other grants. Blank grants all locales team-wide for every member.
+- Local known-project-code draft, explicit Save, newer text retention, accurate
+  accepted receipt and cross-role pending guard. Backend API unchanged.
+  [Review0566](reviews/0566-settings-group-locales-explicit.md).

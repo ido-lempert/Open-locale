@@ -347,6 +347,13 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                   <button type="button" name="grole-save-{{g.id}}" (click)="setGroupRole(g)" [disabled]="!canSaveGroupRole(g)">{{ groupRolePending()[g.id] ? 'Saving role...' : 'Save role' }}</button>
                   <span class="muted">Selection alone does not change access. Save role applies this group's team-wide grant.</span>
                   @if(groupRoleNotice()[g.id]){<p role="status" [attr.name]="'grole-notice-'+g.id">{{ groupRoleNotice()[g.id] }}</p>}
+                  @if(g.role === 'MEMBER') {
+                    <label>Group write locales <input [attr.name]="'group-locales-'+g.id" [ngModel]="groupLocalesPick()[g.id] ?? g.allowedLocales.join(', ')" (ngModelChange)="pickGroupLocales(g.id, $event)" [attr.aria-describedby]="'group-locales-help-'+g.id" [attr.aria-invalid]="!validGroupLocales(g)" /></label>
+                    <button type="button" [attr.name]="'group-locales-save-'+g.id" (click)="saveGroupLocales(g)" [disabled]="!canSaveGroupLocales(g)">{{ groupLocalesPending()[g.id] ? 'Saving locales...' : 'Save locales' }}</button>
+                    <span class="muted" [attr.id]="'group-locales-help-'+g.id">Comma-separated locale codes from this project. Blank grants all locales. This changes this grant for every group member across every team project. Other grants still combine; this does not hide projects. Typing does not save.</span>
+                    @if(!validGroupLocales(g)){<p role="status">Use only locale codes from this project, separated by commas without empty entries. Leave the field completely blank only to grant all locales.</p>}
+                    @if(groupLocalesNotice()[g.id]){<p role="status" [attr.name]="'group-locales-notice-'+g.id">{{ groupLocalesNotice()[g.id] }}</p>}
+                  }
                   <button class="danger" (click)="removeGroup(g)">Delete</button>
                 }
               </li>
@@ -876,7 +883,7 @@ export class SettingsComponent implements OnInit {
   }
   canSaveGroupRole(g: GroupInfo): boolean {
     const role=this.groupRolePick()[g.id];
-    return !this.groupRolePending()[g.id] && (role==='MEMBER' || role==='ADMIN') && role!==g.role;
+    return !this.groupRolePending()[g.id] && !this.groupLocalesPending()[g.id] && (role==='MEMBER' || role==='ADMIN') && role!==g.role;
   }
   async setGroupRole(g: GroupInfo) {
     if(!this.canSaveGroupRole(g))return;
@@ -988,6 +995,44 @@ export class SettingsComponent implements OnInit {
     }
     catch(e){this.error.set(e instanceof Error?e.message:'Failed');}
     finally{this.memberLocalesPending.set({ ...this.memberLocalesPending(), [m.id]: false });}
+  }
+
+  groupLocalesPick = signal<Record<string, string>>({});
+  groupLocalesPending = signal<Record<string, boolean>>({});
+  groupLocalesNotice = signal<Record<string, string>>({});
+  pickGroupLocales(groupId: string, value: string) {
+    this.groupLocalesPick.set({ ...this.groupLocalesPick(), [groupId]: value });
+  }
+  private parsedGroupLocales(raw: string): string[] {
+    return [...new Set(raw.split(',').map(code=>code.trim()).filter(Boolean))];
+  }
+  validGroupLocales(g: GroupInfo): boolean {
+    const raw=this.groupLocalesPick()[g.id];
+    if(raw===undefined)return true;
+    const project=this.project();
+    return !!project && (raw.trim()==='' || raw.split(',').every(part=>part.trim()!=='' && project.locales.some(locale=>locale.code===part.trim())));
+  }
+  canSaveGroupLocales(g: GroupInfo): boolean {
+    const raw=this.groupLocalesPick()[g.id];
+    if(g.role!=='MEMBER' || raw===undefined || this.groupLocalesPending()[g.id] || this.groupRolePending()[g.id] || !this.validGroupLocales(g))return false;
+    const locales=this.parsedGroupLocales(raw);
+    return locales.length!==g.allowedLocales.length || locales.some(code=>!g.allowedLocales.includes(code));
+  }
+  async saveGroupLocales(g: GroupInfo) {
+    if(!this.canSaveGroupLocales(g))return;
+    const raw=this.groupLocalesPick()[g.id],allowedLocales=this.parsedGroupLocales(raw);
+    this.groupLocalesPending.set({ ...this.groupLocalesPending(), [g.id]: true });
+    this.groupLocalesNotice.set({ ...this.groupLocalesNotice(), [g.id]: '' });
+    this.error.set('');
+    try {
+      await this.api.updateGroup(this.projectId, g.id, { allowedLocales });
+      this.groups.set(this.groups().map(row=>row.id===g.id?{...row,allowedLocales}:row));
+      if(this.groupLocalesPick()[g.id]===raw){const next={...this.groupLocalesPick()};delete next[g.id];this.groupLocalesPick.set(next);}
+      this.groupLocalesNotice.set({ ...this.groupLocalesNotice(), [g.id]: 'The submitted group locale scope was saved. Any newer locale text has not been saved by this request. Other grants still combine; review effective access before saving again.' });
+      await this.reload();
+    }
+    catch(e){this.error.set(e instanceof Error?e.message:'Failed');}
+    finally{this.groupLocalesPending.set({ ...this.groupLocalesPending(), [g.id]: false });}
   }
 
   async removeMember(m: MemberInfo) {
