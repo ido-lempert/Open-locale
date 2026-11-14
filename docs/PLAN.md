@@ -2068,3 +2068,9 @@ chronology; no external acceptance promotion.
 - Per-group pending guard and saved/unsaved receipt, retain newer role draft.
   Accepted PATCH updates local role even if refresh fails, enabling explicit revert.
   [Review0563](reviews/0563-settings-group-role-explicit.md).
+
+## Explicit direct member role Save
+- Draft role selection plus explicit Save before changing direct team access.
+- Per-member pending guard, fixed role snapshot, accepted-role update and accurate
+  saved/unsaved receipt; newer role choice retained, inherited union unchanged.
+  [Review0564](reviews/0564-settings-member-role-explicit.md).

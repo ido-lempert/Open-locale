@@ -297,10 +297,13 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                 <span class="muted">{{ m.role === 'MEMBER' && m.allowedLocales.length ? 'locales: ' + m.allowedLocales.join(', ') : 'all locales' }}</span>
                 @if (effectiveNote(m); as note) { <span class="muted" aria-label="Effective grant">{{ note }}</span> }
                 @if (m.role !== 'OWNER' && isTeamAdmin()) {
-                  <select aria-label="Role" [ngModel]="m.role" (ngModelChange)="setRole(m, $event)" name="role-{{m.id}}">
+                  <select aria-label="Role" [ngModel]="memberRolePick()[m.id] ?? m.role" (ngModelChange)="pickMemberRole(m.id, $event)" [attr.name]="'role-'+m.id">
                     <option value="MEMBER">member</option>
                     <option value="ADMIN">admin</option>
                   </select>
+                  <button type="button" name="role-save-{{m.id}}" (click)="setMemberRole(m)" [disabled]="!canSaveMemberRole(m)">{{ memberRolePending()[m.id] ? 'Saving role...' : 'Save role' }}</button>
+                  <span class="muted">Selection alone does not change access. Save role applies the direct team role; group grants still combine.</span>
+                  @if(memberRoleNotice()[m.id]){<p role="status" [attr.name]="'role-notice-'+m.id">{{ memberRoleNotice()[m.id] }}</p>}
                   <button class="danger" (click)="removeMember(m)">Remove</button>
                 }
               </li>
@@ -915,11 +918,33 @@ export class SettingsComponent implements OnInit {
     try { await this.api.removeGroupMember(this.projectId, g.id, userId); await this.reload(); }
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
   }
-  async setRole(m: MemberInfo, role: string) {
-    this.error.set('');
-    try { await this.api.updateMember(this.projectId, m.id, { role }); await this.reload(); }
-    catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+  memberRolePick = signal<Record<string, string>>({});
+  memberRolePending = signal<Record<string, boolean>>({});
+  memberRoleNotice = signal<Record<string, string>>({});
+  pickMemberRole(memberId: string, role: string) {
+    this.memberRolePick.set({ ...this.memberRolePick(), [memberId]: role });
   }
+  canSaveMemberRole(m: MemberInfo): boolean {
+    const role=this.memberRolePick()[m.id];
+    return !this.memberRolePending()[m.id] && (role==='MEMBER' || role==='ADMIN') && role!==m.role;
+  }
+  async setMemberRole(m: MemberInfo) {
+    if(!this.canSaveMemberRole(m))return;
+    const role=this.memberRolePick()[m.id];
+    this.memberRolePending.set({ ...this.memberRolePending(), [m.id]: true });
+    this.memberRoleNotice.set({ ...this.memberRoleNotice(), [m.id]: '' });
+    this.error.set('');
+    try {
+      await this.api.updateMember(this.projectId, m.id, { role });
+      this.members.set(this.members().map(row=>row.id===m.id?{...row,role}:row));
+      if(this.memberRolePick()[m.id]===role){const next={...this.memberRolePick()};delete next[m.id];this.memberRolePick.set(next);}
+      this.memberRoleNotice.set({ ...this.memberRoleNotice(), [m.id]: 'The submitted direct team role was saved. Any newer role selection has not been saved by this request. Review the current direct team role before saving again.' });
+      await this.reload();
+    }
+    catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+    finally { this.memberRolePending.set({ ...this.memberRolePending(), [m.id]: false }); }
+  }
+
   async removeMember(m: MemberInfo) {
     if (!confirm(`Remove ${m.displayName} from the team? They lose access to this project immediately.`)) return;
     this.error.set('');

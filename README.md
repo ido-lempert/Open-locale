@@ -1722,3 +1722,7 @@ keeps a newer selection unsubmitted. [Review0562](docs/reviews/0562-settings-gro
 Group role selection is a draft, with explicit Save role before applying its
 team-wide grant. Pending Save blocks duplicates and keeps a newer role choice
 unsubmitted. [Review0563](docs/reviews/0563-settings-group-role-explicit.md).
+
+Direct member role selection stays local until explicit Save role. A newer choice
+is kept unsubmitted during an earlier Save; group grants still combine with the
+direct team role. [Review0564](docs/reviews/0564-settings-member-role-explicit.md).
