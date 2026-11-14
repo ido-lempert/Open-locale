@@ -311,6 +311,8 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                     @if(!validMemberLocales(m)){<p role="status">Use only locale codes from this project, separated by commas without empty entries. Leave the field completely blank only to grant all locales.</p>}
                     @if(memberLocalesNotice()[m.id]){<p role="status" [attr.name]="'member-locales-notice-'+m.id">{{ memberLocalesNotice()[m.id] }}</p>}
                   }
+                  <button type="button" [attr.name]="'member-discard-'+m.id" (click)="discardMemberDrafts(m.id)" [disabled]="!canDiscardMemberDrafts(m.id)">Discard unsaved edits</button>
+                  <span class="muted">Discard only clears this member's local role and locale drafts. It uses the last loaded or accepted values, does not refresh the server and does not undo saved changes.</span>
                   <button class="danger" (click)="removeMember(m)">Remove</button>
                 }
               </li>
@@ -981,6 +983,17 @@ export class SettingsComponent implements OnInit {
     try { await this.api.removeGroupMember(this.projectId, g.id, userId); await this.reload(); }
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
   }
+  canDiscardMemberDrafts(memberId: string): boolean {
+    if(this.memberRolePending()[memberId] || this.memberLocalesPending()[memberId])return false;
+    return this.memberRolePick()[memberId]!==undefined || this.memberLocalesPick()[memberId]!==undefined;
+  }
+  discardMemberDrafts(memberId: string) {
+    if(!this.canDiscardMemberDrafts(memberId))return;
+    for(const state of [this.memberRolePick,this.memberLocalesPick]) {
+      const next={...state()};delete next[memberId];state.set(next);
+    }
+  }
+
   memberRolePick = signal<Record<string, string>>({});
   memberRolePending = signal<Record<string, boolean>>({});
   memberRoleNotice = signal<Record<string, string>>({});

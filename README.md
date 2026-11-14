@@ -1746,3 +1746,7 @@ Settings offers Discard unsaved edits per group. It clears that group's local
 name, role, locale and add-member drafts using last loaded or accepted values,
 without refreshing or undoing saved changes. Pending writes block discard;
 other groups' drafts and saved receipts stay intact.
+
+Each editable member also has Discard unsaved edits for local direct-role and
+locale drafts. It uses last loaded or accepted values, not a server refresh or
+undo. Pending member writes block reset; other members and saved receipts stay.

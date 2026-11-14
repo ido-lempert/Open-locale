@@ -2100,3 +2100,8 @@ chronology; no external acceptance promotion.
   drafts, without refresh or undoing saved changes. Other groups are preserved.
 - Pending writes block reset; saved receipts/errors and accepted fallback stay.
   [Review0568](reviews/0568-settings-group-discard.md).
+
+## Discard one member's unsaved edits
+- Explicit target-only local role/scope reset without requests, refresh or undo.
+- Pending role/scope writes block reset; accepted state, errors, saved receipts
+  and other members stay. [Review0569](reviews/0569-settings-member-discard.md).
