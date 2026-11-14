@@ -2088,3 +2088,9 @@ chronology; no external acceptance promotion.
 - Local known-project-code draft, explicit Save, newer text retention, accurate
   accepted receipt and cross-role pending guard. Backend API unchanged.
   [Review0566](reviews/0566-settings-group-locales-explicit.md).
+
+## Explicit group name Save
+- Rename an existing group with name-only PATCH, preserving grants/members/tasks.
+- Local raw draft, explicit Save name, trimmed nonempty100-character check, newer
+  text retention, accepted receipt and role/scope pending guard; duplicate409
+  keeps unsaved text. [Review0567](reviews/0567-settings-group-name-explicit.md).

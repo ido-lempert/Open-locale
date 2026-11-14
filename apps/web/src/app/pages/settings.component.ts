@@ -340,6 +340,11 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                 <span class="role-badge">{{ g.role.toLowerCase() }}</span>
                 <span class="muted">{{ g.role === 'MEMBER' && g.allowedLocales.length ? 'locales: ' + g.allowedLocales.join(', ') : 'all locales' }}</span>
                 @if (canManageGroup(g)) {
+                  <label>Group name <input [attr.name]="'group-name-'+g.id" [ngModel]="groupNamePick()[g.id] ?? g.name" (ngModelChange)="pickGroupName(g.id, $event)" [attr.aria-describedby]="'group-name-help-'+g.id" [attr.aria-invalid]="!validGroupName(g)" /></label>
+                  <button type="button" [attr.name]="'group-name-save-'+g.id" (click)="saveGroupName(g)" [disabled]="!canSaveGroupName(g)">{{ groupNamePending()[g.id] ? 'Saving name...' : 'Save name' }}</button>
+                  <span class="muted" [attr.id]="'group-name-help-'+g.id">Nonempty name, up to 100 characters after trimming. Save name renames this team-wide group without changing its members, grants or task assignments. Typing does not save.</span>
+                  @if(!validGroupName(g)){<p role="status">Enter a nonempty group name of up to 100 characters. Your full text stays here and is not sent.</p>}
+                  @if(groupNameNotice()[g.id]){<p role="status" [attr.name]="'group-name-notice-'+g.id">{{ groupNameNotice()[g.id] }}</p>}
                   <select aria-label="Group role" [ngModel]="groupRolePick()[g.id] ?? g.role" (ngModelChange)="pickGroupRole(g.id, $event)" [attr.name]="'grole-'+g.id">
                     <option value="MEMBER">member</option>
                     <option value="ADMIN">admin</option>
@@ -883,7 +888,7 @@ export class SettingsComponent implements OnInit {
   }
   canSaveGroupRole(g: GroupInfo): boolean {
     const role=this.groupRolePick()[g.id];
-    return !this.groupRolePending()[g.id] && !this.groupLocalesPending()[g.id] && (role==='MEMBER' || role==='ADMIN') && role!==g.role;
+    return !this.groupNamePending()[g.id] && !this.groupRolePending()[g.id] && !this.groupLocalesPending()[g.id] && (role==='MEMBER' || role==='ADMIN') && role!==g.role;
   }
   async setGroupRole(g: GroupInfo) {
     if(!this.canSaveGroupRole(g))return;
@@ -901,6 +906,37 @@ export class SettingsComponent implements OnInit {
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.groupRolePending.set({ ...this.groupRolePending(), [g.id]: false }); }
   }
+  groupNamePick = signal<Record<string, string>>({});
+  groupNamePending = signal<Record<string, boolean>>({});
+  groupNameNotice = signal<Record<string, string>>({});
+  pickGroupName(groupId: string, value: string) {
+    this.groupNamePick.set({ ...this.groupNamePick(), [groupId]: value });
+  }
+  validGroupName(g: GroupInfo): boolean {
+    const name=(this.groupNamePick()[g.id] ?? g.name).trim();
+    return name.length>0 && this.generalTextLength(name)<=100;
+  }
+  canSaveGroupName(g: GroupInfo): boolean {
+    const raw=this.groupNamePick()[g.id];
+    return raw!==undefined && !this.groupNamePending()[g.id] && !this.groupRolePending()[g.id] && !this.groupLocalesPending()[g.id] && this.validGroupName(g) && raw.trim()!==g.name;
+  }
+  async saveGroupName(g: GroupInfo) {
+    if(!this.canSaveGroupName(g))return;
+    const raw=this.groupNamePick()[g.id],name=raw.trim();
+    this.groupNamePending.set({ ...this.groupNamePending(), [g.id]: true });
+    this.groupNameNotice.set({ ...this.groupNameNotice(), [g.id]: '' });
+    this.error.set('');
+    try {
+      await this.api.updateGroup(this.projectId, g.id, { name });
+      this.groups.set(this.groups().map(row=>row.id===g.id?{...row,name}:row));
+      if(this.groupNamePick()[g.id]===raw){const next={...this.groupNamePick()};delete next[g.id];this.groupNamePick.set(next);}
+      this.groupNameNotice.set({ ...this.groupNameNotice(), [g.id]: 'The submitted group name was saved. Any newer name text has not been saved by this request. Review the current group name before saving again.' });
+      await this.reload();
+    }
+    catch(e){this.error.set(e instanceof Error?e.message:'Failed');}
+    finally{this.groupNamePending.set({ ...this.groupNamePending(), [g.id]: false });}
+  }
+
   async removeGroup(g: GroupInfo) {
     if (!confirm(`Delete group ${g.name}? Its members keep their direct team access but lose this grant immediately.`)) return;
     this.error.set('');
@@ -1014,7 +1050,7 @@ export class SettingsComponent implements OnInit {
   }
   canSaveGroupLocales(g: GroupInfo): boolean {
     const raw=this.groupLocalesPick()[g.id];
-    if(g.role!=='MEMBER' || raw===undefined || this.groupLocalesPending()[g.id] || this.groupRolePending()[g.id] || !this.validGroupLocales(g))return false;
+    if(g.role!=='MEMBER' || raw===undefined || this.groupNamePending()[g.id] || this.groupLocalesPending()[g.id] || this.groupRolePending()[g.id] || !this.validGroupLocales(g))return false;
     const locales=this.parsedGroupLocales(raw);
     return locales.length!==g.allowedLocales.length || locales.some(code=>!g.allowedLocales.includes(code));
   }

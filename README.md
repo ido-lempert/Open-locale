@@ -1736,3 +1736,8 @@ MEMBER-group write-locale scope can be revised with explicit Save locales in
 Settings, using codes from the current project. Blank grants all locales for
 every group member across team projects; other direct/group grants still combine.
 Membership is preserved. Typing alone does not change access.
+
+Existing groups can be renamed in Settings with explicit Save name. Names are
+trimmed and limited to100 characters using the API count. Renaming preserves
+members, grants and task assignments; typing does not save, and duplicate names
+keep the unsaved text for correction.
