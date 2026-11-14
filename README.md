@@ -1726,3 +1726,8 @@ unsubmitted. [Review0563](docs/reviews/0563-settings-group-role-explicit.md).
 Direct member role selection stays local until explicit Save role. A newer choice
 is kept unsubmitted during an earlier Save; group grants still combine with the
 direct team role. [Review0564](docs/reviews/0564-settings-member-role-explicit.md).
+
+Direct member write-locale scope can now be edited in Settings with explicit
+Save locales. Blank grants all locales across the team; group grants can widen
+access. Unknown codes and empty comma entries are rejected locally, newer unsaved
+text stays after Save, and the server still checks permission.

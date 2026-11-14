@@ -222,6 +222,7 @@
     "test:settings-rule-pending-draft-browser": "node scripts/settings-rule-pending-draft-browser-test.mjs",
     "test:settings-mt-pending-draft-browser": "node scripts/settings-mt-pending-draft-browser-test.mjs",
     "test:settings-member-role-explicit-browser": "node scripts/settings-member-role-explicit-browser-test.mjs",
+    "test:settings-member-locales-explicit-browser": "node scripts/settings-member-locales-explicit-browser-test.mjs",
     "test:settings-group-role-explicit-browser": "node scripts/settings-group-role-explicit-browser-test.mjs",
     "test:settings-group-member-explicit-browser": "node scripts/settings-group-member-explicit-browser-test.mjs",
     "test:settings-token-pending-draft-browser": "node scripts/settings-token-pending-draft-browser-test.mjs",

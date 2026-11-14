@@ -2074,3 +2074,10 @@ chronology; no external acceptance promotion.
 - Per-member pending guard, fixed role snapshot, accepted-role update and accurate
   saved/unsaved receipt; newer role choice retained, inherited union unchanged.
   [Review0564](reviews/0564-settings-member-role-explicit.md).
+
+## Explicit direct member locale scope Save
+- Edit direct MEMBER translation-write scope through existing locale-only PATCH.
+- Explicit Save, known-project-code validation, blank all-locales/team-wide warning,
+  inherited union cue, snapshot/newer-text retention and cross-role pending guard.
+- Empty comma entries cannot silently broaden to all locales. Actual PG writes
+  verify saved and inherited access. [Review0565](reviews/0565-settings-member-locales-explicit.md).

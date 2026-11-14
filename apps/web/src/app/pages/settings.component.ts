@@ -304,6 +304,13 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                   <button type="button" name="role-save-{{m.id}}" (click)="setMemberRole(m)" [disabled]="!canSaveMemberRole(m)">{{ memberRolePending()[m.id] ? 'Saving role...' : 'Save role' }}</button>
                   <span class="muted">Selection alone does not change access. Save role applies the direct team role; group grants still combine.</span>
                   @if(memberRoleNotice()[m.id]){<p role="status" [attr.name]="'role-notice-'+m.id">{{ memberRoleNotice()[m.id] }}</p>}
+                  @if(m.role === 'MEMBER') {
+                    <label>Direct write locales <input [attr.name]="'member-locales-'+m.id" [ngModel]="memberLocalesPick()[m.id] ?? m.allowedLocales.join(', ')" (ngModelChange)="pickMemberLocales(m.id, $event)" [attr.aria-describedby]="'member-locales-help-'+m.id" [attr.aria-invalid]="!validMemberLocales(m)" /></label>
+                    <button type="button" [attr.name]="'member-locales-save-'+m.id" (click)="saveMemberLocales(m)" [disabled]="!canSaveMemberLocales(m)">{{ memberLocalesPending()[m.id] ? 'Saving locales...' : 'Save locales' }}</button>
+                    <span class="muted" [attr.id]="'member-locales-help-'+m.id">Comma-separated locale codes from this project. Blank grants all locales. This changes direct translation-write access across the team, not project visibility. Group grants can widen access. Typing does not save.</span>
+                    @if(!validMemberLocales(m)){<p role="status">Use only locale codes from this project, separated by commas without empty entries. Leave the field completely blank only to grant all locales.</p>}
+                    @if(memberLocalesNotice()[m.id]){<p role="status" [attr.name]="'member-locales-notice-'+m.id">{{ memberLocalesNotice()[m.id] }}</p>}
+                  }
                   <button class="danger" (click)="removeMember(m)">Remove</button>
                 }
               </li>
@@ -926,7 +933,7 @@ export class SettingsComponent implements OnInit {
   }
   canSaveMemberRole(m: MemberInfo): boolean {
     const role=this.memberRolePick()[m.id];
-    return !this.memberRolePending()[m.id] && (role==='MEMBER' || role==='ADMIN') && role!==m.role;
+    return !this.memberRolePending()[m.id] && !this.memberLocalesPending()[m.id] && (role==='MEMBER' || role==='ADMIN') && role!==m.role;
   }
   async setMemberRole(m: MemberInfo) {
     if(!this.canSaveMemberRole(m))return;
@@ -943,6 +950,44 @@ export class SettingsComponent implements OnInit {
     }
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.memberRolePending.set({ ...this.memberRolePending(), [m.id]: false }); }
+  }
+
+  memberLocalesPick = signal<Record<string, string>>({});
+  memberLocalesPending = signal<Record<string, boolean>>({});
+  memberLocalesNotice = signal<Record<string, string>>({});
+  pickMemberLocales(memberId: string, value: string) {
+    this.memberLocalesPick.set({ ...this.memberLocalesPick(), [memberId]: value });
+  }
+  private parsedMemberLocales(raw: string): string[] {
+    return [...new Set(raw.split(',').map(code=>code.trim()).filter(Boolean))];
+  }
+  validMemberLocales(m: MemberInfo): boolean {
+    const raw=this.memberLocalesPick()[m.id];
+    if(raw===undefined)return true;
+    const project=this.project();
+    return !!project && (raw.trim()==='' || raw.split(',').every(part=>part.trim()!=='' && project.locales.some(locale=>locale.code===part.trim())));
+  }
+  canSaveMemberLocales(m: MemberInfo): boolean {
+    const raw=this.memberLocalesPick()[m.id];
+    if(m.role!=='MEMBER' || raw===undefined || this.memberLocalesPending()[m.id] || this.memberRolePending()[m.id] || !this.validMemberLocales(m))return false;
+    const locales=this.parsedMemberLocales(raw);
+    return locales.length!==m.allowedLocales.length || locales.some(code=>!m.allowedLocales.includes(code));
+  }
+  async saveMemberLocales(m: MemberInfo) {
+    if(!this.canSaveMemberLocales(m))return;
+    const raw=this.memberLocalesPick()[m.id],allowedLocales=this.parsedMemberLocales(raw);
+    this.memberLocalesPending.set({ ...this.memberLocalesPending(), [m.id]: true });
+    this.memberLocalesNotice.set({ ...this.memberLocalesNotice(), [m.id]: '' });
+    this.error.set('');
+    try {
+      await this.api.updateMember(this.projectId, m.id, { allowedLocales });
+      this.members.set(this.members().map(row=>row.id===m.id?{...row,allowedLocales}:row));
+      if(this.memberLocalesPick()[m.id]===raw){const next={...this.memberLocalesPick()};delete next[m.id];this.memberLocalesPick.set(next);}
+      this.memberLocalesNotice.set({ ...this.memberLocalesNotice(), [m.id]: 'The submitted direct locale scope was saved. Any newer locale text has not been saved by this request. Group grants still combine; review effective access before saving again.' });
+      await this.reload();
+    }
+    catch(e){this.error.set(e instanceof Error?e.message:'Failed');}
+    finally{this.memberLocalesPending.set({ ...this.memberLocalesPending(), [m.id]: false });}
   }
 
   async removeMember(m: MemberInfo) {
