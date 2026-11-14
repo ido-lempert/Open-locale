@@ -47,12 +47,14 @@ try {
   await page.setRequestInterception(true);page.on('request',req=>{const path=new URL(req.url()).pathname;if(path.startsWith('/api/')&&req.method()==='GET'){reads++;if(failRead&&path===`/api${P}`)return req.respond({status:503,contentType:'application/json',body:'{"message":"Refresh failed"}'});}if(path.startsWith('/api/')&&['POST','PATCH','PUT','DELETE'].includes(req.method())){writes++;if(req.method()==='PATCH'&&path===`/api${P}/groups/${target.id}`){payloads.push(JSON.parse(req.postData()));held=req;return;}}req.continue();});
   const input=id=>`[name=group-name-${id}]`,discard=id=>`[name=group-discard-${id}]`;
   const type=async(selector,value)=>{await page.$eval(selector,(e,v)=>{e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}));},value);await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));};
-  const click=async selector=>{await page.$eval(selector,e=>e.scrollIntoView({block:'center'}));await page.click(selector);};
+  const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+  const select=async(selector,value)=>{await page.select(selector,value);await settle();};
+  const click=async selector=>{await page.$eval(selector,e=>e.scrollIntoView({block:'center'}));await page.click(selector);await settle();};
   const row=async()=>(await call(P+'/groups',null,token)).find(x=>x.id===target.id);
   const poll=async()=>{for(let n=0;n<150;n++){if(held)return;await new Promise(r=>setTimeout(r,20));}throw new Error('Name PATCH not held');};
   const done=()=>page.waitForFunction(id=>!ng.getComponent(document.querySelector('ol-settings')).groupNamePending()[id],{},target.id);
   check('discard disabled without drafts',await page.$eval(discard(target.id),e=>e.disabled));
-  await type(input(target.id),'');await type(`[name=group-locales-${target.id}]`,'unknown');await page.select(`[name=grole-${target.id}]`,'ADMIN');await page.select(`[name=gadd-${target.id}]`,candidate.user.id);await type(input(other.id),'Other unsaved');
+  await type(input(target.id),'');await type(`[name=group-locales-${target.id}]`,'unknown');await select(`[name=grole-${target.id}]`,'ADMIN');await select(`[name=gadd-${target.id}]`,candidate.user.id);await type(input(other.id),'Other unsaved');
   check('invalid name scope plus role and member drafts local no network',writes===0&&reads===0&&!await page.$eval(discard(target.id),e=>e.disabled));
   await click(discard(target.id));check('discard restores all four target fields without requests',writes===0&&reads===0&&await page.$eval(input(target.id),e=>e.value==='Scope translators')&&await page.$eval(`[name=group-locales-${target.id}]`,e=>e.value==='he')&&await page.$eval(`[name=grole-${target.id}]`,e=>e.value==='MEMBER')&&await page.$eval(`[name=gadd-${target.id}]`,e=>e.value==='')&&await page.$eval(discard(target.id),e=>e.disabled));if(failures)throw new Error('Discard did not reset target local drafts');
   check('other group raw draft unchanged',await page.$eval(input(other.id),e=>e.value==='Other unsaved')&&!await page.$eval(discard(other.id),e=>e.disabled));

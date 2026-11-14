@@ -227,6 +227,7 @@
     "test:settings-group-name-explicit-browser": "node scripts/settings-group-name-explicit-browser-test.mjs",
     "test:settings-group-discard-browser": "node scripts/settings-group-discard-browser-test.mjs",
     "test:settings-member-discard-browser": "node scripts/settings-member-discard-browser-test.mjs",
+    "test:settings-general-discard-browser": "node scripts/settings-general-discard-browser-test.mjs",
     "test:settings-group-role-explicit-browser": "node scripts/settings-group-role-explicit-browser-test.mjs",
     "test:settings-group-member-explicit-browser": "node scripts/settings-group-member-explicit-browser-test.mjs",
     "test:settings-token-pending-draft-browser": "node scripts/settings-token-pending-draft-browser-test.mjs",

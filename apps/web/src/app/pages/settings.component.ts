@@ -22,6 +22,8 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             <label>Description <input [ngModel]="description()" (ngModelChange)="description.set($event)" name="description" aria-describedby="settingsGeneralRules" [attr.aria-invalid]="!validGeneralDescription()" /></label>
             <button class="primary" type="submit" name="saveSettingsGeneral" [disabled]="busy() || !validGeneralName() || !validGeneralDescription()">Save</button>
           </form>
+          <button type="button" name="discardSettingsGeneral" (click)="discardGeneralDraft()" [disabled]="!canDiscardGeneralDraft()">Discard unsaved edits</button>
+          <p class="muted">Discard only resets the local project name and description to last loaded or accepted values. It does not refresh the server or undo saved changes; other forms stay as they are.</p>
           <p class="muted" id="settingsGeneralRules" name="settingsGeneralRules">Project name: up to 120 characters; description: up to 2,000 characters using the API count. Empty text is allowed by the update API. Outer whitespace is kept; text is not truncated or automatically saved. These checks do not verify permission or newer server changes. A successful save refreshes Settings.</p>
           @if(generalDraftNotice()){<p role="status" name="settingsGeneralDraftNotice">{{ generalDraftNotice() }}</p>}
           @if(!validGeneralName() || !validGeneralDescription()){<p role="status" name="settingsGeneralInvalid">Correct the name or description before saving. Your full text stays here and is not sent.</p>}
@@ -600,6 +602,15 @@ export class SettingsComponent implements OnInit {
   }
   validGeneralName():boolean {return this.generalTextLength(this.name())<=120;}
   validGeneralDescription():boolean {return this.generalTextLength(this.description())<=2000;}
+  canDiscardGeneralDraft():boolean {
+    const p=this.project();
+    return !!p && !this.busy() && (this.name()!==p.name || this.description()!==p.description);
+  }
+  discardGeneralDraft() {
+    if(!this.canDiscardGeneralDraft())return;
+    const p=this.project()!;this.name.set(p.name);this.description.set(p.description);
+    if(this.generalDraftNotice())this.generalDraftNotice.set('The submitted project details were saved. Local name and description drafts were discarded without refreshing or undoing saved changes.');
+  }
   generalDraftNotice = signal('');
   private readonly generalDraftMessage = 'The submitted project details were saved. Your newer name and description draft is kept here and has not been saved. Review both fields before saving again.';
   async rename() {
@@ -608,6 +619,7 @@ export class SettingsComponent implements OnInit {
     this.busy.set(true); this.error.set(''); this.generalDraftNotice.set('');
     try {
       await this.api.updateProject(this.projectId, submitted);
+      const accepted=this.project();if(accepted)this.project.set({...accepted,...submitted});
       if(this.name()!==submitted.name || this.description()!==submitted.description)this.generalDraftNotice.set(this.generalDraftMessage);
       await this.reload(submitted);
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }

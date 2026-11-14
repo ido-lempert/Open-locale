@@ -1750,3 +1750,7 @@ other groups' drafts and saved receipts stay intact.
 Each editable member also has Discard unsaved edits for local direct-role and
 locale drafts. It uses last loaded or accepted values, not a server refresh or
 undo. Pending member writes block reset; other members and saved receipts stay.
+
+General project details have a local Discard unsaved edits action for name and
+description. It uses last loaded or accepted values without refreshing or undoing
+saved changes. Busy work blocks reset, while other forms and errors stay intact.

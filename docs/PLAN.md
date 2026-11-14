@@ -2105,3 +2105,9 @@ chronology; no external acceptance promotion.
 - Explicit target-only local role/scope reset without requests, refresh or undo.
 - Pending role/scope writes block reset; accepted state, errors, saved receipts
   and other members stay. [Review0569](reviews/0569-settings-member-discard.md).
+
+## Discard local project details
+- Explicit local name/description reset, no refresh or undo; busy guard and
+  independent forms. Accepted PATCH updates fallback before a failed refresh.
+- Saved receipt distinguishes discarded drafts from retained newer text.
+  [Review0570](reviews/0570-settings-general-discard.md).
