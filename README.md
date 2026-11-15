@@ -1795,3 +1795,8 @@ Project deletion requires the explicit confirmation state, including direct call
 Pending deletion blocks duplicate deletes and confirmation cancellation. If the
 server accepts deletion but navigation fails, an accepted-deletion notice and
 Return to projects link remain; deletion cannot be submitted again on that page.
+
+Webhook deletion requires matching confirmation and blocks duplicate deletion or
+cancellation while busy. Accepted deletion removes the webhook locally before
+refresh and clears its matching secret reveal. A saved result remains on refresh
+failure. Deletion includes that webhook's delivery history, not other webhooks.

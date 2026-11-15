@@ -110,19 +110,20 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                 @if (!h.active) { <span class="badge">disabled</span> }
                 @if (isTeamAdmin()) {
                   @if (confirmingHook() === h.id) {
-                    <span>Delete this webhook? Deliveries stop immediately.</span>
-                    <button class="danger" (click)="removeHook(h.id)">Yes, delete</button>
-                    <button (click)="confirmingHook.set(null)">Cancel</button>
+                    <span>Delete this webhook and its delivery history? Deliveries stop immediately. This cannot be undone.</span>
+                    <button class="danger" [attr.name]="'confirmDeleteHook-'+h.id" (click)="removeHook(h.id)" [disabled]="busy()">Yes, delete</button>
+                    <button [attr.name]="'cancelDeleteHook-'+h.id" (click)="cancelDeleteHook()" [disabled]="busy()">Cancel</button>
                   } @else {
                     <a [routerLink]="['/projects',projectId,'webhooks',h.id,'deliveries']">Delivery journal</a>
                     <button (click)="toggleHook(h)">{{ h.active ? 'Disable' : 'Enable' }}</button>
-                    <button class="danger" (click)="confirmingHook.set(h.id)">Delete</button>
+                    <button class="danger" [attr.name]="'startDeleteHook-'+h.id" (click)="askDeleteHook(h.id)" [disabled]="busy()">Delete</button>
                   }
                 }
               </li>
             }
             @if (!webhooks().length) { <li class="muted">No webhooks yet.</li> }
           </ul>
+          @if(hookDeleteNotice()){<p role="status" name="settingsHookDeleteNotice">{{hookDeleteNotice()}}</p>}
           @if (isTeamAdmin()) {
           <form class="inline" (ngSubmit)="createWebhook()">
             <input type="url" aria-label="Webhook URL" placeholder="https://example.com/hook" [ngModel]="hookUrl()" (ngModelChange)="hookUrl.set($event)" name="hookUrl" required />
@@ -597,10 +598,16 @@ export class SettingsComponent implements OnInit {
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }
+  hookDeleteNotice = signal('');
+  askDeleteHook(id:string) {if(!this.busy() && this.webhooks().some(h=>h.id===id))this.confirmingHook.set(id);}
+  cancelDeleteHook() {if(!this.busy())this.confirmingHook.set(null);}
   async removeHook(id: string) {
-    this.busy.set(true); this.error.set('');
+    if(this.busy() || this.confirmingHook()!==id || !this.webhooks().some(h=>h.id===id))return;
+    this.busy.set(true); this.error.set(''); this.hookDeleteNotice.set('');
     try {
       await this.api.deleteWebhook(this.projectId, id);
+      this.webhooks.set(this.webhooks().filter(h=>h.id!==id));
+      this.hookDeleteNotice.set('The submitted webhook and its delivery history were deleted. Other webhooks were not deleted by this request.');
       this.confirmingHook.set(null);
       if (this.createdWebhook()?.id === id) this.createdWebhook.set(null);
       await this.reload();

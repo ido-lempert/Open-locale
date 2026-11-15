@@ -2162,3 +2162,8 @@ chronology; no external acceptance promotion.
   while pending. Server refusal retains drafts and confirmation for retry.
 - Accepted deletion blocks repeat submission even if navigation fails; explicit
   return link and deleted-state notice. [Review0580](reviews/0580-settings-project-delete.md).
+
+## Guard webhook deletion confirmation and pending state
+- Match confirmation to target; block duplicates/cancel/start while busy.
+- Accepted local removal and matching secret clear precede refresh; deletion
+  includes target history. [Review0581](reviews/0581-settings-webhook-delete.md).
