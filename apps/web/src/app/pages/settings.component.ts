@@ -168,12 +168,19 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             @for (o of project()?.embedOrigins ?? []; track o) {
               <li>
                 <code>{{ o }}</code>
-                @if (isTeamAdmin()) { <button class="danger" (click)="removeOrigin(o)">Remove</button> }
+                @if (isTeamAdmin()) {
+                  @if(confirmingOrigin()===o){
+                    <span>Remove this origin? It will no longer be allowlisted for this project's embed endpoint. This does not sign users out or promise to close frames already open. The currently loaded list, minus this origin, will replace the saved list.</span>
+                    <button class="danger" [attr.name]="'confirmRemoveOrigin-'+$index" (click)="removeOrigin(o)" [disabled]="busy()">Yes, remove</button>
+                    <button [attr.name]="'cancelRemoveOrigin-'+$index" (click)="cancelRemoveOrigin()" [disabled]="busy()">Cancel</button>
+                  } @else {<button class="danger" [attr.name]="'startRemoveOrigin-'+$index" (click)="askRemoveOrigin(o)" [disabled]="busy()">Remove</button>}
+                }
               </li>
             }
             @if (!(project()?.embedOrigins ?? []).length) { <li class="muted">No origins allowlisted - the embed endpoint answers nothing yet.</li> }
           </ul>
           @if (isTeamAdmin()) {
+          @if(originRemoveNotice()){<p role="status" name="settingsOriginRemoveNotice">{{originRemoveNotice()}}</p>}
           <form class="inline" (ngSubmit)="addOrigin()">
             <input aria-label="New embed origin" placeholder="https://app.example.com" [ngModel]="newOrigin()" (ngModelChange)="newOrigin.set($event)" name="newOrigin" required aria-describedby="settingsOriginRules" [attr.aria-invalid]="newOrigin()!=='' && !validNewOrigin()" />
             <button type="submit" name="addSettingsOrigin" [disabled]="busy() || !validNewOrigin()">Add origin</button>
@@ -747,12 +754,20 @@ export class SettingsComponent implements OnInit {
     finally { this.busy.set(false); }
   }
 
+  confirmingOrigin = signal<string|null>(null);
+  originRemoveNotice = signal('');
+  askRemoveOrigin(origin:string) {if(!this.busy() && this.project()?.embedOrigins?.includes(origin))this.confirmingOrigin.set(origin);}
+  cancelRemoveOrigin() {if(!this.busy())this.confirmingOrigin.set(null);}
   async removeOrigin(origin: string) {
-    this.busy.set(true); this.error.set('');
+    if(this.busy() || this.confirmingOrigin()!==origin || !this.project()?.embedOrigins?.includes(origin))return;
+    const embedOrigins=(this.project()?.embedOrigins ?? []).filter(x=>x!==origin);
+    this.busy.set(true); this.error.set(''); this.originRemoveNotice.set('');
     try {
-      const current = this.project()?.embedOrigins ?? [];
-      await this.api.updateProject(this.projectId, { embedOrigins: current.filter((x) => x !== origin) });
-      await this.reload();
+      await this.api.updateProject(this.projectId, { embedOrigins });
+      this.project.update(project=>project?{...project,embedOrigins}:project);
+      this.confirmingOrigin.set(null);
+      this.originRemoveNotice.set('The submitted allowlist was saved without the selected origin. This replaced the saved list using the previously loaded origins; it did not sign users out or close frames already open. Your new-origin draft and other forms are kept.');
+      this.project.set(await this.api.getProject(this.projectId));
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }

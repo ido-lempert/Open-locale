@@ -1816,3 +1816,9 @@ confirmation changes, Enable/Disable and Fill empty while busy. Accepted removal
 updates the local list and existing Fill empty selection fallback before refresh.
 Saved rules referencing the removed provider are not repaired and may fail;
 existing translations are not undone and in-progress work may finish.
+
+Embed-origin removal requires matching confirmation and blocks duplicate requests,
+confirmation changes and Add origin while busy. Accepted allowlist replacement is
+shown locally before a project-only refresh, preserving independent form drafts
+and the saved receipt on refresh failure. This keeps the existing whole-list save
+semantics; it does not sign users out or close frames already open.

@@ -2182,3 +2182,8 @@ chronology; no external acceptance promotion.
 - Match existing provider confirmation; block duplicate/cancel/start/toggle/run.
 - Accepted local removal/selection fallback precedes refresh; refusal keeps retry
   context. [Review0584](reviews/0584-settings-mt-remove.md).
+
+## Guard embed-origin removal confirmation and pending state
+- Match loaded origin confirmation; block duplicate/cancel/start/add while busy.
+- Accepted allowlist replacement/receipt precede project-only refresh; refusal
+  keeps retry context. [Review0585](reviews/0585-settings-origin-remove.md).
