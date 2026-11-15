@@ -1253,6 +1253,9 @@ try {
   }, rawToken);
   check('read-only token: GET 200, write 403', tokenExercise.get === 200 && tokenExercise.write === 403, JSON.stringify(tokenExercise));
   await page.waitForFunction(() => [...document.querySelectorAll('.locale-list li')].some((el) => el.textContent.includes('ci') && [...el.querySelectorAll('button')].some((b) => b.textContent === 'Revoke')), { timeout: 10000 });
+  // Creation reveals the token before its Settings refresh finishes. Wait for
+  // the explicit revoke action to be ready, not just the newly rendered row.
+  await page.waitForFunction(() => !ng.getComponent(document.querySelector('ol-settings')).busy() && [...document.querySelectorAll('.locale-list li')].some(el => el.textContent.includes('ci') && [...el.querySelectorAll('button')].some(b => b.textContent === 'Revoke' && !b.disabled)), {timeout:10000});
   await page.evaluate(() => {
     const li = [...document.querySelectorAll('.locale-list li')].find((el) => el.textContent.includes('ci'));
     [...li.querySelectorAll('button')].find((b) => b.textContent === 'Revoke').click();

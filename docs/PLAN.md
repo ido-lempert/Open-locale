@@ -2167,3 +2167,8 @@ chronology; no external acceptance promotion.
 - Match confirmation to target; block duplicates/cancel/start while busy.
 - Accepted local removal and matching secret clear precede refresh; deletion
   includes target history. [Review0581](reviews/0581-settings-webhook-delete.md).
+
+## Guard API-token revocation confirmation and pending state
+- Match existing token confirmation; block duplicate/cancel/start while busy.
+- Accepted local removal and matching reveal clear precede refresh; refusal keeps
+  retry context. [Review0582](reviews/0582-settings-token-revoke.md).

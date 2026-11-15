@@ -73,15 +73,16 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                 <span>{{ tok.name }}</span>
                 <span class="muted">{{ tok.scopes.join('+') }} · created {{ tok.createdAt | date:'mediumDate' }}{{ tok.lastUsedAt ? ' · used ' + (tok.lastUsedAt | date:'short') : ' · never used' }}</span>
                 @if (confirmingToken() === tok.id) {
-                  <span>Revoke <strong>{{ tok.name }}</strong>? Scripts using it stop immediately.</span>
-                  <button class="danger" (click)="revokeToken(tok.id)">Yes, revoke</button>
-                  <button (click)="confirmingToken.set(null)">Cancel</button>
+                  <span>Revoke <strong>{{ tok.name }}</strong>? Scripts using it stop immediately. This cannot be undone.</span>
+                  <button class="danger" [attr.name]="'confirmRevokeToken-'+tok.id" (click)="revokeToken(tok.id)" [disabled]="busy()">Yes, revoke</button>
+                  <button [attr.name]="'cancelRevokeToken-'+tok.id" (click)="cancelRevokeToken()" [disabled]="busy()">Cancel</button>
                 } @else {
-                  <button class="danger" (click)="confirmingToken.set(tok.id)">Revoke</button>
+                  <button class="danger" [attr.name]="'startRevokeToken-'+tok.id" (click)="askRevokeToken(tok.id)" [disabled]="busy()">Revoke</button>
                 }
               </li>
             }
           </ul>
+          @if(tokenRevokeNotice()){<p role="status" name="settingsTokenRevokeNotice">{{tokenRevokeNotice()}}</p>}
           <form class="inline" (ngSubmit)="createToken()">
             <input aria-label="Token name" placeholder="Token name (e.g. ci)" [ngModel]="tokenName()" (ngModelChange)="tokenName.set($event)" name="tokenName" required />
             <select aria-label="Token access" [ngModel]="tokenScope()" (ngModelChange)="tokenScope.set($event)" name="tokenScope">
@@ -614,10 +615,16 @@ export class SettingsComponent implements OnInit {
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }
+  tokenRevokeNotice = signal('');
+  askRevokeToken(id:string) {if(!this.busy() && this.tokens().some(t=>t.id===id))this.confirmingToken.set(id);}
+  cancelRevokeToken() {if(!this.busy())this.confirmingToken.set(null);}
   async revokeToken(id: string) {
-    this.busy.set(true); this.error.set('');
+    if(this.busy() || this.confirmingToken()!==id || !this.tokens().some(t=>t.id===id))return;
+    this.busy.set(true); this.error.set(''); this.tokenRevokeNotice.set('');
     try {
       await this.api.revokeToken(id);
+      this.tokens.set(this.tokens().filter(t=>t.id!==id));
+      this.tokenRevokeNotice.set('The submitted API token was revoked. Other tokens were not revoked by this request.');
       this.confirmingToken.set(null);
       if (this.createdToken()?.id === id) this.createdToken.set(null);
       await this.reload();

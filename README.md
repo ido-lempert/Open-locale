@@ -1800,3 +1800,8 @@ Webhook deletion requires matching confirmation and blocks duplicate deletion or
 cancellation while busy. Accepted deletion removes the webhook locally before
 refresh and clears its matching secret reveal. A saved result remains on refresh
 failure. Deletion includes that webhook's delivery history, not other webhooks.
+
+API-token revocation requires matching confirmation and blocks duplicate revoke
+or confirmation changes while busy. Accepted revocation removes the token locally
+before refresh and clears its matching reveal; a saved receipt stays on refresh
+failure. Other tokens and independent form drafts are not revoked or discarded.
