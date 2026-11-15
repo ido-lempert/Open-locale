@@ -272,6 +272,8 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             }
             <button type="submit" name="addSettingsRule" [disabled]="busy() || !validNewRuleName() || !validNewRulePayload()">Add rule</button>
           </form>
+          <button type="button" name="discardSettingsRuleName" (click)="discardRuleNameDraft()" [disabled]="!canDiscardRuleNameDraft()">Discard rule name draft</button>
+          <p class="muted">Discard only clears the local rule name. Trigger, action, provider, locales, title and message stay. It does not refresh Settings, change saved rules or run an action; other forms stay as they are.</p>
           <p class="muted" id="settingsRuleNameRules" name="settingsRuleNameRules">Rule name: up to 120 characters using the API count after trimming outer whitespace. Empty names are allowed by the API. Full text is kept without truncation. This checks the name only, not permission, provider, locales or delivery; the active title or message also has limits below.</p>
           @if(ruleDraftNotice()){<p role="status" name="settingsRuleDraftNotice">{{ ruleDraftNotice() }}</p>}
           @if(!validNewRuleName()){<p role="status" name="settingsRuleNameInvalid">Shorten the rule name before adding. Your full name and rule choices stay here and are not sent.</p>}
@@ -787,6 +789,12 @@ export class SettingsComponent implements OnInit {
       : [...this.newRuleLocales(), code]);
   }
 
+  canDiscardRuleNameDraft():boolean {return !this.busy() && this.newRuleName()!=='';}
+  discardRuleNameDraft() {
+    if(!this.canDiscardRuleNameDraft())return;
+    this.newRuleName.set('');
+    if(this.ruleDraftNotice())this.ruleDraftNotice.set('The submitted rule was saved. The local rule name draft was discarded without refreshing Settings, changing saved rules or running an action. Trigger, action, provider, locales, title and message stay for your next explicit Add rule.');
+  }
   ruleDraftNotice = signal('');
   private ruleDraft() {return {name:this.newRuleName(),trigger:this.newRuleTrigger(),action:this.newRuleAction(),provider:this.newRuleProvider(),locales:[...this.newRuleLocales()],title:this.newRuleTitle(),message:this.newRuleMessage()};}
   validNewRuleName():boolean {return this.generalTextLength(this.newRuleName().trim())<=120;}

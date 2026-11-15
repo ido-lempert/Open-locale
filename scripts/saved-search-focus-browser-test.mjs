@@ -47,7 +47,7 @@ try {
   await page.goto(`${WEB}${P}/find`,{waitUntil:'networkidle0'});await page.waitForSelector('[name=savedSearchIdle]');
   const focusName=()=>page.evaluate(()=>document.activeElement?.getAttribute('name'));
   const waitFocus=name=>page.waitForFunction(n=>document.activeElement?.getAttribute('name')===n,{},name);
-  const enterText=async text=>{await page.focus('[name=savedSearchText]');await page.$eval('[name=savedSearchText]',e=>{e.value='';e.dispatchEvent(new Event('input',{bubbles:true}));});await page.type('[name=savedSearchText]',text);};
+  const enterText=async text=>{await page.focus('[name=savedSearchText]');await page.$eval('[name=savedSearchText]',e=>{e.value='';e.dispatchEvent(new Event('input',{bubbles:true}));});await page.type('[name=savedSearchText]',text);await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));};
   await page.select('[name=savedSearchLocale]','he');await enterText('Needle');reads=[];await page.focus('[name=runSavedSearch]');await page.keyboard.press('Enter');await waitFocus('savedSearchCount');
   check('keyboard search lands actual result count with selected-locale matches',await focusName()==='savedSearchCount'&&await page.$$eval('[name=savedSearchResult]',r=>r.length===3));
   check('focus landing adds no read or write',reads.length===1&&reads[0].method==='GET'&&writes.length===0);

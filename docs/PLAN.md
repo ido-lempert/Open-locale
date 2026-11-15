@@ -2141,3 +2141,8 @@ chronology; no external acceptance promotion.
 - Name-only local clear without request/refresh/removal/run, busy direct guard.
 - Provider type, pretranslation choices/result, other forms and errors stay intact.
   [Review0576](reviews/0576-settings-mt-name-discard.md).
+
+## Discard local automation rule name draft
+- Name-only local clear without request/refresh/saved-rule change/run, busy guard.
+- Trigger/action/provider/locales/title/message, other forms and errors stay intact.
+  [Review0577](reviews/0577-settings-rule-name-discard.md).

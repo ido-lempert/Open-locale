@@ -1778,3 +1778,7 @@ revocation or access change is triggered; busy work blocks reset.
 Offline pseudo-provider creation has Discard provider name draft. It clears only
 the local name, preserving provider type, pre-translation choices and results.
 No refresh, saved-provider removal or pre-translation run; busy work blocks reset.
+
+Automation creation has Discard rule name draft. It clears only the local name,
+preserving trigger, action, provider, locales, title and message. No refresh,
+saved-rule change or action run; busy work blocks reset.
