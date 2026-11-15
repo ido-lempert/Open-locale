@@ -147,6 +147,8 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             <input aria-label="New custom status" placeholder="e.g. NEEDS_WORK (A-Z, 0-9, _)" [ngModel]="newStatus()" (ngModelChange)="newStatus.set($event)" name="newStatus" required aria-describedby="settingsStatusRules" [attr.aria-invalid]="newStatus()!=='' && !validNewStatus()" />
             <button type="submit" name="addSettingsStatus" [disabled]="busy() || !validNewStatus()">Add</button>
           </form>
+          <button type="button" name="discardSettingsStatus" (click)="discardStatusDraft()" [disabled]="!canDiscardStatusDraft()">Discard status draft</button>
+          <p class="muted">Discard only clears the local new-status field. It does not refresh Settings or remove any saved status; other forms stay as they are.</p>
           <p class="muted" id="settingsStatusRules" name="settingsStatusRules">New custom status: 2-24 characters, starting with a letter, then letters, digits or underscores. Outer whitespace is trimmed and text is uppercased when adding, as before. UNVERIFIED, TRANSLATED and REVIEWED are base statuses, not custom names. Full input is kept without truncation. This checks the new name only, not newer server status choices or permission. A successful addition refreshes Settings.</p>
           @if(statusDraftNotice()){<p role="status" name="settingsStatusDraftNotice">{{ statusDraftNotice() }}</p>}
           @if(newStatus()!=='' && !validNewStatus()){<p role="status" name="settingsStatusInvalid">Correct the custom status before adding. Your full text stays here and is not sent.</p>}
@@ -800,6 +802,12 @@ export class SettingsComponent implements OnInit {
     } catch (e) { this.error.set(e instanceof Error ? e.message : String(e)); } finally { this.busy.set(false); }
   }
 
+  canDiscardStatusDraft():boolean {return !this.busy() && this.newStatus()!=='';}
+  discardStatusDraft() {
+    if(!this.canDiscardStatusDraft())return;
+    this.newStatus.set('');
+    if(this.statusDraftNotice())this.statusDraftNotice.set('The submitted custom status was saved. The local new-status draft was discarded without refreshing Settings or removing any saved status.');
+  }
   statusDraftNotice = signal('');
   validNewStatus():boolean {
     const value=this.newStatus().trim().toUpperCase();

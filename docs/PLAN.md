@@ -2116,3 +2116,8 @@ chronology; no external acceptance promotion.
 - Explicit local code clear without GET/write/removal, with busy direct guard.
 - Other forms/errors/saved locales preserved, saved receipt updated accurately.
   [Review0571](reviews/0571-settings-locale-discard.md).
+
+## Discard local custom-status draft
+- Explicit local name clear without GET/PATCH/removal, with busy direct guard.
+- Other forms/errors/saved statuses preserved, saved receipt updated accurately.
+  [Review0572](reviews/0572-settings-status-discard.md).

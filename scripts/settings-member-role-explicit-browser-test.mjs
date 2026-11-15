@@ -43,8 +43,9 @@ try {
   await page.goto(`${WEB}${P}/settings`,{waitUntil:'networkidle0'});await page.waitForSelector(`[name=role-${member.id}]`);await page.waitForNetworkIdle({idleTime:200});
   let patches=0,reads=0,held,failPatch=false,failRead=false;const payloads=[];
   await page.setRequestInterception(true);page.on('request',req=>{const path=new URL(req.url()).pathname;if(path.startsWith('/api/')&&req.method()==='GET'){reads++;if(failRead&&path===`/api${P}`)return req.respond({status:503,contentType:'application/json',body:'{"message":"Refresh failed"}'});}if(req.method()==='PATCH'&&path===`/api${P}/members/${member.id}`){patches++;payloads.push(JSON.parse(req.postData()));if(failPatch)return req.respond({status:403,contentType:'application/json',body:'{"message":"Permission denied"}'});held=req;return;}req.continue();});
-  const select=role=>page.select(`[name=role-${member.id}]`,role);
-  const save=()=>page.click(`[name=role-save-${member.id}]`);
+  const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+  const select=async role=>{await page.select(`[name=role-${member.id}]`,role);await settle();};
+  const save=async()=>{await page.click(`[name=role-save-${member.id}]`);await settle();};
   const poll=async()=>{for(let n=0;n<150;n++){if(held)return;await new Promise(r=>setTimeout(r,20));}throw new Error('Role PATCH not held');};
   const done=()=>page.waitForFunction(id=>!ng.getComponent(document.querySelector('ol-settings')).memberRolePending()[id],{},member.id);
   const row=async()=>(await call(P+'/members',null,token)).find(x=>x.id===member.id);

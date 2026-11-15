@@ -44,8 +44,9 @@ try {
   await page.goto(`${WEB}${P}/settings`,{waitUntil:'networkidle0'});await page.waitForSelector(`[name=gadd-${group.id}]`);await page.waitForNetworkIdle({idleTime:200});
   let puts=0,reads=0,held,failPut=false,failRead=false;const paths=[];
   await page.setRequestInterception(true);page.on('request',req=>{const path=new URL(req.url()).pathname;if(path.startsWith('/api/')&&req.method()==='GET'){reads++;if(failRead&&path===`/api${P}`)return req.respond({status:503,contentType:'application/json',body:'{"message":"Refresh failed"}'});}if(req.method()==='PUT'&&path.startsWith(`/api${P}/groups/`)){puts++;paths.push(path);if(failPut)return req.respond({status:403,contentType:'application/json',body:'{"message":"Permission denied"}'});held=req;return;}req.continue();});
-  const select=(g,u)=>page.select(`[name=gadd-${g.id}]`,u);
-  const add=g=>page.click(`[name=gadd-submit-${g.id}]`);
+  const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+  const select=async(g,u)=>{await page.select(`[name=gadd-${g.id}]`,u);await settle();};
+  const add=async g=>{await page.click(`[name=gadd-submit-${g.id}]`);await settle();};
   const poll=async()=>{for(let n=0;n<150;n++){if(held)return;await new Promise(r=>setTimeout(r,20));}throw new Error('Member PUT not held');};
   const done=g=>page.waitForFunction(id=>!ng.getComponent(document.querySelector('ol-settings')).groupMemberPending()[id],{},g.id);
   const ids=async g=>(await call(P+'/groups',null,token)).find(x=>x.id===g.id).members.map(x=>x.userId);

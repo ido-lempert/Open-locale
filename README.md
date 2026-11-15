@@ -1758,3 +1758,7 @@ saved changes. Busy work blocks reset, while other forms and errors stay intact.
 The add-locale field has Discard locale draft. It clears only the local code,
 without refreshing Settings or removing saved locales. Busy work blocks reset;
 other forms and errors remain, with accurate saved-add/discard wording.
+
+Custom status creation has Discard status draft. It clears only the local name,
+without refreshing Settings or removing saved statuses. Busy work blocks reset;
+other forms and errors remain, with accurate saved-status/discard wording.
