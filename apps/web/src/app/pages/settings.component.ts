@@ -204,6 +204,8 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             </select>
             <button type="submit" name="addSettingsMtProvider" [disabled]="busy() || !validNewMtName()">Add provider</button>
           </form>
+          <button type="button" name="discardSettingsMtName" (click)="discardMtNameDraft()" [disabled]="!canDiscardMtNameDraft()">Discard provider name draft</button>
+          <p class="muted">Discard only clears the local provider name. Provider type stays. It does not refresh Settings, remove saved providers or run pre-translation; other forms, pre-translation choices and results stay as they are.</p>
           <p class="muted" id="settingsMtNameRules" name="settingsMtNameRules">Provider name: up to 120 characters using the API count after trimming outer whitespace. Empty names are allowed by the API. Full text is kept without truncation. This checks the name only, not permission, duplicate names or provider availability. Adding this offline pseudo provider does not run pre-translation.</p>
           @if(mtDraftNotice()){<p role="status" name="settingsMtDraftNotice">{{ mtDraftNotice() }}</p>}
           @if(!validNewMtName()){<p role="status" name="settingsMtNameInvalid">Shorten the provider name before adding. Your full name and provider type stay here and are not sent.</p>}
@@ -719,6 +721,12 @@ export class SettingsComponent implements OnInit {
     finally { this.busy.set(false); }
   }
 
+  canDiscardMtNameDraft():boolean {return !this.busy() && this.newMtName()!=='';}
+  discardMtNameDraft() {
+    if(!this.canDiscardMtNameDraft())return;
+    this.newMtName.set('');
+    if(this.mtDraftNotice())this.mtDraftNotice.set('The submitted provider was added. The local provider name draft was discarded without refreshing Settings, removing saved providers or running pre-translation. Provider type stays for your next explicit Add provider.');
+  }
   mtDraftNotice = signal('');
   validNewMtName():boolean {return this.generalTextLength(this.newMtName().trim())<=120;}
   async addMtProvider() {

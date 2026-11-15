@@ -2136,3 +2136,8 @@ chronology; no external acceptance promotion.
 - Name-only local clear without request/refresh/revoke, with busy direct guard.
 - Access choice, one-time token reveal, other forms and errors stay intact.
   [Review0575](reviews/0575-settings-token-name-discard.md).
+
+## Discard local offline provider name draft
+- Name-only local clear without request/refresh/removal/run, busy direct guard.
+- Provider type, pretranslation choices/result, other forms and errors stay intact.
+  [Review0576](reviews/0576-settings-mt-name-discard.md).

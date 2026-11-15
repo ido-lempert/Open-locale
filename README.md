@@ -1774,3 +1774,7 @@ No refresh, saved webhook deletion or delivery is triggered; busy work blocks re
 Token creation has Discard name draft. It clears only the local name, preserving
 selected access and the submitted token's one-time reveal. No refresh, creation,
 revocation or access change is triggered; busy work blocks reset.
+
+Offline pseudo-provider creation has Discard provider name draft. It clears only
+the local name, preserving provider type, pre-translation choices and results.
+No refresh, saved-provider removal or pre-translation run; busy work blocks reset.
