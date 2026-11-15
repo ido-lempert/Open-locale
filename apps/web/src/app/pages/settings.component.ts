@@ -192,13 +192,20 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             @for (p of mtProviders(); track p.id) {
               <li>
                 <span>{{ p.name }} <span class="muted">{{ p.type }}</span></span>
-                <button (click)="toggleMtProvider(p)">{{ p.enabled ? 'Disable' : 'Enable' }}</button>
-                @if (isTeamAdmin()) { <button class="danger" (click)="removeMtProvider(p)">Remove</button> }
+                <button [attr.name]="'toggleMtProvider-'+p.id" (click)="toggleMtProvider(p)" [disabled]="busy()">{{ p.enabled ? 'Disable' : 'Enable' }}</button>
+                @if (isTeamAdmin()) {
+                  @if(confirmingMtProvider()===p.id){
+                    <span>Remove <strong>{{p.name}}</strong>? This cannot be undone. Existing translations are not undone. Saved rules referencing it are not repaired and may fail; work already in progress may finish.</span>
+                    <button class="danger" [attr.name]="'confirmRemoveMtProvider-'+p.id" (click)="removeMtProvider(p)" [disabled]="busy()">Yes, remove</button>
+                    <button [attr.name]="'cancelRemoveMtProvider-'+p.id" (click)="cancelRemoveMtProvider()" [disabled]="busy()">Cancel</button>
+                  } @else {<button class="danger" [attr.name]="'startRemoveMtProvider-'+p.id" (click)="askRemoveMtProvider(p.id)" [disabled]="busy()">Remove</button>}
+                }
               </li>
             }
             @if (!mtProviders().length) { <li class="muted">No providers yet - add the pseudo provider to pre-translate empty cells.</li> }
           </ul>
           @if (isTeamAdmin()) {
+          @if(mtRemoveNotice()){<p role="status" name="settingsMtRemoveNotice">{{mtRemoveNotice()}}</p>}
           <form class="inline" (ngSubmit)="addMtProvider()">
             <input aria-label="New provider name" placeholder="Provider name" [ngModel]="newMtName()" (ngModelChange)="newMtName.set($event)" name="newMtName" aria-describedby="settingsMtNameRules" [attr.aria-invalid]="!validNewMtName()" />
             <select aria-label="Provider type" [ngModel]="newMtType()" (ngModelChange)="newMtType.set($event)" name="newMtType">
@@ -226,7 +233,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
               <select aria-label="Branch" [ngModel]="mtBranch()" (ngModelChange)="mtBranch.set($event)" name="mtBranch">
                 @for (b of branches(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }
               </select>
-              <button type="submit" [disabled]="busy()" title="Fill empty cells with pseudo test data">Fill empty</button>
+              <button name="runSettingsPretranslate" type="submit" [disabled]="busy()" title="Fill empty cells with pseudo test data">Fill empty</button>
             </form>
           }
             @if (mtResult()) { <p class="muted" role="status">{{ mtResult() }}</p> }
@@ -775,6 +782,7 @@ export class SettingsComponent implements OnInit {
   }
 
   async toggleMtProvider(p: MtProviderInfo) {
+    if(this.busy())return;
     this.busy.set(true); this.error.set('');
     try {
       await this.api.updateMtProvider(this.projectId, p.id, { enabled: !p.enabled });
@@ -782,16 +790,25 @@ export class SettingsComponent implements OnInit {
     } catch (e) { this.error.set(e instanceof Error ? e.message : String(e)); } finally { this.busy.set(false); }
   }
 
+  confirmingMtProvider = signal<string|null>(null);
+  mtRemoveNotice = signal('');
+  askRemoveMtProvider(id:string) {if(!this.busy() && this.mtProviders().some(p=>p.id===id))this.confirmingMtProvider.set(id);}
+  cancelRemoveMtProvider() {if(!this.busy())this.confirmingMtProvider.set(null);}
   async removeMtProvider(p: MtProviderInfo) {
-    this.busy.set(true); this.error.set('');
+    if(this.busy() || this.confirmingMtProvider()!==p.id || !this.mtProviders().some(provider=>provider.id===p.id))return;
+    this.busy.set(true); this.error.set(''); this.mtRemoveNotice.set('');
     try {
       await this.api.deleteMtProvider(this.projectId, p.id);
-      this.mtProviders.set(await this.api.listMtProviders(this.projectId));
+      this.mtProviders.set(this.mtProviders().filter(provider=>provider.id!==p.id));
       if (this.mtProviderId() === p.id) this.mtProviderId.set(this.mtProviders()[0]?.id ?? '');
+      this.confirmingMtProvider.set(null);
+      this.mtRemoveNotice.set('The submitted provider was removed. Other providers and existing translations were not removed by this request. Saved rules referencing it are not repaired and may fail; work already in progress may finish. If it was selected for Fill empty, the first remaining provider is now selected, or none if no providers remain. Review that selection before running.');
+      this.mtProviders.set(await this.api.listMtProviders(this.projectId));
     } catch (e) { this.error.set(e instanceof Error ? e.message : String(e)); } finally { this.busy.set(false); }
   }
 
   async runPretranslate() {
+    if(this.busy())return;
     this.busy.set(true); this.error.set(''); this.mtResult.set('');
     try {
       const r = await this.api.pretranslate(this.projectId, this.mtProviderId(), this.mtLocale(), this.mtBranch());

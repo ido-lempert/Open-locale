@@ -1810,3 +1810,9 @@ Automation-rule removal requires matching confirmation and blocks duplicate remo
 confirmation changes and Enable/Disable while busy. Accepted removal updates the
 local list before refresh and keeps an accurate receipt on refresh failure.
 Earlier effects are not undone, and a run already in progress may finish.
+
+Offline provider removal requires matching confirmation and blocks duplicate remove,
+confirmation changes, Enable/Disable and Fill empty while busy. Accepted removal
+updates the local list and existing Fill empty selection fallback before refresh.
+Saved rules referencing the removed provider are not repaired and may fail;
+existing translations are not undone and in-progress work may finish.

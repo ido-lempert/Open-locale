@@ -2177,3 +2177,8 @@ chronology; no external acceptance promotion.
 - Match existing rule confirmation; block duplicate/cancel/start/toggle while busy.
 - Accepted local removal/receipt precede refresh; refusal keeps retry context.
   [Review0583](reviews/0583-settings-rule-remove.md).
+
+## Guard offline provider removal confirmation and pending state
+- Match existing provider confirmation; block duplicate/cancel/start/toggle/run.
+- Accepted local removal/selection fallback precedes refresh; refusal keeps retry
+  context. [Review0584](reviews/0584-settings-mt-remove.md).
