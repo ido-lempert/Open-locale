@@ -2151,3 +2151,8 @@ chronology; no external acceptance promotion.
 - Name-only local clear without request/refresh/group or access changes, busy guard.
 - Selected role/locales, saved groups, other forms and errors stay intact.
   [Review0578](reviews/0578-settings-group-name-discard.md).
+
+## Discard local add-member email draft
+- Email-only local clear without requests/refresh/membership or access change.
+- Busy guard; selected role/locales, errors, saved members and other forms stay.
+  [Review0579](reviews/0579-settings-member-email-discard.md).

@@ -1786,3 +1786,7 @@ saved-rule change or action run; busy work blocks reset.
 Group creation has Discard group name draft. It clears only the local name,
 preserving selected role and locales. No refresh, saved-group change or access
 change is triggered; busy work blocks reset.
+
+Add-member has Discard member email draft. It clears only the local email,
+preserving selected role and locales. No refresh, invitation or saved membership
+or access change is triggered; busy work blocks reset.

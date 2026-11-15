@@ -344,6 +344,8 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             <input aria-label="Allowed locales" placeholder="Locales (e.g. he,fr) - blank = all" [ngModel]="memberLocales()" (ngModelChange)="memberLocales.set($event)" name="memberLocales" />
             <button name="addSettingsMember" type="submit" [disabled]="busy()">Add</button>
           </form>
+          <button type="button" name="discardSettingsMemberEmail" (click)="discardMemberEmailDraft()" [disabled]="!canDiscardMemberEmailDraft()">Discard member email draft</button>
+          <p class="muted">Discard only clears the local add-member email. Selected role and locales stay. It does not refresh Settings, send an invitation or change anyone's saved membership or access; other forms stay as they are.</p>
           @if(memberDraftNotice()){<p role="status" name="settingsMemberDraftNotice">{{ memberDraftNotice() }}</p>}
           }
           <p class="muted">Members join this team and can access every project in it. A locale list limits their translation writes across all of the team's projects. Project administration (settings, locales, webhooks, restores, members) requires admin.</p>
@@ -876,6 +878,12 @@ export class SettingsComponent implements OnInit {
       await this.reload();
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
+  }
+  canDiscardMemberEmailDraft():boolean {return !this.busy() && this.memberEmail()!=='';}
+  discardMemberEmailDraft() {
+    if(!this.canDiscardMemberEmailDraft())return;
+    this.memberEmail.set('');
+    if(this.memberDraftNotice())this.memberDraftNotice.set('The submitted membership was saved. The local add-member email draft was discarded without refreshing Settings or changing saved membership or access. Selected role and locales stay for your next explicit Add.');
   }
   memberDraftNotice = signal('');
   async addMember() {
