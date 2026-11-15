@@ -172,6 +172,8 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             <input aria-label="New embed origin" placeholder="https://app.example.com" [ngModel]="newOrigin()" (ngModelChange)="newOrigin.set($event)" name="newOrigin" required aria-describedby="settingsOriginRules" [attr.aria-invalid]="newOrigin()!=='' && !validNewOrigin()" />
             <button type="submit" name="addSettingsOrigin" [disabled]="busy() || !validNewOrigin()">Add origin</button>
           </form>
+          <button type="button" name="discardSettingsOrigin" (click)="discardOriginDraft()" [disabled]="!canDiscardOriginDraft()">Discard origin draft</button>
+          <p class="muted">Discard only clears the local new-origin field. It does not refresh Settings or remove any saved origin; other forms stay as they are.</p>
           <p class="muted" id="settingsOriginRules" name="settingsOriginRules">Use a canonical http:// or https:// bare origin, such as https://app.example.com or http://localhost:4200. No path, trailing slash, query, fragment or credentials. Outer whitespace is trimmed when adding; other text is not repaired or truncated. This checks the new origin's syntax only, not site ownership, trust, permission or newer server settings. Adding an origin allows it to embed this project's editor as described above; a successful addition refreshes Settings.</p>
           @if(originDraftNotice()){<p role="status" name="settingsOriginDraftNotice">{{ originDraftNotice() }}</p>}
           @if(newOrigin()!=='' && !validNewOrigin()){<p role="status" name="settingsOriginInvalid">Correct the origin before adding. Your full text stays here and is not sent.</p>}
@@ -664,6 +666,12 @@ export class SettingsComponent implements OnInit {
   newRuleName = signal(''); newRuleTrigger = signal('translation.value'); newRuleAction = signal('pretranslate');
   newRuleProvider = signal(''); newRuleLocales = signal<string[]>([]); newRuleTitle = signal(''); newRuleMessage = signal('');
 
+  canDiscardOriginDraft():boolean {return !this.busy() && this.newOrigin()!=='';}
+  discardOriginDraft() {
+    if(!this.canDiscardOriginDraft())return;
+    this.newOrigin.set('');
+    if(this.originDraftNotice())this.originDraftNotice.set('The submitted embed origin was saved. The local new-origin draft was discarded without refreshing Settings or removing any saved origin.');
+  }
   originDraftNotice = signal('');
   validNewOrigin():boolean {
     const origin=this.newOrigin().trim();

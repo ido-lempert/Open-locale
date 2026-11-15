@@ -1762,3 +1762,7 @@ other forms and errors remain, with accurate saved-add/discard wording.
 Custom status creation has Discard status draft. It clears only the local name,
 without refreshing Settings or removing saved statuses. Busy work blocks reset;
 other forms and errors remain, with accurate saved-status/discard wording.
+
+Embed-origin creation has Discard origin draft. It clears only the local origin,
+without refreshing Settings or changing the saved allowlist. Busy work blocks
+reset; other forms/errors and accurate saved-origin/discard wording remain.

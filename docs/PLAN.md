@@ -2121,3 +2121,8 @@ chronology; no external acceptance promotion.
 - Explicit local name clear without GET/PATCH/removal, with busy direct guard.
 - Other forms/errors/saved statuses preserved, saved receipt updated accurately.
   [Review0572](reviews/0572-settings-status-discard.md).
+
+## Discard local embed-origin draft
+- Explicit local origin clear without GET/PATCH/removal, with busy direct guard.
+- Other forms/errors/saved allowlist preserved; no access revocation or undo.
+  [Review0573](reviews/0573-settings-origin-discard.md).
