@@ -2126,3 +2126,8 @@ chronology; no external acceptance promotion.
 - Explicit local origin clear without GET/PATCH/removal, with busy direct guard.
 - Other forms/errors/saved allowlist preserved; no access revocation or undo.
   [Review0573](reviews/0573-settings-origin-discard.md).
+
+## Discard local webhook URL draft
+- URL-only local clear without request/refresh/delete/delivery, busy direct guard.
+- Event choices, one-time secret reveal, other forms and errors stay intact.
+  [Review0574](reviews/0574-settings-webhook-url-discard.md).

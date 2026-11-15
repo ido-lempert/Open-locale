@@ -128,6 +128,8 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             <label><input type="checkbox" [ngModel]="hookProjectRestored()" (ngModelChange)="hookProjectRestored.set($event)" name="hookEvRestore" /> project.restored</label>
             <button name="createSettingsWebhook" type="submit" [disabled]="busy()">Create</button>
           </form>
+          <button type="button" name="discardSettingsWebhookUrl" (click)="discardWebhookUrlDraft()" [disabled]="!canDiscardWebhookUrlDraft()">Discard URL draft</button>
+          <p class="muted">Discard only clears the local webhook URL. Selected events stay. It does not refresh Settings, delete saved webhooks or hide the signing secret above; other forms stay as they are.</p>
           @if(hookDraftNotice()){<p role="status" name="settingsWebhookDraftNotice">{{ hookDraftNotice() }}</p>}
           }
         </section>
@@ -541,6 +543,12 @@ export class SettingsComponent implements OnInit {
   }
   async copyToken(value: string) {
     try { await navigator.clipboard.writeText(value); } catch { /* clipboard unavailable */ }
+  }
+  canDiscardWebhookUrlDraft():boolean {return !this.busy() && this.hookUrl()!=='';}
+  discardWebhookUrlDraft() {
+    if(!this.canDiscardWebhookUrlDraft())return;
+    this.hookUrl.set('');
+    if(this.hookDraftNotice())this.hookDraftNotice.set('The submitted webhook was created. The local URL draft was discarded without refreshing Settings or deleting any saved webhook. Selected events stay for your next explicit Create. The signing secret above belongs to the submitted webhook.');
   }
   hookDraftNotice = signal('');
   async createWebhook() {

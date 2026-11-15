@@ -1766,3 +1766,7 @@ other forms and errors remain, with accurate saved-status/discard wording.
 Embed-origin creation has Discard origin draft. It clears only the local origin,
 without refreshing Settings or changing the saved allowlist. Busy work blocks
 reset; other forms/errors and accurate saved-origin/discard wording remain.
+
+Webhook creation has Discard URL draft. It clears only the local URL, preserving
+selected events and the submitted webhook's one-time signing-secret reveal.
+No refresh, saved webhook deletion or delivery is triggered; busy work blocks reset.
