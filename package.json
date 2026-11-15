@@ -228,6 +228,7 @@
     "test:settings-group-discard-browser": "node scripts/settings-group-discard-browser-test.mjs",
     "test:settings-member-discard-browser": "node scripts/settings-member-discard-browser-test.mjs",
     "test:settings-general-discard-browser": "node scripts/settings-general-discard-browser-test.mjs",
+    "test:settings-project-delete-browser": "node scripts/settings-project-delete-browser-test.mjs",
     "test:settings-member-email-discard-browser": "node scripts/settings-member-email-discard-browser-test.mjs",
     "test:settings-group-name-discard-browser": "node scripts/settings-group-name-discard-browser-test.mjs",
     "test:settings-rule-name-discard-browser": "node scripts/settings-rule-name-discard-browser-test.mjs",

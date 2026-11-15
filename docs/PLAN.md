@@ -2156,3 +2156,9 @@ chronology; no external acceptance promotion.
 - Email-only local clear without requests/refresh/membership or access change.
 - Busy guard; selected role/locales, errors, saved members and other forms stay.
   [Review0579](reviews/0579-settings-member-email-discard.md).
+
+## Guard project deletion confirmation and pending state
+- Require explicit confirmation for direct deletion; block duplicates and cancel
+  while pending. Server refusal retains drafts and confirmation for retry.
+- Accepted deletion blocks repeat submission even if navigation fails; explicit
+  return link and deleted-state notice. [Review0580](reviews/0580-settings-project-delete.md).

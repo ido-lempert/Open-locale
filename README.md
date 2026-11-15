@@ -1790,3 +1790,8 @@ change is triggered; busy work blocks reset.
 Add-member has Discard member email draft. It clears only the local email,
 preserving selected role and locales. No refresh, invitation or saved membership
 or access change is triggered; busy work blocks reset.
+
+Project deletion requires the explicit confirmation state, including direct calls.
+Pending deletion blocks duplicate deletes and confirmation cancellation. If the
+server accepts deletion but navigation fails, an accepted-deletion notice and
+Return to projects link remain; deletion cannot be submitted again on that page.

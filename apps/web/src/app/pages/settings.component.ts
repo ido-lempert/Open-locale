@@ -447,12 +447,14 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
         @if (isTeamAdmin()) {
         <section class="panel danger-zone">
           <h2>Danger zone</h2>
-          @if (!confirming()) {
-            <button class="danger-outline" (click)="confirming.set(true)">Delete project…</button>
+          @if (projectDeletionAccepted()) {
+            <p role="status" name="projectDeletedNotice">The project was deleted. <a routerLink="/projects">Return to projects</a>. Local fields on this page are no longer saved project state.</p>
+          } @else if (!confirming()) {
+            <button class="danger-outline" name="startDeleteProject" (click)="askDeleteProject()" [disabled]="busy()">Delete project…</button>
           } @else {
             <p>Delete <strong>{{ p.name }}</strong> and all its keys and translations? This cannot be undone.</p>
-            <button class="danger-solid" (click)="remove()" [disabled]="busy()">Yes, delete permanently</button>
-            <button (click)="confirming.set(false)">Cancel</button>
+            <button class="danger-solid" name="confirmDeleteProject" (click)="remove()" [disabled]="busy()">Yes, delete permanently</button>
+            <button name="cancelDeleteProject" (click)="cancelDeleteProject()" [disabled]="busy()">Cancel</button>
           }
         </section>
         }
@@ -1187,9 +1189,13 @@ export class SettingsComponent implements OnInit {
     try { await this.api.removeMember(this.projectId, m.id); await this.reload(); }
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
   }
+  projectDeletionAccepted = signal(false);
+  askDeleteProject() {if(!this.busy() && !this.projectDeletionAccepted())this.confirming.set(true);}
+  cancelDeleteProject() {if(!this.busy())this.confirming.set(false);}
   async remove() {
-    this.busy.set(true);
-    try { await this.api.deleteProject(this.projectId); await this.router.navigate(['/projects']); }
+    if(this.busy() || !this.confirming() || this.projectDeletionAccepted())return;
+    this.busy.set(true); this.error.set('');
+    try { await this.api.deleteProject(this.projectId); this.projectDeletionAccepted.set(true); this.confirming.set(false); await this.router.navigate(['/projects']); }
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); this.busy.set(false); }
   }
 }
