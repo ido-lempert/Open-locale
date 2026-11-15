@@ -228,6 +228,7 @@
     "test:settings-group-discard-browser": "node scripts/settings-group-discard-browser-test.mjs",
     "test:settings-member-discard-browser": "node scripts/settings-member-discard-browser-test.mjs",
     "test:settings-general-discard-browser": "node scripts/settings-general-discard-browser-test.mjs",
+    "test:settings-token-name-discard-browser": "node scripts/settings-token-name-discard-browser-test.mjs",
     "test:settings-webhook-url-discard-browser": "node scripts/settings-webhook-url-discard-browser-test.mjs",
     "test:settings-origin-discard-browser": "node scripts/settings-origin-discard-browser-test.mjs",
     "test:settings-status-discard-browser": "node scripts/settings-status-discard-browser-test.mjs",

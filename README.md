@@ -1770,3 +1770,7 @@ reset; other forms/errors and accurate saved-origin/discard wording remain.
 Webhook creation has Discard URL draft. It clears only the local URL, preserving
 selected events and the submitted webhook's one-time signing-secret reveal.
 No refresh, saved webhook deletion or delivery is triggered; busy work blocks reset.
+
+Token creation has Discard name draft. It clears only the local name, preserving
+selected access and the submitted token's one-time reveal. No refresh, creation,
+revocation or access change is triggered; busy work blocks reset.

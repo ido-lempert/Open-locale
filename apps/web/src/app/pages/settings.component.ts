@@ -90,6 +90,8 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             </select>
             <button name="createSettingsToken" type="submit" [disabled]="busy()">Create</button>
           </form>
+          <button type="button" name="discardSettingsTokenName" (click)="discardTokenNameDraft()" [disabled]="!canDiscardTokenNameDraft()">Discard name draft</button>
+          <p class="muted">Discard only clears the local token name. Selected access stays. It does not refresh Settings, revoke saved tokens or hide the token revealed above; other forms stay as they are.</p>
           @if(tokenDraftNotice()){<p role="status" name="settingsTokenDraftNotice">{{ tokenDraftNotice() }}</p>}
         </section>
         <section class="panel">
@@ -522,6 +524,12 @@ export class SettingsComponent implements OnInit {
       this.otaPubs.set(await this.api.listOtaPublications(this.projectId));
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Publish failed'); }
     finally { this.busy.set(false); }
+  }
+  canDiscardTokenNameDraft():boolean {return !this.busy() && this.tokenName()!=='';}
+  discardTokenNameDraft() {
+    if(!this.canDiscardTokenNameDraft())return;
+    this.tokenName.set('');
+    if(this.tokenDraftNotice())this.tokenDraftNotice.set('The submitted token was created. The local name draft was discarded without refreshing Settings or revoking any saved token. Selected access stays for your next explicit Create. The token revealed above belongs to the submitted token.');
   }
   tokenDraftNotice = signal('');
   async createToken() {

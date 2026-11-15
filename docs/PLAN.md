@@ -2131,3 +2131,8 @@ chronology; no external acceptance promotion.
 - URL-only local clear without request/refresh/delete/delivery, busy direct guard.
 - Event choices, one-time secret reveal, other forms and errors stay intact.
   [Review0574](reviews/0574-settings-webhook-url-discard.md).
+
+## Discard local token name draft
+- Name-only local clear without request/refresh/revoke, with busy direct guard.
+- Access choice, one-time token reveal, other forms and errors stay intact.
+  [Review0575](reviews/0575-settings-token-name-discard.md).
