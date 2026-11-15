@@ -1805,3 +1805,8 @@ API-token revocation requires matching confirmation and blocks duplicate revoke
 or confirmation changes while busy. Accepted revocation removes the token locally
 before refresh and clears its matching reveal; a saved receipt stays on refresh
 failure. Other tokens and independent form drafts are not revoked or discarded.
+
+Automation-rule removal requires matching confirmation and blocks duplicate remove,
+confirmation changes and Enable/Disable while busy. Accepted removal updates the
+local list before refresh and keeps an accurate receipt on refresh failure.
+Earlier effects are not undone, and a run already in progress may finish.

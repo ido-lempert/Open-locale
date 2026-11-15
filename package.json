@@ -230,6 +230,7 @@
     "test:settings-general-discard-browser": "node scripts/settings-general-discard-browser-test.mjs",
     "test:settings-webhook-delete-browser": "node scripts/settings-webhook-delete-browser-test.mjs",
     "test:settings-token-revoke-browser": "node scripts/settings-token-revoke-browser-test.mjs",
+    "test:settings-rule-remove-browser": "node scripts/settings-rule-remove-browser-test.mjs",
     "test:settings-project-delete-browser": "node scripts/settings-project-delete-browser-test.mjs",
     "test:settings-member-email-discard-browser": "node scripts/settings-member-email-discard-browser-test.mjs",
     "test:settings-group-name-discard-browser": "node scripts/settings-group-name-discard-browser-test.mjs",

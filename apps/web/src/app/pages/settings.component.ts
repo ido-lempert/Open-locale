@@ -240,13 +240,20 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             @for (r of autoRules(); track r.id) {
               <li>
                 <span>{{ r.name }} <span class="muted">{{ r.trigger }} &rarr; {{ ruleSummary(r) }}</span></span>
-                @if (isTeamAdmin()) { <button (click)="toggleRule(r)">{{ r.enabled ? 'Disable' : 'Enable' }}</button> }
-                @if (isTeamAdmin()) { <button class="danger" (click)="removeRule(r)">Remove</button> }
+                @if (isTeamAdmin()) { <button [attr.name]="'toggleRule-'+r.id" (click)="toggleRule(r)" [disabled]="busy()">{{ r.enabled ? 'Disable' : 'Enable' }}</button> }
+                @if (isTeamAdmin()) {
+                  @if(confirmingRule()===r.id){
+                    <span>Remove <strong>{{r.name}}</strong>? This cannot be undone. Earlier effects are not undone, and a run already in progress may finish.</span>
+                    <button class="danger" [attr.name]="'confirmRemoveRule-'+r.id" (click)="removeRule(r)" [disabled]="busy()">Yes, remove</button>
+                    <button [attr.name]="'cancelRemoveRule-'+r.id" (click)="cancelRemoveRule()" [disabled]="busy()">Cancel</button>
+                  } @else {<button class="danger" [attr.name]="'startRemoveRule-'+r.id" (click)="askRemoveRule(r.id)" [disabled]="busy()">Remove</button>}
+                }
               </li>
             }
             @if (!autoRules().length) { <li class="muted">No rules yet.</li> }
           </ul>
           @if (isTeamAdmin()) {
+          @if(ruleRemoveNotice()){<p role="status" name="settingsRuleRemoveNotice">{{ruleRemoveNotice()}}</p>}
           <form class="inline" (ngSubmit)="addRule()">
             <input aria-label="Rule name" placeholder="Rule name" [ngModel]="newRuleName()" (ngModelChange)="newRuleName.set($event)" name="newRuleName" aria-describedby="settingsRuleNameRules" [attr.aria-invalid]="!validNewRuleName()" />
             <select aria-label="Trigger" [ngModel]="newRuleTrigger()" (ngModelChange)="newRuleTrigger.set($event)" name="newRuleTrigger">
@@ -847,6 +854,7 @@ export class SettingsComponent implements OnInit {
   }
 
   async toggleRule(r: AutomationRuleInfo) {
+    if(this.busy())return;
     this.busy.set(true); this.error.set('');
     try {
       await this.api.updateAutomationRule(this.projectId, r.id, { enabled: !r.enabled });
@@ -854,10 +862,18 @@ export class SettingsComponent implements OnInit {
     } catch (e) { this.error.set(e instanceof Error ? e.message : String(e)); } finally { this.busy.set(false); }
   }
 
+  confirmingRule = signal<string|null>(null);
+  ruleRemoveNotice = signal('');
+  askRemoveRule(id:string) {if(!this.busy() && this.autoRules().some(r=>r.id===id))this.confirmingRule.set(id);}
+  cancelRemoveRule() {if(!this.busy())this.confirmingRule.set(null);}
   async removeRule(r: AutomationRuleInfo) {
-    this.busy.set(true); this.error.set('');
+    if(this.busy() || this.confirmingRule()!==r.id || !this.autoRules().some(rule=>rule.id===r.id))return;
+    this.busy.set(true); this.error.set(''); this.ruleRemoveNotice.set('');
     try {
       await this.api.deleteAutomationRule(this.projectId, r.id);
+      this.autoRules.set(this.autoRules().filter(rule=>rule.id!==r.id));
+      this.confirmingRule.set(null);
+      this.ruleRemoveNotice.set('The submitted automation rule was removed. Other rules were not removed by this request. Earlier effects are not undone, and a run already in progress may finish.');
       this.autoRules.set(await this.api.listAutomationRules(this.projectId));
     } catch (e) { this.error.set(e instanceof Error ? e.message : String(e)); } finally { this.busy.set(false); }
   }

@@ -2172,3 +2172,8 @@ chronology; no external acceptance promotion.
 - Match existing token confirmation; block duplicate/cancel/start while busy.
 - Accepted local removal and matching reveal clear precede refresh; refusal keeps
   retry context. [Review0582](reviews/0582-settings-token-revoke.md).
+
+## Guard automation-rule removal confirmation and pending state
+- Match existing rule confirmation; block duplicate/cancel/start/toggle while busy.
+- Accepted local removal/receipt precede refresh; refusal keeps retry context.
+  [Review0583](reviews/0583-settings-rule-remove.md).
