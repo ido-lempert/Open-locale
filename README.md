@@ -1782,3 +1782,7 @@ No refresh, saved-provider removal or pre-translation run; busy work blocks rese
 Automation creation has Discard rule name draft. It clears only the local name,
 preserving trigger, action, provider, locales, title and message. No refresh,
 saved-rule change or action run; busy work blocks reset.
+
+Group creation has Discard group name draft. It clears only the local name,
+preserving selected role and locales. No refresh, saved-group change or access
+change is triggered; busy work blocks reset.

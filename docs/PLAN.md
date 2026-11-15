@@ -2146,3 +2146,8 @@ chronology; no external acceptance promotion.
 - Name-only local clear without request/refresh/saved-rule change/run, busy guard.
 - Trigger/action/provider/locales/title/message, other forms and errors stay intact.
   [Review0577](reviews/0577-settings-rule-name-discard.md).
+
+## Discard local new-group name draft
+- Name-only local clear without request/refresh/group or access changes, busy guard.
+- Selected role/locales, saved groups, other forms and errors stay intact.
+  [Review0578](reviews/0578-settings-group-name-discard.md).

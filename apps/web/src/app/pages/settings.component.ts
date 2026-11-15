@@ -412,6 +412,8 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             <input aria-label="Group locales" placeholder="Locales (e.g. he,fr) - blank = all" [ngModel]="groupLocales()" (ngModelChange)="groupLocales.set($event)" name="groupLocales" />
             <button type="submit" name="addSettingsGroup" [disabled]="busy() || !validNewGroupName()">Add group</button>
           </form>
+          <button type="button" name="discardSettingsGroupName" (click)="discardGroupNameDraft()" [disabled]="!canDiscardGroupNameDraft()">Discard group name draft</button>
+          <p class="muted">Discard only clears the local new-group name. Selected role and locales stay. It does not refresh Settings, change saved groups or change anyone's access; other forms stay as they are.</p>
           <p class="muted" id="settingsGroupRules" name="settingsGroupRules">Group name: 1-100 characters using the API count after trimming outer whitespace. Full input is kept without truncation. This checks the name only, not role, locale grants, permission or newer server changes. A successful addition refreshes Settings.</p>
           @if(groupDraftNotice()){<p role="status" name="settingsGroupDraftNotice">{{ groupDraftNotice() }}</p>}
           @if(groupName()!=='' && !validNewGroupName()){<p role="status" name="settingsGroupInvalid">Correct the group name before adding. Your full name, role and locales stay here and are not sent.</p>}
@@ -933,6 +935,12 @@ export class SettingsComponent implements OnInit {
     const union = [...new Set(grants.flatMap((g) => g.allowedLocales))].sort();
     if (union.length === m.allowedLocales.length && union.every((l) => m.allowedLocales.includes(l))) return null;
     return `effective locales: ${union.join(', ')}`;
+  }
+  canDiscardGroupNameDraft():boolean {return !this.busy() && this.groupName()!=='';}
+  discardGroupNameDraft() {
+    if(!this.canDiscardGroupNameDraft())return;
+    this.groupName.set('');
+    if(this.groupDraftNotice())this.groupDraftNotice.set('The submitted group was created. The local new-group name draft was discarded without refreshing Settings or changing saved groups or access. Selected role and locales stay for your next explicit Add group.');
   }
   groupDraftNotice = signal('');
   validNewGroupName():boolean {const name=this.groupName().trim();return name.length>0 && this.generalTextLength(name)<=100;}
