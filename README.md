@@ -1885,3 +1885,7 @@ fails. A newer URL/event draft still needs its own explicit Create.
 Saving an add-member form refreshes only members, keeping unrelated Settings
 drafts. Existing email/role/locale snapshots, newer whole drafts and accurate
 membership-saved receipts also apply to membership upserts and refresh failure.
+
+Group creation refreshes groups only, preserving unrelated Settings drafts. The
+submitted name/role/locales and whole newer draft behavior stay; refresh failure
+keeps the truthful created receipt without adding another group or any members.
