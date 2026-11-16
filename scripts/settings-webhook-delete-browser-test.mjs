@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55985, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = 55999, WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
 let failures = 0, api, web, browser, prisma;
@@ -38,8 +38,8 @@ try {
   const other=await call(P+'/webhooks',{url:'https://example.com/other',events:['translation.updated']},token);
   for(const h of [first,other])await prisma.webhookDelivery.create({data:{webhookId:h.id,event:'translation.updated',httpStatus:200,success:true,attempts:1,durationMs:1}}); // seeded history, no delivery sent
   await page.goto(`${WEB}${P}/settings`,{waitUntil:'networkidle0'});await page.waitForSelector(`[name=startDeleteHook-${first.id}]`);await page.waitForNetworkIdle({idleTime:200});
-  let deletes=0,reads=0,held,refuse=true,failRead=false;
-  await page.setRequestInterception(true);page.on('request',req=>{const path=new URL(req.url()).pathname;if(path.startsWith('/api/')&&req.method()==='GET'){reads++;if(failRead&&path===`/api${P}`)return req.respond({status:503,contentType:'application/json',body:'{"message":"Refresh failed"}'});}if(req.method()==='DELETE'&&path===`/api${P}/webhooks/${first.id}`){deletes++;if(refuse)return req.respond({status:403,contentType:'application/json',body:'{"message":"Permission denied"}'});held=req;return;}req.continue();});
+  let deletes=0,reads=0,held,refuse=true,failRead=false;const readPaths=[];
+  await page.setRequestInterception(true);page.on('request',req=>{const path=new URL(req.url()).pathname;if(path.startsWith('/api/')&&req.method()==='GET'){reads++;readPaths.push(path);if(failRead&&path===`/api${P}/webhooks`)return req.respond({status:503,contentType:'application/json',body:'{"message":"Refresh failed"}'});}if(req.method()==='DELETE'&&path===`/api${P}/webhooks/${first.id}`){deletes++;if(refuse)return req.respond({status:403,contentType:'application/json',body:'{"message":"Permission denied"}'});held=req;return;}req.continue();});
   const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
   const click=async name=>{await page.$eval(`[name=${name}]`,e=>e.scrollIntoView({block:'center'}));await page.click(`[name=${name}]`);await settle();};
   const direct=id=>page.evaluate(id=>ng.getComponent(document.querySelector('ol-settings')).removeHook(id),id);
@@ -51,7 +51,13 @@ try {
   await held.continue();await page.waitForFunction(()=>!ng.getComponent(document.querySelector('ol-settings')).busy());await direct(first.id);await page.evaluate(id=>ng.getComponent(document.querySelector('ol-settings')).askDeleteHook(id),first.id);const hooks=await call(P+'/webhooks',null,token);check('accepted delete503 removes target locally and on server without retry or stale secret',deletes===2&&hooks.length===1&&hooks[0].id===other.id&&!await page.$(`[name=startDeleteHook-${first.id}]`)&&await page.evaluate(id=>{const c=ng.getComponent(document.querySelector('ol-settings'));return c.webhooks().length===1&&c.webhooks()[0].id===id&&c.createdWebhook()===null&&c.confirmingHook()===null&&c.error()==='Refresh failed'&&c.hookUrl()==='https://example.com/unsent'&&c.name()==='Other draft'&&c.hookDeleteNotice().includes('were deleted');},other.id));
   check('delete cascades only selected seeded history and keeps other history',await prisma.webhookDelivery.count({where:{webhookId:first.id}})===0&&await prisma.webhookDelivery.count({where:{webhookId:other.id}})===1);
   await page.$eval('[name=settingsHookDeleteNotice]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/settings-webhook-delete-desktop.png'});await page.setViewport({width:390,height:844});await page.$eval('[name=settingsHookDeleteNotice]',e=>scrollTo(0,scrollY+e.getBoundingClientRect().top-110));await page.screenshot({path:'/downloads/settings-webhook-delete-mobile.png'});check('390px accepted deletion receipt fits',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-  check('no tasks translations or emitted deliveries beyond one seeded history',await prisma.task.count()===0&&await prisma.translation.count()===0&&await prisma.webhookDelivery.count()===1);
+  check('failed delete refresh reads webhooks only',reads===1&&readPaths.every(p=>p===`/api${P}/webhooks`));
+  failRead=false;
+  await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-settings'));c.name.set('Retained name');c.description.set('Retained description');c.hookUrl.set('https://example.com/next');c.hookTranslationUpdated.set(false);c.hookProjectRestored.set(true);c.newRuleName.set('Next rule');c.createdWebhook.set({id:'local-display-only',secret:'synthetic-display-only'});});await settle();
+  await page.setViewport({width:1280,height:900});await click('startDeleteHook-'+other.id);await click('confirmDeleteHook-'+other.id);await page.waitForFunction(()=>!ng.getComponent(document.querySelector('ol-settings')).busy());
+  check('successful delete refresh keeps unrelated drafts and nonmatching display',await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-settings'));return c.webhooks().length===0&&c.name()==='Retained name'&&c.description()==='Retained description'&&c.hookUrl()==='https://example.com/next'&&!c.hookTranslationUpdated()&&c.hookProjectRestored()&&c.newRuleName()==='Next rule'&&c.createdWebhook()?.id==='local-display-only'&&c.error()===''&&c.hookDeleteNotice().includes('were deleted');}));
+  check('successful delete uses webhooks-only read and deletes other seeded history',reads===2&&readPaths.every(p=>p===`/api${P}/webhooks`)&&await prisma.webhook.count()===0&&await prisma.webhookDelivery.count()===0);
+  check('no tasks translations or emitted deliveries after explicit second delete',await prisma.task.count()===0&&await prisma.translation.count()===0&&await prisma.webhookDelivery.count()===0);
   check('no webhook delete runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
 } catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??String(e)}`);process.exitCode=1;}
 finally {

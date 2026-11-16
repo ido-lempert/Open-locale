@@ -1869,3 +1869,7 @@ result. Toggling does not run the rule, undo earlier effects or reset other draf
 API-token revocation refreshes only the token list after accepted local removal.
 Unrelated Settings drafts and a different token's one-time display stay as they are;
 a failed refresh does not restore the revoked token or invite another revoke.
+
+Webhook deletion refreshes only webhooks after accepted local removal and matching
+secret-display cleanup. Unrelated Settings drafts and a different webhook's display
+stay; failed refresh does not restore the deleted webhook or its delivery history.

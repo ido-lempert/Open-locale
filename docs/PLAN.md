@@ -2241,3 +2241,7 @@ chronology; no external acceptance promotion.
 ## Preserve Settings drafts after API-token revocation
 - Refresh tokens only after accepted removal; preserve unrelated form drafts and
   nonmatching one-time display. [Review0594](reviews/0594-token-revoke-refresh.md).
+
+## Preserve Settings drafts after webhook deletion
+- Refresh webhooks only after accepted deletion; keep unrelated form drafts and
+  nonmatching display. [Review0595](reviews/0595-webhook-delete-refresh.md).

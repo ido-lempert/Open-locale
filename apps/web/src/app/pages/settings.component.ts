@@ -667,7 +667,7 @@ export class SettingsComponent implements OnInit {
       this.hookDeleteNotice.set('The submitted webhook and its delivery history were deleted. Other webhooks were not deleted by this request.');
       this.confirmingHook.set(null);
       if (this.createdWebhook()?.id === id) this.createdWebhook.set(null);
-      await this.reload();
+      this.webhooks.set(await this.api.listWebhooks(this.projectId));
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }
