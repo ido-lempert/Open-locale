@@ -1861,3 +1861,7 @@ refresh does not undo the accepted state. In-progress deliveries may finish.
 Pseudo-provider Enable/Disable refuses missing or stale loaded state. Accepted
 state and a receipt are kept locally if the providers-only refresh fails. Selection,
 saved rules and other drafts remain. Toggling does not run Fill empty or undo data.
+
+Automation-rule Enable/Disable matches the loaded target/state and keeps accepted
+state plus a receipt before rules-only refresh. Refresh failure does not erase that
+result. Toggling does not run the rule, undo earlier effects or reset other drafts.

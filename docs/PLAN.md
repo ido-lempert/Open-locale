@@ -2233,3 +2233,7 @@ chronology; no external acceptance promotion.
   negative1/2,restored11/0. All218 browsers current2498/0;215 FIRST0 and060/078/
   088 unchanged second after startupPGbindaborts. API permissions unchanged50/0
   after startupPGbindabort; others/sync239/native246/config FIRST0. No external promotion.
+
+## Guard automation-rule enabled-state changes
+- Match loaded target/state, retain accepted local state/receipt before rules-only
+  refresh and preserve drafts. [Review0593](reviews/0593-settings-rule-toggle.md).

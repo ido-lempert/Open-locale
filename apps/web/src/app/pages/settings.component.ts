@@ -276,6 +276,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             @if (!autoRules().length) { <li class="muted">No rules yet.</li> }
           </ul>
           @if (isTeamAdmin()) {
+          @if(ruleToggleNotice()){<p role="status" name="settingsRuleToggleNotice">{{ruleToggleNotice()}}</p>}
           @if(ruleRemoveNotice()){<p role="status" name="settingsRuleRemoveNotice">{{ruleRemoveNotice()}}</p>}
           <form class="inline" (ngSubmit)="addRule()">
             <input aria-label="Rule name" placeholder="Rule name" [ngModel]="newRuleName()" (ngModelChange)="newRuleName.set($event)" name="newRuleName" aria-describedby="settingsRuleNameRules" [attr.aria-invalid]="!validNewRuleName()" />
@@ -937,13 +938,19 @@ export class SettingsComponent implements OnInit {
     } catch (e) { this.error.set(e instanceof Error ? e.message : String(e)); } finally { this.busy.set(false); }
   }
 
+  ruleToggleNotice = signal('');
   async toggleRule(r: AutomationRuleInfo) {
-    if(this.busy())return;
-    this.busy.set(true); this.error.set('');
+    const loaded=this.autoRules().find(row=>row.id===r.id);
+    if(this.busy() || !loaded || loaded.enabled!==r.enabled)return;
+    const enabled=!loaded.enabled;
+    this.busy.set(true);this.error.set('');this.ruleToggleNotice.set('');
     try {
-      await this.api.updateAutomationRule(this.projectId, r.id, { enabled: !r.enabled });
+      await this.api.updateAutomationRule(this.projectId,loaded.id,{enabled});
+      this.autoRules.set(this.autoRules().map(row=>row.id===loaded.id?{...row,enabled}:row));
+      this.ruleToggleNotice.set(`The submitted rule was ${enabled?'enabled':'disabled'}. This did not run the rule or undo its earlier effects. Its trigger, action, configuration and creator were not changed by this request. Other rules and unsaved forms are kept. A run already in progress may finish.`);
       this.autoRules.set(await this.api.listAutomationRules(this.projectId));
-    } catch (e) { this.error.set(e instanceof Error ? e.message : String(e)); } finally { this.busy.set(false); }
+    }catch(e){this.error.set(e instanceof Error?e.message:String(e));}
+    finally{this.busy.set(false);}
   }
 
   confirmingRule = signal<string|null>(null);
