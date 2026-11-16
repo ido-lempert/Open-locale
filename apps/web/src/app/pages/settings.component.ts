@@ -1029,7 +1029,7 @@ export class SettingsComponent implements OnInit {
       } else {
         this.memberDraftNotice.set('The submitted membership was saved. Your newer member draft is kept here and has not been saved. Review the email, role and locales before adding again.');
       }
-      await this.reload();
+      this.members.set(await this.api.listMembers(this.projectId));
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }

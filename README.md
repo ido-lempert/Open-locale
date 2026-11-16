@@ -1881,3 +1881,7 @@ newer name/access drafts still need their own explicit Create.
 Webhook creation refreshes only webhooks, preserving unrelated Settings drafts.
 The one-time signing secret stays tied to the submitted webhook even if refresh
 fails. A newer URL/event draft still needs its own explicit Create.
+
+Saving an add-member form refreshes only members, keeping unrelated Settings
+drafts. Existing email/role/locale snapshots, newer whole drafts and accurate
+membership-saved receipts also apply to membership upserts and refresh failure.
