@@ -2187,3 +2187,8 @@ chronology; no external acceptance promotion.
 - Match loaded origin confirmation; block duplicate/cancel/start/add while busy.
 - Accepted allowlist replacement/receipt precede project-only refresh; refusal
   keeps retry context. [Review0585](reviews/0585-settings-origin-remove.md).
+
+## Guard custom-status removal confirmation and pending state
+- Match loaded custom status; block duplicate/cancel/start/add while busy.
+- Accepted local list/receipt precede project-only refresh; refusal keeps retry
+  context. [Review0586](reviews/0586-settings-status-remove.md).

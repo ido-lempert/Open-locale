@@ -1822,3 +1822,9 @@ confirmation changes and Add origin while busy. Accepted allowlist replacement i
 shown locally before a project-only refresh, preserving independent form drafts
 and the saved receipt on refresh failure. This keeps the existing whole-list save
 semantics; it does not sign users out or close frames already open.
+
+Custom review-status removal requires matching confirmation and blocks duplicate
+requests, confirmation changes and Add while busy. Accepted list replacement is
+shown locally before a project-only refresh with a saved receipt on refresh failure.
+New-status and independent form drafts stay. Existing translations carrying the
+removed status are not changed; existing whole-list replacement semantics remain.

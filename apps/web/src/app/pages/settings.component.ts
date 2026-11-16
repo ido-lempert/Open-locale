@@ -144,11 +144,18 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             @for (st of project()?.customStatuses ?? []; track st) {
               <li>
                 <span class="badge">{{ st.toLowerCase() }}</span>
-                @if (isTeamAdmin()) { <button class="danger" (click)="removeStatus(st)">Remove</button> }
+                @if (isTeamAdmin()) {
+                  @if(confirmingStatus()===st){
+                    <span>Remove this custom status? Translations already carrying it are not changed. The currently loaded custom-status list, minus this status, will replace the saved list.</span>
+                    <button class="danger" [attr.name]="'confirmRemoveStatus-'+$index" (click)="removeStatus(st)" [disabled]="busy()">Yes, remove</button>
+                    <button [attr.name]="'cancelRemoveStatus-'+$index" (click)="cancelRemoveStatus()" [disabled]="busy()">Cancel</button>
+                  } @else {<button class="danger" [attr.name]="'startRemoveStatus-'+$index" (click)="askRemoveStatus(st)" [disabled]="busy()">Remove</button>}
+                }
               </li>
             }
           </ul>
           @if (isTeamAdmin()) {
+          @if(statusRemoveNotice()){<p role="status" name="settingsStatusRemoveNotice">{{statusRemoveNotice()}}</p>}
           <form class="inline" (ngSubmit)="addStatus()">
             <input aria-label="New custom status" placeholder="e.g. NEEDS_WORK (A-Z, 0-9, _)" [ngModel]="newStatus()" (ngModelChange)="newStatus.set($event)" name="newStatus" required aria-describedby="settingsStatusRules" [attr.aria-invalid]="newStatus()!=='' && !validNewStatus()" />
             <button type="submit" name="addSettingsStatus" [disabled]="busy() || !validNewStatus()">Add</button>
@@ -934,12 +941,20 @@ export class SettingsComponent implements OnInit {
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }
+  confirmingStatus = signal<string|null>(null);
+  statusRemoveNotice = signal('');
+  askRemoveStatus(st:string) {if(!this.busy() && this.project()?.customStatuses?.includes(st))this.confirmingStatus.set(st);}
+  cancelRemoveStatus() {if(!this.busy())this.confirmingStatus.set(null);}
   async removeStatus(st: string) {
-    this.busy.set(true); this.error.set('');
+    if(this.busy() || this.confirmingStatus()!==st || !this.project()?.customStatuses?.includes(st))return;
+    const customStatuses=(this.project()?.customStatuses ?? []).filter(x=>x!==st);
+    this.busy.set(true); this.error.set(''); this.statusRemoveNotice.set('');
     try {
-      const current = this.project()?.customStatuses ?? [];
-      await this.api.updateProject(this.projectId, { customStatuses: current.filter((x) => x !== st) });
-      await this.reload();
+      await this.api.updateProject(this.projectId, { customStatuses });
+      this.project.update(project=>project?{...project,customStatuses}:project);
+      this.confirmingStatus.set(null);
+      this.statusRemoveNotice.set('The submitted custom-status list was saved without the selected status. This replaced the saved list using the previously loaded statuses. Existing translations were not changed by this request. Your new-status draft and other forms are kept.');
+      this.project.set(await this.api.getProject(this.projectId));
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }
