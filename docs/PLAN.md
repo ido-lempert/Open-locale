@@ -2224,3 +2224,12 @@ chronology; no external acceptance promotion.
   expanded stale-state-only negative1/2,restored11/0. All217 browsers FIRST2487/0;
   API/sync239/config passed. Native246 after fixture-only readiness wait, with
   first stage recreated after failed middle cleaned checkpoint. No external promotion.
+
+## Guard pseudo-provider enabled-state changes
+- Match loaded target/state and keep accepted local enabled state/receipt before
+  providers-only refresh. Preserve selection, saved rules and drafts; no Fill empty.
+  [Review0592](reviews/0592-settings-mt-toggle.md).
+- Verification: initial fixture setup400, corrected11/0, deliberate stale-state
+  negative1/2,restored11/0. All218 browsers current2498/0;215 FIRST0 and060/078/
+  088 unchanged second after startupPGbindaborts. API permissions unchanged50/0
+  after startupPGbindabort; others/sync239/native246/config FIRST0. No external promotion.

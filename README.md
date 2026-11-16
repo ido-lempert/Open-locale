@@ -1857,3 +1857,7 @@ Webhook Enable/Disable refuses stale loaded state and duplicate pending changes.
 Accepted active-state changes update the local row and receipt before a webhooks-
 only refresh, keeping other drafts, revealed secret and delivery history. A failed
 refresh does not undo the accepted state. In-progress deliveries may finish.
+
+Pseudo-provider Enable/Disable refuses missing or stale loaded state. Accepted
+state and a receipt are kept locally if the providers-only refresh fails. Selection,
+saved rules and other drafts remain. Toggling does not run Fill empty or undo data.

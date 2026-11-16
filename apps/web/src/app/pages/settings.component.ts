@@ -220,6 +220,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             @if (!mtProviders().length) { <li class="muted">No providers yet - add the pseudo provider to pre-translate empty cells.</li> }
           </ul>
           @if (isTeamAdmin()) {
+          @if(mtToggleNotice()){<p role="status" name="settingsMtToggleNotice">{{mtToggleNotice()}}</p>}
           @if(mtRemoveNotice()){<p role="status" name="settingsMtRemoveNotice">{{mtRemoveNotice()}}</p>}
           <form class="inline" (ngSubmit)="addMtProvider()">
             <input aria-label="New provider name" placeholder="Provider name" [ngModel]="newMtName()" (ngModelChange)="newMtName.set($event)" name="newMtName" aria-describedby="settingsMtNameRules" [attr.aria-invalid]="!validNewMtName()" />
@@ -841,13 +842,19 @@ export class SettingsComponent implements OnInit {
     } catch (e) { this.error.set(e instanceof Error ? e.message : String(e)); } finally { this.busy.set(false); }
   }
 
+  mtToggleNotice = signal('');
   async toggleMtProvider(p: MtProviderInfo) {
-    if(this.busy())return;
-    this.busy.set(true); this.error.set('');
+    const loaded=this.mtProviders().find(row=>row.id===p.id);
+    if(this.busy() || !loaded || loaded.enabled!==p.enabled)return;
+    const enabled=!loaded.enabled;
+    this.busy.set(true);this.error.set('');this.mtToggleNotice.set('');
     try {
-      await this.api.updateMtProvider(this.projectId, p.id, { enabled: !p.enabled });
+      await this.api.updateMtProvider(this.projectId,loaded.id,{enabled});
+      this.mtProviders.set(this.mtProviders().map(row=>row.id===loaded.id?{...row,enabled}:row));
+      this.mtToggleNotice.set(`The submitted pseudo test-data provider was ${enabled?'enabled':'disabled'}. This did not run Fill empty or undo existing translations. Provider selection, saved rules and your unsaved forms are kept. Work already in progress may finish.`);
       this.mtProviders.set(await this.api.listMtProviders(this.projectId));
-    } catch (e) { this.error.set(e instanceof Error ? e.message : String(e)); } finally { this.busy.set(false); }
+    }catch(e){this.error.set(e instanceof Error?e.message:String(e));}
+    finally{this.busy.set(false);}
   }
 
   confirmingMtProvider = signal<string|null>(null);
