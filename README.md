@@ -1873,3 +1873,7 @@ a failed refresh does not restore the revoked token or invite another revoke.
 Webhook deletion refreshes only webhooks after accepted local removal and matching
 secret-display cleanup. Unrelated Settings drafts and a different webhook's display
 stay; failed refresh does not restore the deleted webhook or its delivery history.
+
+API-token creation refreshes only tokens, keeping unrelated Settings drafts after
+success. The one-time reveal stays tied to the submitted token if refresh fails;
+newer name/access drafts still need their own explicit Create.

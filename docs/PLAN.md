@@ -2245,3 +2245,7 @@ chronology; no external acceptance promotion.
 ## Preserve Settings drafts after webhook deletion
 - Refresh webhooks only after accepted deletion; keep unrelated form drafts and
   nonmatching display. [Review0595](reviews/0595-webhook-delete-refresh.md).
+
+## Preserve unrelated Settings drafts after API-token creation
+- Refresh tokens only; retain submitted one-time reveal and existing pending-draft
+  behavior. [Review0596](reviews/0596-token-create-refresh.md).

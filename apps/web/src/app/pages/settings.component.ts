@@ -605,7 +605,7 @@ export class SettingsComponent implements OnInit {
       } else {
         this.tokenDraftNotice.set('The submitted token was created. Your newer name and access draft is kept here and has not been created. Review the name and access before creating again. The token revealed above belongs to the submitted token, not this newer draft.');
       }
-      await this.reload();
+      this.tokens.set(await this.api.listTokens());
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }
