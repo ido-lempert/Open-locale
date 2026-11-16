@@ -2192,3 +2192,8 @@ chronology; no external acceptance promotion.
 - Match loaded custom status; block duplicate/cancel/start/add while busy.
 - Accepted local list/receipt precede project-only refresh; refusal keeps retry
   context. [Review0586](reviews/0586-settings-status-remove.md).
+
+## Guard locale removal confirmation and pending state
+- Match loaded non-base locale; block overlap while preview/deletion is pending.
+- Accurate preview scope and all-branch cascade warning; accepted list/receipt
+  precede project-only refresh. [Review0587](reviews/0587-settings-locale-remove.md).

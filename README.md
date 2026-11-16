@@ -1828,3 +1828,10 @@ requests, confirmation changes and Add while busy. Accepted list replacement is
 shown locally before a project-only refresh with a saved receipt on refresh failure.
 New-status and independent form drafts stay. Existing translations carrying the
 removed status are not changed; existing whole-list replacement semantics remain.
+
+Locale removal requires matching non-base-locale confirmation, with pending guards
+for preview loading and deletion. Accepted deletion updates the local locale list
+before project-only refresh and preserves a saved receipt on refresh failure.
+The count is a loaded default-branch nonempty preview, not a total: removal deletes
+that locale's translations and their history across every branch, including empty
+rows. Saved rules and local locale choices are not repaired; review before running.

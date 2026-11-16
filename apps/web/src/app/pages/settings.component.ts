@@ -38,16 +38,16 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                 <code>{{ l.code }}</code>
                 @if (l.code === p.baseLocale) { <span class="muted">base</span> }
                 @else if (confirmingLocale() === l.code) {
-                  <span>Remove <strong>{{ l.code }}</strong>? This permanently deletes
-                    {{ localeTxCount() }} translation{{ localeTxCount() === 1 ? '' : 's' }}.</span>
-                  <button class="danger" (click)="removeLocale(l.code)">Yes, remove</button>
-                  <button (click)="confirmingLocale.set(null)">Cancel</button>
+                  <span>Remove <strong>{{ l.code }}</strong>? This cannot be undone. All translations for this locale and their history are deleted across all branches, including empty rows. The loaded default-branch preview contains {{ localeTxCount() }} nonempty translation{{ localeTxCount() === 1 ? '' : 's' }}; it is not a total deletion count. Saved rules and local locale choices are not repaired. Review them before running work.</span>
+                  <button class="danger" [attr.name]="'confirmRemoveLocale-'+l.code" (click)="removeLocale(l.code)" [disabled]="busy()">Yes, remove</button>
+                  <button [attr.name]="'cancelRemoveLocale-'+l.code" (click)="cancelRemoveLocale()" [disabled]="busy()">Cancel</button>
                 }
-                @else if (isTeamAdmin()) { <button class="danger" (click)="askRemoveLocale(l.code)">Remove</button> }
+                @else if (isTeamAdmin()) { <button class="danger" [attr.name]="'startRemoveLocale-'+l.code" (click)="askRemoveLocale(l.code)" [disabled]="busy()">Remove</button> }
               </li>
             }
           </ul>
           @if (isTeamAdmin()) {
+          @if(localeRemoveNotice()){<p role="status" name="settingsLocaleRemoveNotice">{{localeRemoveNotice()}}</p>}
           <form class="inline" (ngSubmit)="addLocale()">
             <input aria-label="Add locale" placeholder="Add locale (e.g. fr)" [ngModel]="newLocale()" (ngModelChange)="newLocale.set($event)" name="newLocale" required aria-describedby="settingsLocaleRules" [attr.aria-invalid]="newLocale()!=='' && !validNewLocaleCode()" />
             <button type="submit" name="addSettingsLocale" [disabled]="busy() || !validNewLocaleCode()">Add</button>
@@ -660,15 +660,20 @@ export class SettingsComponent implements OnInit {
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }
+  localeRemoveNotice = signal('');
+  private removableLocale(code:string):boolean {return !!this.project()?.locales.some(l=>l.code===code) && code!==this.project()?.baseLocale;}
+  cancelRemoveLocale() {if(!this.busy())this.confirmingLocale.set(null);}
   async askRemoveLocale(code: string) {
-    this.error.set('');
+    if(this.busy() || !this.removableLocale(code))return;
+    this.busy.set(true); this.error.set('');
     try {
       const keys = await this.api.listKeys(this.projectId);
       this.localeTxCount.set(
         keys.reduce((n, k) => n + k.translations.filter((t) => t.localeCode === code && t.value !== '').length, 0),
       );
-      this.confirmingLocale.set(code);
+      if(this.removableLocale(code))this.confirmingLocale.set(code);
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+    finally {this.busy.set(false);}
   }
   private generalTextLength(value:string):number {
     // Match installed class-validator/validator isLength, not UTF-16 or grapheme length.
@@ -721,8 +726,15 @@ export class SettingsComponent implements OnInit {
     finally { this.busy.set(false); }
   }
   async removeLocale(code: string) {
-    this.busy.set(true); this.error.set('');
-    try { await this.api.removeLocale(this.projectId, code); this.confirmingLocale.set(null); await this.reload(); }
+    if(this.busy() || this.confirmingLocale()!==code || !this.removableLocale(code))return;
+    this.busy.set(true); this.error.set(''); this.localeRemoveNotice.set('');
+    try {
+      await this.api.removeLocale(this.projectId, code);
+      this.project.update(project=>project?{...project,locales:project.locales.filter(l=>l.code!==code)}:project);
+      this.confirmingLocale.set(null);
+      this.localeRemoveNotice.set('The submitted locale was removed with its translations and their history across all branches. Other locales were not removed by this request. Saved rules and local locale choices are not repaired; review them before running work. Your add-locale draft and other forms are kept.');
+      this.project.set(await this.api.getProject(this.projectId));
+    }
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }
