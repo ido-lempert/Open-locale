@@ -1835,3 +1835,9 @@ before project-only refresh and preserves a saved receipt on refresh failure.
 The count is a loaded default-branch nonempty preview, not a total: removal deletes
 that locale's translations and their history across every branch, including empty
 rows. Saved rules and local locale choices are not repaired; review before running.
+
+Team-group deletion uses inline target confirmation with a team-wide grant and
+assigned-task warning. Same-group edits and member work cannot overlap deletion.
+Accepted deletion removes the local group and records a receipt before groups-only
+refresh, retaining unrelated drafts. Direct team membership and other groups stay;
+tasks assigned to the deleted group become unassigned, not deleted.

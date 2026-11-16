@@ -411,13 +411,17 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                   }
                   <button type="button" [attr.name]="'group-discard-'+g.id" (click)="discardGroupDrafts(g.id)" [disabled]="!canDiscardGroupDrafts(g.id)">Discard unsaved edits</button>
                   <span class="muted">Discard only clears this group's local name, role, locale and add-member drafts. It uses the last loaded or accepted values, does not refresh the server and does not undo saved changes.</span>
-                  <button class="danger" (click)="removeGroup(g)">Delete</button>
+                  @if(confirmingGroup()===g.id){
+                    <span>Delete group <strong>{{g.name}}</strong>? This cannot be undone. This removes the group and its grant across the team, not only this project. Direct team membership and other group grants remain. Tasks assigned to this group become unassigned; tasks and translations are not deleted.</span>
+                    <button class="danger" [attr.name]="'confirmRemoveGroup-'+g.id" (click)="removeGroup(g)" [disabled]="busy() || groupWorkPending(g.id)">Yes, delete group</button>
+                    <button [attr.name]="'cancelRemoveGroup-'+g.id" (click)="cancelRemoveGroup()" [disabled]="busy()">Cancel</button>
+                  }@else{<button class="danger" [attr.name]="'startRemoveGroup-'+g.id" (click)="askRemoveGroup(g.id)" [disabled]="busy() || groupWorkPending(g.id)">Delete</button>}
                 }
               </li>
               <li class="muted group-members" style="padding-left: 1rem;">
                 Members: {{ g.members.length ? '' : 'none' }}
                 @for (gm of g.members; track gm.userId) {
-                  <span>{{ gm.user.displayName }} @if (canManageGroup(g)) { <button class="danger" aria-label="Remove from group" (click)="removeGroupMember(g, gm.userId)">x</button> }</span>
+                  <span>{{ gm.user.displayName }} @if (canManageGroup(g)) { <button class="danger" aria-label="Remove from group" [disabled]="deletingGroup()===g.id || groupMemberPending()[g.id]" (click)="removeGroupMember(g, gm.userId)">x</button> }</span>
                 }
                 @if (canManageGroup(g)) {
                   <select aria-label="Add member to group" [attr.name]="'gadd-'+g.id" [ngModel]="groupPick()[g.id] ?? ''" (ngModelChange)="pickGroupMember(g.id, $event)">
@@ -426,7 +430,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                       @if (!g.members.some((gm) => gm.userId === m.id)) { <option [value]="m.id">{{ m.displayName }}</option> }
                     }
                   </select>
-                  <button type="button" name="gadd-submit-{{g.id}}" (click)="addGroupMember(g)" [disabled]="!groupPick()[g.id] || groupMemberPending()[g.id]">{{ groupMemberPending()[g.id] ? 'Adding member...' : 'Add member' }}</button>
+                  <button type="button" name="gadd-submit-{{g.id}}" (click)="addGroupMember(g)" [disabled]="deletingGroup()===g.id || !groupPick()[g.id] || groupMemberPending()[g.id]">{{ groupMemberPending()[g.id] ? 'Adding member...' : 'Add member' }}</button>
                   <span class="muted">Selection alone does not add access. Choose Add member to apply this group's grant.</span>
                   @if(groupMemberNotice()[g.id]){<p role="status" [attr.name]="'gadd-notice-'+g.id">{{ groupMemberNotice()[g.id] }}</p>}
                 }
@@ -435,6 +439,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             @if (!groups().length) { <li class="muted">No groups yet.</li> }
           </ul>
           @if (isTeamAdmin()) {
+          @if(groupRemoveNotice()){<p role="status" name="settingsGroupRemoveNotice">{{groupRemoveNotice()}}</p>}
           <form class="inline" (ngSubmit)="addGroup()">
             <input aria-label="Group name" placeholder="Group name" [ngModel]="groupName()" (ngModelChange)="groupName.set($event)" name="groupName" required aria-describedby="settingsGroupRules" [attr.aria-invalid]="groupName()!=='' && !validNewGroupName()" />
             <select aria-label="New group role" [ngModel]="groupRole()" (ngModelChange)="groupRole.set($event)" name="groupRole">
@@ -1067,7 +1072,7 @@ export class SettingsComponent implements OnInit {
   }
   canSaveGroupRole(g: GroupInfo): boolean {
     const role=this.groupRolePick()[g.id];
-    return !this.groupNamePending()[g.id] && !this.groupRolePending()[g.id] && !this.groupLocalesPending()[g.id] && (role==='MEMBER' || role==='ADMIN') && role!==g.role;
+    return this.deletingGroup()!==g.id && !this.groupNamePending()[g.id] && !this.groupRolePending()[g.id] && !this.groupLocalesPending()[g.id] && (role==='MEMBER' || role==='ADMIN') && role!==g.role;
   }
   async setGroupRole(g: GroupInfo) {
     if(!this.canSaveGroupRole(g))return;
@@ -1097,7 +1102,7 @@ export class SettingsComponent implements OnInit {
   }
   canSaveGroupName(g: GroupInfo): boolean {
     const raw=this.groupNamePick()[g.id];
-    return raw!==undefined && !this.groupNamePending()[g.id] && !this.groupRolePending()[g.id] && !this.groupLocalesPending()[g.id] && this.validGroupName(g) && raw.trim()!==g.name;
+    return this.deletingGroup()!==g.id && raw!==undefined && !this.groupNamePending()[g.id] && !this.groupRolePending()[g.id] && !this.groupLocalesPending()[g.id] && this.validGroupName(g) && raw.trim()!==g.name;
   }
   async saveGroupName(g: GroupInfo) {
     if(!this.canSaveGroupName(g))return;
@@ -1117,7 +1122,7 @@ export class SettingsComponent implements OnInit {
   }
 
   canDiscardGroupDrafts(groupId: string): boolean {
-    if(this.groupNamePending()[groupId] || this.groupRolePending()[groupId] || this.groupLocalesPending()[groupId] || this.groupMemberPending()[groupId])return false;
+    if(this.deletingGroup()===groupId || this.groupNamePending()[groupId] || this.groupRolePending()[groupId] || this.groupLocalesPending()[groupId] || this.groupMemberPending()[groupId])return false;
     return this.groupNamePick()[groupId]!==undefined || this.groupRolePick()[groupId]!==undefined || this.groupLocalesPick()[groupId]!==undefined || !!this.groupPick()[groupId];
   }
   discardGroupDrafts(groupId: string) {
@@ -1127,11 +1132,23 @@ export class SettingsComponent implements OnInit {
     }
   }
 
+  confirmingGroup = signal<string|null>(null);
+  deletingGroup = signal<string|null>(null);
+  groupRemoveNotice = signal('');
+  groupWorkPending(id:string):boolean {return !!(this.groupNamePending()[id] || this.groupRolePending()[id] || this.groupLocalesPending()[id] || this.groupMemberPending()[id]);}
+  askRemoveGroup(id:string) {if(!this.busy() && !this.groupWorkPending(id) && this.groups().some(g=>g.id===id))this.confirmingGroup.set(id);}
+  cancelRemoveGroup() {if(!this.busy())this.confirmingGroup.set(null);}
   async removeGroup(g: GroupInfo) {
-    if (!confirm(`Delete group ${g.name}? Its members keep their direct team access but lose this grant immediately.`)) return;
-    this.error.set('');
-    try { await this.api.deleteGroup(this.projectId, g.id); await this.reload(); }
-    catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+    if(this.busy() || this.groupWorkPending(g.id) || this.confirmingGroup()!==g.id || !this.groups().some(row=>row.id===g.id))return;
+    this.busy.set(true);this.deletingGroup.set(g.id);this.error.set('');this.groupRemoveNotice.set('');
+    try {
+      await this.api.deleteGroup(this.projectId,g.id);
+      this.groups.set(this.groups().filter(row=>row.id!==g.id));
+      this.confirmingGroup.set(null);
+      this.groupRemoveNotice.set('The submitted group and its grant were deleted across the team. Direct team membership and other group grants remain. Tasks assigned to it are now unassigned; tasks and translations were not deleted. Other group edits, your new-group draft and other forms are kept.');
+      this.groups.set(await this.api.listGroups(this.projectId));
+    }catch(e){this.error.set(e instanceof Error?e.message:'Failed');}
+    finally{this.deletingGroup.set(null);this.busy.set(false);}
   }
   groupMemberPending = signal<Record<string, boolean>>({});
   groupMemberNotice = signal<Record<string, string>>({});
@@ -1140,7 +1157,7 @@ export class SettingsComponent implements OnInit {
   }
   async addGroupMember(g: GroupInfo) {
     const userId=this.groupPick()[g.id];
-    if (!userId || this.groupMemberPending()[g.id]) return;
+    if (!userId || this.deletingGroup()===g.id || this.groupMemberPending()[g.id]) return;
     this.groupMemberPending.set({ ...this.groupMemberPending(), [g.id]: true });
     this.groupMemberNotice.set({ ...this.groupMemberNotice(), [g.id]: '' });
     this.error.set('');
@@ -1154,9 +1171,12 @@ export class SettingsComponent implements OnInit {
     finally { this.groupMemberPending.set({ ...this.groupMemberPending(), [g.id]: false }); }
   }
   async removeGroupMember(g: GroupInfo, userId: string) {
+    if(this.deletingGroup()===g.id || this.groupMemberPending()[g.id])return;
+    this.groupMemberPending.set({...this.groupMemberPending(),[g.id]:true});
     this.error.set('');
     try { await this.api.removeGroupMember(this.projectId, g.id, userId); await this.reload(); }
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+    finally{this.groupMemberPending.set({...this.groupMemberPending(),[g.id]:false});}
   }
   canDiscardMemberDrafts(memberId: string): boolean {
     if(this.memberRolePending()[memberId] || this.memberLocalesPending()[memberId])return false;
@@ -1251,7 +1271,7 @@ export class SettingsComponent implements OnInit {
   }
   canSaveGroupLocales(g: GroupInfo): boolean {
     const raw=this.groupLocalesPick()[g.id];
-    if(g.role!=='MEMBER' || raw===undefined || this.groupNamePending()[g.id] || this.groupLocalesPending()[g.id] || this.groupRolePending()[g.id] || !this.validGroupLocales(g))return false;
+    if(this.deletingGroup()===g.id || g.role!=='MEMBER' || raw===undefined || this.groupNamePending()[g.id] || this.groupLocalesPending()[g.id] || this.groupRolePending()[g.id] || !this.validGroupLocales(g))return false;
     const locales=this.parsedGroupLocales(raw);
     return locales.length!==g.allowedLocales.length || locales.some(code=>!g.allowedLocales.includes(code));
   }

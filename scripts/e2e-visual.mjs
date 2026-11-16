@@ -1480,13 +1480,19 @@ try {
   check('member removed from group via UI', chipGone);
 
   // Delete: cancel keeps the group, confirm removes it.
-  let dialogAction = 'dismiss';
-  page.on('dialog', (d) => (dialogAction === 'accept' ? d.accept() : d.dismiss()));
-  await page.evaluate(() => { [...document.querySelectorAll('button.danger')].find((b) => b.textContent === 'Delete').click(); });
-  await new Promise((r) => setTimeout(r, 600));
+  await page.waitForFunction(() => !Object.values(ng.getComponent(document.querySelector('ol-settings')).groupMemberPending()).some(Boolean));
+  await page.$eval('[name^=startRemoveGroup-]',e=>e.scrollIntoView({block:'center'}));
+  await page.click('[name^=startRemoveGroup-]');
+  await page.waitForSelector('[name^=cancelRemoveGroup-]');
+  await page.$eval('[name^=cancelRemoveGroup-]',e=>e.scrollIntoView({block:'center'}));
+  await page.click('[name^=cancelRemoveGroup-]');
+  await page.waitForSelector('[name^=startRemoveGroup-]');
   check('cancel delete keeps the group', await page.evaluate(() => (document.body.textContent || '').includes('reviewers')));
-  dialogAction = 'accept';
-  await page.evaluate(() => { [...document.querySelectorAll('button.danger')].find((b) => b.textContent === 'Delete').click(); });
+  await page.$eval('[name^=startRemoveGroup-]',e=>e.scrollIntoView({block:'center'}));
+  await page.click('[name^=startRemoveGroup-]');
+  await page.waitForSelector('[name^=confirmRemoveGroup-]');
+  await page.$eval('[name^=confirmRemoveGroup-]',e=>e.scrollIntoView({block:'center'}));
+  await page.click('[name^=confirmRemoveGroup-]');
   const groupGone = await page.waitForFunction(() => !(document.body.textContent || '').includes('reviewers'), { timeout: 10000 }).then(() => true).catch(() => false);
   check('confirm delete removes the group', groupGone);
 

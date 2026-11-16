@@ -2197,3 +2197,8 @@ chronology; no external acceptance promotion.
 - Match loaded non-base locale; block overlap while preview/deletion is pending.
 - Accurate preview scope and all-branch cascade warning; accepted list/receipt
   precede project-only refresh. [Review0587](reviews/0587-settings-locale-remove.md).
+
+## Guard team-group deletion confirmation and pending state
+- Matching loaded group, same-group edit/member pending guards, team-wide scope
+  and task-unassignment warning, accepted list/receipt before groups-only refresh.
+  [Review0588](reviews/0588-settings-group-remove.md).
