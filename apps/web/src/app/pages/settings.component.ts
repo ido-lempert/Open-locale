@@ -637,7 +637,7 @@ export class SettingsComponent implements OnInit {
       } else {
         this.hookDraftNotice.set('The submitted webhook was created. Your newer URL and event draft is kept here and has not been created. Review the URL and events before creating again. The signing secret above belongs to the submitted webhook, not this newer draft.');
       }
-      await this.reload();
+      this.webhooks.set(await this.api.listWebhooks(this.projectId));
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }

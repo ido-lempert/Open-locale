@@ -1877,3 +1877,7 @@ stay; failed refresh does not restore the deleted webhook or its delivery histor
 API-token creation refreshes only tokens, keeping unrelated Settings drafts after
 success. The one-time reveal stays tied to the submitted token if refresh fails;
 newer name/access drafts still need their own explicit Create.
+
+Webhook creation refreshes only webhooks, preserving unrelated Settings drafts.
+The one-time signing secret stays tied to the submitted webhook even if refresh
+fails. A newer URL/event draft still needs its own explicit Create.

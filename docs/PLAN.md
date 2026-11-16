@@ -2249,3 +2249,7 @@ chronology; no external acceptance promotion.
 ## Preserve unrelated Settings drafts after API-token creation
 - Refresh tokens only; retain submitted one-time reveal and existing pending-draft
   behavior. [Review0596](reviews/0596-token-create-refresh.md).
+
+## Preserve unrelated Settings drafts after webhook creation
+- Refresh webhooks only; keep submitted signing-secret reveal and existing whole
+  newer URL/event draft behavior. [Review0597](reviews/0597-webhook-create-refresh.md).
