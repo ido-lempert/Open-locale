@@ -1852,3 +1852,8 @@ with same-member edit and pending guards. Accepted removal updates the local mem
 list and receipt before members-only refresh, keeping other drafts. It removes
 access to all team projects but keeps the user account, group-membership rows,
 assignments and content. Re-adding may reactivate saved group grants.
+
+Webhook Enable/Disable refuses stale loaded state and duplicate pending changes.
+Accepted active-state changes update the local row and receipt before a webhooks-
+only refresh, keeping other drafts, revealed secret and delivery history. A failed
+refresh does not undo the accepted state. In-progress deliveries may finish.

@@ -116,7 +116,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                     <button [attr.name]="'cancelDeleteHook-'+h.id" (click)="cancelDeleteHook()" [disabled]="busy()">Cancel</button>
                   } @else {
                     <a [routerLink]="['/projects',projectId,'webhooks',h.id,'deliveries']">Delivery journal</a>
-                    <button (click)="toggleHook(h)">{{ h.active ? 'Disable' : 'Enable' }}</button>
+                    <button [attr.name]="'toggleHook-'+h.id" (click)="toggleHook(h)" [disabled]="busy()">{{ h.active ? 'Disable' : 'Enable' }}</button>
                     <button class="danger" [attr.name]="'startDeleteHook-'+h.id" (click)="askDeleteHook(h.id)" [disabled]="busy()">Delete</button>
                   }
                 }
@@ -124,6 +124,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             }
             @if (!webhooks().length) { <li class="muted">No webhooks yet.</li> }
           </ul>
+          @if(hookToggleNotice()){<p role="status" name="settingsHookToggleNotice">{{hookToggleNotice()}}</p>}
           @if(hookDeleteNotice()){<p role="status" name="settingsHookDeleteNotice">{{hookDeleteNotice()}}</p>}
           @if (isTeamAdmin()) {
           <form class="inline" (ngSubmit)="createWebhook()">
@@ -638,11 +639,19 @@ export class SettingsComponent implements OnInit {
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }
+  hookToggleNotice = signal('');
   async toggleHook(h: WebhookInfo) {
-    this.busy.set(true); this.error.set('');
-    try { await this.api.updateWebhook(this.projectId, h.id, { active: !h.active }); await this.reload(); }
-    catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
-    finally { this.busy.set(false); }
+    const loaded=this.webhooks().find(row=>row.id===h.id);
+    if(this.busy() || !loaded || loaded.active!==h.active)return;
+    const active=!loaded.active;
+    this.busy.set(true);this.error.set('');this.hookToggleNotice.set('');
+    try {
+      await this.api.updateWebhook(this.projectId,loaded.id,{active});
+      this.webhooks.set(this.webhooks().map(row=>row.id===loaded.id?{...row,active}:row));
+      this.hookToggleNotice.set(`The submitted webhook was ${active?'enabled':'disabled'}. Its URL, events, signing secret and delivery history were not changed by this request. Work already in progress may finish. Other webhooks and your unsaved forms are kept.`);
+      this.webhooks.set(await this.api.listWebhooks(this.projectId));
+    }catch(e){this.error.set(e instanceof Error?e.message:'Failed');}
+    finally{this.busy.set(false);}
   }
   hookDeleteNotice = signal('');
   askDeleteHook(id:string) {if(!this.busy() && this.webhooks().some(h=>h.id===id))this.confirmingHook.set(id);}

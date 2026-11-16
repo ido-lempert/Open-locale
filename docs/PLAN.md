@@ -2215,3 +2215,12 @@ chronology; no external acceptance promotion.
 - Verification: focused16/0, deliberate negative0/2, restored16/0;
   all216 browser suites FIRST2476/0, API/sync239/native246/config passed.
   Final units/build cached0. No external acceptance promotion.
+
+## Guard webhook active-state changes and preserve drafts
+- Match loaded target/state, block overlap, apply accepted active state and receipt
+  before webhooks-only refresh. Keep history, reveal and unsaved forms.
+  [Review0591](reviews/0591-settings-webhook-toggle.md).
+- Verification: focused first9/1 mobile reveal overflow, CSS wrap fix10/0;
+  expanded stale-state-only negative1/2,restored11/0. All217 browsers FIRST2487/0;
+  API/sync239/config passed. Native246 after fixture-only readiness wait, with
+  first stage recreated after failed middle cleaned checkpoint. No external promotion.

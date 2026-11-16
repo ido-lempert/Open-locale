@@ -1334,6 +1334,8 @@ try {
   });
   await page.waitForFunction(() => [...document.querySelectorAll('.locale-list li')].some((el) => el.textContent.includes('hooks.example.com') && el.textContent.includes('disabled')), { timeout: 10000 });
   check('webhook disabled via UI shows the disabled badge', true);
+  // The accepted badge precedes the webhooks-only refresh; await usable control.
+  await page.waitForFunction(() => { const li=[...document.querySelectorAll('.locale-list li')].find(el=>el.textContent.includes('hooks.example.com'));return !!li&&[...li.querySelectorAll('button')].some(b=>b.textContent==='Enable'&&!b.disabled); }, { timeout:10000 });
   await page.evaluate(() => {
     const li = [...document.querySelectorAll('.locale-list li')].find((el) => el.textContent.includes('hooks.example.com'));
     [...li.querySelectorAll('button')].find((b) => b.textContent === 'Enable').click();

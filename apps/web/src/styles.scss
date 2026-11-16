@@ -268,3 +268,7 @@ span.review { font-size: 0.72rem; padding: 0.05rem 0.4rem; border: 1px solid var
   .comment-form { flex-wrap: wrap; }
   .comment-form input { flex: 1 1 100%; min-width: 0; }
 }
+
+// Keep one-time token/signing-secret reveals readable on narrow screens.
+.token-reveal { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; min-width: 0; }
+.token-reveal code { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
