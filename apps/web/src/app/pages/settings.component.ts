@@ -683,7 +683,7 @@ export class SettingsComponent implements OnInit {
       this.tokenRevokeNotice.set('The submitted API token was revoked. Other tokens were not revoked by this request.');
       this.confirmingToken.set(null);
       if (this.createdToken()?.id === id) this.createdToken.set(null);
-      await this.reload();
+      this.tokens.set(await this.api.listTokens());
     }
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }

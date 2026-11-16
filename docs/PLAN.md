@@ -2237,3 +2237,7 @@ chronology; no external acceptance promotion.
 ## Guard automation-rule enabled-state changes
 - Match loaded target/state, retain accepted local state/receipt before rules-only
   refresh and preserve drafts. [Review0593](reviews/0593-settings-rule-toggle.md).
+
+## Preserve Settings drafts after API-token revocation
+- Refresh tokens only after accepted removal; preserve unrelated form drafts and
+  nonmatching one-time display. [Review0594](reviews/0594-token-revoke-refresh.md).

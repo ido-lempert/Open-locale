@@ -1865,3 +1865,7 @@ saved rules and other drafts remain. Toggling does not run Fill empty or undo da
 Automation-rule Enable/Disable matches the loaded target/state and keeps accepted
 state plus a receipt before rules-only refresh. Refresh failure does not erase that
 result. Toggling does not run the rule, undo earlier effects or reset other drafts.
+
+API-token revocation refreshes only the token list after accepted local removal.
+Unrelated Settings drafts and a different token's one-time display stay as they are;
+a failed refresh does not restore the revoked token or invite another revoke.

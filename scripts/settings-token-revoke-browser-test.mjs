@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55986, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = 55998, WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
 let failures = 0, api, web, browser, prisma;
@@ -38,8 +38,8 @@ try {
   const other=await call('/auth/tokens',{name:'Other token',scopes:['read']},token);
   const tokenStatus=key=>fetch(`${API}/projects`,{headers:{'X-Api-Key':key}}).then(r=>r.status);
   await page.goto(`${WEB}${P}/settings`,{waitUntil:'networkidle0'});await page.waitForSelector(`[name=startRevokeToken-${first.id}]`);await page.waitForNetworkIdle({idleTime:200});
-  let deletes=0,reads=0,held,refuse=true,failRead=false;
-  await page.setRequestInterception(true);page.on('request',req=>{const path=new URL(req.url()).pathname;if(path.startsWith('/api/')&&req.method()==='GET'){reads++;if(failRead&&path===`/api${P}`)return req.respond({status:503,contentType:'application/json',body:'{"message":"Refresh failed"}'});}if(req.method()==='DELETE'&&path===`/api/auth/tokens/${first.id}`){deletes++;if(refuse)return req.respond({status:403,contentType:'application/json',body:'{"message":"Permission denied"}'});held=req;return;}req.continue();});
+  let deletes=0,reads=0,held,refuse=true,failRead=false;const readPaths=[];
+  await page.setRequestInterception(true);page.on('request',req=>{const path=new URL(req.url()).pathname;if(path.startsWith('/api/')&&req.method()==='GET'){reads++;readPaths.push(path);if(failRead&&path==='/api/auth/tokens')return req.respond({status:503,contentType:'application/json',body:'{"message":"Refresh failed"}'});}if(req.method()==='DELETE'&&path===`/api/auth/tokens/${first.id}`){deletes++;if(refuse)return req.respond({status:403,contentType:'application/json',body:'{"message":"Permission denied"}'});held=req;return;}req.continue();});
   const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
   const click=async name=>{await page.$eval(`[name=${name}]`,e=>e.scrollIntoView({block:'center'}));await page.click(`[name=${name}]`);await settle();};
   const direct=id=>page.evaluate(id=>ng.getComponent(document.querySelector('ol-settings')).revokeToken(id),id);
@@ -53,6 +53,12 @@ try {
   check('revoked token actually fails authentication while other token works',await tokenStatus(first.token)===401&&await tokenStatus(other.token)===200);
   check('only selected token row is deleted',await prisma.apiToken.count({where:{id:first.id}})===0&&await prisma.apiToken.count({where:{id:other.id}})===1);
   await page.$eval('[name=settingsTokenRevokeNotice]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/settings-token-revoke-desktop.png'});await page.setViewport({width:390,height:844});await page.$eval('[name=settingsTokenRevokeNotice]',e=>scrollTo(0,scrollY+e.getBoundingClientRect().top-110));await page.screenshot({path:'/downloads/settings-token-revoke-mobile.png'});check('390px accepted revocation receipt fits',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  check('failed revoke refresh reads tokens only',reads===1&&readPaths.every(p=>p==='/api/auth/tokens'));
+  failRead=false;
+  await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-settings'));c.name.set('Retained name');c.description.set('Retained description');c.tokenName.set('Next token');c.tokenScope.set('read');c.newRuleName.set('Next rule');c.createdToken.set({id:'local-display-only',name:'Kept display',token:'not-a-real-token'});});await settle();
+  await page.setViewport({width:1280,height:900});await click('startRevokeToken-'+other.id);await click('confirmRevokeToken-'+other.id);await page.waitForFunction(()=>!ng.getComponent(document.querySelector('ol-settings')).busy());
+  check('successful revoke refresh keeps unrelated drafts and nonmatching display',await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-settings'));return c.tokens().length===0&&c.name()==='Retained name'&&c.description()==='Retained description'&&c.tokenName()==='Next token'&&c.tokenScope()==='read'&&c.newRuleName()==='Next rule'&&c.createdToken()?.id==='local-display-only'&&c.error()===''&&c.tokenRevokeNotice().includes('was revoked');}));
+  check('successful revoke uses tokens-only read and revokes the other token',reads===2&&readPaths.every(p=>p==='/api/auth/tokens')&&await tokenStatus(other.token)===401&&await prisma.apiToken.count()===0);
   check('no tasks translations or webhook deliveries',await prisma.task.count()===0&&await prisma.translation.count()===0&&await prisma.webhookDelivery.count()===0);
   check('no token revoke runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
 } catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??String(e)}`);process.exitCode=1;}
