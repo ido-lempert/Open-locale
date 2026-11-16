@@ -1841,3 +1841,8 @@ assigned-task warning. Same-group edits and member work cannot overlap deletion.
 Accepted deletion removes the local group and records a receipt before groups-only
 refresh, retaining unrelated drafts. Direct team membership and other groups stay;
 tasks assigned to the deleted group become unassigned, not deleted.
+
+Removing someone from a group requires matching group-and-member confirmation,
+with pending guards and an accepted local membership receipt before groups-only
+refresh. This removes only that group's team-wide grant. Direct team membership,
+other group grants, task assignments and translations remain unchanged.

@@ -1476,6 +1476,9 @@ try {
 
   // Remove member via the UI chip button; inherited note disappears.
   await page.evaluate(() => { [...document.querySelectorAll('button[aria-label="Remove from group"]')][0].click(); });
+  await page.waitForSelector('[name^=confirmRemoveGroupMember-]');
+  await page.$eval('[name^=confirmRemoveGroupMember-]',e=>e.scrollIntoView({block:'center'}));
+  await page.click('[name^=confirmRemoveGroupMember-]');
   const chipGone = await page.waitForFunction(() => !(document.body.textContent || '').includes('Second Member') || !document.body.textContent.includes('effective locales'), { timeout: 10000 }).then(() => true).catch(() => false);
   check('member removed from group via UI', chipGone);
 

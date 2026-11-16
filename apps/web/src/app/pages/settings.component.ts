@@ -421,7 +421,13 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
               <li class="muted group-members" style="padding-left: 1rem;">
                 Members: {{ g.members.length ? '' : 'none' }}
                 @for (gm of g.members; track gm.userId) {
-                  <span>{{ gm.user.displayName }} @if (canManageGroup(g)) { <button class="danger" aria-label="Remove from group" [disabled]="deletingGroup()===g.id || groupMemberPending()[g.id]" (click)="removeGroupMember(g, gm.userId)">x</button> }</span>
+                  <span>{{ gm.user.displayName }} @if (canManageGroup(g)) {
+                    @if(confirmingGroupMember()?.groupId===g.id && confirmingGroupMember()?.userId===gm.userId){
+                      <span>Remove <strong>{{gm.user.displayName}}</strong> from <strong>{{g.name}}</strong>? This removes this group's grant for them across the team, not only this project. Direct team membership and other group grants remain. Group task assignments, tasks and translations are not changed.</span>
+                      <button class="danger" [attr.name]="'confirmRemoveGroupMember-'+g.id+'-'+gm.userId" (click)="removeGroupMember(g,gm.userId)" [disabled]="busy() || groupWorkPending(g.id)">Yes, remove from group</button>
+                      <button [attr.name]="'cancelRemoveGroupMember-'+g.id+'-'+gm.userId" (click)="cancelRemoveGroupMember()" [disabled]="busy()">Cancel</button>
+                    }@else{<button class="danger" aria-label="Remove from group" [attr.name]="'startRemoveGroupMember-'+g.id+'-'+gm.userId" [disabled]="busy() || groupWorkPending(g.id)" (click)="askRemoveGroupMember(g.id,gm.userId)">Remove from group</button>}
+                  }</span>
                 }
                 @if (canManageGroup(g)) {
                   <select aria-label="Add member to group" [attr.name]="'gadd-'+g.id" [ngModel]="groupPick()[g.id] ?? ''" (ngModelChange)="pickGroupMember(g.id, $event)">
@@ -439,6 +445,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             @if (!groups().length) { <li class="muted">No groups yet.</li> }
           </ul>
           @if (isTeamAdmin()) {
+          @if(groupMemberRemoveNotice()){<p role="status" name="settingsGroupMemberRemoveNotice">{{groupMemberRemoveNotice()}}</p>}
           @if(groupRemoveNotice()){<p role="status" name="settingsGroupRemoveNotice">{{groupRemoveNotice()}}</p>}
           <form class="inline" (ngSubmit)="addGroup()">
             <input aria-label="Group name" placeholder="Group name" [ngModel]="groupName()" (ngModelChange)="groupName.set($event)" name="groupName" required aria-describedby="settingsGroupRules" [attr.aria-invalid]="groupName()!=='' && !validNewGroupName()" />
@@ -1170,13 +1177,25 @@ export class SettingsComponent implements OnInit {
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.groupMemberPending.set({ ...this.groupMemberPending(), [g.id]: false }); }
   }
+  confirmingGroupMember = signal<{groupId:string,userId:string}|null>(null);
+  groupMemberRemoveNotice = signal('');
+  private hasGroupMember(groupId:string,userId:string):boolean {return !!this.groups().find(g=>g.id===groupId)?.members.some(m=>m.userId===userId);}
+  askRemoveGroupMember(groupId:string,userId:string) {if(!this.busy() && !this.groupWorkPending(groupId) && this.hasGroupMember(groupId,userId))this.confirmingGroupMember.set({groupId,userId});}
+  cancelRemoveGroupMember() {if(!this.busy())this.confirmingGroupMember.set(null);}
   async removeGroupMember(g: GroupInfo, userId: string) {
-    if(this.deletingGroup()===g.id || this.groupMemberPending()[g.id])return;
+    const target=this.confirmingGroupMember();
+    if(this.busy() || this.deletingGroup()===g.id || this.groupWorkPending(g.id) || target?.groupId!==g.id || target?.userId!==userId || !this.hasGroupMember(g.id,userId))return;
+    this.busy.set(true);this.deletingGroup.set(g.id);
     this.groupMemberPending.set({...this.groupMemberPending(),[g.id]:true});
-    this.error.set('');
-    try { await this.api.removeGroupMember(this.projectId, g.id, userId); await this.reload(); }
-    catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
-    finally{this.groupMemberPending.set({...this.groupMemberPending(),[g.id]:false});}
+    this.error.set('');this.groupMemberRemoveNotice.set('');
+    try {
+      await this.api.removeGroupMember(this.projectId,g.id,userId);
+      this.groups.set(this.groups().map(row=>row.id===g.id?{...row,members:row.members.filter(m=>m.userId!==userId)}:row));
+      this.confirmingGroupMember.set(null);
+      this.groupMemberRemoveNotice.set('The submitted member was removed from this group. This group grant no longer applies to them across the team. Direct team membership and other group grants remain. Group task assignments, tasks and translations were not changed. Your group edits, new-group draft and other forms are kept.');
+      this.groups.set(await this.api.listGroups(this.projectId));
+    }catch(e){this.error.set(e instanceof Error?e.message:'Failed');}
+    finally{this.groupMemberPending.set({...this.groupMemberPending(),[g.id]:false});this.deletingGroup.set(null);this.busy.set(false);}
   }
   canDiscardMemberDrafts(memberId: string): boolean {
     if(this.memberRolePending()[memberId] || this.memberLocalesPending()[memberId])return false;

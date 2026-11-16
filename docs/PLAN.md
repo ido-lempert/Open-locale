@@ -2202,3 +2202,8 @@ chronology; no external acceptance promotion.
 - Matching loaded group, same-group edit/member pending guards, team-wide scope
   and task-unassignment warning, accepted list/receipt before groups-only refresh.
   [Review0588](reviews/0588-settings-group-remove.md).
+
+## Guard group-member removal confirmation and pending state
+- Match loaded group/member, block overlap, show team-wide grant scope and
+  unchanged task assignments; accepted membership/receipt before groups-only
+  refresh. [Review0589](reviews/0589-settings-group-member-remove.md).
