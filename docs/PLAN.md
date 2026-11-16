@@ -2207,3 +2207,11 @@ chronology; no external acceptance promotion.
 - Match loaded group/member, block overlap, show team-wide grant scope and
   unchanged task assignments; accepted membership/receipt before groups-only
   refresh. [Review0589](reviews/0589-settings-group-member-remove.md).
+
+## Guard team-member removal confirmation and pending state
+- Match non-owner/non-self member; block same-member edit overlap, explain
+  team-wide access and saved-grant reactivation; accepted member/receipt before
+  members-only refresh. [Review0590](reviews/0590-settings-member-remove.md).
+- Verification: focused16/0, deliberate negative0/2, restored16/0;
+  all216 browser suites FIRST2476/0, API/sync239/native246/config passed.
+  Final units/build cached0. No external acceptance promotion.

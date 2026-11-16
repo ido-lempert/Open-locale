@@ -1846,3 +1846,9 @@ Removing someone from a group requires matching group-and-member confirmation,
 with pending guards and an accepted local membership receipt before groups-only
 refresh. This removes only that group's team-wide grant. Direct team membership,
 other group grants, task assignments and translations remain unchanged.
+
+Team-member removal requires matching loaded non-owner/non-self confirmation,
+with same-member edit and pending guards. Accepted removal updates the local member
+list and receipt before members-only refresh, keeping other drafts. It removes
+access to all team projects but keeps the user account, group-membership rows,
+assignments and content. Re-adding may reactivate saved group grants.

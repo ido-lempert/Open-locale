@@ -359,12 +359,17 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                   }
                   <button type="button" [attr.name]="'member-discard-'+m.id" (click)="discardMemberDrafts(m.id)" [disabled]="!canDiscardMemberDrafts(m.id)">Discard unsaved edits</button>
                   <span class="muted">Discard only clears this member's local role and locale drafts. It uses the last loaded or accepted values, does not refresh the server and does not undo saved changes.</span>
-                  <button class="danger" (click)="removeMember(m)">Remove</button>
+                  @if(confirmingMember()===m.id){
+                    <span>Remove <strong>{{m.displayName}}</strong> ({{m.email}}) from the team? They lose access to every project in this team, not only this project. Their user account, saved group memberships, task assignments, tasks and translations remain. Re-adding them to this team can reactivate their saved group grants. Work already in progress may finish.</span>
+                    <button class="danger" [attr.name]="'confirmRemoveMember-'+m.id" (click)="removeMember(m)" [disabled]="busy() || memberWorkPending(m.id)">Yes, remove from team</button>
+                    <button [attr.name]="'cancelRemoveMember-'+m.id" (click)="cancelRemoveMember()" [disabled]="busy()">Cancel</button>
+                  }@else{<button class="danger" [attr.name]="'startRemoveMember-'+m.id" (click)="askRemoveMember(m.id)" [disabled]="busy() || memberWorkPending(m.id) || !removableMember(m.id)">Remove</button>}
                 }
               </li>
             }
           </ul>
           @if (isTeamAdmin()) {
+          @if(memberRemoveNotice()){<p role="status" name="settingsMemberRemoveNotice">{{memberRemoveNotice()}}</p>}
           <form class="inline" (ngSubmit)="addMember()">
             <input aria-label="Member email" placeholder="User email" [ngModel]="memberEmail()" (ngModelChange)="memberEmail.set($event)" name="memberEmail" required />
             <select aria-label="New member role" [ngModel]="memberRole()" (ngModelChange)="memberRole.set($event)" name="memberRole">
@@ -1198,7 +1203,7 @@ export class SettingsComponent implements OnInit {
     finally{this.groupMemberPending.set({...this.groupMemberPending(),[g.id]:false});this.deletingGroup.set(null);this.busy.set(false);}
   }
   canDiscardMemberDrafts(memberId: string): boolean {
-    if(this.memberRolePending()[memberId] || this.memberLocalesPending()[memberId])return false;
+    if(this.removingMember()===memberId || this.memberRolePending()[memberId] || this.memberLocalesPending()[memberId])return false;
     return this.memberRolePick()[memberId]!==undefined || this.memberLocalesPick()[memberId]!==undefined;
   }
   discardMemberDrafts(memberId: string) {
@@ -1216,7 +1221,7 @@ export class SettingsComponent implements OnInit {
   }
   canSaveMemberRole(m: MemberInfo): boolean {
     const role=this.memberRolePick()[m.id];
-    return !this.memberRolePending()[m.id] && !this.memberLocalesPending()[m.id] && (role==='MEMBER' || role==='ADMIN') && role!==m.role;
+    return this.removingMember()!==m.id && !this.memberRolePending()[m.id] && !this.memberLocalesPending()[m.id] && (role==='MEMBER' || role==='ADMIN') && role!==m.role;
   }
   async setMemberRole(m: MemberInfo) {
     if(!this.canSaveMemberRole(m))return;
@@ -1252,7 +1257,7 @@ export class SettingsComponent implements OnInit {
   }
   canSaveMemberLocales(m: MemberInfo): boolean {
     const raw=this.memberLocalesPick()[m.id];
-    if(m.role!=='MEMBER' || raw===undefined || this.memberLocalesPending()[m.id] || this.memberRolePending()[m.id] || !this.validMemberLocales(m))return false;
+    if(this.removingMember()===m.id || m.role!=='MEMBER' || raw===undefined || this.memberLocalesPending()[m.id] || this.memberRolePending()[m.id] || !this.validMemberLocales(m))return false;
     const locales=this.parsedMemberLocales(raw);
     return locales.length!==m.allowedLocales.length || locales.some(code=>!m.allowedLocales.includes(code));
   }
@@ -1311,11 +1316,24 @@ export class SettingsComponent implements OnInit {
     finally{this.groupLocalesPending.set({ ...this.groupLocalesPending(), [g.id]: false });}
   }
 
+  confirmingMember = signal<string|null>(null);
+  removingMember = signal<string|null>(null);
+  memberRemoveNotice = signal('');
+  removableMember(id:string):boolean {const m=this.members().find(row=>row.id===id);return !!m && m.role!=='OWNER' && m.email.toLowerCase()!==this.myEmail().toLowerCase();}
+  memberWorkPending(id:string):boolean {return !!(this.memberRolePending()[id] || this.memberLocalesPending()[id]);}
+  askRemoveMember(id:string) {if(!this.busy() && !this.memberWorkPending(id) && this.removableMember(id))this.confirmingMember.set(id);}
+  cancelRemoveMember() {if(!this.busy())this.confirmingMember.set(null);}
   async removeMember(m: MemberInfo) {
-    if (!confirm(`Remove ${m.displayName} from the team? They lose access to this project immediately.`)) return;
-    this.error.set('');
-    try { await this.api.removeMember(this.projectId, m.id); await this.reload(); }
-    catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
+    if(this.busy() || this.memberWorkPending(m.id) || this.confirmingMember()!==m.id || !this.removableMember(m.id))return;
+    this.busy.set(true);this.removingMember.set(m.id);this.error.set('');this.memberRemoveNotice.set('');
+    try {
+      await this.api.removeMember(this.projectId,m.id);
+      this.members.set(this.members().filter(row=>row.id!==m.id));
+      this.confirmingMember.set(null);
+      this.memberRemoveNotice.set('The submitted member was removed from this team and loses access to every project in it. Their user account, saved group memberships, task assignments, tasks and translations remain. Re-adding them can reactivate saved group grants. Work already in progress may finish. Your other member edits, add-member draft and other forms are kept.');
+      this.members.set(await this.api.listMembers(this.projectId));
+    }catch(e){this.error.set(e instanceof Error?e.message:'Failed');}
+    finally{this.removingMember.set(null);this.busy.set(false);}
   }
   projectDeletionAccepted = signal(false);
   askDeleteProject() {if(!this.busy() && !this.projectDeletionAccepted())this.confirming.set(true);}
