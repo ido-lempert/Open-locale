@@ -103,9 +103,12 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           <p class="muted">Signed POSTs to a public http(s) URL when project events happen. Each delivery carries X-OpenLocale-Event and X-OpenLocale-Signature (HMAC-SHA256 of the raw body with the signing secret). Private and internal addresses are refused.</p>
           @if (createdWebhook(); as w) {
             <p class="notice">Webhook created. Copy the signing secret now - it will not be shown again.</p>
-            <p class="token-reveal"><code>{{ w.secret }}</code>
-              <button type="button" (click)="copyToken(w.secret)">Copy</button></p>
+            <p class="token-reveal"><code style="overflow-wrap:anywhere">{{ w.secret }}</code>
+              <button type="button" (click)="copyToken(w.secret)">Copy</button>
+              <button type="button" name="hideCreatedWebhook" aria-describedby="settingsWebhookRevealScope" (click)="hideCreatedWebhook()">Hide signing secret</button></p>
+            <p class="muted" id="settingsWebhookRevealScope" name="settingsWebhookRevealScope">Copy before hiding. Hide removes this one-time signing-secret reveal from this screen. It does not delete or disable the webhook, rotate its secret, or clear clipboard, browser history or earlier copies. It cannot be shown here again.</p>
           }
+          @if(hookRevealNotice()){<p role="status" name="settingsWebhookRevealNotice">{{hookRevealNotice()}}</p>}
           <ul class="locale-list">
             @for (h of webhooks(); track h.id) {
               <li>
@@ -628,7 +631,14 @@ export class SettingsComponent implements OnInit {
   discardWebhookUrlDraft() {
     if(!this.canDiscardWebhookUrlDraft())return;
     this.hookUrl.set('');
-    if(this.hookDraftNotice())this.hookDraftNotice.set('The submitted webhook was created. The local URL draft was discarded without refreshing Settings or deleting any saved webhook. Selected events stay for your next explicit Create. The signing secret above belongs to the submitted webhook.');
+    if(this.hookDraftNotice())this.hookDraftNotice.set('The submitted webhook was created. The local URL draft was discarded without refreshing Settings or deleting any saved webhook. Selected events stay for your next explicit Create. '+(this.createdWebhook()?'The signing secret above belongs to the submitted webhook.':'The one-time signing-secret reveal is no longer shown here.'));
+  }
+  hookRevealNotice = signal('');
+  hideCreatedWebhook() {
+    if(!this.createdWebhook())return;
+    this.createdWebhook.set(null);
+    this.hookRevealNotice.set('The one-time signing-secret reveal was hidden from this screen. The webhook was not deleted or disabled and its secret was not rotated. Clipboard, browser history and earlier copies were not cleared.');
+    if(this.hookDraftNotice())this.hookDraftNotice.set(this.hookDraftNotice().replace('The signing secret above belongs to the submitted webhook', 'The hidden signing-secret reveal belonged to the submitted webhook'));
   }
   hookDraftNotice = signal('');
   async createWebhook() {
@@ -643,6 +653,7 @@ export class SettingsComponent implements OnInit {
     this.hookDraftNotice.set('');
     try {
       const res = await this.api.createWebhook(this.projectId, { url: submitted.url.trim(), events });
+      this.hookRevealNotice.set('');
       this.createdWebhook.set({ id: res.id, secret: res.secret });
       if(this.hookUrl()===submitted.url && this.hookTranslationUpdated()===submitted.translationUpdated && this.hookProjectRestored()===submitted.projectRestored) {
         this.hookUrl.set('');

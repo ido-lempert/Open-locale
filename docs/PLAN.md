@@ -2305,3 +2305,7 @@ chronology; no external acceptance promotion.
 ## Hide the one-time API-token reveal locally
 - Explicit local Hide preserves saved access and drafts with accurate limits.
   [Review0610](reviews/0610-token-hide.md).
+
+## Hide the one-time webhook signing-secret reveal locally
+- Explicit Hide preserves saved webhook state and drafts with accurate limits.
+  [Review0611](reviews/0611-webhook-hide.md).

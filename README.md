@@ -1934,3 +1934,7 @@ drafts, explicit second Save and accepted-save receipts remain.
 The one-time API-token reveal has an explicit Hide token control. It clears the
 local reveal only, not token access, clipboard, browser history or earlier copies.
 Later explicit creation can show its new token; hidden bytes cannot be shown again.
+
+The one-time webhook signing-secret reveal has an explicit local Hide control.
+It does not delete/disable the webhook, rotate its key, or clear clipboard, history
+or earlier copies. A later explicit creation reveals only its new webhook secret.
