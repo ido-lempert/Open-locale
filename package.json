@@ -264,7 +264,8 @@
     "test:settings-origin-validation-browser": "node scripts/settings-origin-validation-browser-test.mjs",
     "test:settings-rule-payload-validation-browser": "node scripts/settings-rule-payload-validation-browser-test.mjs",
     "test:settings-group-validation-browser": "node scripts/settings-group-validation-browser-test.mjs",
-    "test:settings-general-validation-browser": "node scripts/settings-general-validation-browser-test.mjs"
+    "test:settings-general-validation-browser": "node scripts/settings-general-validation-browser-test.mjs",
+    "test:settings-token-hide-browser": "node scripts/settings-token-hide-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

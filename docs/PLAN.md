@@ -2301,3 +2301,7 @@ chronology; no external acceptance promotion.
 ## Limit general project-details Save refresh to project data
 - Keep whole-form submitted/newer draft behavior and accepted fallback.
   [Review0609](reviews/0609-general-project-refresh.md).
+
+## Hide the one-time API-token reveal locally
+- Explicit local Hide preserves saved access and drafts with accurate limits.
+  [Review0610](reviews/0610-token-hide.md).

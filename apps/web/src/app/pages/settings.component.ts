@@ -64,9 +64,12 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           <p class="muted">Tokens authenticate scripts and CI against the API (X-Api-Key header).</p>
           @if (createdToken(); as t) {
             <p class="notice">Token created. Copy it now - it will not be shown again.</p>
-            <p class="token-reveal"><code>{{ t.token }}</code>
-              <button type="button" (click)="copyToken(t.token)">Copy</button></p>
+            <p class="token-reveal"><code style="overflow-wrap:anywhere">{{ t.token }}</code>
+              <button type="button" (click)="copyToken(t.token)">Copy</button>
+              <button type="button" name="hideCreatedToken" aria-describedby="settingsTokenRevealScope" (click)="hideCreatedToken()">Hide token</button></p>
+            <p class="muted" id="settingsTokenRevealScope" name="settingsTokenRevealScope">Copy before hiding. Hide removes this one-time reveal from this screen. It does not revoke the token or clear clipboard, browser history or earlier copies. It cannot be shown here again.</p>
           }
+          @if(tokenRevealNotice()){<p role="status" name="settingsTokenRevealNotice">{{tokenRevealNotice()}}</p>}
           <ul class="locale-list">
             @for (tok of tokens(); track tok.id) {
               <li>
@@ -590,7 +593,14 @@ export class SettingsComponent implements OnInit {
   discardTokenNameDraft() {
     if(!this.canDiscardTokenNameDraft())return;
     this.tokenName.set('');
-    if(this.tokenDraftNotice())this.tokenDraftNotice.set('The submitted token was created. The local name draft was discarded without refreshing Settings or revoking any saved token. Selected access stays for your next explicit Create. The token revealed above belongs to the submitted token.');
+    if(this.tokenDraftNotice())this.tokenDraftNotice.set('The submitted token was created. The local name draft was discarded without refreshing Settings or revoking any saved token. Selected access stays for your next explicit Create. '+(this.createdToken()?'The token revealed above belongs to the submitted token.':'The one-time reveal is no longer shown here.'));
+  }
+  tokenRevealNotice = signal('');
+  hideCreatedToken() {
+    if(!this.createdToken())return;
+    this.createdToken.set(null);
+    this.tokenRevealNotice.set('The one-time token reveal was hidden from this screen. The token was not revoked. Clipboard, browser history and earlier copies were not cleared.');
+    if(this.tokenDraftNotice())this.tokenDraftNotice.set(this.tokenDraftNotice().replace('The token revealed above belongs to the submitted token', 'The hidden reveal belonged to the submitted token'));
   }
   tokenDraftNotice = signal('');
   async createToken() {
@@ -600,6 +610,7 @@ export class SettingsComponent implements OnInit {
     try {
       const scopes = submitted.scope.split(',');
       const res = await this.api.createToken(submitted.name, scopes);
+      this.tokenRevealNotice.set('');
       this.createdToken.set({ id: res.id, name: res.name, token: res.token });
       if(this.tokenName()===submitted.name && this.tokenScope()===submitted.scope) {
         this.tokenName.set('');

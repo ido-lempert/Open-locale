@@ -1930,3 +1930,7 @@ grant and accepted-save receipts on refresh failure stay; group grants still com
 General project-details Save refreshes project data only, keeping unrelated forms
 and avoiding unrelated token/member/group/automation/SSO reads. Whole-form newer
 drafts, explicit second Save and accepted-save receipts remain.
+
+The one-time API-token reveal has an explicit Hide token control. It clears the
+local reveal only, not token access, clipboard, browser history or earlier copies.
+Later explicit creation can show its new token; hidden bytes cannot be shown again.
