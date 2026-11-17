@@ -2289,3 +2289,7 @@ chronology; no external acceptance promotion.
 ## Preserve unrelated Settings drafts after group member addition
 - Refresh groups only; retain submitted-member and newer unsent-choice behavior.
   [Review0606](reviews/0606-group-member-add-refresh.md).
+
+## Preserve unrelated Settings drafts after direct member-role Save
+- Refresh members only; keep role snapshot and newer-choice behavior.
+  [Review0607](reviews/0607-member-role-refresh.md).

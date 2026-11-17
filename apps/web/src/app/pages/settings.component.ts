@@ -351,7 +351,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                     <option value="ADMIN">admin</option>
                   </select>
                   <button type="button" name="role-save-{{m.id}}" (click)="setMemberRole(m)" [disabled]="!canSaveMemberRole(m)">{{ memberRolePending()[m.id] ? 'Saving role...' : 'Save role' }}</button>
-                  <span class="muted">Selection alone does not change access. Save role applies the direct team role; group grants still combine.</span>
+                  <span class="muted">Selection alone does not change access. Save role applies the direct team role; group grants still combine. A successful role save refreshes members only and keeps other unsaved forms.</span>
                   @if(memberRoleNotice()[m.id]){<p role="status" [attr.name]="'role-notice-'+m.id">{{ memberRoleNotice()[m.id] }}</p>}
                   @if(m.role === 'MEMBER') {
                     <label>Direct write locales <input [attr.name]="'member-locales-'+m.id" [ngModel]="memberLocalesPick()[m.id] ?? m.allowedLocales.join(', ')" (ngModelChange)="pickMemberLocales(m.id, $event)" [attr.aria-describedby]="'member-locales-help-'+m.id" [attr.aria-invalid]="!validMemberLocales(m)" /></label>
@@ -1257,7 +1257,7 @@ export class SettingsComponent implements OnInit {
       this.members.set(this.members().map(row=>row.id===m.id?{...row,role}:row));
       if(this.memberRolePick()[m.id]===role){const next={...this.memberRolePick()};delete next[m.id];this.memberRolePick.set(next);}
       this.memberRoleNotice.set({ ...this.memberRoleNotice(), [m.id]: 'The submitted direct team role was saved. Any newer role selection has not been saved by this request. Review the current direct team role before saving again.' });
-      await this.reload();
+      this.members.set(await this.api.listMembers(this.projectId));
     }
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.memberRolePending.set({ ...this.memberRolePending(), [m.id]: false }); }

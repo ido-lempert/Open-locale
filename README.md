@@ -1918,3 +1918,7 @@ and accepted-save receipts on refresh failure stay; grants remain team-wide.
 Explicit Add member to group refreshes groups only, keeping unrelated Settings
 drafts. Submitted-member snapshot, newer unsent choice, pending guards and
 accurate accepted-add receipts on refresh failure stay; grants remain team-wide.
+
+Explicit direct member-role Save refreshes members only, keeping unrelated
+Settings drafts. Submitted role, newer choice, pending guards and accurate
+accepted-save receipts on refresh failure remain; group grants still combine.
