@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicationInfo, ApiTokenInfo, GroupInfo, MemberInfo, Project, WebhookInfo } from '../api.service';
@@ -65,9 +65,14 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           @if (createdToken(); as t) {
             <p class="notice">Token created. Copy it now - it will not be shown again.</p>
             <p class="token-reveal"><code style="overflow-wrap:anywhere">{{ t.token }}</code>
-              <button type="button" (click)="copyToken(t.token)">Copy</button>
+              <button type="button" name="copyCreatedToken" [disabled]="tokenCopyPending()" aria-describedby="settingsTokenCopyScope" (click)="copyCreatedToken()">Copy</button>
               <button type="button" name="hideCreatedToken" aria-describedby="settingsTokenRevealScope" (click)="hideCreatedToken()">Hide token</button></p>
             <p class="muted" id="settingsTokenRevealScope" name="settingsTokenRevealScope">Copy before hiding. Hide removes this one-time reveal from this screen. It does not revoke the token or clear clipboard, browser history or earlier copies. It cannot be shown here again.</p>
+          }
+          @if(createdToken()){
+            <p class="muted" id="settingsTokenCopyScope">Copy reports whether the browser accepted the clipboard write, not whether it was pasted or kept. Hiding cannot cancel an in-progress clipboard write.</p>
+            @if(tokenCopyPending()){<p role="status" name="settingsTokenCopyPending">A token clipboard write is still pending. Another Copy is unavailable until it settles, even if the reveal changes.</p>}
+            @if(tokenCopyNotice()){<p role="status" name="settingsTokenCopyNotice">{{tokenCopyNotice()}}</p>}
           }
           @if(tokenRevealNotice()){<p role="status" name="settingsTokenRevealNotice">{{tokenRevealNotice()}}</p>}
           <ul class="locale-list">
@@ -521,7 +526,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
     </main>
   `,
 })
-export class SettingsComponent implements OnInit {
+export class SettingsComponent implements OnInit, OnDestroy {
   project = signal<Project | null>(null);
   name = signal(''); description = signal(''); newLocale = signal('');
   busy = signal(false); error = signal(''); confirming = signal(false);
@@ -547,6 +552,8 @@ export class SettingsComponent implements OnInit {
   constructor(private api: ApiService, route: ActivatedRoute, private router: Router) {
     this.projectId = route.snapshot.paramMap.get('id') ?? '';
   }
+  private tokenCopyDeparted = false;
+  ngOnDestroy() {this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');}
   async ngOnInit() { await this.reload(); }
   async reload(generalSubmission?: {name:string;description:string}, projectOnly = false) {
     let loadedGeneral: {name:string;description:string}|undefined;
@@ -602,7 +609,8 @@ export class SettingsComponent implements OnInit {
   hideCreatedToken() {
     if(!this.createdToken())return;
     this.createdToken.set(null);
-    this.tokenRevealNotice.set('The one-time token reveal was hidden from this screen. The token was not revoked. Clipboard, browser history and earlier copies were not cleared.');
+    this.tokenCopyNotice.set('');
+    this.tokenRevealNotice.set('The one-time token reveal was hidden from this screen. The token was not revoked. Clipboard, browser history and earlier copies were not cleared.'+(this.tokenCopyPending()?' An in-progress clipboard write may still finish.':''));
     if(this.tokenDraftNotice())this.tokenDraftNotice.set(this.tokenDraftNotice().replace('The token revealed above belongs to the submitted token', 'The hidden reveal belonged to the submitted token'));
   }
   tokenDraftNotice = signal('');
@@ -614,6 +622,7 @@ export class SettingsComponent implements OnInit {
       const scopes = submitted.scope.split(',');
       const res = await this.api.createToken(submitted.name, scopes);
       this.tokenRevealNotice.set('');
+      this.tokenCopyNotice.set('');
       this.createdToken.set({ id: res.id, name: res.name, token: res.token });
       if(this.tokenName()===submitted.name && this.tokenScope()===submitted.scope) {
         this.tokenName.set('');
@@ -623,6 +632,21 @@ export class SettingsComponent implements OnInit {
       this.tokens.set(await this.api.listTokens());
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
+  }
+  tokenCopyPending = signal(false);
+  tokenCopyNotice = signal('');
+  async copyCreatedToken() {
+    const reveal=this.createdToken(),projectId=this.projectId;
+    if(this.tokenCopyDeparted || !reveal || this.tokenCopyPending())return;
+    this.tokenCopyPending.set(true);this.tokenCopyNotice.set('');
+    let accepted=false;
+    try {await navigator.clipboard.writeText(reveal.token);accepted=true;} catch { /* Show only bounded feedback, never raw clipboard errors. */ }
+    finally {
+      this.tokenCopyPending.set(false);
+      if(!this.tokenCopyDeparted && this.projectId===projectId && this.createdToken()===reveal) {
+        this.tokenCopyNotice.set(accepted?'The browser accepted the token clipboard write. This does not confirm pasting or how long the clipboard keeps it.':'The browser did not confirm copying the token. Keep the reveal open and try Copy again, or select the token and copy it manually.');
+      }
+    }
   }
   async copyToken(value: string) {
     try { await navigator.clipboard.writeText(value); } catch { /* clipboard unavailable */ }
@@ -705,7 +729,7 @@ export class SettingsComponent implements OnInit {
       this.tokens.set(this.tokens().filter(t=>t.id!==id));
       this.tokenRevokeNotice.set('The submitted API token was revoked. Other tokens were not revoked by this request.');
       this.confirmingToken.set(null);
-      if (this.createdToken()?.id === id) this.createdToken.set(null);
+      if (this.createdToken()?.id === id) {this.createdToken.set(null);this.tokenCopyNotice.set('');}
       this.tokens.set(await this.api.listTokens());
     }
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }

@@ -2309,3 +2309,9 @@ chronology; no external acceptance promotion.
 ## Hide the one-time webhook signing-secret reveal locally
 - Explicit Hide preserves saved webhook state and drafts with accurate limits.
   [Review0611](reviews/0611-webhook-hide.md).
+
+### Token Copy feedback
+One-time API-token Copy now reports browser acceptance or bounded failure,
+keeps the reveal for retry/manual copy, and fences late feedback after Hide,
+replacement Create, revoke or departure. An in-progress write cannot be canceled
+by Hide; another Copy waits for it to settle. No paste or clipboard-retention guarantee.

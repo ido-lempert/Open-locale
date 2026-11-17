@@ -1938,3 +1938,9 @@ Later explicit creation can show its new token; hidden bytes cannot be shown aga
 The one-time webhook signing-secret reveal has an explicit local Hide control.
 It does not delete/disable the webhook, rotate its key, or clear clipboard, history
 or earlier copies. A later explicit creation reveals only its new webhook secret.
+
+### Token Copy feedback
+One-time API-token Copy now reports browser acceptance or bounded failure,
+keeps the reveal for retry/manual copy, and fences late feedback after Hide,
+replacement Create, revoke or departure. An in-progress write cannot be canceled
+by Hide; another Copy waits for it to settle. No paste or clipboard-retention guarantee.
