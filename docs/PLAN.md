@@ -2297,3 +2297,7 @@ chronology; no external acceptance promotion.
 ## Preserve unrelated Settings drafts after direct member locale-scope Save
 - Refresh members only; keep submitted scope and newer raw draft behavior.
   [Review0608](reviews/0608-member-locales-refresh.md).
+
+## Limit general project-details Save refresh to project data
+- Keep whole-form submitted/newer draft behavior and accepted fallback.
+  [Review0609](reviews/0609-general-project-refresh.md).

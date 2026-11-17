@@ -1926,3 +1926,7 @@ accepted-save receipts on refresh failure remain; group grants still combine.
 Explicit direct member locale-scope Save refreshes members only, preserving
 unrelated Settings drafts. Submitted scope, newer raw text, explicit blank-all
 grant and accepted-save receipts on refresh failure stay; group grants still combine.
+
+General project-details Save refreshes project data only, keeping unrelated forms
+and avoiding unrelated token/member/group/automation/SSO reads. Whole-form newer
+drafts, explicit second Save and accepted-save receipts remain.

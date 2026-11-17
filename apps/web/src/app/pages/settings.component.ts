@@ -24,7 +24,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           </form>
           <button type="button" name="discardSettingsGeneral" (click)="discardGeneralDraft()" [disabled]="!canDiscardGeneralDraft()">Discard unsaved edits</button>
           <p class="muted">Discard only resets the local project name and description to last loaded or accepted values. It does not refresh the server or undo saved changes; other forms stay as they are.</p>
-          <p class="muted" id="settingsGeneralRules" name="settingsGeneralRules">Project name: up to 120 characters; description: up to 2,000 characters using the API count. Empty text is allowed by the update API. Outer whitespace is kept; text is not truncated or automatically saved. These checks do not verify permission or newer server changes. A successful save refreshes Settings.</p>
+          <p class="muted" id="settingsGeneralRules" name="settingsGeneralRules">Project name: up to 120 characters; description: up to 2,000 characters using the API count. Empty text is allowed by the update API. Outer whitespace is kept; text is not truncated or automatically saved. These checks do not verify permission or newer server changes. A successful save refreshes project data only and keeps other unsaved forms.</p>
           @if(generalDraftNotice()){<p role="status" name="settingsGeneralDraftNotice">{{ generalDraftNotice() }}</p>}
           @if(!validGeneralName() || !validGeneralDescription()){<p role="status" name="settingsGeneralInvalid">Correct the name or description before saving. Your full text stays here and is not sent.</p>}
           }
@@ -542,7 +542,7 @@ export class SettingsComponent implements OnInit {
     this.projectId = route.snapshot.paramMap.get('id') ?? '';
   }
   async ngOnInit() { await this.reload(); }
-  async reload(generalSubmission?: {name:string;description:string}) {
+  async reload(generalSubmission?: {name:string;description:string}, projectOnly = false) {
     let loadedGeneral: {name:string;description:string}|undefined;
     try {
       const p = await this.api.getProject(this.projectId);
@@ -553,6 +553,7 @@ export class SettingsComponent implements OnInit {
       } else {
         this.generalDraftNotice.set(this.generalDraftMessage);
       }
+      if(projectOnly)return;
       this.tokens.set(await this.api.listTokens());
       this.webhooks.set(await this.api.listWebhooks(this.projectId));
       this.members.set(await this.api.listMembers(this.projectId));
@@ -728,7 +729,7 @@ export class SettingsComponent implements OnInit {
       await this.api.updateProject(this.projectId, submitted);
       const accepted=this.project();if(accepted)this.project.set({...accepted,...submitted});
       if(this.name()!==submitted.name || this.description()!==submitted.description)this.generalDraftNotice.set(this.generalDraftMessage);
-      await this.reload(submitted);
+      await this.reload(submitted, true);
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }
