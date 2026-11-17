@@ -1889,3 +1889,8 @@ membership-saved receipts also apply to membership upserts and refresh failure.
 Group creation refreshes groups only, preserving unrelated Settings drafts. The
 submitted name/role/locales and whole newer draft behavior stay; refresh failure
 keeps the truthful created receipt without adding another group or any members.
+
+Adding an embed origin refreshes project data only, keeping unrelated Settings
+drafts. Existing submitted-origin and newer-draft behavior stay, including the
+accurate saved receipt on refresh failure. The loaded whole allowlist is still
+replaced; this does not verify origin ownership or trust.

@@ -195,7 +195,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           </form>
           <button type="button" name="discardSettingsOrigin" (click)="discardOriginDraft()" [disabled]="!canDiscardOriginDraft()">Discard origin draft</button>
           <p class="muted">Discard only clears the local new-origin field. It does not refresh Settings or remove any saved origin; other forms stay as they are.</p>
-          <p class="muted" id="settingsOriginRules" name="settingsOriginRules">Use a canonical http:// or https:// bare origin, such as https://app.example.com or http://localhost:4200. No path, trailing slash, query, fragment or credentials. Outer whitespace is trimmed when adding; other text is not repaired or truncated. This checks the new origin's syntax only, not site ownership, trust, permission or newer server settings. Adding an origin allows it to embed this project's editor as described above; a successful addition refreshes Settings.</p>
+          <p class="muted" id="settingsOriginRules" name="settingsOriginRules">Use a canonical http:// or https:// bare origin, such as https://app.example.com or http://localhost:4200. No path, trailing slash, query, fragment or credentials. Outer whitespace is trimmed when adding; other text is not repaired or truncated. This checks the new origin's syntax only, not site ownership, trust, permission or newer server settings. Adding an origin allows it to embed this project's editor as described above; a successful addition refreshes project data only and keeps other unsaved forms.</p>
           @if(originDraftNotice()){<p role="status" name="settingsOriginDraftNotice">{{ originDraftNotice() }}</p>}
           @if(newOrigin()!=='' && !validNewOrigin()){<p role="status" name="settingsOriginInvalid">Correct the origin before adding. Your full text stays here and is not sent.</p>}
           }
@@ -796,7 +796,7 @@ export class SettingsComponent implements OnInit {
       await this.api.updateProject(this.projectId, { embedOrigins: [...current, origin] });
       if(this.newOrigin()===submitted)this.newOrigin.set('');
       else this.originDraftNotice.set('The submitted embed origin was saved. Your newer origin draft is kept here and has not been saved. Review it before adding another origin.');
-      await this.reload();
+      this.project.set(await this.api.getProject(this.projectId));
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }

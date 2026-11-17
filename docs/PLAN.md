@@ -2261,3 +2261,7 @@ chronology; no external acceptance promotion.
 ## Preserve unrelated Settings drafts after group creation
 - Refresh groups only; keep submitted grant and whole newer draft behavior. Group
   rules explain the limited refresh. [Review0599](reviews/0599-group-create-refresh.md).
+
+## Preserve unrelated Settings drafts after origin addition
+- Refresh project data only; keep submitted allowlist and newer origin draft.
+  [Review0600](reviews/0600-origin-add-refresh.md).
