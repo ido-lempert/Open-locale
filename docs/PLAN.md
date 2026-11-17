@@ -2281,3 +2281,7 @@ chronology; no external acceptance promotion.
 ## Preserve unrelated Settings drafts after group-role Save
 - Refresh groups only; retain role-only snapshot and newer choice behavior.
   [Review0604](reviews/0604-group-role-refresh.md).
+
+## Preserve unrelated Settings drafts after group locale-scope Save
+- Refresh groups only; keep submitted scope and newer raw draft behavior.
+  [Review0605](reviews/0605-group-locales-refresh.md).

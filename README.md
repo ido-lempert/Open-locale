@@ -1910,3 +1910,7 @@ accurate accepted-save receipts on refresh failure stay.
 Explicit group-role Save refreshes groups only, keeping unrelated Settings
 drafts. Role-only snapshots, newer selections, pending guards and accurate
 accepted-save receipts on refresh failure stay; grants still apply team-wide.
+
+Explicit group locale-scope Save refreshes groups only, preserving unrelated
+Settings drafts. Submitted scope, exact newer raw text, explicit blank-all grant
+and accepted-save receipts on refresh failure stay; grants remain team-wide.

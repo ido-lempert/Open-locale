@@ -413,7 +413,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                   @if(g.role === 'MEMBER') {
                     <label>Group write locales <input [attr.name]="'group-locales-'+g.id" [ngModel]="groupLocalesPick()[g.id] ?? g.allowedLocales.join(', ')" (ngModelChange)="pickGroupLocales(g.id, $event)" [attr.aria-describedby]="'group-locales-help-'+g.id" [attr.aria-invalid]="!validGroupLocales(g)" /></label>
                     <button type="button" [attr.name]="'group-locales-save-'+g.id" (click)="saveGroupLocales(g)" [disabled]="!canSaveGroupLocales(g)">{{ groupLocalesPending()[g.id] ? 'Saving locales...' : 'Save locales' }}</button>
-                    <span class="muted" [attr.id]="'group-locales-help-'+g.id">Comma-separated locale codes from this project. Blank grants all locales. This changes this grant for every group member across every team project. Other grants still combine; this does not hide projects. Typing does not save.</span>
+                    <span class="muted" [attr.id]="'group-locales-help-'+g.id">Comma-separated locale codes from this project. Blank grants all locales. This changes this grant for every group member across every team project. Other grants still combine; this does not hide projects. Typing does not save. A successful scope save refreshes groups only and keeps other unsaved forms.</span>
                     @if(!validGroupLocales(g)){<p role="status">Use only locale codes from this project, separated by commas without empty entries. Leave the field completely blank only to grant all locales.</p>}
                     @if(groupLocalesNotice()[g.id]){<p role="status" [attr.name]="'group-locales-notice-'+g.id">{{ groupLocalesNotice()[g.id] }}</p>}
                   }
@@ -1333,7 +1333,7 @@ export class SettingsComponent implements OnInit {
       this.groups.set(this.groups().map(row=>row.id===g.id?{...row,allowedLocales}:row));
       if(this.groupLocalesPick()[g.id]===raw){const next={...this.groupLocalesPick()};delete next[g.id];this.groupLocalesPick.set(next);}
       this.groupLocalesNotice.set({ ...this.groupLocalesNotice(), [g.id]: 'The submitted group locale scope was saved. Any newer locale text has not been saved by this request. Other grants still combine; review effective access before saving again.' });
-      await this.reload();
+      this.groups.set(await this.api.listGroups(this.projectId));
     }
     catch(e){this.error.set(e instanceof Error?e.message:'Failed');}
     finally{this.groupLocalesPending.set({ ...this.groupLocalesPending(), [g.id]: false });}
