@@ -65,13 +65,13 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           @if (createdToken(); as t) {
             <p class="notice">Token created. Copy it now - it will not be shown again.</p>
             <p class="token-reveal"><code style="overflow-wrap:anywhere">{{ t.token }}</code>
-              <button type="button" name="copyCreatedToken" [disabled]="tokenCopyPending()" aria-describedby="settingsTokenCopyScope" (click)="copyCreatedToken()">Copy</button>
+              <button type="button" name="copyCreatedToken" [disabled]="tokenCopyPending() || hookCopyPending()" aria-describedby="settingsTokenCopyScope" (click)="copyCreatedToken()">Copy</button>
               <button type="button" name="hideCreatedToken" aria-describedby="settingsTokenRevealScope" (click)="hideCreatedToken()">Hide token</button></p>
             <p class="muted" id="settingsTokenRevealScope" name="settingsTokenRevealScope">Copy before hiding. Hide removes this one-time reveal from this screen. It does not revoke the token or clear clipboard, browser history or earlier copies. It cannot be shown here again.</p>
           }
           @if(createdToken()){
             <p class="muted" id="settingsTokenCopyScope">Copy reports whether the browser accepted the clipboard write, not whether it was pasted or kept. Hiding cannot cancel an in-progress clipboard write.</p>
-            @if(tokenCopyPending()){<p role="status" name="settingsTokenCopyPending">A token clipboard write is still pending. Another Copy is unavailable until it settles, even if the reveal changes.</p>}
+            @if(tokenCopyPending()){<p role="status" name="settingsTokenCopyPending">A token clipboard write is still pending. Another secret Copy on this screen is unavailable until it settles, even if the reveal changes.</p>}
             @if(tokenCopyNotice()){<p role="status" name="settingsTokenCopyNotice">{{tokenCopyNotice()}}</p>}
           }
           @if(tokenRevealNotice()){<p role="status" name="settingsTokenRevealNotice">{{tokenRevealNotice()}}</p>}
@@ -109,9 +109,14 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           @if (createdWebhook(); as w) {
             <p class="notice">Webhook created. Copy the signing secret now - it will not be shown again.</p>
             <p class="token-reveal"><code style="overflow-wrap:anywhere">{{ w.secret }}</code>
-              <button type="button" (click)="copyToken(w.secret)">Copy</button>
+              <button type="button" name="copyCreatedWebhook" [disabled]="hookCopyPending() || tokenCopyPending()" aria-describedby="settingsWebhookCopyScope" (click)="copyCreatedWebhook()">Copy</button>
               <button type="button" name="hideCreatedWebhook" aria-describedby="settingsWebhookRevealScope" (click)="hideCreatedWebhook()">Hide signing secret</button></p>
             <p class="muted" id="settingsWebhookRevealScope" name="settingsWebhookRevealScope">Copy before hiding. Hide removes this one-time signing-secret reveal from this screen. It does not delete or disable the webhook, rotate its secret, or clear clipboard, browser history or earlier copies. It cannot be shown here again.</p>
+          }
+          @if(createdWebhook()){
+            <p class="muted" id="settingsWebhookCopyScope">Copy reports whether the browser accepted the clipboard write, not whether it was pasted or kept. Hiding cannot cancel an in-progress clipboard write.</p>
+            @if(hookCopyPending()){<p role="status" name="settingsWebhookCopyPending">A signing-secret clipboard write is still pending. Another secret Copy on this screen is unavailable until it settles, even if the reveal changes.</p>}
+            @if(hookCopyNotice()){<p role="status" name="settingsWebhookCopyNotice">{{hookCopyNotice()}}</p>}
           }
           @if(hookRevealNotice()){<p role="status" name="settingsWebhookRevealNotice">{{hookRevealNotice()}}</p>}
           <ul class="locale-list">
@@ -553,7 +558,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.projectId = route.snapshot.paramMap.get('id') ?? '';
   }
   private tokenCopyDeparted = false;
-  ngOnDestroy() {this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');}
+  ngOnDestroy() {this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
   async ngOnInit() { await this.reload(); }
   async reload(generalSubmission?: {name:string;description:string}, projectOnly = false) {
     let loadedGeneral: {name:string;description:string}|undefined;
@@ -637,7 +642,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   tokenCopyNotice = signal('');
   async copyCreatedToken() {
     const reveal=this.createdToken(),projectId=this.projectId;
-    if(this.tokenCopyDeparted || !reveal || this.tokenCopyPending())return;
+    if(this.tokenCopyDeparted || !reveal || this.tokenCopyPending() || this.hookCopyPending())return;
     this.tokenCopyPending.set(true);this.tokenCopyNotice.set('');
     let accepted=false;
     try {await navigator.clipboard.writeText(reveal.token);accepted=true;} catch { /* Show only bounded feedback, never raw clipboard errors. */ }
@@ -648,8 +653,20 @@ export class SettingsComponent implements OnInit, OnDestroy {
       }
     }
   }
-  async copyToken(value: string) {
-    try { await navigator.clipboard.writeText(value); } catch { /* clipboard unavailable */ }
+  hookCopyPending = signal(false);
+  hookCopyNotice = signal('');
+  async copyCreatedWebhook() {
+    const reveal=this.createdWebhook(),projectId=this.projectId;
+    if(this.tokenCopyDeparted || !reveal || this.hookCopyPending() || this.tokenCopyPending())return;
+    this.hookCopyPending.set(true);this.hookCopyNotice.set('');
+    let accepted=false;
+    try {await navigator.clipboard.writeText(reveal.secret);accepted=true;} catch { /* Never display raw clipboard errors. */ }
+    finally {
+      this.hookCopyPending.set(false);
+      if(!this.tokenCopyDeparted && this.projectId===projectId && this.createdWebhook()===reveal) {
+        this.hookCopyNotice.set(accepted?'The browser accepted the signing-secret clipboard write. This does not confirm pasting or how long the clipboard keeps it.':'The browser did not confirm copying the signing secret. Keep the reveal open and try Copy again, or select the signing secret and copy it manually.');
+      }
+    }
   }
   canDiscardWebhookUrlDraft():boolean {return !this.busy() && this.hookUrl()!=='';}
   discardWebhookUrlDraft() {
@@ -661,7 +678,8 @@ export class SettingsComponent implements OnInit, OnDestroy {
   hideCreatedWebhook() {
     if(!this.createdWebhook())return;
     this.createdWebhook.set(null);
-    this.hookRevealNotice.set('The one-time signing-secret reveal was hidden from this screen. The webhook was not deleted or disabled and its secret was not rotated. Clipboard, browser history and earlier copies were not cleared.');
+    this.hookCopyNotice.set('');
+    this.hookRevealNotice.set('The one-time signing-secret reveal was hidden from this screen. The webhook was not deleted or disabled and its secret was not rotated. Clipboard, browser history and earlier copies were not cleared.'+(this.hookCopyPending()?' An in-progress clipboard write may still finish.':''));
     if(this.hookDraftNotice())this.hookDraftNotice.set(this.hookDraftNotice().replace('The signing secret above belongs to the submitted webhook', 'The hidden signing-secret reveal belonged to the submitted webhook'));
   }
   hookDraftNotice = signal('');
@@ -678,6 +696,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     try {
       const res = await this.api.createWebhook(this.projectId, { url: submitted.url.trim(), events });
       this.hookRevealNotice.set('');
+      this.hookCopyNotice.set('');
       this.createdWebhook.set({ id: res.id, secret: res.secret });
       if(this.hookUrl()===submitted.url && this.hookTranslationUpdated()===submitted.translationUpdated && this.hookProjectRestored()===submitted.projectRestored) {
         this.hookUrl.set('');
@@ -713,7 +732,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
       this.webhooks.set(this.webhooks().filter(h=>h.id!==id));
       this.hookDeleteNotice.set('The submitted webhook and its delivery history were deleted. Other webhooks were not deleted by this request.');
       this.confirmingHook.set(null);
-      if (this.createdWebhook()?.id === id) this.createdWebhook.set(null);
+      if (this.createdWebhook()?.id === id) {this.createdWebhook.set(null);this.hookCopyNotice.set('');}
       this.webhooks.set(await this.api.listWebhooks(this.projectId));
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }

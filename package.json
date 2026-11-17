@@ -266,6 +266,7 @@
     "test:settings-group-validation-browser": "node scripts/settings-group-validation-browser-test.mjs",
     "test:settings-general-validation-browser": "node scripts/settings-general-validation-browser-test.mjs",
     "test:settings-token-hide-browser": "node scripts/settings-token-hide-browser-test.mjs",
+    "test:settings-webhook-copy-browser": "node scripts/settings-webhook-copy-browser-test.mjs",
     "test:settings-token-copy-browser": "node scripts/settings-token-copy-browser-test.mjs",
     "test:settings-webhook-hide-browser": "node scripts/settings-webhook-hide-browser-test.mjs"
   },

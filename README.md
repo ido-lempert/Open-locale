@@ -1944,3 +1944,10 @@ One-time API-token Copy now reports browser acceptance or bounded failure,
 keeps the reveal for retry/manual copy, and fences late feedback after Hide,
 replacement Create, revoke or departure. An in-progress write cannot be canceled
 by Hide; another Copy waits for it to settle. No paste or clipboard-retention guarantee.
+
+### Signing-secret Copy feedback
+Webhook signing-secret Copy reports browser write acceptance or bounded refusal,
+keeps the reveal available for retry/manual copy, and fences late feedback after
+Hide, replacement Create, delete or departure. Token and signing-secret Copy
+share a pending-write fence so their writes do not race on this Settings screen.
+No paste, retention, cancellation, rotation or clipboard-cleanup guarantee.
