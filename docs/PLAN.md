@@ -2265,3 +2265,7 @@ chronology; no external acceptance promotion.
 ## Preserve unrelated Settings drafts after origin addition
 - Refresh project data only; keep submitted allowlist and newer origin draft.
   [Review0600](reviews/0600-origin-add-refresh.md).
+
+## Preserve unrelated Settings drafts after locale addition
+- Refresh project data only; retain submitted-code and newer-draft behavior.
+  [Review0601](reviews/0601-locale-add-refresh.md).

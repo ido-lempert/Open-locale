@@ -1894,3 +1894,7 @@ Adding an embed origin refreshes project data only, keeping unrelated Settings
 drafts. Existing submitted-origin and newer-draft behavior stay, including the
 accurate saved receipt on refresh failure. The loaded whole allowlist is still
 replaced; this does not verify origin ownership or trust.
+
+Adding a locale refreshes project data only and keeps unrelated Settings drafts.
+Submitted trimmed code, exact newer raw draft and explicit corrected Add behavior
+stay, including an accurate added receipt if the project refresh fails.

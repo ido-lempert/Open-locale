@@ -54,7 +54,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           </form>
           <button type="button" name="discardSettingsLocale" (click)="discardLocaleDraft()" [disabled]="!canDiscardLocaleDraft()">Discard locale draft</button>
           <p class="muted">Discard only clears the local add-locale field. It does not refresh Settings or remove any saved locale; other forms stay as they are.</p>
-          <p class="muted" id="settingsLocaleRules" name="settingsLocaleRules">Locale code: 2-3 lowercase letters, optionally followed by dash-separated groups of 2-8 letters or digits (for example en, pt-BR, zh-Hant-HK). Outer whitespace is trimmed when adding; text is not truncated or otherwise rewritten. This checks API syntax, not a language registry, availability or permission. A successful addition refreshes Settings.</p>
+          <p class="muted" id="settingsLocaleRules" name="settingsLocaleRules">Locale code: 2-3 lowercase letters, optionally followed by dash-separated groups of 2-8 letters or digits (for example en, pt-BR, zh-Hant-HK). Outer whitespace is trimmed when adding; text is not truncated or otherwise rewritten. This checks API syntax, not a language registry, availability or permission. A successful addition refreshes project data only and keeps other unsaved forms.</p>
           @if(localeDraftNotice()){<p role="status" name="settingsLocaleDraftNotice">{{ localeDraftNotice() }}</p>}
           @if(newLocale()!=='' && !validNewLocaleCode()){<p role="status" name="settingsLocaleInvalid">Correct the locale code before adding. Your full code stays here and is not sent.</p>}
           }
@@ -748,7 +748,7 @@ export class SettingsComponent implements OnInit {
       await this.api.addLocale(this.projectId, submitted.trim());
       if(this.newLocale()===submitted)this.newLocale.set('');
       else this.localeDraftNotice.set('The submitted locale was added. Your newer locale draft is kept here and has not been added. Review it before adding another locale.');
-      await this.reload();
+      this.project.set(await this.api.getProject(this.projectId));
     }
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
