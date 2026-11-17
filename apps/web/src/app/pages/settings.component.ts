@@ -408,7 +408,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                     <option value="ADMIN">admin</option>
                   </select>
                   <button type="button" name="grole-save-{{g.id}}" (click)="setGroupRole(g)" [disabled]="!canSaveGroupRole(g)">{{ groupRolePending()[g.id] ? 'Saving role...' : 'Save role' }}</button>
-                  <span class="muted">Selection alone does not change access. Save role applies this group's team-wide grant.</span>
+                  <span class="muted">Selection alone does not change access. Save role applies this group's team-wide grant. A successful role save refreshes groups only and keeps other unsaved forms.</span>
                   @if(groupRoleNotice()[g.id]){<p role="status" [attr.name]="'grole-notice-'+g.id">{{ groupRoleNotice()[g.id] }}</p>}
                   @if(g.role === 'MEMBER') {
                     <label>Group write locales <input [attr.name]="'group-locales-'+g.id" [ngModel]="groupLocalesPick()[g.id] ?? g.allowedLocales.join(', ')" (ngModelChange)="pickGroupLocales(g.id, $event)" [attr.aria-describedby]="'group-locales-help-'+g.id" [attr.aria-invalid]="!validGroupLocales(g)" /></label>
@@ -1120,7 +1120,7 @@ export class SettingsComponent implements OnInit {
       this.groups.set(this.groups().map(row=>row.id===g.id?{...row,role}:row));
       if(this.groupRolePick()[g.id]===role){const next={...this.groupRolePick()};delete next[g.id];this.groupRolePick.set(next);}
       this.groupRoleNotice.set({ ...this.groupRoleNotice(), [g.id]: 'The submitted group role was saved. Any newer role selection has not been saved by this request. Review the current group role before saving again.' });
-      await this.reload();
+      this.groups.set(await this.api.listGroups(this.projectId));
     }
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.groupRolePending.set({ ...this.groupRolePending(), [g.id]: false }); }

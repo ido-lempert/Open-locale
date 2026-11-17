@@ -2277,3 +2277,7 @@ chronology; no external acceptance promotion.
 ## Preserve unrelated Settings drafts after group rename
 - Refresh groups only; keep name-only snapshot and newer raw draft behavior.
   [Review0603](reviews/0603-group-name-refresh.md).
+
+## Preserve unrelated Settings drafts after group-role Save
+- Refresh groups only; retain role-only snapshot and newer choice behavior.
+  [Review0604](reviews/0604-group-role-refresh.md).

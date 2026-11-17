@@ -1906,3 +1906,7 @@ newer-draft behavior stay, including truthful saved receipts on refresh failure.
 Explicit group-name Save refreshes groups only, preserving unrelated Settings
 drafts. Name-only snapshots, exact newer raw text, per-row pending guards and
 accurate accepted-save receipts on refresh failure stay.
+
+Explicit group-role Save refreshes groups only, keeping unrelated Settings
+drafts. Role-only snapshots, newer selections, pending guards and accurate
+accepted-save receipts on refresh failure stay; grants still apply team-wide.
