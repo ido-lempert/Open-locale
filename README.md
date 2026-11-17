@@ -1914,3 +1914,7 @@ accepted-save receipts on refresh failure stay; grants still apply team-wide.
 Explicit group locale-scope Save refreshes groups only, preserving unrelated
 Settings drafts. Submitted scope, exact newer raw text, explicit blank-all grant
 and accepted-save receipts on refresh failure stay; grants remain team-wide.
+
+Explicit Add member to group refreshes groups only, keeping unrelated Settings
+drafts. Submitted-member snapshot, newer unsent choice, pending guards and
+accurate accepted-add receipts on refresh failure stay; grants remain team-wide.

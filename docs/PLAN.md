@@ -2285,3 +2285,7 @@ chronology; no external acceptance promotion.
 ## Preserve unrelated Settings drafts after group locale-scope Save
 - Refresh groups only; keep submitted scope and newer raw draft behavior.
   [Review0605](reviews/0605-group-locales-refresh.md).
+
+## Preserve unrelated Settings drafts after group member addition
+- Refresh groups only; retain submitted-member and newer unsent-choice behavior.
+  [Review0606](reviews/0606-group-member-add-refresh.md).

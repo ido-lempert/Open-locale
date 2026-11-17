@@ -445,7 +445,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                     }
                   </select>
                   <button type="button" name="gadd-submit-{{g.id}}" (click)="addGroupMember(g)" [disabled]="deletingGroup()===g.id || !groupPick()[g.id] || groupMemberPending()[g.id]">{{ groupMemberPending()[g.id] ? 'Adding member...' : 'Add member' }}</button>
-                  <span class="muted">Selection alone does not add access. Choose Add member to apply this group's grant.</span>
+                  <span class="muted">Selection alone does not add access. Choose Add member to apply this group's grant. A successful add refreshes groups only and keeps other unsaved forms.</span>
                   @if(groupMemberNotice()[g.id]){<p role="status" [attr.name]="'gadd-notice-'+g.id">{{ groupMemberNotice()[g.id] }}</p>}
                 }
               </li>
@@ -1200,7 +1200,7 @@ export class SettingsComponent implements OnInit {
       await this.api.addGroupMember(this.projectId, g.id, userId);
       if(this.groupPick()[g.id]===userId)this.groupPick.set({ ...this.groupPick(), [g.id]: '' });
       this.groupMemberNotice.set({ ...this.groupMemberNotice(), [g.id]: 'The submitted member was added. Any selection shown here has not been added by this request. Choose Add member to apply it.' });
-      await this.reload();
+      this.groups.set(await this.api.listGroups(this.projectId));
     }
     catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.groupMemberPending.set({ ...this.groupMemberPending(), [g.id]: false }); }
