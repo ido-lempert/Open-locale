@@ -2293,3 +2293,7 @@ chronology; no external acceptance promotion.
 ## Preserve unrelated Settings drafts after direct member-role Save
 - Refresh members only; keep role snapshot and newer-choice behavior.
   [Review0607](reviews/0607-member-role-refresh.md).
+
+## Preserve unrelated Settings drafts after direct member locale-scope Save
+- Refresh members only; keep submitted scope and newer raw draft behavior.
+  [Review0608](reviews/0608-member-locales-refresh.md).

@@ -1922,3 +1922,7 @@ accurate accepted-add receipts on refresh failure stay; grants remain team-wide.
 Explicit direct member-role Save refreshes members only, keeping unrelated
 Settings drafts. Submitted role, newer choice, pending guards and accurate
 accepted-save receipts on refresh failure remain; group grants still combine.
+
+Explicit direct member locale-scope Save refreshes members only, preserving
+unrelated Settings drafts. Submitted scope, newer raw text, explicit blank-all
+grant and accepted-save receipts on refresh failure stay; group grants still combine.

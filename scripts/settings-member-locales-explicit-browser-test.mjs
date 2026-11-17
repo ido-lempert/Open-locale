@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55964, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = 56029, WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
 let failures = 0, api, web, browser, prisma;
@@ -42,8 +42,8 @@ try {
   const key=await call(P+'/keys',{name:'locale.scope'},token);
   const write=async locale=>{const r=await fetch(API+P+'/keys/'+key.id+'/translations',{method:'PUT',headers:{'Content-Type':'application/json',Authorization:'Bearer '+person.accessToken},body:JSON.stringify({locale,value:'scope test'})});return r.status;};
   await page.goto(`${WEB}${P}/settings`,{waitUntil:'networkidle0'});await page.waitForSelector(`[name=member-locales-${member.id}]`);await page.waitForNetworkIdle({idleTime:200});
-  let patches=0,reads=0,held,failPatch=false,failRead=false;const payloads=[];
-  await page.setRequestInterception(true);page.on('request',req=>{const path=new URL(req.url()).pathname;if(path.startsWith('/api/')&&req.method()==='GET'){reads++;if(failRead&&path===`/api${P}`)return req.respond({status:503,contentType:'application/json',body:'{"message":"Refresh failed"}'});}if(req.method()==='PATCH'&&path===`/api${P}/members/${member.id}`){patches++;payloads.push(JSON.parse(req.postData()));if(failPatch)return req.respond({status:403,contentType:'application/json',body:'{"message":"Permission denied"}'});held=req;return;}req.continue();});
+  let patches=0,reads=0,held,failPatch=false,failRead=false;const payloads=[],readPaths=[];
+  await page.setRequestInterception(true);page.on('request',req=>{const path=new URL(req.url()).pathname;if(path.startsWith('/api/')&&req.method()==='GET'){reads++;readPaths.push(path);if(failRead&&path===`/api${P}/members`)return req.respond({status:503,contentType:'application/json',body:'{"message":"Refresh failed"}'});}if(req.method()==='PATCH'&&path===`/api${P}/members/${member.id}`){patches++;payloads.push(JSON.parse(req.postData()));if(failPatch)return req.respond({status:403,contentType:'application/json',body:'{"message":"Permission denied"}'});held=req;return;}req.continue();});
   const input=`[name=member-locales-${member.id}]`,button=`[name=member-locales-save-${member.id}]`,notice=`[name=member-locales-notice-${member.id}]`;
   const type=async value=>{await page.$eval(input,(e,v)=>{e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}));},value);await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));};
   const save=()=>page.click(button);
@@ -53,10 +53,12 @@ try {
   check('initial unchanged locale scope Save disabled',await page.$eval(button,e=>e.disabled));
   await type('unknown');check('unknown project locale invalid and unsent',await page.$eval(input,e=>e.getAttribute('aria-invalid')==='true')&&await page.$eval(button,e=>e.disabled)&&patches===0);
   await type(', ,');check('comma-only input cannot silently grant all locales',await page.$eval(input,e=>e.getAttribute('aria-invalid')==='true')&&await page.$eval(button,e=>e.disabled)&&patches===0);
+  await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-settings'));c.name.set('Other name draft');c.description.set('Other description draft');c.groupName.set('Other new-group draft');c.newRuleName.set('Other rule draft');});
   await type('en');check('typing locale scope sends no PATCH or GET and keeps server grant',patches===0&&reads===0&&JSON.stringify((await row()).allowedLocales)==='["he"]');if(failures)throw new Error('Local-only locale editing absent');
   await save();await poll();await type('he');await page.select(`[name=role-${member.id}]`,'ADMIN');await page.evaluate(m=>{const c=ng.getComponent(document.querySelector('ol-settings'));c.saveMemberLocales(m);c.setMemberRole(m);},member);
   check('Save sends only original locale snapshot blocks duplicate and role Save',patches===1&&JSON.stringify(payloads[0])==='{"allowedLocales":["en"]}'&&await page.$eval(button,e=>e.disabled)&&await page.$eval(`[name=role-save-${member.id}]`,e=>e.disabled));await page.select(`[name=role-${member.id}]`,'MEMBER');await held.continue();await done();
   check('accepted en scope newer he text retained with saved unsaved receipt',JSON.stringify((await row()).allowedLocales)==='["en"]'&&await page.$eval(input,e=>e.value==='he')&&!await page.$eval(button,e=>e.disabled)&&await page.$eval(notice,e=>e.textContent.includes('submitted direct locale scope was saved')&&e.textContent.includes('newer locale text has not been saved')));
+  check('member scope refresh reads members only and keeps unrelated drafts',reads===1&&readPaths.every(p=>p===`/api${P}/members`)&&await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-settings'));return c.name()==='Other name draft'&&c.description()==='Other description draft'&&c.groupName()==='Other new-group draft'&&c.newRuleName()==='Other rule draft'&&c.error()==='';}));
   check('real API denies removed direct locale and allows saved and inherited locales',(await write('he'))===403&&[200,201].includes(await write('en'))&&[200,201].includes(await write('fr')));
   check('effective union shown without changing inherited group',await page.evaluate(()=>document.body.textContent.includes('effective locales: en, fr')));
   await page.$eval(input,e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/settings-member-locales-explicit-desktop.png'});await page.setViewport({width:390,height:844});await page.$eval(input,e=>scrollTo(0,scrollY+e.getBoundingClientRect().top-90));await page.screenshot({path:'/downloads/settings-member-locales-explicit-mobile.png'});
@@ -65,6 +67,7 @@ try {
   await type('');held=null;await save();await poll();await held.continue();await done();check('explicit blank scope saves all locales and broadens actual translation writes',patches===3&&JSON.stringify(payloads[2])==='{"allowedLocales":[]}'&&(await row()).allowedLocales.length===0&&[200,201].includes(await write('en'))&&await page.$eval(button,e=>e.disabled));
   failPatch=true;const before=reads;await type('en');await save();await page.waitForFunction(()=>ng.getComponent(document.querySelector('ol-settings')).error()==='Permission denied');await done();check('403 preserves raw scope no saved claim or refresh',reads===before&&(await row()).allowedLocales.length===0&&!await page.$(notice)&&await page.$eval(input,e=>e.value==='en'));
   failPatch=false;failRead=true;held=null;await save();await poll();await type('');await held.continue();await done();check('503 refresh preserves accepted scope and enables explicit newer revert',JSON.stringify((await row()).allowedLocales)==='["en"]'&&await page.$eval(input,e=>e.value==='')&&!await page.$eval(button,e=>e.disabled)&&await page.$eval(notice,e=>e.textContent.includes('was saved'))&&await page.evaluate(id=>{const c=ng.getComponent(document.querySelector('ol-settings'));return c.error()==='Refresh failed'&&JSON.stringify(c.members().find(m=>m.id===id).allowedLocales)==='["en"]';},member.id));
+  check('accepted scope refreshes read members only and retain drafts on503',reads===4&&readPaths.every(p=>p===`/api${P}/members`)&&await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-settings'));return c.name()==='Other name draft'&&c.description()==='Other description draft'&&c.groupName()==='Other new-group draft'&&c.newRuleName()==='Other rule draft';}));
   const groups=await call(P+'/groups',null,token);check('inherited member group and direct role unchanged',groups.length===1&&groups[0].role==='MEMBER'&&JSON.stringify(groups[0].allowedLocales)==='["fr"]'&&groups[0].members[0].userId===member.id&&(await row()).role==='MEMBER');
   check('no locale scope runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
 } catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??String(e)}`);process.exitCode=1;}
