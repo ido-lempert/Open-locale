@@ -2273,3 +2273,7 @@ chronology; no external acceptance promotion.
 ## Preserve unrelated Settings drafts after custom-status addition
 - Refresh project data only; retain loaded-list submission and newer raw draft.
   [Review0602](reviews/0602-status-add-refresh.md).
+
+## Preserve unrelated Settings drafts after group rename
+- Refresh groups only; keep name-only snapshot and newer raw draft behavior.
+  [Review0603](reviews/0603-group-name-refresh.md).

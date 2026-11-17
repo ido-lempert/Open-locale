@@ -400,7 +400,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                 @if (canManageGroup(g)) {
                   <label>Group name <input [attr.name]="'group-name-'+g.id" [ngModel]="groupNamePick()[g.id] ?? g.name" (ngModelChange)="pickGroupName(g.id, $event)" [attr.aria-describedby]="'group-name-help-'+g.id" [attr.aria-invalid]="!validGroupName(g)" /></label>
                   <button type="button" [attr.name]="'group-name-save-'+g.id" (click)="saveGroupName(g)" [disabled]="!canSaveGroupName(g)">{{ groupNamePending()[g.id] ? 'Saving name...' : 'Save name' }}</button>
-                  <span class="muted" [attr.id]="'group-name-help-'+g.id">Nonempty name, up to 100 characters after trimming. Save name renames this team-wide group without changing its members, grants or task assignments. Typing does not save.</span>
+                  <span class="muted" [attr.id]="'group-name-help-'+g.id">Nonempty name, up to 100 characters after trimming. Save name renames this team-wide group without changing its members, grants or task assignments. Typing does not save. A successful rename refreshes groups only and keeps other unsaved forms.</span>
                   @if(!validGroupName(g)){<p role="status">Enter a nonempty group name of up to 100 characters. Your full text stays here and is not sent.</p>}
                   @if(groupNameNotice()[g.id]){<p role="status" [attr.name]="'group-name-notice-'+g.id">{{ groupNameNotice()[g.id] }}</p>}
                   <select aria-label="Group role" [ngModel]="groupRolePick()[g.id] ?? g.role" (ngModelChange)="pickGroupRole(g.id, $event)" [attr.name]="'grole-'+g.id">
@@ -1150,7 +1150,7 @@ export class SettingsComponent implements OnInit {
       this.groups.set(this.groups().map(row=>row.id===g.id?{...row,name}:row));
       if(this.groupNamePick()[g.id]===raw){const next={...this.groupNamePick()};delete next[g.id];this.groupNamePick.set(next);}
       this.groupNameNotice.set({ ...this.groupNameNotice(), [g.id]: 'The submitted group name was saved. Any newer name text has not been saved by this request. Review the current group name before saving again.' });
-      await this.reload();
+      this.groups.set(await this.api.listGroups(this.projectId));
     }
     catch(e){this.error.set(e instanceof Error?e.message:'Failed');}
     finally{this.groupNamePending.set({ ...this.groupNamePending(), [g.id]: false });}

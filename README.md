@@ -1902,3 +1902,7 @@ stay, including an accurate added receipt if the project refresh fails.
 Adding a custom status refreshes project data only, preserving unrelated Settings
 drafts. Loaded whole-list replacement, trimmed uppercase submission and exact
 newer-draft behavior stay, including truthful saved receipts on refresh failure.
+
+Explicit group-name Save refreshes groups only, preserving unrelated Settings
+drafts. Name-only snapshots, exact newer raw text, per-row pending guards and
+accurate accepted-save receipts on refresh failure stay.
