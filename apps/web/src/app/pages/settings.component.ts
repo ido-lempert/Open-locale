@@ -163,7 +163,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           </form>
           <button type="button" name="discardSettingsStatus" (click)="discardStatusDraft()" [disabled]="!canDiscardStatusDraft()">Discard status draft</button>
           <p class="muted">Discard only clears the local new-status field. It does not refresh Settings or remove any saved status; other forms stay as they are.</p>
-          <p class="muted" id="settingsStatusRules" name="settingsStatusRules">New custom status: 2-24 characters, starting with a letter, then letters, digits or underscores. Outer whitespace is trimmed and text is uppercased when adding, as before. UNVERIFIED, TRANSLATED and REVIEWED are base statuses, not custom names. Full input is kept without truncation. This checks the new name only, not newer server status choices or permission. A successful addition refreshes Settings.</p>
+          <p class="muted" id="settingsStatusRules" name="settingsStatusRules">New custom status: 2-24 characters, starting with a letter, then letters, digits or underscores. Outer whitespace is trimmed and text is uppercased when adding, as before. UNVERIFIED, TRANSLATED and REVIEWED are base statuses, not custom names. Full input is kept without truncation. This checks the new name only, not newer server status choices or permission. A successful addition refreshes project data only and keeps other unsaved forms.</p>
           @if(statusDraftNotice()){<p role="status" name="settingsStatusDraftNotice">{{ statusDraftNotice() }}</p>}
           @if(newStatus()!=='' && !validNewStatus()){<p role="status" name="settingsStatusInvalid">Correct the custom status before adding. Your full text stays here and is not sent.</p>}
           }
@@ -989,7 +989,7 @@ export class SettingsComponent implements OnInit {
       await this.api.updateProject(this.projectId, { customStatuses: [...current, submitted.trim().toUpperCase()] });
       if(this.newStatus()===submitted)this.newStatus.set('');
       else this.statusDraftNotice.set('The submitted custom status was saved. Your newer custom status draft is kept here and has not been saved. Review it before adding another status.');
-      await this.reload();
+      this.project.set(await this.api.getProject(this.projectId));
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }

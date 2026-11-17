@@ -1898,3 +1898,7 @@ replaced; this does not verify origin ownership or trust.
 Adding a locale refreshes project data only and keeps unrelated Settings drafts.
 Submitted trimmed code, exact newer raw draft and explicit corrected Add behavior
 stay, including an accurate added receipt if the project refresh fails.
+
+Adding a custom status refreshes project data only, preserving unrelated Settings
+drafts. Loaded whole-list replacement, trimmed uppercase submission and exact
+newer-draft behavior stay, including truthful saved receipts on refresh failure.

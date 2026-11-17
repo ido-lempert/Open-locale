@@ -2269,3 +2269,7 @@ chronology; no external acceptance promotion.
 ## Preserve unrelated Settings drafts after locale addition
 - Refresh project data only; retain submitted-code and newer-draft behavior.
   [Review0601](reviews/0601-locale-add-refresh.md).
+
+## Preserve unrelated Settings drafts after custom-status addition
+- Refresh project data only; retain loaded-list submission and newer raw draft.
+  [Review0602](reviews/0602-status-add-refresh.md).
