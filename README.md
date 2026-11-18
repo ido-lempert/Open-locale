@@ -1951,3 +1951,10 @@ keeps the reveal available for retry/manual copy, and fences late feedback after
 Hide, replacement Create, delete or departure. Token and signing-secret Copy
 share a pending-write fence so their writes do not race on this Settings screen.
 No paste, retention, cancellation, rotation or clipboard-cleanup guarantee.
+
+### Read-only API-token list Refresh
+Refresh token list reads current token metadata without reloading other Settings
+forms. Drafts, one-time reveals and prior copy feedback stay. Failed reads keep
+the last list with bounded retry guidance. A kept reveal can belong to a token
+no longer in the list. This is a list snapshot, not an authentication check.
+Later explicit Create/revoke and route departure fence late refresh results.

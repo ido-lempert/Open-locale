@@ -56,7 +56,7 @@ try {
   await page.$eval('[name=historyError]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/editor-history-error.png',fullPage:false});
   mode='live';await page.click('[name=retryHistory]');await page.waitForSelector('.history-list');check('manual retry restores actual history read',!(await page.$('[name=historyError]'))&&!!await page.$('.history-list'));
   await page.screenshot({path:'/downloads/editor-history-retry.png',fullPage:false});await toggle('alpha');
-  mode='hold';await toggle('alpha');await waitHeld(2);const leaving=held.splice(0);await page.click('a.settings-link');await page.waitForSelector('form');await answer(leaving,'AFTER-DESTROY');check('late read after actual navigation never mounts history in destination',new URL(page.url()).pathname.endsWith('/settings')&&!(await page.$('.history-row'))&&!(await page.content()).includes('AFTER-DESTROY'));
+  mode='hold';await toggle('alpha');await waitHeld(2);const leaving=held.splice(0);await page.click('a.settings-link');await page.waitForSelector('ol-settings [name=tokenName]');await answer(leaving,'AFTER-DESTROY');check('late read after actual navigation never mounts history in destination',new URL(page.url()).pathname.endsWith('/settings')&&!(await page.$('.history-row'))&&!(await page.content()).includes('AFTER-DESTROY'));
   check('history controls perform reads only',mutations.length===0);check('no history browser runtime error',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));
   process.exitCode=failures?1:0;
 } catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}

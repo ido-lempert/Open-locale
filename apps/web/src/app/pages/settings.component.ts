@@ -62,6 +62,11 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
         <section class="panel">
           <h2>API tokens</h2>
           <p class="muted">Tokens authenticate scripts and CI against the API (X-Api-Key header).</p>
+          <button type="button" name="refreshSettingsTokens" [disabled]="busy() || tokenListRefreshing()" aria-describedby="settingsTokenListRefreshScope" (click)="refreshTokenList()">Refresh token list</button>
+          <p class="muted" id="settingsTokenListRefreshScope">Reads token metadata only. Your drafts and one-time reveals stay. This does not create or revoke tokens, copy credentials or check whether a token works. A kept reveal can belong to a token no longer in the list.</p>
+          @if(tokenListRefreshing()){<p role="status" name="settingsTokenListRefreshing">Refreshing token metadata. The previous list stays until this read succeeds.</p>}
+          @if(tokenListRefreshNotice()){<p role="status" name="settingsTokenListRefreshNotice">{{tokenListRefreshNotice()}}</p>}
+
           @if (createdToken(); as t) {
             <p class="notice">Token created. Copy it now - it will not be shown again.</p>
             <p class="token-reveal"><code style="overflow-wrap:anywhere">{{ t.token }}</code>
@@ -558,7 +563,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.projectId = route.snapshot.paramMap.get('id') ?? '';
   }
   private tokenCopyDeparted = false;
-  ngOnDestroy() {this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
+  ngOnDestroy() {this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
   async ngOnInit() { await this.reload(); }
   async reload(generalSubmission?: {name:string;description:string}, projectOnly = false) {
     let loadedGeneral: {name:string;description:string}|undefined;
@@ -572,6 +577,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
         this.generalDraftNotice.set(this.generalDraftMessage);
       }
       if(projectOnly)return;
+      this.invalidateTokenListRefresh();
       this.tokens.set(await this.api.listTokens());
       this.webhooks.set(await this.api.listWebhooks(this.projectId));
       this.members.set(await this.api.listMembers(this.projectId));
@@ -621,6 +627,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   tokenDraftNotice = signal('');
   async createToken() {
     if(this.busy())return;
+    this.invalidateTokenListRefresh();
     const submitted={name:this.tokenName(),scope:this.tokenScope()};
     this.busy.set(true); this.error.set(''); this.tokenDraftNotice.set('');
     try {
@@ -637,6 +644,26 @@ export class SettingsComponent implements OnInit, OnDestroy {
       this.tokens.set(await this.api.listTokens());
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
+  }
+  tokenListRefreshing = signal(false);
+  tokenListRefreshNotice = signal('');
+  private tokenListRefreshEpoch = 0;
+  private invalidateTokenListRefresh() {
+    this.tokenListRefreshEpoch++;this.tokenListRefreshing.set(false);this.tokenListRefreshNotice.set('');
+  }
+  async refreshTokenList() {
+    if(this.tokenCopyDeparted || this.busy() || this.tokenListRefreshing())return;
+    const epoch=++this.tokenListRefreshEpoch,projectId=this.projectId;
+    this.tokenListRefreshing.set(true);this.tokenListRefreshNotice.set('');
+    const current=()=>!this.tokenCopyDeparted && epoch===this.tokenListRefreshEpoch && projectId===this.projectId;
+    try {
+      const tokens=await this.api.listTokens();
+      if(!current())return;
+      this.tokens.set(tokens);
+      this.tokenListRefreshNotice.set('Token metadata was refreshed. Drafts and one-time reveals were kept. This is a list snapshot, not a token authentication check.');
+    } catch {
+      if(current())this.tokenListRefreshNotice.set('Token metadata could not be refreshed. The previous list, drafts and one-time reveals were kept. Try Refresh token list again.');
+    } finally {if(current())this.tokenListRefreshing.set(false);}
   }
   tokenCopyPending = signal(false);
   tokenCopyNotice = signal('');
@@ -742,6 +769,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   cancelRevokeToken() {if(!this.busy())this.confirmingToken.set(null);}
   async revokeToken(id: string) {
     if(this.busy() || this.confirmingToken()!==id || !this.tokens().some(t=>t.id===id))return;
+    this.invalidateTokenListRefresh();
     this.busy.set(true); this.error.set(''); this.tokenRevokeNotice.set('');
     try {
       await this.api.revokeToken(id);
