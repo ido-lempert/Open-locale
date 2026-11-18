@@ -1974,3 +1974,11 @@ longer listed. Failure keeps the previous list with bounded retry guidance.
 Refresh does not add/remove members, save grants, reload groups or verify
 effective access. Pending direct-role/locale writes block Refresh. Later explicit
 Add/remove/role/locale saves and departure fence older refresh results.
+
+### Read-only group-list Refresh
+Settings can explicitly refresh team-wide group metadata and saved memberships
+without reloading direct members or other forms. New-group fields and row drafts
+stay, even for groups no longer listed; Refresh never saves them. Failed reads
+keep the previous list with retry guidance. Pending group writes refuse Refresh;
+later group create/name/role/locales/member changes/delete and departure fence
+older snapshots. This does not verify effective access or change grants.

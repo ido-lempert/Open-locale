@@ -419,6 +419,10 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
         </section>
         <section class="panel">
           <h2>Groups</h2>
+          <button type="button" name="refreshSettingsGroups" [disabled]="!canRefreshGroupList()" aria-describedby="settingsGroupListRefreshScope" (click)="refreshGroupList()">Refresh group list</button>
+          <p class="muted" id="settingsGroupListRefreshScope">Reads team-wide group metadata and saved group memberships only. New-group fields and row drafts stay, including drafts for groups no longer listed. This does not create or delete groups, save grants or members, reload direct team members or verify effective access. Kept drafts are local and are not saved by Refresh.</p>
+          @if(groupListRefreshing()){<p role="status" name="settingsGroupListRefreshing">Refreshing group metadata. The previous list stays until this read succeeds.</p>}
+          @if(groupListRefreshNotice()){<p role="status" name="settingsGroupListRefreshNotice">{{groupListRefreshNotice()}}</p>}
           <p class="muted">Groups are team-wide grant templates: every member sees all groups and their members (there is no per-project hiding), and a group grant applies to every project in the team. A member's effective access is the UNION of their direct membership and every group they belong to: the strongest role wins, locale lists combine, and a restrictive group never reduces an unrestricted direct grant. Changes apply immediately - promoting or demoting a group changes its members' effective access on their next action.</p>
           <ul class="locale-list">
             @for (g of groups(); track g.id) {
@@ -571,7 +575,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.projectId = route.snapshot.paramMap.get('id') ?? '';
   }
   private tokenCopyDeparted = false;
-  ngOnDestroy() {this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
+  ngOnDestroy() {this.invalidateGroupListRefresh();this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
   async ngOnInit() { await this.reload(); }
   async reload(generalSubmission?: {name:string;description:string}, projectOnly = false) {
     let loadedGeneral: {name:string;description:string}|undefined;
@@ -591,6 +595,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
       this.webhooks.set(await this.api.listWebhooks(this.projectId));
       this.invalidateMemberListRefresh();
       this.members.set(await this.api.listMembers(this.projectId));
+      this.invalidateGroupListRefresh();
       this.groups.set(await this.api.listGroups(this.projectId));
       this.otaPubs.set(await this.api.listOtaPublications(this.projectId));
       this.branches.set(await this.api.listBranches(this.projectId));
@@ -717,6 +722,29 @@ export class SettingsComponent implements OnInit, OnDestroy {
     } catch {
       if(current())this.memberListRefreshNotice.set('Membership metadata could not be refreshed. The previous list, add-member fields and row drafts were kept. Try Refresh member list again.');
     } finally {if(current())this.memberListRefreshing.set(false);}
+  }
+  groupListRefreshing = signal(false);
+  groupListRefreshNotice = signal('');
+  private groupListRefreshEpoch = 0;
+  private invalidateGroupListRefresh() {
+    this.groupListRefreshEpoch++;this.groupListRefreshing.set(false);this.groupListRefreshNotice.set('');
+  }
+  canRefreshGroupList():boolean {
+    return !this.tokenCopyDeparted && !this.busy() && !this.groupListRefreshing() && !this.deletingGroup() && ![this.groupNamePending(),this.groupRolePending(),this.groupLocalesPending(),this.groupMemberPending()].some(map=>Object.values(map).some(Boolean));
+  }
+  async refreshGroupList() {
+    if(!this.canRefreshGroupList())return;
+    const epoch=++this.groupListRefreshEpoch,projectId=this.projectId;
+    this.groupListRefreshing.set(true);this.groupListRefreshNotice.set('');
+    const current=()=>!this.tokenCopyDeparted && epoch===this.groupListRefreshEpoch && projectId===this.projectId;
+    try {
+      const groups=await this.api.listGroups(projectId);
+      if(!current())return;
+      this.groups.set(groups);
+      this.groupListRefreshNotice.set('Group metadata was refreshed. New-group fields and row drafts were kept. Direct team members were not reloaded; this is not an effective-access check.');
+    } catch {
+      if(current())this.groupListRefreshNotice.set('Group metadata could not be refreshed. The previous list, new-group fields and row drafts were kept. Try Refresh group list again.');
+    } finally {if(current())this.groupListRefreshing.set(false);}
   }
   tokenCopyPending = signal(false);
   tokenCopyNotice = signal('');
@@ -1236,6 +1264,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   validNewGroupName():boolean {const name=this.groupName().trim();return name.length>0 && this.generalTextLength(name)<=100;}
   async addGroup() {
     if(this.busy() || !this.validNewGroupName())return;
+    this.invalidateGroupListRefresh();
     const submitted={name:this.groupName(),role:this.groupRole(),locales:this.groupLocales()};
     this.busy.set(true); this.error.set(''); this.groupDraftNotice.set('');
     try {
@@ -1262,6 +1291,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   }
   async setGroupRole(g: GroupInfo) {
     if(!this.canSaveGroupRole(g))return;
+    this.invalidateGroupListRefresh();
     const role=this.groupRolePick()[g.id];
     this.groupRolePending.set({ ...this.groupRolePending(), [g.id]: true });
     this.groupRoleNotice.set({ ...this.groupRoleNotice(), [g.id]: '' });
@@ -1292,6 +1322,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   }
   async saveGroupName(g: GroupInfo) {
     if(!this.canSaveGroupName(g))return;
+    this.invalidateGroupListRefresh();
     const raw=this.groupNamePick()[g.id],name=raw.trim();
     this.groupNamePending.set({ ...this.groupNamePending(), [g.id]: true });
     this.groupNameNotice.set({ ...this.groupNameNotice(), [g.id]: '' });
@@ -1326,6 +1357,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   cancelRemoveGroup() {if(!this.busy())this.confirmingGroup.set(null);}
   async removeGroup(g: GroupInfo) {
     if(this.busy() || this.groupWorkPending(g.id) || this.confirmingGroup()!==g.id || !this.groups().some(row=>row.id===g.id))return;
+    this.invalidateGroupListRefresh();
     this.busy.set(true);this.deletingGroup.set(g.id);this.error.set('');this.groupRemoveNotice.set('');
     try {
       await this.api.deleteGroup(this.projectId,g.id);
@@ -1344,6 +1376,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   async addGroupMember(g: GroupInfo) {
     const userId=this.groupPick()[g.id];
     if (!userId || this.deletingGroup()===g.id || this.groupMemberPending()[g.id]) return;
+    this.invalidateGroupListRefresh();
     this.groupMemberPending.set({ ...this.groupMemberPending(), [g.id]: true });
     this.groupMemberNotice.set({ ...this.groupMemberNotice(), [g.id]: '' });
     this.error.set('');
@@ -1364,6 +1397,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   async removeGroupMember(g: GroupInfo, userId: string) {
     const target=this.confirmingGroupMember();
     if(this.busy() || this.deletingGroup()===g.id || this.groupWorkPending(g.id) || target?.groupId!==g.id || target?.userId!==userId || !this.hasGroupMember(g.id,userId))return;
+    this.invalidateGroupListRefresh();
     this.busy.set(true);this.deletingGroup.set(g.id);
     this.groupMemberPending.set({...this.groupMemberPending(),[g.id]:true});
     this.error.set('');this.groupMemberRemoveNotice.set('');
@@ -1477,6 +1511,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   }
   async saveGroupLocales(g: GroupInfo) {
     if(!this.canSaveGroupLocales(g))return;
+    this.invalidateGroupListRefresh();
     const raw=this.groupLocalesPick()[g.id],allowedLocales=this.parsedGroupLocales(raw);
     this.groupLocalesPending.set({ ...this.groupLocalesPending(), [g.id]: true });
     this.groupLocalesNotice.set({ ...this.groupLocalesNotice(), [g.id]: '' });
