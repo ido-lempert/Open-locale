@@ -2005,3 +2005,10 @@ with retry guidance. Explicit Publish/full reload/departure fence older reads.
 Refresh does not publish/download/verify bundles, reload branch choices or deploy
 to a CDN/device. Kept receipts can refer to pruned publications; this is not a
 complete release history or current bundle-availability check.
+
+### Read-only OTA publish branch choices Refresh
+Refresh publish branches reads choices without changing selected branch, earlier
+publication receipt, retained publication list or other drafts. Missing selection
+stays explicitly labeled, never silently replaced. Failure keeps previous choices
+with retry. This does not create/merge/delete branches,publish/download bundles,
+reload publication metadata or validate current availability/publish permission.

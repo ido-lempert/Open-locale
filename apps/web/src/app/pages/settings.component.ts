@@ -530,9 +530,15 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             @if (!otaPubs().length) { <li class="muted">No publications yet.</li> }
           </ul>
           @if (isTeamAdmin()) {
+          <button type="button" name="refreshSettingsOtaBranches" [disabled]="!canRefreshOtaBranches()" aria-describedby="settingsOtaBranchRefreshScope" (click)="refreshOtaBranches()">Refresh publish branches</button>
+          <p class="muted" id="settingsOtaBranchRefreshScope">Reads branch choices only. Your selected branch, earlier publication receipt, publication list and other drafts stay. This does not create, merge or delete branches, publish or download bundles, reload publication metadata or validate current publish permission or branch availability. A missing selected branch is kept, not replaced.</p>
+          @if(otaBranchesRefreshing()){<p role="status" name="settingsOtaBranchesRefreshing">Refreshing publish branches. The previous choices stay until this read succeeds.</p>}
+          @if(otaBranchesRefreshNotice()){<p role="status" name="settingsOtaBranchesRefreshNotice">{{otaBranchesRefreshNotice()}}</p>}
+          @if(otaBranchMissing()){<p role="status" name="settingsOtaBranchMissing">Selected branch <code>{{otaBranch()}}</code> is not in the loaded choices. It is still selected; choose a loaded branch before publishing if needed. This is not a current availability or permission check.</p>}
           <form class="inline" (ngSubmit)="publishOta()">
             <select aria-label="OTA branch" [ngModel]="otaBranch()" (ngModelChange)="otaBranch.set($event)" name="otaBranch">
-              @for (b of branches(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }
+              @if(otaBranchMissing()){<option [value]="otaBranch()">{{otaBranch()}} (not in loaded choices)</option>}
+              @for (b of otaPublishBranches(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }
             </select>
             <button type="submit" name="publishSettingsOta" [disabled]="busy()">Publish bundle</button>
           </form>
@@ -587,7 +593,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.projectId = route.snapshot.paramMap.get('id') ?? '';
   }
   private tokenCopyDeparted = false;
-  ngOnDestroy() {this.invalidateOtaListRefresh();this.invalidateRuleListRefresh();this.invalidateMtProviderListRefresh();this.invalidateGroupListRefresh();this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
+  ngOnDestroy() {this.invalidateOtaBranchRefresh();this.invalidateOtaListRefresh();this.invalidateRuleListRefresh();this.invalidateMtProviderListRefresh();this.invalidateGroupListRefresh();this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
   async ngOnInit() { await this.reload(); }
   async reload(generalSubmission?: {name:string;description:string}, projectOnly = false) {
     let loadedGeneral: {name:string;description:string}|undefined;
@@ -611,7 +617,9 @@ export class SettingsComponent implements OnInit, OnDestroy {
       this.groups.set(await this.api.listGroups(this.projectId));
       this.invalidateOtaListRefresh();
       this.otaPubs.set(await this.api.listOtaPublications(this.projectId));
+      this.invalidateOtaBranchRefresh();
       this.branches.set(await this.api.listBranches(this.projectId));
+      this.otaPublishBranches.set(this.branches());
       this.invalidateMtProviderListRefresh();
       this.mtProviders.set(await this.api.listMtProviders(this.projectId));
       this.invalidateRuleListRefresh();
@@ -785,6 +793,29 @@ export class SettingsComponent implements OnInit, OnDestroy {
     } catch {
       if(current())this.mtProviderListRefreshNotice.set('Provider metadata could not be refreshed. The previous list, drafts, choices and results were kept. Try Refresh provider list again.');
     } finally {if(current())this.mtProviderListRefreshing.set(false);}
+  }
+  otaPublishBranches = signal<BranchInfo[]>([]);
+  otaBranchesRefreshing = signal(false);
+  otaBranchesRefreshNotice = signal('');
+  private otaBranchRefreshEpoch = 0;
+  private invalidateOtaBranchRefresh() {
+    this.otaBranchRefreshEpoch++;this.otaBranchesRefreshing.set(false);this.otaBranchesRefreshNotice.set('');
+  }
+  otaBranchMissing():boolean {return !this.otaPublishBranches().some(branch=>branch.name===this.otaBranch());}
+  canRefreshOtaBranches():boolean {return !this.tokenCopyDeparted && !this.busy() && !this.otaBranchesRefreshing();}
+  async refreshOtaBranches() {
+    if(!this.canRefreshOtaBranches())return;
+    const epoch=++this.otaBranchRefreshEpoch,projectId=this.projectId;
+    this.otaBranchesRefreshing.set(true);this.otaBranchesRefreshNotice.set('');
+    const current=()=>!this.tokenCopyDeparted && epoch===this.otaBranchRefreshEpoch && projectId===this.projectId;
+    try {
+      const branches=await this.api.listBranches(projectId);
+      if(!current())return;
+      this.otaPublishBranches.set(branches);
+      this.otaBranchesRefreshNotice.set('Publish branch choices were refreshed. Your selected branch, earlier receipt, publication list and other drafts were kept. This is not a current availability or publish-permission check.');
+    } catch {
+      if(current())this.otaBranchesRefreshNotice.set('Publish branch choices could not be refreshed. The previous choices, selected branch, earlier receipt, publication list and other drafts were kept. Try Refresh publish branches again.');
+    } finally {if(current())this.otaBranchesRefreshing.set(false);}
   }
   otaListRefreshing = signal(false);
   otaListRefreshNotice = signal('');

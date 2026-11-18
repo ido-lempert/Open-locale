@@ -2376,3 +2376,11 @@ departure fence old reads. No Publish/download/integrity/deployment/CDN/native/
 current-availability or complete-release-history claim. Existing Publish now
 refuses duplicate/global-busy/departed handlers before submission.
 [Review0620](reviews/0620-ota-publication-list-refresh.md).
+
+### Read-only OTA publish branch choices Refresh
+Explicit branch choices Refresh preserves selected branch, earlier publication
+receipt, retained metadata and all unrelated drafts. Missing selection stays with
+visible option/status rather than fallback. Bounded failure/duplicate guards and
+full-reload/departure fences. No branch mutation, Publish/download,publication
+metadata reload or current availability/permission claim.
+[Review0621](reviews/0621-ota-publish-branches-refresh.md).

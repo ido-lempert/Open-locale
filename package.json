@@ -268,6 +268,7 @@
     "test:settings-token-hide-browser": "node scripts/settings-token-hide-browser-test.mjs",
     "test:settings-token-refresh-browser": "node scripts/settings-token-refresh-browser-test.mjs",
     "test:settings-webhook-refresh-browser": "node scripts/settings-webhook-refresh-browser-test.mjs",
+    "test:settings-ota-branches-refresh-browser": "node scripts/settings-ota-branches-refresh-browser-test.mjs",
     "test:settings-ota-refresh-browser": "node scripts/settings-ota-refresh-browser-test.mjs",
     "test:settings-rule-refresh-browser": "node scripts/settings-rule-refresh-browser-test.mjs",
     "test:settings-mt-refresh-browser": "node scripts/settings-mt-refresh-browser-test.mjs",
