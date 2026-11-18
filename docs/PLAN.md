@@ -2337,3 +2337,11 @@ Failure keeps the last list with bounded retry guidance. A kept reveal can belon
 to a webhook no longer listed. Refresh does not contact endpoints or check health
 or delivery, copy secrets, or create/delete/enable webhooks. Later explicit
 Create/delete/enable-disable and departure fence older refresh results.
+
+### Read-only member-list Refresh
+Refresh member list reads direct team membership metadata only. Add-member fields
+and per-member role/locale drafts stay, including local drafts for members no
+longer listed. Failure keeps the previous list with bounded retry guidance.
+Refresh does not add/remove members, save grants, reload groups or verify
+effective access. Pending direct-role/locale writes block Refresh. Later explicit
+Add/remove/role/locale saves and departure fence older refresh results.

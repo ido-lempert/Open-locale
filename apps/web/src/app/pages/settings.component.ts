@@ -363,6 +363,10 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
         </section>
         <section class="panel">
           <h2>Members</h2>
+          <button type="button" name="refreshSettingsMembers" [disabled]="!canRefreshMemberList()" aria-describedby="settingsMemberListRefreshScope" (click)="refreshMemberList()">Refresh member list</button>
+          <p class="muted" id="settingsMemberListRefreshScope">Reads direct team membership metadata only. Add-member fields and row drafts stay. This does not add or remove members, save roles or locales, reload groups or check effective access. Drafts for members no longer listed stay local and are not saved by Refresh.</p>
+          @if(memberListRefreshing()){<p role="status" name="settingsMemberListRefreshing">Refreshing membership metadata. The previous list stays until this read succeeds.</p>}
+          @if(memberListRefreshNotice()){<p role="status" name="settingsMemberListRefreshNotice">{{memberListRefreshNotice()}}</p>}
           <ul class="locale-list">
             @for (m of members(); track m.id) {
               <li>
@@ -567,7 +571,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.projectId = route.snapshot.paramMap.get('id') ?? '';
   }
   private tokenCopyDeparted = false;
-  ngOnDestroy() {this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
+  ngOnDestroy() {this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
   async ngOnInit() { await this.reload(); }
   async reload(generalSubmission?: {name:string;description:string}, projectOnly = false) {
     let loadedGeneral: {name:string;description:string}|undefined;
@@ -585,6 +589,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
       this.tokens.set(await this.api.listTokens());
       this.invalidateWebhookListRefresh();
       this.webhooks.set(await this.api.listWebhooks(this.projectId));
+      this.invalidateMemberListRefresh();
       this.members.set(await this.api.listMembers(this.projectId));
       this.groups.set(await this.api.listGroups(this.projectId));
       this.otaPubs.set(await this.api.listOtaPublications(this.projectId));
@@ -689,6 +694,29 @@ export class SettingsComponent implements OnInit, OnDestroy {
     } catch {
       if(current())this.hookListRefreshNotice.set('Webhook metadata could not be refreshed. The previous list, drafts and one-time reveals were kept. Try Refresh webhook list again.');
     } finally {if(current())this.hookListRefreshing.set(false);}
+  }
+  memberListRefreshing = signal(false);
+  memberListRefreshNotice = signal('');
+  private memberListRefreshEpoch = 0;
+  private invalidateMemberListRefresh() {
+    this.memberListRefreshEpoch++;this.memberListRefreshing.set(false);this.memberListRefreshNotice.set('');
+  }
+  canRefreshMemberList():boolean {
+    return !this.tokenCopyDeparted && !this.busy() && !this.memberListRefreshing() && !this.removingMember() && !Object.values(this.memberRolePending()).some(Boolean) && !Object.values(this.memberLocalesPending()).some(Boolean);
+  }
+  async refreshMemberList() {
+    if(!this.canRefreshMemberList())return;
+    const epoch=++this.memberListRefreshEpoch,projectId=this.projectId;
+    this.memberListRefreshing.set(true);this.memberListRefreshNotice.set('');
+    const current=()=>!this.tokenCopyDeparted && epoch===this.memberListRefreshEpoch && projectId===this.projectId;
+    try {
+      const members=await this.api.listMembers(projectId);
+      if(!current())return;
+      this.members.set(members);
+      this.memberListRefreshNotice.set('Membership metadata was refreshed. Add-member fields and row drafts were kept. This is a list snapshot, not an effective-access check.');
+    } catch {
+      if(current())this.memberListRefreshNotice.set('Membership metadata could not be refreshed. The previous list, add-member fields and row drafts were kept. Try Refresh member list again.');
+    } finally {if(current())this.memberListRefreshing.set(false);}
   }
   tokenCopyPending = signal(false);
   tokenCopyNotice = signal('');
@@ -1141,6 +1169,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   memberDraftNotice = signal('');
   async addMember() {
     if(this.busy())return;
+    this.invalidateMemberListRefresh();
     const submitted={email:this.memberEmail(),role:this.memberRole(),locales:this.memberLocales()};
     this.busy.set(true); this.error.set(''); this.memberDraftNotice.set('');
     try {
@@ -1370,6 +1399,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   }
   async setMemberRole(m: MemberInfo) {
     if(!this.canSaveMemberRole(m))return;
+    this.invalidateMemberListRefresh();
     const role=this.memberRolePick()[m.id];
     this.memberRolePending.set({ ...this.memberRolePending(), [m.id]: true });
     this.memberRoleNotice.set({ ...this.memberRoleNotice(), [m.id]: '' });
@@ -1408,6 +1438,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   }
   async saveMemberLocales(m: MemberInfo) {
     if(!this.canSaveMemberLocales(m))return;
+    this.invalidateMemberListRefresh();
     const raw=this.memberLocalesPick()[m.id],allowedLocales=this.parsedMemberLocales(raw);
     this.memberLocalesPending.set({ ...this.memberLocalesPending(), [m.id]: true });
     this.memberLocalesNotice.set({ ...this.memberLocalesNotice(), [m.id]: '' });
@@ -1470,6 +1501,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   cancelRemoveMember() {if(!this.busy())this.confirmingMember.set(null);}
   async removeMember(m: MemberInfo) {
     if(this.busy() || this.memberWorkPending(m.id) || this.confirmingMember()!==m.id || !this.removableMember(m.id))return;
+    this.invalidateMemberListRefresh();
     this.busy.set(true);this.removingMember.set(m.id);this.error.set('');this.memberRemoveNotice.set('');
     try {
       await this.api.removeMember(this.projectId,m.id);
