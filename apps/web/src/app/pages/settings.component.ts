@@ -111,6 +111,10 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
         <section class="panel">
           <h2>Webhooks</h2>
           <p class="muted">Signed POSTs to a public http(s) URL when project events happen. Each delivery carries X-OpenLocale-Event and X-OpenLocale-Signature (HMAC-SHA256 of the raw body with the signing secret). Private and internal addresses are refused.</p>
+          <button type="button" name="refreshSettingsWebhooks" [disabled]="busy() || hookListRefreshing()" aria-describedby="settingsWebhookListRefreshScope" (click)="refreshWebhookList()">Refresh webhook list</button>
+          <p class="muted" id="settingsWebhookListRefreshScope">Reads webhook metadata only. Your drafts and one-time reveals stay. This does not create, delete or enable webhooks, copy secrets, contact endpoints or verify delivery. A kept reveal can belong to a webhook no longer in the list.</p>
+          @if(hookListRefreshing()){<p role="status" name="settingsWebhookListRefreshing">Refreshing webhook metadata. The previous list stays until this read succeeds.</p>}
+          @if(hookListRefreshNotice()){<p role="status" name="settingsWebhookListRefreshNotice">{{hookListRefreshNotice()}}</p>}
           @if (createdWebhook(); as w) {
             <p class="notice">Webhook created. Copy the signing secret now - it will not be shown again.</p>
             <p class="token-reveal"><code style="overflow-wrap:anywhere">{{ w.secret }}</code>
@@ -563,7 +567,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.projectId = route.snapshot.paramMap.get('id') ?? '';
   }
   private tokenCopyDeparted = false;
-  ngOnDestroy() {this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
+  ngOnDestroy() {this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
   async ngOnInit() { await this.reload(); }
   async reload(generalSubmission?: {name:string;description:string}, projectOnly = false) {
     let loadedGeneral: {name:string;description:string}|undefined;
@@ -579,6 +583,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
       if(projectOnly)return;
       this.invalidateTokenListRefresh();
       this.tokens.set(await this.api.listTokens());
+      this.invalidateWebhookListRefresh();
       this.webhooks.set(await this.api.listWebhooks(this.projectId));
       this.members.set(await this.api.listMembers(this.projectId));
       this.groups.set(await this.api.listGroups(this.projectId));
@@ -665,6 +670,26 @@ export class SettingsComponent implements OnInit, OnDestroy {
       if(current())this.tokenListRefreshNotice.set('Token metadata could not be refreshed. The previous list, drafts and one-time reveals were kept. Try Refresh token list again.');
     } finally {if(current())this.tokenListRefreshing.set(false);}
   }
+  hookListRefreshing = signal(false);
+  hookListRefreshNotice = signal('');
+  private hookListRefreshEpoch = 0;
+  private invalidateWebhookListRefresh() {
+    this.hookListRefreshEpoch++;this.hookListRefreshing.set(false);this.hookListRefreshNotice.set('');
+  }
+  async refreshWebhookList() {
+    if(this.tokenCopyDeparted || this.busy() || this.hookListRefreshing())return;
+    const epoch=++this.hookListRefreshEpoch,projectId=this.projectId;
+    this.hookListRefreshing.set(true);this.hookListRefreshNotice.set('');
+    const current=()=>!this.tokenCopyDeparted && epoch===this.hookListRefreshEpoch && projectId===this.projectId;
+    try {
+      const webhooks=await this.api.listWebhooks(projectId);
+      if(!current())return;
+      this.webhooks.set(webhooks);
+      this.hookListRefreshNotice.set('Webhook metadata was refreshed. Drafts and one-time reveals were kept. This is a list snapshot, not an endpoint health or delivery check.');
+    } catch {
+      if(current())this.hookListRefreshNotice.set('Webhook metadata could not be refreshed. The previous list, drafts and one-time reveals were kept. Try Refresh webhook list again.');
+    } finally {if(current())this.hookListRefreshing.set(false);}
+  }
   tokenCopyPending = signal(false);
   tokenCopyNotice = signal('');
   async copyCreatedToken() {
@@ -719,6 +744,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
       ...(submitted.projectRestored ? ['project.restored'] : []),
     ];
     if (!events.length) { this.error.set('Pick at least one event'); this.busy.set(false); return; }
+    this.invalidateWebhookListRefresh();
     this.hookDraftNotice.set('');
     try {
       const res = await this.api.createWebhook(this.projectId, { url: submitted.url.trim(), events });
@@ -738,6 +764,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   async toggleHook(h: WebhookInfo) {
     const loaded=this.webhooks().find(row=>row.id===h.id);
     if(this.busy() || !loaded || loaded.active!==h.active)return;
+    this.invalidateWebhookListRefresh();
     const active=!loaded.active;
     this.busy.set(true);this.error.set('');this.hookToggleNotice.set('');
     try {
@@ -753,6 +780,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   cancelDeleteHook() {if(!this.busy())this.confirmingHook.set(null);}
   async removeHook(id: string) {
     if(this.busy() || this.confirmingHook()!==id || !this.webhooks().some(h=>h.id===id))return;
+    this.invalidateWebhookListRefresh();
     this.busy.set(true); this.error.set(''); this.hookDeleteNotice.set('');
     try {
       await this.api.deleteWebhook(this.projectId, id);

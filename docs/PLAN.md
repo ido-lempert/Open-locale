@@ -2329,3 +2329,11 @@ forms. Drafts, one-time reveals and prior copy feedback stay. Failed reads keep
 the last list with bounded retry guidance. A kept reveal can belong to a token
 no longer in the list. This is a list snapshot, not an authentication check.
 Later explicit Create/revoke and route departure fence late refresh results.
+
+### Read-only webhook-list Refresh
+Refresh webhook list reads project webhook metadata without reloading other
+Settings forms. URL/event drafts, one-time reveals and copy feedback stay.
+Failure keeps the last list with bounded retry guidance. A kept reveal can belong
+to a webhook no longer listed. Refresh does not contact endpoints or check health
+or delivery, copy secrets, or create/delete/enable webhooks. Later explicit
+Create/delete/enable-disable and departure fence older refresh results.
