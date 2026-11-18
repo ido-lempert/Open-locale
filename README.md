@@ -2012,3 +2012,10 @@ publication receipt, retained publication list or other drafts. Missing selectio
 stays explicitly labeled, never silently replaced. Failure keeps previous choices
 with retry. This does not create/merge/delete branches,publish/download bundles,
 reload publication metadata or validate current availability/publish permission.
+
+### Read-only pre-translation branch choices Refresh
+Refresh pre-translation branches reads choices without changing selected provider,
+locale or branch, earlier pseudo result, OTA choices or other drafts. Missing
+selection stays visibly marked, never replaced. Failure keeps previous choices
+with retry. No pre-translation, branch mutation, provider reload, OTA reload or
+current availability/permission check. Existing Fill empty is separate and explicit.

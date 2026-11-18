@@ -266,6 +266,11 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           }
           @if (mtProviders().length) {
             @if (isTeamAdmin()) {
+          <button type="button" name="refreshSettingsMtBranches" [disabled]="!canRefreshMtBranches()" aria-describedby="settingsMtBranchRefreshScope" (click)="refreshMtBranches()">Refresh pre-translation branches</button>
+          <p class="muted" id="settingsMtBranchRefreshScope">Reads branch choices only. Your selected provider, locale and branch, earlier pseudo result and other drafts stay. This does not run pre-translation, create, merge or delete branches, reload provider or OTA choices, or validate current branch availability or permission. A missing selected branch is kept, not replaced.</p>
+          @if(mtBranchesRefreshing()){<p role="status" name="settingsMtBranchesRefreshing">Refreshing pre-translation branches. The previous choices stay until this read succeeds.</p>}
+          @if(mtBranchesRefreshNotice()){<p role="status" name="settingsMtBranchesRefreshNotice">{{mtBranchesRefreshNotice()}}</p>}
+          @if(mtBranchMissing()){<p role="status" name="settingsMtBranchMissing">Selected branch <code>{{mtBranch()}}</code> is not in the loaded choices. It is still selected; choose a loaded branch before pre-translating if needed. This is not a current availability or permission check.</p>}
           <form class="inline" (ngSubmit)="runPretranslate()">
               <select aria-label="Pre-translate provider" [ngModel]="mtProviderId()" (ngModelChange)="mtProviderId.set($event)" name="mtProviderId">
                 @for (p of mtProviders(); track p.id) { <option [value]="p.id" [disabled]="!p.enabled">{{ p.name }}</option> }
@@ -276,6 +281,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                 }
               </select>
               <select aria-label="Branch" [ngModel]="mtBranch()" (ngModelChange)="mtBranch.set($event)" name="mtBranch">
+                @if(mtBranchMissing()){<option [value]="mtBranch()">{{mtBranch()}} (not in loaded choices)</option>}
                 @for (b of branches(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }
               </select>
               <button name="runSettingsPretranslate" type="submit" [disabled]="busy()" title="Fill empty cells with pseudo test data">Fill empty</button>
@@ -593,7 +599,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.projectId = route.snapshot.paramMap.get('id') ?? '';
   }
   private tokenCopyDeparted = false;
-  ngOnDestroy() {this.invalidateOtaBranchRefresh();this.invalidateOtaListRefresh();this.invalidateRuleListRefresh();this.invalidateMtProviderListRefresh();this.invalidateGroupListRefresh();this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
+  ngOnDestroy() {this.invalidateMtBranchRefresh();this.invalidateOtaBranchRefresh();this.invalidateOtaListRefresh();this.invalidateRuleListRefresh();this.invalidateMtProviderListRefresh();this.invalidateGroupListRefresh();this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
   async ngOnInit() { await this.reload(); }
   async reload(generalSubmission?: {name:string;description:string}, projectOnly = false) {
     let loadedGeneral: {name:string;description:string}|undefined;
@@ -618,6 +624,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
       this.invalidateOtaListRefresh();
       this.otaPubs.set(await this.api.listOtaPublications(this.projectId));
       this.invalidateOtaBranchRefresh();
+      this.invalidateMtBranchRefresh();
       this.branches.set(await this.api.listBranches(this.projectId));
       this.otaPublishBranches.set(this.branches());
       this.invalidateMtProviderListRefresh();
@@ -793,6 +800,28 @@ export class SettingsComponent implements OnInit, OnDestroy {
     } catch {
       if(current())this.mtProviderListRefreshNotice.set('Provider metadata could not be refreshed. The previous list, drafts, choices and results were kept. Try Refresh provider list again.');
     } finally {if(current())this.mtProviderListRefreshing.set(false);}
+  }
+  mtBranchesRefreshing = signal(false);
+  mtBranchesRefreshNotice = signal('');
+  private mtBranchRefreshEpoch = 0;
+  private invalidateMtBranchRefresh() {
+    this.mtBranchRefreshEpoch++;this.mtBranchesRefreshing.set(false);this.mtBranchesRefreshNotice.set('');
+  }
+  mtBranchMissing():boolean {return !this.branches().some(branch=>branch.name===this.mtBranch());}
+  canRefreshMtBranches():boolean {return !this.tokenCopyDeparted && !this.busy() && !this.mtBranchesRefreshing();}
+  async refreshMtBranches() {
+    if(!this.canRefreshMtBranches())return;
+    const epoch=++this.mtBranchRefreshEpoch,projectId=this.projectId;
+    this.mtBranchesRefreshing.set(true);this.mtBranchesRefreshNotice.set('');
+    const current=()=>!this.tokenCopyDeparted && epoch===this.mtBranchRefreshEpoch && projectId===this.projectId;
+    try {
+      const branches=await this.api.listBranches(projectId);
+      if(!current())return;
+      this.branches.set(branches);
+      this.mtBranchesRefreshNotice.set('Pre-translation branch choices were refreshed. Your selected provider, locale and branch, earlier pseudo result and other drafts were kept. This is not a current availability or permission check.');
+    } catch {
+      if(current())this.mtBranchesRefreshNotice.set('Pre-translation branch choices could not be refreshed. The previous choices, selected provider, locale and branch, earlier pseudo result and other drafts were kept. Try Refresh pre-translation branches again.');
+    } finally {if(current())this.mtBranchesRefreshing.set(false);}
   }
   otaPublishBranches = signal<BranchInfo[]>([]);
   otaBranchesRefreshing = signal(false);

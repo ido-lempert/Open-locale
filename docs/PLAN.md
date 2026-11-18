@@ -2384,3 +2384,11 @@ visible option/status rather than fallback. Bounded failure/duplicate guards and
 full-reload/departure fences. No branch mutation, Publish/download,publication
 metadata reload or current availability/permission claim.
 [Review0621](reviews/0621-ota-publish-branches-refresh.md).
+
+### Read-only pre-translation branch choices Refresh
+Explicit Refresh preserves selected provider/locale/branch, earlier pseudo result,
+OTA choices and unrelated drafts. Missing selection has visible option/status,
+not automatic fallback. Bounded failure/duplicate guards and full-reload/departure
+fences. Reads existing branches metadata only; no pre-translation or branch
+mutation, provider/OTA reload or current availability/permission claim.
+[Review0622](reviews/0622-mt-branch-choices-refresh.md).
