@@ -1982,3 +1982,11 @@ stay, even for groups no longer listed; Refresh never saves them. Failed reads
 keep the previous list with retry guidance. Pending group writes refuse Refresh;
 later group create/name/role/locales/member changes/delete and departure fence
 older snapshots. This does not verify effective access or change grants.
+
+### Read-only pseudo-provider list Refresh
+Refresh provider list reads saved metadata without resetting provider drafts,
+Fill empty choices/results, automation provider choice or other forms. It never
+selects a replacement for an absent provider; review kept choices before an
+explicit run/save. Failure retains the last list with bounded retry. Later Add,
+remove/toggle and departure fence older reads. Refresh does not test health,
+run Fill empty, repair saved rules or enable real translation.

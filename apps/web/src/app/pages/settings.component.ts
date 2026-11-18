@@ -227,6 +227,10 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
         </section>
         <section class="panel">
           <h2>Machine translation (pseudo test data)</h2>
+          <button type="button" name="refreshSettingsMtProviders" [disabled]="!canRefreshMtProviderList()" aria-describedby="settingsMtProviderListRefreshScope" (click)="refreshMtProviderList()">Refresh provider list</button>
+          <p class="muted" id="settingsMtProviderListRefreshScope">Reads saved provider metadata only. Provider drafts, Fill empty choices and results, and automation provider choice stay. Kept choices may refer to a provider no longer listed; review them before any explicit run or save. This does not add, remove, enable or test providers, run Fill empty, repair saved rules or enable real translation.</p>
+          @if(mtProviderListRefreshing()){<p role="status" name="settingsMtProviderListRefreshing">Refreshing provider metadata. The previous list stays until this read succeeds.</p>}
+          @if(mtProviderListRefreshNotice()){<p role="status" name="settingsMtProviderListRefreshNotice">{{mtProviderListRefreshNotice()}}</p>}
           <p class="muted"><strong>This slice ships pseudo-localization TEST DATA only - not real language translation.</strong> The pseudo provider wraps source text in brackets with accented characters so you can spot hard-coded strings and layout breakage. External MT/AI engines are NOT available in this slice; no provider configuration enables them yet. Runs fill EMPTY target cells only - existing human or reviewed values are never touched - and every filled row starts UNVERIFIED and is attributed to you in the activity log.</p>
           <ul class="locale-list">
             @for (p of mtProviders(); track p.id) {
@@ -575,7 +579,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.projectId = route.snapshot.paramMap.get('id') ?? '';
   }
   private tokenCopyDeparted = false;
-  ngOnDestroy() {this.invalidateGroupListRefresh();this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
+  ngOnDestroy() {this.invalidateMtProviderListRefresh();this.invalidateGroupListRefresh();this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
   async ngOnInit() { await this.reload(); }
   async reload(generalSubmission?: {name:string;description:string}, projectOnly = false) {
     let loadedGeneral: {name:string;description:string}|undefined;
@@ -599,6 +603,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
       this.groups.set(await this.api.listGroups(this.projectId));
       this.otaPubs.set(await this.api.listOtaPublications(this.projectId));
       this.branches.set(await this.api.listBranches(this.projectId));
+      this.invalidateMtProviderListRefresh();
       this.mtProviders.set(await this.api.listMtProviders(this.projectId));
       this.autoRules.set(await this.api.listAutomationRules(this.projectId));
       this.samlInfo.set(await this.api.getSamlSpInfo());
@@ -745,6 +750,29 @@ export class SettingsComponent implements OnInit, OnDestroy {
     } catch {
       if(current())this.groupListRefreshNotice.set('Group metadata could not be refreshed. The previous list, new-group fields and row drafts were kept. Try Refresh group list again.');
     } finally {if(current())this.groupListRefreshing.set(false);}
+  }
+  mtProviderListRefreshing = signal(false);
+  mtProviderListRefreshNotice = signal('');
+  private mtProviderListRefreshEpoch = 0;
+  private invalidateMtProviderListRefresh() {
+    this.mtProviderListRefreshEpoch++;this.mtProviderListRefreshing.set(false);this.mtProviderListRefreshNotice.set('');
+  }
+  canRefreshMtProviderList():boolean {
+    return !this.tokenCopyDeparted && !this.busy() && !this.mtProviderListRefreshing();
+  }
+  async refreshMtProviderList() {
+    if(!this.canRefreshMtProviderList())return;
+    const epoch=++this.mtProviderListRefreshEpoch,projectId=this.projectId;
+    this.mtProviderListRefreshing.set(true);this.mtProviderListRefreshNotice.set('');
+    const current=()=>!this.tokenCopyDeparted && epoch===this.mtProviderListRefreshEpoch && projectId===this.projectId;
+    try {
+      const providers=await this.api.listMtProviders(projectId);
+      if(!current())return;
+      this.mtProviders.set(providers);
+      this.mtProviderListRefreshNotice.set('Provider metadata was refreshed. Drafts, Fill empty choices and results, and automation provider choice were kept. This is not a provider availability or health check.');
+    } catch {
+      if(current())this.mtProviderListRefreshNotice.set('Provider metadata could not be refreshed. The previous list, drafts, choices and results were kept. Try Refresh provider list again.');
+    } finally {if(current())this.mtProviderListRefreshing.set(false);}
   }
   tokenCopyPending = signal(false);
   tokenCopyNotice = signal('');
@@ -1007,6 +1035,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   validNewMtName():boolean {return this.generalTextLength(this.newMtName().trim())<=120;}
   async addMtProvider() {
     if(this.busy() || !this.validNewMtName())return;
+    this.invalidateMtProviderListRefresh();
     const submitted={name:this.newMtName(),type:this.newMtType()};
     this.busy.set(true); this.error.set(''); this.mtDraftNotice.set('');
     try {
@@ -1025,6 +1054,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   async toggleMtProvider(p: MtProviderInfo) {
     const loaded=this.mtProviders().find(row=>row.id===p.id);
     if(this.busy() || !loaded || loaded.enabled!==p.enabled)return;
+    this.invalidateMtProviderListRefresh();
     const enabled=!loaded.enabled;
     this.busy.set(true);this.error.set('');this.mtToggleNotice.set('');
     try {
@@ -1042,6 +1072,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   cancelRemoveMtProvider() {if(!this.busy())this.confirmingMtProvider.set(null);}
   async removeMtProvider(p: MtProviderInfo) {
     if(this.busy() || this.confirmingMtProvider()!==p.id || !this.mtProviders().some(provider=>provider.id===p.id))return;
+    this.invalidateMtProviderListRefresh();
     this.busy.set(true); this.error.set(''); this.mtRemoveNotice.set('');
     try {
       await this.api.deleteMtProvider(this.projectId, p.id);

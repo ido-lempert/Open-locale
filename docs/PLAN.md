@@ -2353,3 +2353,11 @@ orphan drafts. Failure retains the previous list with bounded retry. Direct
 members are not reloaded and effective access is not verified. Pending group
 writes refuse Refresh; later create/name/role/scope/member changes/delete and
 departure fence older read results. [Review0617](reviews/0617-group-list-refresh.md).
+
+### Read-only pseudo-provider list Refresh
+Explicit metadata-only Refresh preserves provider drafts, Fill empty choices/
+results and automation provider choice, even when a selected row disappears.
+No automatic fallback, health check, translation run or saved-rule repair.
+Failure keeps previous list with bounded retry; later Add/remove/toggle and
+departure fence older responses. Pseudo test data only, not real translation.
+[Review0618](reviews/0618-mt-provider-list-refresh.md).
