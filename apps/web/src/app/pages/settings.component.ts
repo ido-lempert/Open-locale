@@ -264,6 +264,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           @if(mtDraftNotice()){<p role="status" name="settingsMtDraftNotice">{{ mtDraftNotice() }}</p>}
           @if(!validNewMtName()){<p role="status" name="settingsMtNameInvalid">Shorten the provider name before adding. Your full name and provider type stay here and are not sent.</p>}
           }
+          @if(isTeamAdmin() && mtLocaleMissing()){<p role="status" name="settingsMtLocaleMissing">Selected Fill empty target locale <code>{{mtLocale()}}</code> is not in the loaded non-base locale choices. The exact choice and earlier result are kept, not replaced. Choose a listed target before running if needed. This does not add locales, repair saved rules or check current availability or permission.</p>}
           @if(isTeamAdmin() && missingMtProvider(mtProviderId())){<p role="status" name="settingsMtProviderMissing">Selected Fill empty provider <code>{{mtProviderId()}}</code> is not in the loaded provider list. The exact choice and earlier result are kept, not replaced. Refresh provider list or choose a listed provider before running if needed. This is not a current availability or permission check.</p>}
           @if (mtProviders().length) {
             @if (isTeamAdmin()) {
@@ -278,6 +279,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                 @for (p of mtProviders(); track p.id) { <option [value]="p.id" [disabled]="!p.enabled">{{ p.name }}</option> }
               </select>
               <select aria-label="Target locale" [ngModel]="mtLocale()" (ngModelChange)="mtLocale.set($event)" name="mtLocale">
+                @if(mtLocaleMissing()){<option [value]="mtLocale()">{{mtLocale()}} (not in loaded target locales)</option>}
                 @for (l of project()?.locales ?? []; track l.code) {
                   @if (l.code !== project()?.baseLocale) { <option [value]="l.code">{{ l.code }}</option> }
                 }
@@ -805,6 +807,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
       if(current())this.mtProviderListRefreshNotice.set('Provider metadata could not be refreshed. The previous list, drafts, choices and results were kept. Try Refresh provider list again.');
     } finally {if(current())this.mtProviderListRefreshing.set(false);}
   }
+  mtLocaleMissing():boolean {const project=this.project();return !!project && this.mtLocale()!=='' && !project.locales.some(locale=>locale.code===this.mtLocale() && locale.code!==project.baseLocale);}
   missingMtProvider(id:string):boolean {return id!=='' && !this.mtProviders().some(provider=>provider.id===id);}
   mtBranchesRefreshing = signal(false);
   mtBranchesRefreshNotice = signal('');

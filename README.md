@@ -2026,3 +2026,10 @@ option when the selected ID is absent from the loaded list, rather than looking
 like another provider is selected. Separate warnings keep the exact ID visible,
 also when an empty list hides Fill empty. Explicit choice clears only that warning.
 This display does not repair saved rules, run work or check current availability.
+
+### Retained missing Fill empty target locale
+Fill empty shows an explicit kept target when its exact locale is no longer in the
+loaded non-base project locales, including after confirmed locale removal. The
+adjacent warning keeps the code visible without choosing a fallback or clearing
+an earlier result. A listed choice clears this display only; it does not add a
+locale, repair saved rules or check current availability or permission.

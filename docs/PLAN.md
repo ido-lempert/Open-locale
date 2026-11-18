@@ -2399,3 +2399,10 @@ choices, including an empty loaded provider list. Exact IDs and drafts/results
 stay; no fallback, run, save, rule repair or availability/permission check.
 Inactive non-pre-translation rule action hides only its provider warning.
 [Review0623](reviews/0623-retained-missing-provider-choices.md).
+
+### Retained missing Fill empty target locale
+Exact missing-selected target option/status after loaded project locales change,
+including base-locale exclusion and zero remaining targets. Keeps exact code,
+provider/branch/result and rule drafts; no fallback, new reads, run, locale/rule
+repair or permission guarantee. Explicit listed choice clears display only.
+[Review0624](reviews/0624-retained-missing-target-locale.md).
