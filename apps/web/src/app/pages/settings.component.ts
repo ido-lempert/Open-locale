@@ -286,7 +286,11 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
         </section>
         <section class="panel">
           <h2>Automations</h2>
-          <p><a [routerLink]="['/projects',projectId,'activity']" name="automationActivityLink">Review recorded runs in Activity</a> <span class="muted">Choose "ran automation" in the action filter. This is not a complete run history or delivery receipt.</span></p>
+          <button type="button" name="refreshSettingsRules" [disabled]="!canRefreshRuleList()" aria-describedby="settingsRuleListRefreshScope" (click)="refreshRuleList()">Refresh rule list</button>
+          <p class="muted" id="settingsRuleListRefreshScope">Reads saved rule metadata only. All new-rule fields, choices and earlier receipts stay. This does not create, remove, enable or run rules, reload providers or webhooks, validate current creator authority or repair configuration. This list is not a complete run history or delivery verification.</p>
+          @if(ruleListRefreshing()){<p role="status" name="settingsRuleListRefreshing">Refreshing rule metadata. The previous list stays until this read succeeds.</p>}
+          @if(ruleListRefreshNotice()){<p role="status" name="settingsRuleListRefreshNotice">{{ruleListRefreshNotice()}}</p>}
+          <p><a [routerLink]="['/projects',projectId,'activity']" name="automationActivityLink">Review recorded runs in Activity</a>&nbsp;<span class="muted">Choose "ran automation" in the action filter. This is not a complete run history or delivery receipt.</span></p>
           <p class="muted">Rules fire only on the whitelisted triggers - a new key, or a base-locale write on the main branch - and only do the whitelisted actions: fill empty cells with pseudo TEST DATA, create a task, or notify this project's registered webhooks (signed delivery to the URLs admins set up in the Webhooks panel - a rule itself cannot send anywhere else). Only project admins can create rules, and creating a rule delegates YOUR authority to it: any member's edit can trigger it, but the rule acts as you, with your CURRENT permissions re-checked on every run - not as the editor who triggered it. If you are demoted, lose a locale grant, or leave the project, the run narrows or fails visibly in the activity log and the triggering edit is unaffected. Runs are best-effort and in-process: no durable queue and no retry, and a write committed while the server restarts does not replay.</p>
           <ul class="locale-list">
             @for (r of autoRules(); track r.id) {
@@ -579,7 +583,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.projectId = route.snapshot.paramMap.get('id') ?? '';
   }
   private tokenCopyDeparted = false;
-  ngOnDestroy() {this.invalidateMtProviderListRefresh();this.invalidateGroupListRefresh();this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
+  ngOnDestroy() {this.invalidateRuleListRefresh();this.invalidateMtProviderListRefresh();this.invalidateGroupListRefresh();this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
   async ngOnInit() { await this.reload(); }
   async reload(generalSubmission?: {name:string;description:string}, projectOnly = false) {
     let loadedGeneral: {name:string;description:string}|undefined;
@@ -605,6 +609,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
       this.branches.set(await this.api.listBranches(this.projectId));
       this.invalidateMtProviderListRefresh();
       this.mtProviders.set(await this.api.listMtProviders(this.projectId));
+      this.invalidateRuleListRefresh();
       this.autoRules.set(await this.api.listAutomationRules(this.projectId));
       this.samlInfo.set(await this.api.getSamlSpInfo());
       if (!this.mtProviderId() && this.mtProviders().length) this.mtProviderId.set(this.mtProviders()[0].id);
@@ -773,6 +778,29 @@ export class SettingsComponent implements OnInit, OnDestroy {
     } catch {
       if(current())this.mtProviderListRefreshNotice.set('Provider metadata could not be refreshed. The previous list, drafts, choices and results were kept. Try Refresh provider list again.');
     } finally {if(current())this.mtProviderListRefreshing.set(false);}
+  }
+  ruleListRefreshing = signal(false);
+  ruleListRefreshNotice = signal('');
+  private ruleListRefreshEpoch = 0;
+  private invalidateRuleListRefresh() {
+    this.ruleListRefreshEpoch++;this.ruleListRefreshing.set(false);this.ruleListRefreshNotice.set('');
+  }
+  canRefreshRuleList():boolean {
+    return !this.tokenCopyDeparted && !this.busy() && !this.ruleListRefreshing();
+  }
+  async refreshRuleList() {
+    if(!this.canRefreshRuleList())return;
+    const epoch=++this.ruleListRefreshEpoch,projectId=this.projectId;
+    this.ruleListRefreshing.set(true);this.ruleListRefreshNotice.set('');
+    const current=()=>!this.tokenCopyDeparted && epoch===this.ruleListRefreshEpoch && projectId===this.projectId;
+    try {
+      const rules=await this.api.listAutomationRules(projectId);
+      if(!current())return;
+      this.autoRules.set(rules);
+      this.ruleListRefreshNotice.set('Rule metadata was refreshed. All new-rule fields, choices and earlier receipts were kept. This is not a run history, delivery verification or current-authority check.');
+    } catch {
+      if(current())this.ruleListRefreshNotice.set('Rule metadata could not be refreshed. The previous list, new-rule fields, choices and earlier receipts were kept. Try Refresh rule list again.');
+    } finally {if(current())this.ruleListRefreshing.set(false);}
   }
   tokenCopyPending = signal(false);
   tokenCopyNotice = signal('');
@@ -1127,6 +1155,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   }
   async addRule() {
     if(this.busy() || !this.validNewRuleName() || !this.validNewRulePayload())return;
+    this.invalidateRuleListRefresh();
     const submitted=this.ruleDraft();
     this.busy.set(true); this.error.set(''); this.ruleDraftNotice.set('');
     try {
@@ -1151,6 +1180,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   async toggleRule(r: AutomationRuleInfo) {
     const loaded=this.autoRules().find(row=>row.id===r.id);
     if(this.busy() || !loaded || loaded.enabled!==r.enabled)return;
+    this.invalidateRuleListRefresh();
     const enabled=!loaded.enabled;
     this.busy.set(true);this.error.set('');this.ruleToggleNotice.set('');
     try {
@@ -1168,6 +1198,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   cancelRemoveRule() {if(!this.busy())this.confirmingRule.set(null);}
   async removeRule(r: AutomationRuleInfo) {
     if(this.busy() || this.confirmingRule()!==r.id || !this.autoRules().some(rule=>rule.id===r.id))return;
+    this.invalidateRuleListRefresh();
     this.busy.set(true); this.error.set(''); this.ruleRemoveNotice.set('');
     try {
       await this.api.deleteAutomationRule(this.projectId, r.id);

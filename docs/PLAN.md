@@ -2361,3 +2361,10 @@ No automatic fallback, health check, translation run or saved-rule repair.
 Failure keeps previous list with bounded retry; later Add/remove/toggle and
 departure fence older responses. Pseudo test data only, not real translation.
 [Review0618](reviews/0618-mt-provider-list-refresh.md).
+
+### Read-only automation-rule list Refresh
+Explicit saved-rule metadata Refresh preserves all new-rule fields/choices and
+earlier receipts. Failure retains previous list with retry guidance; later
+Add/remove/toggle and departure fence stale reads. No rule execution/enablement,
+provider/webhook reload, configuration repair, creator-authority validation or
+complete run-history/delivery claim. [Review0619](reviews/0619-rule-list-refresh.md).

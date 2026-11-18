@@ -1990,3 +1990,10 @@ selects a replacement for an absent provider; review kept choices before an
 explicit run/save. Failure retains the last list with bounded retry. Later Add,
 remove/toggle and departure fence older reads. Refresh does not test health,
 run Fill empty, repair saved rules or enable real translation.
+
+### Read-only automation-rule list Refresh
+Refresh rule list reads saved metadata without resetting new-rule name, trigger,
+action, provider, locales, title, message or earlier receipts. Failed reads keep
+the previous snapshot with bounded retry. Add/remove/toggle and departure fence
+older reads. Refresh does not run or enable rules, reload providers/webhooks,
+repair configuration, validate creator authority or verify history/delivery.
