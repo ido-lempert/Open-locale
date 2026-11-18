@@ -2392,3 +2392,10 @@ not automatic fallback. Bounded failure/duplicate guards and full-reload/departu
 fences. Reads existing branches metadata only; no pre-translation or branch
 mutation, provider/OTA reload or current availability/permission claim.
 [Review0622](reviews/0622-mt-branch-choices-refresh.md).
+
+### Retained missing provider choices
+Explicit missing-selected options/status for Fill empty and new-rule provider
+choices, including an empty loaded provider list. Exact IDs and drafts/results
+stay; no fallback, run, save, rule repair or availability/permission check.
+Inactive non-pre-translation rule action hides only its provider warning.
+[Review0623](reviews/0623-retained-missing-provider-choices.md).

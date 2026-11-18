@@ -2019,3 +2019,10 @@ locale or branch, earlier pseudo result, OTA choices or other drafts. Missing
 selection stays visibly marked, never replaced. Failure keeps previous choices
 with retry. No pre-translation, branch mutation, provider reload, OTA reload or
 current availability/permission check. Existing Fill empty is separate and explicit.
+
+### Retained missing provider choices
+Fill empty and new pre-translation rule selectors keep an explicit missing-provider
+option when the selected ID is absent from the loaded list, rather than looking
+like another provider is selected. Separate warnings keep the exact ID visible,
+also when an empty list hides Fill empty. Explicit choice clears only that warning.
+This display does not repair saved rules, run work or check current availability.

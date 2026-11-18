@@ -264,6 +264,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           @if(mtDraftNotice()){<p role="status" name="settingsMtDraftNotice">{{ mtDraftNotice() }}</p>}
           @if(!validNewMtName()){<p role="status" name="settingsMtNameInvalid">Shorten the provider name before adding. Your full name and provider type stay here and are not sent.</p>}
           }
+          @if(isTeamAdmin() && missingMtProvider(mtProviderId())){<p role="status" name="settingsMtProviderMissing">Selected Fill empty provider <code>{{mtProviderId()}}</code> is not in the loaded provider list. The exact choice and earlier result are kept, not replaced. Refresh provider list or choose a listed provider before running if needed. This is not a current availability or permission check.</p>}
           @if (mtProviders().length) {
             @if (isTeamAdmin()) {
           <button type="button" name="refreshSettingsMtBranches" [disabled]="!canRefreshMtBranches()" aria-describedby="settingsMtBranchRefreshScope" (click)="refreshMtBranches()">Refresh pre-translation branches</button>
@@ -273,6 +274,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           @if(mtBranchMissing()){<p role="status" name="settingsMtBranchMissing">Selected branch <code>{{mtBranch()}}</code> is not in the loaded choices. It is still selected; choose a loaded branch before pre-translating if needed. This is not a current availability or permission check.</p>}
           <form class="inline" (ngSubmit)="runPretranslate()">
               <select aria-label="Pre-translate provider" [ngModel]="mtProviderId()" (ngModelChange)="mtProviderId.set($event)" name="mtProviderId">
+                @if(missingMtProvider(mtProviderId())){<option [value]="mtProviderId()">{{mtProviderId()}} (not in loaded providers)</option>}
                 @for (p of mtProviders(); track p.id) { <option [value]="p.id" [disabled]="!p.enabled">{{ p.name }}</option> }
               </select>
               <select aria-label="Target locale" [ngModel]="mtLocale()" (ngModelChange)="mtLocale.set($event)" name="mtLocale">
@@ -329,7 +331,9 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
               <option value="notify">notify project webhooks</option>
             </select>
             @if (newRuleAction() === 'pretranslate') {
+              @if(missingMtProvider(newRuleProvider())){<p role="status" name="settingsRuleProviderMissing">Selected new-rule provider <code>{{newRuleProvider()}}</code> is not in the loaded provider list. The exact choice and rule draft are kept, not replaced. Refresh provider list or choose a listed provider before saving if needed. This does not repair saved rules or check current availability or permission.</p>}
               <select aria-label="Rule provider" [ngModel]="newRuleProvider()" (ngModelChange)="newRuleProvider.set($event)" name="newRuleProvider">
+                @if(missingMtProvider(newRuleProvider())){<option [value]="newRuleProvider()">{{newRuleProvider()}} (not in loaded providers)</option>}
                 @for (p of mtProviders(); track p.id) { <option [value]="p.id">{{ p.name }}</option> }
               </select>
               @for (l of project()?.locales ?? []; track l.code) {
@@ -801,6 +805,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
       if(current())this.mtProviderListRefreshNotice.set('Provider metadata could not be refreshed. The previous list, drafts, choices and results were kept. Try Refresh provider list again.');
     } finally {if(current())this.mtProviderListRefreshing.set(false);}
   }
+  missingMtProvider(id:string):boolean {return id!=='' && !this.mtProviders().some(provider=>provider.id===id);}
   mtBranchesRefreshing = signal(false);
   mtBranchesRefreshNotice = signal('');
   private mtBranchRefreshEpoch = 0;
