@@ -2368,3 +2368,11 @@ earlier receipts. Failure retains previous list with retry guidance; later
 Add/remove/toggle and departure fence stale reads. No rule execution/enablement,
 provider/webhook reload, configuration repair, creator-authority validation or
 complete run-history/delivery claim. [Review0619](reviews/0619-rule-list-refresh.md).
+
+### Read-only OTA retained publication metadata Refresh
+Explicit Refresh preserves selected publish branch, earlier receipt and other
+drafts. Failure keeps prior list with bounded retry. Publish/full reload/
+departure fence old reads. No Publish/download/integrity/deployment/CDN/native/
+current-availability or complete-release-history claim. Existing Publish now
+refuses duplicate/global-busy/departed handlers before submission.
+[Review0620](reviews/0620-ota-publication-list-refresh.md).

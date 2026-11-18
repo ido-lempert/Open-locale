@@ -514,6 +514,10 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
         </section>
         <section class="panel">
           <h2>OTA publications</h2>
+          <button type="button" name="refreshSettingsOta" [disabled]="!canRefreshOtaList()" aria-describedby="settingsOtaListRefreshScope" (click)="refreshOtaList()">Refresh publication list</button>
+          <p class="muted" id="settingsOtaListRefreshScope">Reads retained publication metadata only. Your selected publish branch, earlier receipt and other drafts stay. This does not publish, download or verify bundles, reload branch choices or deploy to a CDN or device. A kept receipt can refer to a publication no longer retained. This is not a complete release history or current bundle-availability check.</p>
+          @if(otaListRefreshing()){<p role="status" name="settingsOtaListRefreshing">Refreshing publication metadata. The previous list stays until this read succeeds.</p>}
+          @if(otaListRefreshNotice()){<p role="status" name="settingsOtaListRefreshNotice">{{otaListRefreshNotice()}}</p>}
           <p class="muted">Immutable per-branch translation bundles for OTA pull. Pull requires a session or a read API token - bundles are never public. A bundle includes EVERY translation on the branch: empty values and all review statuses, not only reviewed ones.</p>
           <ul class="locale-list">
             @for (o of otaPubs(); track o.id) {
@@ -530,7 +534,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             <select aria-label="OTA branch" [ngModel]="otaBranch()" (ngModelChange)="otaBranch.set($event)" name="otaBranch">
               @for (b of branches(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }
             </select>
-            <button type="submit" [disabled]="busy()">Publish bundle</button>
+            <button type="submit" name="publishSettingsOta" [disabled]="busy()">Publish bundle</button>
           </form>
           }
           @if (otaNotice()) { <p class="notice">{{ otaNotice() }}</p> }
@@ -583,7 +587,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.projectId = route.snapshot.paramMap.get('id') ?? '';
   }
   private tokenCopyDeparted = false;
-  ngOnDestroy() {this.invalidateRuleListRefresh();this.invalidateMtProviderListRefresh();this.invalidateGroupListRefresh();this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
+  ngOnDestroy() {this.invalidateOtaListRefresh();this.invalidateRuleListRefresh();this.invalidateMtProviderListRefresh();this.invalidateGroupListRefresh();this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
   async ngOnInit() { await this.reload(); }
   async reload(generalSubmission?: {name:string;description:string}, projectOnly = false) {
     let loadedGeneral: {name:string;description:string}|undefined;
@@ -605,6 +609,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
       this.members.set(await this.api.listMembers(this.projectId));
       this.invalidateGroupListRefresh();
       this.groups.set(await this.api.listGroups(this.projectId));
+      this.invalidateOtaListRefresh();
       this.otaPubs.set(await this.api.listOtaPublications(this.projectId));
       this.branches.set(await this.api.listBranches(this.projectId));
       this.invalidateMtProviderListRefresh();
@@ -627,6 +632,8 @@ export class SettingsComponent implements OnInit, OnDestroy {
     }
   }
   async publishOta() {
+    if(this.busy() || this.tokenCopyDeparted)return;
+    this.invalidateOtaListRefresh();
     this.busy.set(true); this.error.set(''); this.otaNotice.set('');
     try {
       const pub = await this.api.publishOta(this.projectId, this.otaBranch());
@@ -778,6 +785,29 @@ export class SettingsComponent implements OnInit, OnDestroy {
     } catch {
       if(current())this.mtProviderListRefreshNotice.set('Provider metadata could not be refreshed. The previous list, drafts, choices and results were kept. Try Refresh provider list again.');
     } finally {if(current())this.mtProviderListRefreshing.set(false);}
+  }
+  otaListRefreshing = signal(false);
+  otaListRefreshNotice = signal('');
+  private otaListRefreshEpoch = 0;
+  private invalidateOtaListRefresh() {
+    this.otaListRefreshEpoch++;this.otaListRefreshing.set(false);this.otaListRefreshNotice.set('');
+  }
+  canRefreshOtaList():boolean {
+    return !this.tokenCopyDeparted && !this.busy() && !this.otaListRefreshing();
+  }
+  async refreshOtaList() {
+    if(!this.canRefreshOtaList())return;
+    const epoch=++this.otaListRefreshEpoch,projectId=this.projectId;
+    this.otaListRefreshing.set(true);this.otaListRefreshNotice.set('');
+    const current=()=>!this.tokenCopyDeparted && epoch===this.otaListRefreshEpoch && projectId===this.projectId;
+    try {
+      const publications=await this.api.listOtaPublications(projectId);
+      if(!current())return;
+      this.otaPubs.set(publications);
+      this.otaListRefreshNotice.set('Publication metadata was refreshed. Your selected branch, earlier receipt and other drafts were kept. This does not verify bundles, deployment or current availability.');
+    } catch {
+      if(current())this.otaListRefreshNotice.set('Publication metadata could not be refreshed. The previous list, selected branch, earlier receipt and other drafts were kept. Try Refresh publication list again.');
+    } finally {if(current())this.otaListRefreshing.set(false);}
   }
   ruleListRefreshing = signal(false);
   ruleListRefreshNotice = signal('');

@@ -1997,3 +1997,11 @@ action, provider, locales, title, message or earlier receipts. Failed reads keep
 the previous snapshot with bounded retry. Add/remove/toggle and departure fence
 older reads. Refresh does not run or enable rules, reload providers/webhooks,
 repair configuration, validate creator authority or verify history/delivery.
+
+### Read-only OTA publication list Refresh
+Refresh publication list reads retained metadata without resetting selected
+publish branch, earlier receipt or other drafts. Failure keeps the prior list
+with retry guidance. Explicit Publish/full reload/departure fence older reads.
+Refresh does not publish/download/verify bundles, reload branch choices or deploy
+to a CDN/device. Kept receipts can refer to pruned publications; this is not a
+complete release history or current bundle-availability check.
