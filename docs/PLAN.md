@@ -2406,3 +2406,10 @@ including base-locale exclusion and zero remaining targets. Keeps exact code,
 provider/branch/result and rule drafts; no fallback, new reads, run, locale/rule
 repair or permission guarantee. Explicit listed choice clears display only.
 [Review0624](reviews/0624-retained-missing-target-locale.md).
+
+### Retained missing new-rule target locales
+Checked exact-code choices and bounded warning expose retained targets missing
+from loaded non-base project locales. Existing explicit toggle removes only that
+local draft target; no fallback, saved-rule repair, new reads/save/run or locale
+mutation. Inactive action hides display without clearing drafts.
+[Review0625](reviews/0625-retained-missing-rule-locales.md).

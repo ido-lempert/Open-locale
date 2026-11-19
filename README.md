@@ -2033,3 +2033,10 @@ loaded non-base project locales, including after confirmed locale removal. The
 adjacent warning keeps the code visible without choosing a fallback or clearing
 an earlier result. A listed choice clears this display only; it does not add a
 locale, repair saved rules or check current availability or permission.
+
+### Retained missing new-rule target locales
+New pre-translation rule targets missing from loaded non-base locales remain
+visible as checked exact-code choices. Explicitly unchecking one removes only
+that local draft target, without saving a rule or changing Fill empty choices.
+Other action types hide this display without clearing targets. This does not add
+locales, repair saved rules or check current availability or permission.

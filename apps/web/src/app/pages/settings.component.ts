@@ -338,6 +338,10 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                 @if(missingMtProvider(newRuleProvider())){<option [value]="newRuleProvider()">{{newRuleProvider()}} (not in loaded providers)</option>}
                 @for (p of mtProviders(); track p.id) { <option [value]="p.id">{{ p.name }}</option> }
               </select>
+              @if(missingRuleLocales().length){<p role="status" name="settingsRuleLocalesMissing">These checked new-rule target locales are not in the loaded non-base locale choices. Exact codes and the rule draft are kept, not replaced. Uncheck a retained target to remove it from this draft only. This does not add locales, repair saved rules or check current availability or permission.</p>}
+              @for (code of missingRuleLocales(); track code) {
+                <label class="missing-rule-locale"><input type="checkbox" [checked]="true" (change)="toggleRuleLocale(code)" name="missingRuleLoc-{{code}}" /> {{code}} (not in loaded target locales)</label>
+              }
               @for (l of project()?.locales ?? []; track l.code) {
                 @if (l.code !== project()?.baseLocale) {
                   <label><input type="checkbox" [checked]="newRuleLocales().includes(l.code)" (change)="toggleRuleLocale(l.code)" name="ruleLoc-{{ l.code }}" /> {{ l.code }}</label>
@@ -577,6 +581,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
       }
     </main>
   `,
+  styles: [`.missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
 })
 export class SettingsComponent implements OnInit, OnDestroy {
   project = signal<Project | null>(null);
@@ -807,6 +812,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
       if(current())this.mtProviderListRefreshNotice.set('Provider metadata could not be refreshed. The previous list, drafts, choices and results were kept. Try Refresh provider list again.');
     } finally {if(current())this.mtProviderListRefreshing.set(false);}
   }
+  missingRuleLocales():string[] {const project=this.project();return project?[...new Set(this.newRuleLocales())].filter(code=>!project.locales.some(locale=>locale.code===code && locale.code!==project.baseLocale)):[];}
   mtLocaleMissing():boolean {const project=this.project();return !!project && this.mtLocale()!=='' && !project.locales.some(locale=>locale.code===this.mtLocale() && locale.code!==project.baseLocale);}
   missingMtProvider(id:string):boolean {return id!=='' && !this.mtProviders().some(provider=>provider.id===id);}
   mtBranchesRefreshing = signal(false);
