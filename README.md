@@ -2073,3 +2073,9 @@ newly loaded values. Discard during a pending read fences it. Failure keeps prio
 loaded details/inputs with bounded retry; busy/replacement/reload/departure fence
 stale reads. No Save, automatic input replacement or conflict-checked merge.
 See [review0629](docs/reviews/0629-general-metadata-refresh.md).
+
+Settings General shows last loaded or accepted name and description separately
+from editable inputs. Admin comparison identifies exact local field differences;
+a match is not a newer-server check. Empty and whitespace-only values have labels,
+full text stays, and Refresh/Save/Discard remain explicit. See
+[review0630](docs/reviews/0630-general-loaded-details.md).

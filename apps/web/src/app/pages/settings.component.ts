@@ -21,7 +21,18 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           @if(generalMetadataRefreshing()){<p role="status" name="settingsGeneralMetadataRefreshing">Refreshing loaded name and description. Your current inputs stay.</p>}
           @if(generalMetadataRefreshNotice()){<p role="status" name="settingsGeneralMetadataRefreshNotice">{{generalMetadataRefreshNotice()}}</p>}
 
+          <div class="loaded-general" aria-labelledby="settingsLoadedGeneralHeading">
+            <h3 id="settingsLoadedGeneralHeading">Loaded details</h3>
+            <p class="muted">Last loaded or accepted values, not a live server check. Editable inputs, when available, may differ. Refresh loaded details updates this display without replacing editable inputs.</p>
+            <dl>
+              <dt>Loaded name</dt>
+              <dd name="settingsLoadedGeneralName">@if(p.name === ''){<span class="muted">Empty name</span>}@else{@if(p.name.trim() === ''){<span class="muted">Whitespace-only name</span>}<span class="loaded-general-value">{{p.name}}</span>}</dd>
+              <dt>Loaded description</dt>
+              <dd name="settingsLoadedGeneralDescription">@if(p.description === ''){<span class="muted">Empty description</span>}@else{@if(p.description.trim() === ''){<span class="muted">Whitespace-only description</span>}<span class="loaded-general-value">{{p.description}}</span>}</dd>
+            </dl>
+          </div>
           @if (isTeamAdmin()) {
+          <p role="status" name="settingsGeneralInputComparison">{{generalInputComparison()}}</p>
           <form (ngSubmit)="rename()">
             <label>Name <input [ngModel]="name()" (ngModelChange)="name.set($event)" name="name" aria-describedby="settingsGeneralRules" [attr.aria-invalid]="!validGeneralName()" /></label>
             <label>Description <input [ngModel]="description()" (ngModelChange)="description.set($event)" name="description" aria-describedby="settingsGeneralRules" [attr.aria-invalid]="!validGeneralDescription()" /></label>
@@ -310,7 +321,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
               <button name="runSettingsPretranslate" type="submit" [disabled]="busy()" title="Fill empty cells with pseudo test data">Fill empty</button>
             </form>
           }
-            @if (mtResult()) { <p class="muted" role="status">{{ mtResult() }}</p> }
+            @if (mtResult()) { <p class="muted" role="status" name="settingsMtResult">{{ mtResult() }}</p> }
           }
         </section>
         <section class="panel">
@@ -600,7 +611,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
       }
     </main>
   `,
-  styles: [`.missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
+  styles: [`.loaded-general {margin:1rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .loaded-general h3 {margin-top:0} .loaded-general dt {font-weight:600} .loaded-general dd {margin:.25rem 0 .75rem;min-width:0} .loaded-general-value {white-space:pre-wrap;overflow-wrap:anywhere} .missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
 })
 export class SettingsComponent implements OnInit, OnDestroy {
   project = signal<Project | null>(null);
@@ -1150,6 +1161,13 @@ export class SettingsComponent implements OnInit, OnDestroy {
   }
   validGeneralName():boolean {return this.generalTextLength(this.name())<=120;}
   validGeneralDescription():boolean {return this.generalTextLength(this.description())<=2000;}
+  generalInputComparison():string {
+    const p=this.project();if(!p)return '';
+    const name=this.name()!==p.name,description=this.description()!==p.description;
+    if(!name && !description)return 'Your name and description inputs match the loaded details. This does not check newer server changes.';
+    const fields=name && description?'Name and description inputs differ':name?'Name input differs':'Description input differs';
+    return fields+' from the loaded details. These differences are local, not a server conflict check. Save remains explicit; Discard unsaved edits replaces both inputs with the loaded values.';
+  }
   canDiscardGeneralDraft():boolean {
     const p=this.project();
     return !!p && !this.busy() && (this.name()!==p.name || this.description()!==p.description);

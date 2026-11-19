@@ -1,0 +1,11 @@
+import {SettingsComponent} from './settings.component';
+const make=()=>{const c=new SettingsComponent({} as any,{snapshot:{paramMap:{get:()=> 'p'}}} as any,{} as any);c.project.set({id:'p',name:'Loaded',description:'Original'} as any);c.name.set('Loaded');c.description.set('Original');return c;};
+describe('loaded General values comparison',()=>{
+ it('unloaded state gives no misleading comparison',()=>{const c=make();c.project.set(null);expect(c.generalInputComparison()).toBe('');});
+ it('matching input is not a current-server or saved-state promise',()=>{const c=make();expect(c.generalInputComparison()).toContain('match the loaded');expect(c.generalInputComparison()).toContain('does not check newer server');});
+ for(const field of ['name','description'] as const)it('identifies exact '+field+' difference without mutation',()=>{const c=make(),before=c.project();c[field].set('Changed');expect(c.generalInputComparison()).toContain(field==='name'?'Name input differs':'Description input differs');expect(c.project()).toBe(before);expect(c[field]()).toBe('Changed');});
+ it('both fields differ and explicit Discard restores both only',()=>{const c=make();c.name.set('');c.description.set(' ');c.newLocale.set('fr');expect(c.generalInputComparison()).toContain('Name and description inputs differ');c.discardGeneralDraft();expect(c.generalInputComparison()).toContain('match the loaded');expect(c.newLocale()).toBe('fr');});
+ it('outer whitespace and Unicode count as exact differences',()=>{const c=make();c.name.set(' Loaded');expect(c.generalInputComparison()).toContain('Name input differs');c.name.set('Loaded');c.description.set('Original\u200e');expect(c.generalInputComparison()).toContain('Description input differs');});
+ it('refresh changes loaded comparison not current input',async()=>{const c=make();(c as any).api={getProject:async()=>({id:'p',name:'Server',description:'Original'})};await c.refreshGeneralMetadata();expect(c.name()).toBe('Loaded');expect(c.generalInputComparison()).toContain('Name input differs');});
+ it('empty loaded and empty inputs match',()=>{const c=make();c.project.set({id:'p',name:'',description:''} as any);c.name.set('');c.description.set('');expect(c.generalInputComparison()).toContain('match the loaded');});
+});

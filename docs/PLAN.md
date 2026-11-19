@@ -2443,3 +2443,9 @@ metadata/drafts/choices/results. Explicit Discard then uses newly loaded values;
 Discard during pending read fences it. Bounded retry, duplicate/busy/replacement/
 reload/departure guards. No save, auto input replacement, merge or permission check.
 [Review0629](reviews/0629-general-metadata-refresh.md).
+
+### Loaded General values alongside editable inputs
+Read-only loaded name/description for all Settings readers; exact field-specific
+local-input comparison for admins. Full escaped multiline/unbroken text, explicit
+empty/whitespace-only labels. No read/save or server conflict/permission promise;
+Refresh/Save/Discard unchanged. [Review0630](reviews/0630-general-loaded-details.md).
