@@ -460,15 +460,18 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           </ul>
           @if (isTeamAdmin()) {
           @if(memberRemoveNotice()){<p role="status" name="settingsMemberRemoveNotice">{{memberRemoveNotice()}}</p>}
-          <form class="inline" (ngSubmit)="addMember()">
-            <input aria-label="Member email" placeholder="User email" [ngModel]="memberEmail()" (ngModelChange)="memberEmail.set($event)" name="memberEmail" required />
-            <select aria-label="New member role" [ngModel]="memberRole()" (ngModelChange)="memberRole.set($event)" name="memberRole">
+          <h3 id="settingsNewMemberHeading">Add or update direct member</h3>
+          <form class="inline new-member-form" (ngSubmit)="addMember()">
+            <label>Email <input aria-label="Member email" placeholder="User email" [ngModel]="memberEmail()" (ngModelChange)="memberEmail.set($event)" name="memberEmail" required /></label>
+            <label>Direct role <select aria-label="New member role" [ngModel]="memberRole()" (ngModelChange)="memberRole.set($event)" name="memberRole">
               <option value="MEMBER">member</option>
               <option value="ADMIN">admin</option>
-            </select>
-            <input aria-label="Allowed locales" placeholder="Locales (e.g. he,fr) - blank = all" [ngModel]="memberLocales()" (ngModelChange)="memberLocales.set($event)" name="memberLocales" />
-            <button name="addSettingsMember" type="submit" [disabled]="busy()">Add</button>
+            </select></label>
+            <label>Direct write locales <input aria-label="Allowed locales" placeholder="Locales (e.g. he,fr) - blank = all" [ngModel]="memberLocales()" (ngModelChange)="memberLocales.set($event)" name="memberLocales" aria-describedby="settingsNewMemberLocalesRules" [attr.aria-invalid]="!validNewMemberLocales()" /></label>
+            <button name="addSettingsMember" type="submit" [disabled]="busy() || !validNewMemberLocales()">Add</button>
           </form>
+          <p class="muted" id="settingsNewMemberLocalesRules" name="settingsNewMemberLocalesRules">Direct write locales: comma-separated exact codes from this project's loaded locale list. Blank or whitespace-only text grants all locales. A comma is not blank: empty entries and unknown codes block Add, without changing your text. Outer spaces around codes are trimmed on submission. This checks loaded choices only, not newer server state or permission. Add can update an existing member's team-wide direct role and scope; group grants can widen access. Admin roles are not restricted by a locale list.</p>
+          @if(!validNewMemberLocales()){<p role="status" name="settingsNewMemberLocalesInvalid">Correct the direct write locales before adding. Use loaded project codes separated by commas with no empty entries, or leave the field blank only if all locales is intended. Your full email, role and locale draft stays here and has not been sent.</p>}
           <button type="button" name="discardSettingsMemberEmail" (click)="discardMemberEmailDraft()" [disabled]="!canDiscardMemberEmailDraft()">Discard member email draft</button>
           <p class="muted">Discard only clears the local add-member email. Selected role and locales stay. It does not refresh Settings, send an invitation or change anyone's saved membership or access; other forms stay as they are.</p>
           @if(memberDraftNotice()){<p role="status" name="settingsMemberDraftNotice">{{ memberDraftNotice() }}</p>}
@@ -615,7 +618,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
       }
     </main>
   `,
-  styles: [`.saml-display code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .loaded-general {margin:1rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .loaded-general h3 {margin-top:0} .loaded-general dt {font-weight:600} .loaded-general dd {margin:.25rem 0 .75rem;min-width:0} .loaded-general-value {white-space:pre-wrap;overflow-wrap:anywhere} .missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
+  styles: [`.new-member-form label {display:flex;flex-direction:column;gap:.25rem;min-width:0;max-width:100%} .saml-display code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .loaded-general {margin:1rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .loaded-general h3 {margin-top:0} .loaded-general dt {font-weight:600} .loaded-general dd {margin:.25rem 0 .75rem;min-width:0} .loaded-general-value {white-space:pre-wrap;overflow-wrap:anywhere} .missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
 })
 export class SettingsComponent implements OnInit, OnDestroy {
   project = signal<Project | null>(null);
@@ -1509,8 +1512,12 @@ export class SettingsComponent implements OnInit, OnDestroy {
     if(this.memberDraftNotice())this.memberDraftNotice.set('The submitted membership was saved. The local add-member email draft was discarded without refreshing Settings or changing saved membership or access. Selected role and locales stay for your next explicit Add.');
   }
   memberDraftNotice = signal('');
+  validNewMemberLocales():boolean {
+    const raw=this.memberLocales(),project=this.project();
+    return !!project && (raw.trim()==='' || raw.split(',').every(part=>part.trim()!=='' && project.locales.some(locale=>locale.code===part.trim())));
+  }
   async addMember() {
-    if(this.busy())return;
+    if(this.busy() || !this.validNewMemberLocales())return;
     this.invalidateMemberListRefresh();
     const submitted={email:this.memberEmail(),role:this.memberRole(),locales:this.memberLocales()};
     this.busy.set(true); this.error.set(''); this.memberDraftNotice.set('');

@@ -2085,3 +2085,9 @@ settings, drafts and earlier results. Failure keeps the previous display with
 retry guidance; missing metadata is not labeled unconfigured. This does not save
 configuration, contact an IdP, sign in or verify trust/access/working SAML.
 [Review0631](docs/reviews/0631-saml-display-refresh.md).
+
+Add-member direct locale scope now rejects empty comma entries and codes absent
+from the loaded project before any request. Blank/whitespace-only text still
+means all locales on explicit Add. Full drafts stay; this is not a current-server
+or permission check. Add can update an existing team member's direct grant;
+admin roles and group grants can widen access. [Review0632](docs/reviews/0632-member-create-locale-preflight.md).

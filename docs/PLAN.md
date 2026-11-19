@@ -2456,3 +2456,10 @@ failure/retry and duplicate/busy/reload/departure fences. Missing metadata offer
 retry rather than claiming unconfigured. No config save/IdP contact/sign-in or
 trust/current-access/working-authentication promise. Scoped code wrapping fixes
 390px ACS display overflow. [Review0631](reviews/0631-saml-display-refresh.md).
+
+### Add-member direct locale preflight
+Blocks silent comma-only-to-unrestricted submission and unknown/empty entries
+using loaded exact project codes, preserving full drafts/receipts/errors without
+reads/writes. Explicit blank-only all-locales unchanged; team-wide upsert/admin/
+group limits explained. Persistent form labels. Server remains authority.
+[Review0632](reviews/0632-member-create-locale-preflight.md).
