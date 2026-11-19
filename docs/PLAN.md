@@ -2463,3 +2463,10 @@ using loaded exact project codes, preserving full drafts/receipts/errors without
 reads/writes. Explicit blank-only all-locales unchanged; team-wide upsert/admin/
 group limits explained. Persistent form labels. Server remains authority.
 [Review0632](reviews/0632-member-create-locale-preflight.md).
+
+### New-group locale preflight
+Blocks silent comma-only-to-unrestricted creation and unknown/empty entries using
+loaded exact project codes, preserving drafts/receipts/errors without reads/writes.
+Explicit blank-only all-locales unchanged. Persistent labels and group/team-wide/
+admin/union limits explained. No member added or API permission rule changed.
+[Review0633](reviews/0633-group-create-locale-preflight.md).

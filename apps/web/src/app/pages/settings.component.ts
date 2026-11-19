@@ -549,15 +549,18 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           @if (isTeamAdmin()) {
           @if(groupMemberRemoveNotice()){<p role="status" name="settingsGroupMemberRemoveNotice">{{groupMemberRemoveNotice()}}</p>}
           @if(groupRemoveNotice()){<p role="status" name="settingsGroupRemoveNotice">{{groupRemoveNotice()}}</p>}
-          <form class="inline" (ngSubmit)="addGroup()">
-            <input aria-label="Group name" placeholder="Group name" [ngModel]="groupName()" (ngModelChange)="groupName.set($event)" name="groupName" required aria-describedby="settingsGroupRules" [attr.aria-invalid]="groupName()!=='' && !validNewGroupName()" />
-            <select aria-label="New group role" [ngModel]="groupRole()" (ngModelChange)="groupRole.set($event)" name="groupRole">
+          <h3 id="settingsNewGroupHeading">Create group</h3>
+          <form class="inline new-group-form" (ngSubmit)="addGroup()">
+            <label>Group name <input aria-label="Group name" placeholder="Group name" [ngModel]="groupName()" (ngModelChange)="groupName.set($event)" name="groupName" required aria-describedby="settingsGroupRules" [attr.aria-invalid]="groupName()!=='' && !validNewGroupName()" /></label>
+            <label>Group role <select aria-label="New group role" [ngModel]="groupRole()" (ngModelChange)="groupRole.set($event)" name="groupRole">
               <option value="MEMBER">member</option>
               @if (isTeamOwner()) { <option value="ADMIN">admin</option> }
-            </select>
-            <input aria-label="Group locales" placeholder="Locales (e.g. he,fr) - blank = all" [ngModel]="groupLocales()" (ngModelChange)="groupLocales.set($event)" name="groupLocales" />
-            <button type="submit" name="addSettingsGroup" [disabled]="busy() || !validNewGroupName()">Add group</button>
+            </select></label>
+            <label>Group write locales <input aria-label="Group locales" placeholder="Locales (e.g. he,fr) - blank = all" [ngModel]="groupLocales()" (ngModelChange)="groupLocales.set($event)" name="groupLocales" aria-describedby="settingsNewGroupLocalesRules" [attr.aria-invalid]="!validNewGroupLocales()" /></label>
+            <button type="submit" name="addSettingsGroup" [disabled]="busy() || !validNewGroupName() || !validNewGroupLocales()">Add group</button>
           </form>
+          <p class="muted" id="settingsNewGroupLocalesRules" name="settingsNewGroupLocalesRules">Group write locales: comma-separated exact codes from this project's loaded locale list. Blank or whitespace-only text grants all locales. A comma is not blank: empty entries and unknown codes block Add group, without changing your text. Outer spaces around codes are trimmed on submission. This checks loaded choices only, not newer server state or permission. Groups are team-wide; members can have wider access from direct or other group grants. Admin roles are not restricted by a locale list. Creating a group does not add members.</p>
+          @if(!validNewGroupLocales()){<p role="status" name="settingsNewGroupLocalesInvalid">Correct the group write locales before adding. Use loaded project codes separated by commas with no empty entries, or leave the field blank only if all locales is intended. Your full name, role and locale draft stays here and has not been sent.</p>}
           <button type="button" name="discardSettingsGroupName" (click)="discardGroupNameDraft()" [disabled]="!canDiscardGroupNameDraft()">Discard group name draft</button>
           <p class="muted">Discard only clears the local new-group name. Selected role and locales stay. It does not refresh Settings, change saved groups or change anyone's access; other forms stay as they are.</p>
           <p class="muted" id="settingsGroupRules" name="settingsGroupRules">Group name: 1-100 characters using the API count after trimming outer whitespace. Full input is kept without truncation. This checks the name only, not role, locale grants, permission or newer server changes. A successful addition refreshes groups only; other unsaved forms stay.</p>
@@ -618,7 +621,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
       }
     </main>
   `,
-  styles: [`.new-member-form label {display:flex;flex-direction:column;gap:.25rem;min-width:0;max-width:100%} .saml-display code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .loaded-general {margin:1rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .loaded-general h3 {margin-top:0} .loaded-general dt {font-weight:600} .loaded-general dd {margin:.25rem 0 .75rem;min-width:0} .loaded-general-value {white-space:pre-wrap;overflow-wrap:anywhere} .missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
+  styles: [`.new-member-form label,.new-group-form label {display:flex;flex-direction:column;gap:.25rem;min-width:0;max-width:100%} .saml-display code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .loaded-general {margin:1rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .loaded-general h3 {margin-top:0} .loaded-general dt {font-weight:600} .loaded-general dd {margin:.25rem 0 .75rem;min-width:0} .loaded-general-value {white-space:pre-wrap;overflow-wrap:anywhere} .missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
 })
 export class SettingsComponent implements OnInit, OnDestroy {
   project = signal<Project | null>(null);
@@ -1583,8 +1586,12 @@ export class SettingsComponent implements OnInit, OnDestroy {
   }
   groupDraftNotice = signal('');
   validNewGroupName():boolean {const name=this.groupName().trim();return name.length>0 && this.generalTextLength(name)<=100;}
+  validNewGroupLocales():boolean {
+    const raw=this.groupLocales(),project=this.project();
+    return !!project && (raw.trim()==='' || raw.split(',').every(part=>part.trim()!=='' && project.locales.some(locale=>locale.code===part.trim())));
+  }
   async addGroup() {
-    if(this.busy() || !this.validNewGroupName())return;
+    if(this.busy() || !this.validNewGroupName() || !this.validNewGroupLocales())return;
     this.invalidateGroupListRefresh();
     const submitted={name:this.groupName(),role:this.groupRole(),locales:this.groupLocales()};
     this.busy.set(true); this.error.set(''); this.groupDraftNotice.set('');

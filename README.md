@@ -2091,3 +2091,9 @@ from the loaded project before any request. Blank/whitespace-only text still
 means all locales on explicit Add. Full drafts stay; this is not a current-server
 or permission check. Add can update an existing team member's direct grant;
 admin roles and group grants can widen access. [Review0632](docs/reviews/0632-member-create-locale-preflight.md).
+
+New-group locale scope rejects empty comma entries and codes absent from the
+loaded project before any request. Blank/whitespace-only still means all locales
+on explicit Add group. Full drafts stay; this is not a current-server or permission
+check. Groups are team-wide and admin/direct/other-group grants can widen access.
+Creating a group adds no members. [Review0633](docs/reviews/0633-group-create-locale-preflight.md).
