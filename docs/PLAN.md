@@ -2420,3 +2420,11 @@ stay. Missing selections kept. Bounded failure/retry, duplicate/busy/confirmatio
 guards and project-replacement/reload/departure fences. No locale mutation/rule
 repair/run or availability/permission guarantee.
 [Review0626](reviews/0626-project-locales-refresh.md).
+
+### Read-only custom review-status list Refresh
+Explicit project GET applies customStatuses only, preserving all other loaded
+metadata/drafts/choices/results. Bounded retry and confirmation/busy/replacement/
+reload/departure fences. Base statuses stay; empty custom lists supported.
+No translation or editor-elsewhere update, status save, conflict-checked merge,
+availability or permission promise. Existing explicit Add/Remove unchanged.
+[Review0627](reviews/0627-status-list-refresh.md).

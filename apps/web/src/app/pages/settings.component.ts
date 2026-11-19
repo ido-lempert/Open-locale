@@ -169,6 +169,11 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
         </section>
         <section class="panel">
           <h2>Review statuses</h2>
+          <button type="button" name="refreshSettingsStatuses" [disabled]="!canRefreshStatusList()" aria-describedby="settingsStatusListRefreshScope" (click)="refreshStatusList()">Refresh status list</button>
+          <p class="muted" id="settingsStatusListRefreshScope">Reads project metadata and updates custom review statuses only. New-status text, other drafts, choices, earlier results and other loaded settings stay. This does not save statuses, change existing translations or refresh editor choices already open elsewhere. Later Add or Remove replaces the saved list using the statuses loaded here, not a conflict-checked merge. This is not a current availability or permission check.</p>
+          @if(statusListRefreshing()){<p role="status" name="settingsStatusListRefreshing">Refreshing custom-status metadata. The previous list stays until this read succeeds.</p>}
+          @if(statusListRefreshNotice()){<p role="status" name="settingsStatusListRefreshNotice">{{statusListRefreshNotice()}}</p>}
+
           <ul class="locale-list">
             <li><span class="badge">unverified</span><span class="badge">translated</span><span class="badge">reviewed</span> <span class="muted">base statuses, always available</span></li>
             @for (st of project()?.customStatuses ?? []; track st) {
@@ -614,9 +619,10 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.projectId = route.snapshot.paramMap.get('id') ?? '';
   }
   private tokenCopyDeparted = false;
-  ngOnDestroy() {this.invalidateLocaleListRefresh();this.invalidateMtBranchRefresh();this.invalidateOtaBranchRefresh();this.invalidateOtaListRefresh();this.invalidateRuleListRefresh();this.invalidateMtProviderListRefresh();this.invalidateGroupListRefresh();this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
+  ngOnDestroy() {this.invalidateStatusListRefresh();this.invalidateLocaleListRefresh();this.invalidateMtBranchRefresh();this.invalidateOtaBranchRefresh();this.invalidateOtaListRefresh();this.invalidateRuleListRefresh();this.invalidateMtProviderListRefresh();this.invalidateGroupListRefresh();this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
   async ngOnInit() { await this.reload(); }
   async reload(generalSubmission?: {name:string;description:string}, projectOnly = false) {
+    this.invalidateStatusListRefresh();
     this.invalidateLocaleListRefresh();
     let loadedGeneral: {name:string;description:string}|undefined;
     try {
@@ -816,6 +822,26 @@ export class SettingsComponent implements OnInit, OnDestroy {
     } catch {
       if(current())this.mtProviderListRefreshNotice.set('Provider metadata could not be refreshed. The previous list, drafts, choices and results were kept. Try Refresh provider list again.');
     } finally {if(current())this.mtProviderListRefreshing.set(false);}
+  }
+  statusListRefreshing = signal(false);
+  statusListRefreshNotice = signal('');
+  private statusListRefreshEpoch = 0;
+  private invalidateStatusListRefresh() {this.statusListRefreshEpoch++;this.statusListRefreshing.set(false);this.statusListRefreshNotice.set('');}
+  canRefreshStatusList():boolean {return !this.tokenCopyDeparted && !this.busy() && !!this.project() && !this.statusListRefreshing() && this.confirmingStatus()===null;}
+  async refreshStatusList() {
+    if(!this.canRefreshStatusList())return;
+    const epoch=++this.statusListRefreshEpoch,projectId=this.projectId,previous=this.project();
+    this.statusListRefreshing.set(true);this.statusListRefreshNotice.set('');
+    const active=()=>!this.tokenCopyDeparted && epoch===this.statusListRefreshEpoch && projectId===this.projectId;
+    const current=()=>active() && this.project()===previous && !this.busy() && this.confirmingStatus()===null;
+    try {
+      const fresh=await this.api.getProject(projectId);
+      if(!current())return;
+      this.project.set({...previous!,customStatuses:fresh.customStatuses});
+      this.statusListRefreshNotice.set('Custom-status metadata was refreshed. Drafts, new-status text and earlier results were kept. Other loaded settings were not refreshed; this is not a current availability or permission check.');
+    } catch {
+      if(current())this.statusListRefreshNotice.set('Custom-status metadata could not be refreshed. The previous list, drafts, choices and results were kept. Try Refresh status list again.');
+    } finally {if(active())this.statusListRefreshing.set(false);}
   }
   localeListRefreshing = signal(false);
   localeListRefreshNotice = signal('');

@@ -2048,3 +2048,12 @@ Missing selected targets remain visible without fallback. Bounded failure/retry,
 duplicate and busy/confirmation guards, and replacement/reload/departure fences
 avoid overwriting newer loaded project state. Refresh does not add/remove locales,
 repair rules, run work or check current availability or permission.
+
+Settings has an explicit **Refresh status list** read for custom review statuses.
+It applies only customStatuses from the project GET and keeps new-status text,
+other drafts/metadata/choices/results. Failure retains the list with retry
+feedback; active removal confirmation, busy writes, reload, replacement and
+departure fence stale reads. It does not save statuses, change translations,
+refresh editor choices elsewhere or promise current availability/permission.
+Later explicit Add/Remove still replaces the saved list using loaded statuses,
+not a conflict-checked merge. See [review0627](docs/reviews/0627-status-list-refresh.md).
