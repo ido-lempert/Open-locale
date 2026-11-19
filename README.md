@@ -2079,3 +2079,9 @@ from editable inputs. Admin comparison identifies exact local field differences;
 a match is not a newer-server check. Empty and whitespace-only values have labels,
 full text stays, and Refresh/Save/Discard remain explicit. See
 [review0630](docs/reviews/0630-general-loaded-details.md).
+
+Settings SAML has an explicit display-metadata Refresh, preserving other loaded
+settings, drafts and earlier results. Failure keeps the previous display with
+retry guidance; missing metadata is not labeled unconfigured. This does not save
+configuration, contact an IdP, sign in or verify trust/access/working SAML.
+[Review0631](docs/reviews/0631-saml-display-refresh.md).

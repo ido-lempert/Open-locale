@@ -2449,3 +2449,10 @@ Read-only loaded name/description for all Settings readers; exact field-specific
 local-input comparison for admins. Full escaped multiline/unbroken text, explicit
 empty/whitespace-only labels. No read/save or server conflict/permission promise;
 Refresh/Save/Discard unchanged. [Review0630](reviews/0630-general-loaded-details.md).
+
+### Read-only SAML display metadata Refresh
+Existing SP-info GET only; preserves drafts/results/other settings with bounded
+failure/retry and duplicate/busy/reload/departure fences. Missing metadata offers
+retry rather than claiming unconfigured. No config save/IdP contact/sign-in or
+trust/current-access/working-authentication promise. Scoped code wrapping fixes
+390px ACS display overflow. [Review0631](reviews/0631-saml-display-refresh.md).

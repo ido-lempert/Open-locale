@@ -395,8 +395,12 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           }
           }
         </section>
-        <section class="panel">
+        <section class="panel saml-display">
           <h2>Single sign-on (SAML)</h2>
+          <button type="button" name="refreshSettingsSaml" [disabled]="!canRefreshSamlInfo()" aria-describedby="settingsSamlRefreshScope" (click)="refreshSamlInfo()">Refresh SAML configuration</button>
+          <p class="muted" id="settingsSamlRefreshScope">Reads this instance's display-only SAML metadata. The previous display, inputs, choices and earlier results stay until this read succeeds. This does not save configuration, contact the identity provider, start sign-in or verify trust, current access or working authentication. Other settings are not refreshed.</p>
+          @if(samlInfoRefreshing()){<p role="status" name="settingsSamlInfoRefreshing">Refreshing SAML display metadata.</p>}
+          @if(samlInfoRefreshNotice()){<p role="status" name="settingsSamlInfoRefreshNotice">{{samlInfoRefreshNotice()}}</p>}
           <p class="muted">Server-level sign-in configuration for this instance (set on the API server, read-only here). SAML lets team members sign in through your identity provider; accounts are created on first login, and members can also link an existing account from a signed-in session.</p>
           @if (samlInfo(); as saml) {
             @if (saml.configured) {
@@ -412,7 +416,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
               <p class="muted">Not configured. Set SAML_ENTRY_POINT and SAML_IDP_CERT on the API server to enable SAML sign-in; SAML_SP_PRIVATE_KEY and SAML_SP_SIGNING_CERT additionally enable signed requests.</p>
             }
           } @else {
-            <p class="muted">Loading SAML configuration...</p>
+            <p class="muted" name="settingsSamlInfoUnloaded">No SAML display metadata is loaded yet. Refresh SAML configuration to try again. This does not mean SAML is unconfigured.</p>
           }
         </section>
         <section class="panel">
@@ -611,7 +615,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
       }
     </main>
   `,
-  styles: [`.loaded-general {margin:1rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .loaded-general h3 {margin-top:0} .loaded-general dt {font-weight:600} .loaded-general dd {margin:.25rem 0 .75rem;min-width:0} .loaded-general-value {white-space:pre-wrap;overflow-wrap:anywhere} .missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
+  styles: [`.saml-display code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .loaded-general {margin:1rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .loaded-general h3 {margin-top:0} .loaded-general dt {font-weight:600} .loaded-general dd {margin:.25rem 0 .75rem;min-width:0} .loaded-general-value {white-space:pre-wrap;overflow-wrap:anywhere} .missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
 })
 export class SettingsComponent implements OnInit, OnDestroy {
   project = signal<Project | null>(null);
@@ -640,9 +644,10 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.projectId = route.snapshot.paramMap.get('id') ?? '';
   }
   private tokenCopyDeparted = false;
-  ngOnDestroy() {this.invalidateGeneralMetadataRefresh();this.invalidateOriginListRefresh();this.invalidateStatusListRefresh();this.invalidateLocaleListRefresh();this.invalidateMtBranchRefresh();this.invalidateOtaBranchRefresh();this.invalidateOtaListRefresh();this.invalidateRuleListRefresh();this.invalidateMtProviderListRefresh();this.invalidateGroupListRefresh();this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
+  ngOnDestroy() {this.invalidateSamlInfoRefresh();this.invalidateGeneralMetadataRefresh();this.invalidateOriginListRefresh();this.invalidateStatusListRefresh();this.invalidateLocaleListRefresh();this.invalidateMtBranchRefresh();this.invalidateOtaBranchRefresh();this.invalidateOtaListRefresh();this.invalidateRuleListRefresh();this.invalidateMtProviderListRefresh();this.invalidateGroupListRefresh();this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
   async ngOnInit() { await this.reload(); }
   async reload(generalSubmission?: {name:string;description:string}, projectOnly = false) {
+    this.invalidateSamlInfoRefresh();
     this.invalidateGeneralMetadataRefresh();
     this.invalidateOriginListRefresh();
     this.invalidateStatusListRefresh();
@@ -676,6 +681,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
       this.mtProviders.set(await this.api.listMtProviders(this.projectId));
       this.invalidateRuleListRefresh();
       this.autoRules.set(await this.api.listAutomationRules(this.projectId));
+      this.invalidateSamlInfoRefresh();
       this.samlInfo.set(await this.api.getSamlSpInfo());
       if (!this.mtProviderId() && this.mtProviders().length) this.mtProviderId.set(this.mtProviders()[0].id);
       if (!this.newRuleProvider() && this.mtProviders().length) this.newRuleProvider.set(this.mtProviders()[0].id);
@@ -845,6 +851,26 @@ export class SettingsComponent implements OnInit, OnDestroy {
     } catch {
       if(current())this.mtProviderListRefreshNotice.set('Provider metadata could not be refreshed. The previous list, drafts, choices and results were kept. Try Refresh provider list again.');
     } finally {if(current())this.mtProviderListRefreshing.set(false);}
+  }
+  samlInfoRefreshing = signal(false);
+  samlInfoRefreshNotice = signal('');
+  private samlInfoRefreshEpoch = 0;
+  private invalidateSamlInfoRefresh() {this.samlInfoRefreshEpoch++;this.samlInfoRefreshing.set(false);this.samlInfoRefreshNotice.set('');}
+  canRefreshSamlInfo():boolean {return !this.tokenCopyDeparted && !this.busy() && !this.samlInfoRefreshing();}
+  async refreshSamlInfo() {
+    if(!this.canRefreshSamlInfo())return;
+    const epoch=++this.samlInfoRefreshEpoch,projectId=this.projectId,previous=this.samlInfo();
+    this.samlInfoRefreshing.set(true);this.samlInfoRefreshNotice.set('');
+    const active=()=>!this.tokenCopyDeparted && epoch===this.samlInfoRefreshEpoch && projectId===this.projectId;
+    const current=()=>active() && this.samlInfo()===previous && !this.busy();
+    try {
+      const info=await this.api.getSamlSpInfo();
+      if(!current())return;
+      this.samlInfo.set(info);
+      this.samlInfoRefreshNotice.set('SAML display metadata was refreshed. Other settings, drafts, choices and earlier results were kept. This is a configuration snapshot, not a sign-in, trust or effective-access check.');
+    } catch {
+      if(current())this.samlInfoRefreshNotice.set('SAML display metadata could not be refreshed. Previous display, drafts, choices and earlier results were kept. Try Refresh SAML configuration again.');
+    } finally {if(active())this.samlInfoRefreshing.set(false);}
   }
   generalMetadataRefreshing = signal(false);
   generalMetadataRefreshNotice = signal('');
