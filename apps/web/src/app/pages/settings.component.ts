@@ -32,6 +32,10 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
         </section>
         <section class="panel">
           <h2>Locales</h2>
+          <button type="button" name="refreshSettingsLocales" [disabled]="!canRefreshLocaleList()" aria-describedby="settingsLocaleListRefreshScope" (click)="refreshLocaleList()">Refresh locale list</button>
+          <p class="muted" id="settingsLocaleListRefreshScope">Reads project metadata and updates this locale list only. Drafts, Fill empty and new-rule choices, earlier results and other loaded settings stay. This does not add or remove locales, save fields or rules, run work or check current availability or permission. Missing selected targets are kept, not replaced.</p>
+          @if(localeListRefreshing()){<p role="status" name="settingsLocaleListRefreshing">Refreshing locale metadata. The previous list stays until this read succeeds.</p>}
+          @if(localeListRefreshNotice()){<p role="status" name="settingsLocaleListRefreshNotice">{{localeListRefreshNotice()}}</p>}
           <ul class="locale-list">
             @for (l of p.locales; track l.code) {
               <li>
@@ -610,9 +614,10 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.projectId = route.snapshot.paramMap.get('id') ?? '';
   }
   private tokenCopyDeparted = false;
-  ngOnDestroy() {this.invalidateMtBranchRefresh();this.invalidateOtaBranchRefresh();this.invalidateOtaListRefresh();this.invalidateRuleListRefresh();this.invalidateMtProviderListRefresh();this.invalidateGroupListRefresh();this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
+  ngOnDestroy() {this.invalidateLocaleListRefresh();this.invalidateMtBranchRefresh();this.invalidateOtaBranchRefresh();this.invalidateOtaListRefresh();this.invalidateRuleListRefresh();this.invalidateMtProviderListRefresh();this.invalidateGroupListRefresh();this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
   async ngOnInit() { await this.reload(); }
   async reload(generalSubmission?: {name:string;description:string}, projectOnly = false) {
+    this.invalidateLocaleListRefresh();
     let loadedGeneral: {name:string;description:string}|undefined;
     try {
       const p = await this.api.getProject(this.projectId);
@@ -811,6 +816,26 @@ export class SettingsComponent implements OnInit, OnDestroy {
     } catch {
       if(current())this.mtProviderListRefreshNotice.set('Provider metadata could not be refreshed. The previous list, drafts, choices and results were kept. Try Refresh provider list again.');
     } finally {if(current())this.mtProviderListRefreshing.set(false);}
+  }
+  localeListRefreshing = signal(false);
+  localeListRefreshNotice = signal('');
+  private localeListRefreshEpoch = 0;
+  private invalidateLocaleListRefresh() {this.localeListRefreshEpoch++;this.localeListRefreshing.set(false);this.localeListRefreshNotice.set('');}
+  canRefreshLocaleList():boolean {return !this.tokenCopyDeparted && !this.busy() && !!this.project() && !this.localeListRefreshing() && this.confirmingLocale()===null;}
+  async refreshLocaleList() {
+    if(!this.canRefreshLocaleList())return;
+    const epoch=++this.localeListRefreshEpoch,projectId=this.projectId,previous=this.project();
+    this.localeListRefreshing.set(true);this.localeListRefreshNotice.set('');
+    const active=()=>!this.tokenCopyDeparted && epoch===this.localeListRefreshEpoch && projectId===this.projectId;
+    const current=()=>active() && this.project()===previous && !this.busy() && this.confirmingLocale()===null;
+    try {
+      const fresh=await this.api.getProject(projectId);
+      if(!current())return;
+      this.project.set({...previous!,locales:fresh.locales});
+      this.localeListRefreshNotice.set('Locale metadata was refreshed. Drafts, target choices and earlier results were kept. Other loaded settings were not refreshed; this is not a current availability or permission check.');
+    } catch {
+      if(current())this.localeListRefreshNotice.set('Locale metadata could not be refreshed. The previous list, drafts, choices and results were kept. Try Refresh locale list again.');
+    } finally {if(active())this.localeListRefreshing.set(false);}
   }
   missingRuleLocales():string[] {const project=this.project();return project?[...new Set(this.newRuleLocales())].filter(code=>!project.locales.some(locale=>locale.code===code && locale.code!==project.baseLocale)):[];}
   mtLocaleMissing():boolean {const project=this.project();return !!project && this.mtLocale()!=='' && !project.locales.some(locale=>locale.code===this.mtLocale() && locale.code!==project.baseLocale);}

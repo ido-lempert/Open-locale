@@ -2040,3 +2040,11 @@ visible as checked exact-code choices. Explicitly unchecking one removes only
 that local draft target, without saving a rule or changing Fill empty choices.
 Other action types hide this display without clearing targets. This does not add
 locales, repair saved rules or check current availability or permission.
+
+### Read-only project locale list Refresh
+Settings can explicitly read project metadata and apply only its locale list.
+General fields, drafts, Fill empty/new-rule targets and earlier results stay.
+Missing selected targets remain visible without fallback. Bounded failure/retry,
+duplicate and busy/confirmation guards, and replacement/reload/departure fences
+avoid overwriting newer loaded project state. Refresh does not add/remove locales,
+repair rules, run work or check current availability or permission.

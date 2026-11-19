@@ -2413,3 +2413,10 @@ from loaded non-base project locales. Existing explicit toggle removes only that
 local draft target; no fallback, saved-rule repair, new reads/save/run or locale
 mutation. Inactive action hides display without clearing drafts.
 [Review0625](reviews/0625-retained-missing-rule-locales.md).
+
+### Read-only project locale list Refresh
+Existing project GET, apply locales only; other metadata/drafts/choices/results
+stay. Missing selections kept. Bounded failure/retry, duplicate/busy/confirmation
+guards and project-replacement/reload/departure fences. No locale mutation/rule
+repair/run or availability/permission guarantee.
+[Review0626](reviews/0626-project-locales-refresh.md).
