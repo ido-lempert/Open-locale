@@ -16,6 +16,11 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
       @if (project(); as p) {
         <section class="panel">
           <h2>General</h2>
+          <button type="button" name="refreshSettingsGeneralMetadata" [disabled]="!canRefreshGeneralMetadata()" aria-describedby="settingsGeneralMetadataRefreshScope" (click)="refreshGeneralMetadata()">Refresh loaded details</button>
+          <p class="muted" id="settingsGeneralMetadataRefreshScope">Reads project metadata and updates the loaded name and description only. Your current inputs, other drafts, choices, earlier results and other loaded settings stay. Discard unsaved edits will use these newly loaded values. This does not save or replace your inputs, merge changes or check current permission. Save remains explicit and can replace newer server details.</p>
+          @if(generalMetadataRefreshing()){<p role="status" name="settingsGeneralMetadataRefreshing">Refreshing loaded name and description. Your current inputs stay.</p>}
+          @if(generalMetadataRefreshNotice()){<p role="status" name="settingsGeneralMetadataRefreshNotice">{{generalMetadataRefreshNotice()}}</p>}
+
           @if (isTeamAdmin()) {
           <form (ngSubmit)="rename()">
             <label>Name <input [ngModel]="name()" (ngModelChange)="name.set($event)" name="name" aria-describedby="settingsGeneralRules" [attr.aria-invalid]="!validGeneralName()" /></label>
@@ -624,9 +629,10 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.projectId = route.snapshot.paramMap.get('id') ?? '';
   }
   private tokenCopyDeparted = false;
-  ngOnDestroy() {this.invalidateOriginListRefresh();this.invalidateStatusListRefresh();this.invalidateLocaleListRefresh();this.invalidateMtBranchRefresh();this.invalidateOtaBranchRefresh();this.invalidateOtaListRefresh();this.invalidateRuleListRefresh();this.invalidateMtProviderListRefresh();this.invalidateGroupListRefresh();this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
+  ngOnDestroy() {this.invalidateGeneralMetadataRefresh();this.invalidateOriginListRefresh();this.invalidateStatusListRefresh();this.invalidateLocaleListRefresh();this.invalidateMtBranchRefresh();this.invalidateOtaBranchRefresh();this.invalidateOtaListRefresh();this.invalidateRuleListRefresh();this.invalidateMtProviderListRefresh();this.invalidateGroupListRefresh();this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
   async ngOnInit() { await this.reload(); }
   async reload(generalSubmission?: {name:string;description:string}, projectOnly = false) {
+    this.invalidateGeneralMetadataRefresh();
     this.invalidateOriginListRefresh();
     this.invalidateStatusListRefresh();
     this.invalidateLocaleListRefresh();
@@ -828,6 +834,26 @@ export class SettingsComponent implements OnInit, OnDestroy {
     } catch {
       if(current())this.mtProviderListRefreshNotice.set('Provider metadata could not be refreshed. The previous list, drafts, choices and results were kept. Try Refresh provider list again.');
     } finally {if(current())this.mtProviderListRefreshing.set(false);}
+  }
+  generalMetadataRefreshing = signal(false);
+  generalMetadataRefreshNotice = signal('');
+  private generalMetadataRefreshEpoch = 0;
+  private invalidateGeneralMetadataRefresh() {this.generalMetadataRefreshEpoch++;this.generalMetadataRefreshing.set(false);this.generalMetadataRefreshNotice.set('');}
+  canRefreshGeneralMetadata():boolean {return !this.tokenCopyDeparted && !this.busy() && !!this.project() && !this.generalMetadataRefreshing();}
+  async refreshGeneralMetadata() {
+    if(!this.canRefreshGeneralMetadata())return;
+    const epoch=++this.generalMetadataRefreshEpoch,projectId=this.projectId,previous=this.project();
+    this.generalMetadataRefreshing.set(true);this.generalMetadataRefreshNotice.set('');
+    const active=()=>!this.tokenCopyDeparted && epoch===this.generalMetadataRefreshEpoch && projectId===this.projectId;
+    const current=()=>active() && this.project()===previous && !this.busy();
+    try {
+      const fresh=await this.api.getProject(projectId);
+      if(!current())return;
+      this.project.set({...previous!,name:fresh.name,description:fresh.description});
+      this.generalMetadataRefreshNotice.set('Loaded name and description were refreshed. Your inputs and other settings were kept. Discard unsaved edits now uses these loaded values. Nothing was saved; Save remains explicit and is not a conflict-checked merge.');
+    } catch {
+      if(current())this.generalMetadataRefreshNotice.set('General details could not be refreshed. Previous loaded values, your inputs and other settings were kept. Try Refresh loaded details again.');
+    } finally {if(active())this.generalMetadataRefreshing.set(false);}
   }
   originListRefreshing = signal(false);
   originListRefreshNotice = signal('');
@@ -1130,6 +1156,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   }
   discardGeneralDraft() {
     if(!this.canDiscardGeneralDraft())return;
+    this.invalidateGeneralMetadataRefresh();
     const p=this.project()!;this.name.set(p.name);this.description.set(p.description);
     if(this.generalDraftNotice())this.generalDraftNotice.set('The submitted project details were saved. Local name and description drafts were discarded without refreshing or undoing saved changes.');
   }

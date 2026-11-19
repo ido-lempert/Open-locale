@@ -2436,3 +2436,10 @@ replacement/reload/departure fences. No save, listed-site contact, ownership/tru
 permission validation or frame closing. Later explicit Add/Remove still replaces
 the saved list using loaded origins, not a conflict-checked merge.
 [Review0628](reviews/0628-origin-list-refresh.md).
+
+### Read-only General loaded details Refresh
+Project GET applies loaded name/description only, keeping current inputs and other
+metadata/drafts/choices/results. Explicit Discard then uses newly loaded values;
+Discard during pending read fences it. Bounded retry, duplicate/busy/replacement/
+reload/departure guards. No save, auto input replacement, merge or permission check.
+[Review0629](reviews/0629-general-metadata-refresh.md).

@@ -2065,3 +2065,11 @@ busy/replacement/reload/departure fences keep stale reads from replacing accepte
 state. It does not save origins, contact listed sites, verify site ownership/trust
 or close frames. Later Add/Remove remains loaded-list replacement, not a conflict-
 checked merge. See [review0628](docs/reviews/0628-origin-list-refresh.md).
+
+Settings has explicit **Refresh loaded details** for the loaded project name and
+description. Current inputs stay, even when they matched previous loaded values;
+other drafts/metadata/choices/results stay too. Later explicit Discard uses the
+newly loaded values. Discard during a pending read fences it. Failure keeps prior
+loaded details/inputs with bounded retry; busy/replacement/reload/departure fence
+stale reads. No Save, automatic input replacement or conflict-checked merge.
+See [review0629](docs/reviews/0629-general-metadata-refresh.md).
