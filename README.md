@@ -2057,3 +2057,11 @@ departure fence stale reads. It does not save statuses, change translations,
 refresh editor choices elsewhere or promise current availability/permission.
 Later explicit Add/Remove still replaces the saved list using loaded statuses,
 not a conflict-checked merge. See [review0627](docs/reviews/0627-status-list-refresh.md).
+
+Settings has an explicit **Refresh origin list** read for the loaded embed-origin
+allowlist. It applies embedOrigins only from the project GET, preserving new-origin
+text and other drafts/metadata/choices/results. Bounded retry and confirmation/
+busy/replacement/reload/departure fences keep stale reads from replacing accepted
+state. It does not save origins, contact listed sites, verify site ownership/trust
+or close frames. Later Add/Remove remains loaded-list replacement, not a conflict-
+checked merge. See [review0628](docs/reviews/0628-origin-list-refresh.md).

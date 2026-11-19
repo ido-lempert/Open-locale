@@ -2428,3 +2428,11 @@ reload/departure fences. Base statuses stay; empty custom lists supported.
 No translation or editor-elsewhere update, status save, conflict-checked merge,
 availability or permission promise. Existing explicit Add/Remove unchanged.
 [Review0627](reviews/0627-status-list-refresh.md).
+
+### Read-only embed-origin allowlist Refresh
+Explicit project GET applies embedOrigins only and preserves new-origin text and
+other metadata/drafts/choices/results. Bounded retry/duplicate/busy/confirmation/
+replacement/reload/departure fences. No save, listed-site contact, ownership/trust/
+permission validation or frame closing. Later explicit Add/Remove still replaces
+the saved list using loaded origins, not a conflict-checked merge.
+[Review0628](reviews/0628-origin-list-refresh.md).

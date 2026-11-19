@@ -268,6 +268,7 @@
     "test:settings-token-hide-browser": "node scripts/settings-token-hide-browser-test.mjs",
     "test:settings-token-refresh-browser": "node scripts/settings-token-refresh-browser-test.mjs",
     "test:settings-webhook-refresh-browser": "node scripts/settings-webhook-refresh-browser-test.mjs",
+    "test:settings-origins-refresh-browser": "node scripts/settings-origins-refresh-browser-test.mjs",
     "test:settings-statuses-refresh-browser": "node scripts/settings-statuses-refresh-browser-test.mjs",
     "test:settings-locales-refresh-browser": "node scripts/settings-locales-refresh-browser-test.mjs",
     "test:settings-rule-locales-missing-browser": "node scripts/settings-rule-locales-missing-browser-test.mjs",

@@ -205,6 +205,11 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
         </section>
         <section class="panel">
           <h2>In-context embedding</h2>
+          <button type="button" name="refreshSettingsOrigins" [disabled]="!canRefreshOriginList()" aria-describedby="settingsOriginListRefreshScope" (click)="refreshOriginList()">Refresh origin list</button>
+          <p class="muted" id="settingsOriginListRefreshScope">Reads project metadata and updates the loaded embed-origin allowlist only. New-origin text, other drafts, choices, earlier results and other loaded settings stay. This does not add or remove origins, contact listed sites, verify site ownership or trust, close open frames or check current permission. Later Add or Remove replaces the saved list using the origins loaded here, not a conflict-checked merge.</p>
+          @if(originListRefreshing()){<p role="status" name="settingsOriginListRefreshing">Refreshing origin metadata. The previous list stays until this read succeeds.</p>}
+          @if(originListRefreshNotice()){<p role="status" name="settingsOriginListRefreshNotice">{{originListRefreshNotice()}}</p>}
+
           <p class="muted">Origins allowed to embed the in-context editor (served by the API at /embed/projects/{{ projectId }}) in an iframe and exchange messages with it. Bare origins only (https://app.example.com - no path or trailing slash). The embedded frame answers only these origins and never exposes your session to the host page. Serve /embed/host.js from the API on your page and call OpenLocaleEmbed.init with your iframe element to run the handshake and click-to-locate annotated elements (data-ol-key). Changes here require a signed-in session, not an API token.</p>
           <ul class="locale-list">
             @for (o of project()?.embedOrigins ?? []; track o) {
@@ -619,9 +624,10 @@ export class SettingsComponent implements OnInit, OnDestroy {
     this.projectId = route.snapshot.paramMap.get('id') ?? '';
   }
   private tokenCopyDeparted = false;
-  ngOnDestroy() {this.invalidateStatusListRefresh();this.invalidateLocaleListRefresh();this.invalidateMtBranchRefresh();this.invalidateOtaBranchRefresh();this.invalidateOtaListRefresh();this.invalidateRuleListRefresh();this.invalidateMtProviderListRefresh();this.invalidateGroupListRefresh();this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
+  ngOnDestroy() {this.invalidateOriginListRefresh();this.invalidateStatusListRefresh();this.invalidateLocaleListRefresh();this.invalidateMtBranchRefresh();this.invalidateOtaBranchRefresh();this.invalidateOtaListRefresh();this.invalidateRuleListRefresh();this.invalidateMtProviderListRefresh();this.invalidateGroupListRefresh();this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
   async ngOnInit() { await this.reload(); }
   async reload(generalSubmission?: {name:string;description:string}, projectOnly = false) {
+    this.invalidateOriginListRefresh();
     this.invalidateStatusListRefresh();
     this.invalidateLocaleListRefresh();
     let loadedGeneral: {name:string;description:string}|undefined;
@@ -822,6 +828,26 @@ export class SettingsComponent implements OnInit, OnDestroy {
     } catch {
       if(current())this.mtProviderListRefreshNotice.set('Provider metadata could not be refreshed. The previous list, drafts, choices and results were kept. Try Refresh provider list again.');
     } finally {if(current())this.mtProviderListRefreshing.set(false);}
+  }
+  originListRefreshing = signal(false);
+  originListRefreshNotice = signal('');
+  private originListRefreshEpoch = 0;
+  private invalidateOriginListRefresh() {this.originListRefreshEpoch++;this.originListRefreshing.set(false);this.originListRefreshNotice.set('');}
+  canRefreshOriginList():boolean {return !this.tokenCopyDeparted && !this.busy() && !!this.project() && !this.originListRefreshing() && this.confirmingOrigin()===null;}
+  async refreshOriginList() {
+    if(!this.canRefreshOriginList())return;
+    const epoch=++this.originListRefreshEpoch,projectId=this.projectId,previous=this.project();
+    this.originListRefreshing.set(true);this.originListRefreshNotice.set('');
+    const active=()=>!this.tokenCopyDeparted && epoch===this.originListRefreshEpoch && projectId===this.projectId;
+    const current=()=>active() && this.project()===previous && !this.busy() && this.confirmingOrigin()===null;
+    try {
+      const fresh=await this.api.getProject(projectId);
+      if(!current())return;
+      this.project.set({...previous!,embedOrigins:fresh.embedOrigins});
+      this.originListRefreshNotice.set('Origin metadata was refreshed. Drafts, new-origin text and earlier results were kept. Other loaded settings were not refreshed; this is not a current availability or permission check.');
+    } catch {
+      if(current())this.originListRefreshNotice.set('Origin metadata could not be refreshed. The previous list, drafts, choices and results were kept. Try Refresh origin list again.');
+    } finally {if(active())this.originListRefreshing.set(false);}
   }
   statusListRefreshing = signal(false);
   statusListRefreshNotice = signal('');
