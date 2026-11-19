@@ -590,15 +590,16 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           <p class="muted" id="settingsOtaBranchRefreshScope">Reads branch choices only. Your selected branch, earlier publication receipt, publication list and other drafts stay. This does not create, merge or delete branches, publish or download bundles, reload publication metadata or validate current publish permission or branch availability. A missing selected branch is kept, not replaced.</p>
           @if(otaBranchesRefreshing()){<p role="status" name="settingsOtaBranchesRefreshing">Refreshing publish branches. The previous choices stay until this read succeeds.</p>}
           @if(otaBranchesRefreshNotice()){<p role="status" name="settingsOtaBranchesRefreshNotice">{{otaBranchesRefreshNotice()}}</p>}
-          @if(otaBranchMissing()){<p role="status" name="settingsOtaBranchMissing">Selected branch <code>{{otaBranch()}}</code> is not in the loaded choices. It is still selected; choose a loaded branch before publishing if needed. This is not a current availability or permission check.</p>}
+          @if(otaBranchMissing()){<p role="status" name="settingsOtaBranchMissing">Selected branch <code>{{otaBranch()}}</code> is not in the loaded choices. It is still selected. Publish is blocked until you explicitly choose a loaded branch. Your earlier receipt and other drafts stay. Refresh publish branches to read choices again if needed. This is not a current availability or permission check.</p>}
           <form class="inline" (ngSubmit)="publishOta()">
-            <select aria-label="OTA branch" [ngModel]="otaBranch()" (ngModelChange)="otaBranch.set($event)" name="otaBranch">
+            <label>Publish branch <select aria-label="OTA branch" [ngModel]="otaBranch()" (ngModelChange)="otaBranch.set($event)" name="otaBranch" aria-describedby="settingsOtaPublishRules" [attr.aria-invalid]="otaBranchMissing()">
               @if(otaBranchMissing()){<option [value]="otaBranch()">{{otaBranch()}} (not in loaded choices)</option>}
               @for (b of otaPublishBranches(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }
-            </select>
-            <button type="submit" name="publishSettingsOta" [disabled]="busy()">Publish bundle</button>
+            </select></label>
+            <button type="submit" name="publishSettingsOta" [disabled]="busy() || otaBranchMissing()">Publish bundle</button>
           </form>
           }
+          <p class="muted" id="settingsOtaPublishRules">Publish uses the exact selected branch from the loaded publish choices. Missing choices are kept, never replaced with main. This checks loaded choices only; the server still checks current branch state and permission. Publishing creates a saved bundle snapshot of all translations on that branch, not a CDN or device deployment.</p>
           @if (otaNotice()) { <p class="notice">{{ otaNotice() }}</p> }
         </section>
         @if (isTeamAdmin()) {
@@ -704,7 +705,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     }
   }
   async publishOta() {
-    if(this.busy() || this.tokenCopyDeparted)return;
+    if(this.busy() || this.tokenCopyDeparted || this.otaBranchMissing())return;
     this.invalidateOtaListRefresh();
     this.busy.set(true); this.error.set(''); this.otaNotice.set('');
     try {

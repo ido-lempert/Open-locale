@@ -2097,3 +2097,9 @@ loaded project before any request. Blank/whitespace-only still means all locales
 on explicit Add group. Full drafts stay; this is not a current-server or permission
 check. Groups are team-wide and admin/direct/other-group grants can widen access.
 Creating a group adds no members. [Review0633](docs/reviews/0633-group-create-locale-preflight.md).
+
+OTA Publish now requires the exact selected branch in the loaded publish choices.
+Missing choices are kept, not replaced; no request is sent and prior feedback and
+drafts stay. Refresh choices or explicitly choose a listed branch. The server
+still checks current state and permission. This creates a saved bundle snapshot,
+not CDN/device deployment. [Review0634](docs/reviews/0634-ota-publish-branch-preflight.md).

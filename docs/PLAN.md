@@ -2470,3 +2470,9 @@ loaded exact project codes, preserving drafts/receipts/errors without reads/writ
 Explicit blank-only all-locales unchanged. Persistent labels and group/team-wide/
 admin/union limits explained. No member added or API permission rule changed.
 [Review0633](reviews/0633-group-create-locale-preflight.md).
+
+### OTA loaded publish branch preflight
+Missing exact selected publish branch now blocks button/Enter/captured-handler
+requests before effects, preserving full choice and prior receipt/error/drafts.
+Explicit loaded selection retains valid publication behavior; server remains
+current-state/permission authority. [Review0634](reviews/0634-ota-publish-branch-preflight.md).
