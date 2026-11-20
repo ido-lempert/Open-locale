@@ -2135,3 +2135,9 @@ Pretranslation Add rule requires an exact loaded provider, retaining empty/missi
 choices with full draft/receipt/error until explicit correction. Listed disabled
 providers remain saveable references, not enabled or promised ready. Other actions
 ignore inactive provider draft. [Review0639](docs/reviews/0639-rule-provider-preflight.md).
+
+### Unsaved custom-status Add preview
+Shows exact trimmed/uppercased draft and ordered loaded list plus draft, including
+duplicates as sent. Explicit not-saved/whole-list replacement/no-conflict-check
+limits. Read-only, existing Add/Discard/validation unchanged.
+[Review0640](docs/reviews/0640-status-add-preview.md).

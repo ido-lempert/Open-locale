@@ -2508,3 +2508,9 @@ Empty/missing provider references block active pretranslation Add before effects
 Full choice/draft/receipt kept, explicit loaded choice required, no fallback.
 Disabled loaded references preserve API save behavior without enabling or running.
 [Review0639](reviews/0639-rule-provider-preflight.md).
+
+### Read-only custom-status Add preview
+Exact normalized name and ordered outgoing loaded-list-plus-draft entries before
+explicit Add; duplicates visible as sent, full escaped wrapped text. Explicit local
+preview/whole-list replacement/server validation/no merge/no translation change
+limits. Existing actions unchanged. [Review0640](reviews/0640-status-add-preview.md).

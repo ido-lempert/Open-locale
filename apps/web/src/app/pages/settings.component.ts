@@ -208,9 +208,19 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           @if (isTeamAdmin()) {
           @if(statusRemoveNotice()){<p role="status" name="settingsStatusRemoveNotice">{{statusRemoveNotice()}}</p>}
           <form class="inline" (ngSubmit)="addStatus()">
-            <input aria-label="New custom status" placeholder="e.g. NEEDS_WORK (A-Z, 0-9, _)" [ngModel]="newStatus()" (ngModelChange)="newStatus.set($event)" name="newStatus" required aria-describedby="settingsStatusRules" [attr.aria-invalid]="newStatus()!=='' && !validNewStatus()" />
+            <label>New custom status <input aria-label="New custom status" placeholder="e.g. NEEDS_WORK (A-Z, 0-9, _)" [ngModel]="newStatus()" (ngModelChange)="newStatus.set($event)" name="newStatus" required aria-describedby="settingsStatusRules settingsStatusPreviewScope" [attr.aria-invalid]="newStatus()!=='' && !validNewStatus()" /></label>
             <button type="submit" name="addSettingsStatus" [disabled]="busy() || !validNewStatus()">Add</button>
           </form>
+          <section class="status-add-preview" name="settingsStatusPreview" aria-label="Unsaved custom-status Add preview">
+            <h3>Unsaved Add preview</h3>
+            <p class="muted" id="settingsStatusPreviewScope">Local preview only. Add submits the loaded custom-status list followed by the trimmed, uppercased draft below, replacing the saved list. Duplicate entries are shown as sent; the server validates and deduplicates them. This is not a conflict-checked merge or a read of newer server values. Nothing is saved by this preview, and no translation status changes here.</p>
+            <p>Normalized draft: <code name="settingsStatusNormalized">{{newStatus().trim().toUpperCase() || '(empty)'}}</code></p>
+            @if(!validNewStatus()){<p name="settingsStatusPreviewInvalid">This draft cannot be added. Correct the name above; the full raw draft stays.</p>}
+            @if(project()){
+              <p>Outgoing custom-status entries, in order:</p>
+              <ol name="settingsStatusPreviewEntries">@for(entry of statusAddPreview(); track $index){<li><code>{{entry || '(empty)'}}</code></li>}</ol>
+            } @else {<p name="settingsStatusPreviewUnavailable">Loaded project metadata is unavailable. This preview cannot show the replacement list.</p>}
+          </section>
           <button type="button" name="discardSettingsStatus" (click)="discardStatusDraft()" [disabled]="!canDiscardStatusDraft()">Discard status draft</button>
           <p class="muted">Discard only clears the local new-status field. It does not refresh Settings or remove any saved status; other forms stay as they are.</p>
           <p class="muted" id="settingsStatusRules" name="settingsStatusRules">New custom status: 2-24 characters, starting with a letter, then letters, digits or underscores. Outer whitespace is trimmed and text is uppercased when adding, as before. UNVERIFIED, TRANSLATED and REVIEWED are base statuses, not custom names. Full input is kept without truncation. This checks the new name only, not newer server status choices or permission. A successful addition refreshes project data only and keeps other unsaved forms.</p>
@@ -630,7 +640,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
       }
     </main>
   `,
-  styles: [`.new-member-form label,.new-group-form label {display:flex;flex-direction:column;gap:.25rem;min-width:0;max-width:100%} .saml-display code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .loaded-general {margin:1rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .loaded-general h3 {margin-top:0} .loaded-general dt {font-weight:600} .loaded-general dd {margin:.25rem 0 .75rem;min-width:0} .loaded-general-value {white-space:pre-wrap;overflow-wrap:anywhere} .missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
+  styles: [`.status-add-preview {margin:.75rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .status-add-preview h3 {margin-top:0} .status-add-preview code {white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word} .status-add-preview li {min-width:0} .new-member-form label,.new-group-form label {display:flex;flex-direction:column;gap:.25rem;min-width:0;max-width:100%} .saml-display code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .loaded-general {margin:1rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .loaded-general h3 {margin-top:0} .loaded-general dt {font-weight:600} .loaded-general dd {margin:.25rem 0 .75rem;min-width:0} .loaded-general-value {white-space:pre-wrap;overflow-wrap:anywhere} .missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
 })
 export class SettingsComponent implements OnInit, OnDestroy {
   project = signal<Project | null>(null);
@@ -1491,6 +1501,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     if(this.statusDraftNotice())this.statusDraftNotice.set('The submitted custom status was saved. The local new-status draft was discarded without refreshing Settings or removing any saved status.');
   }
   statusDraftNotice = signal('');
+  statusAddPreview():string[] {return [...(this.project()?.customStatuses ?? []),this.newStatus().trim().toUpperCase()];}
   validNewStatus():boolean {
     const value=this.newStatus().trim().toUpperCase();
     return /^[A-Z][A-Z0-9_]{1,23}$/.test(value) && !['UNVERIFIED','TRANSLATED','REVIEWED'].includes(value);
