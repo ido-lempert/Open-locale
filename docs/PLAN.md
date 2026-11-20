@@ -2489,3 +2489,9 @@ Empty/base/missing exact targets block button/Enter/captured handler before effe
 Raw target, earlier result/error and other drafts stay, no fallback/locale repair.
 Explicit loaded non-base choice required, server remains current-state authority.
 [Review0636](reviews/0636-mt-target-preflight.md).
+
+### Fill empty loaded provider preflight
+Exact enabled loaded provider required before button/Enter/captured handler effects.
+Empty/missing/disabled choice retained with result/error/drafts, no fallback or
+provider enablement. Server owns current availability/readiness/permission checks.
+[Review0637](reviews/0637-mt-provider-preflight.md).
