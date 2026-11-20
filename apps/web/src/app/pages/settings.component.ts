@@ -190,14 +190,21 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           @if(statusListRefreshing()){<p role="status" name="settingsStatusListRefreshing">Refreshing custom-status metadata. The previous list stays until this read succeeds.</p>}
           @if(statusListRefreshNotice()){<p role="status" name="settingsStatusListRefreshNotice">{{statusListRefreshNotice()}}</p>}
 
-          <ul class="locale-list">
+          <ul class="locale-list status-choice-list">
             <li><span class="badge">unverified</span><span class="badge">translated</span><span class="badge">reviewed</span> <span class="muted">base statuses, always available</span></li>
-            @for (st of project()?.customStatuses ?? []; track st) {
+            @for (st of project()?.customStatuses ?? []; track $index) {
               <li>
                 <span class="badge">{{ st.toLowerCase() }}</span>
                 @if (isTeamAdmin()) {
                   @if(confirmingStatus()===st){
                     <span>Remove this custom status? Translations already carrying it are not changed. The currently loaded custom-status list, minus this status, will replace the saved list.</span>
+                    <section class="status-remove-preview" name="settingsStatusRemovePreview" aria-label="Unsaved custom-status Remove preview">
+                      <h3>Unsaved Remove preview</h3>
+                      <p class="muted">Local preview only. Confirming removes all exact matches of <code name="settingsStatusRemoveSelected">{{st}}</code> from the loaded custom-status list and submits the remaining entries in this order, replacing the saved list. The server validates and deduplicates entries. This is not a conflict-checked merge or a read of newer server values. Nothing is saved by this preview. Translations already carrying this status are not changed.</p>
+                      @if(statusRemovePreview(st).length){
+                        <ol name="settingsStatusRemovePreviewEntries">@for(entry of statusRemovePreview(st); track $index){<li><code>{{entry || '(empty)'}}</code></li>}</ol>
+                      } @else {<p name="settingsStatusRemovePreviewEmpty">The outgoing custom-status list is empty. Base statuses stay available.</p>}
+                    </section>
                     <button class="danger" [attr.name]="'confirmRemoveStatus-'+$index" (click)="removeStatus(st)" [disabled]="busy()">Yes, remove</button>
                     <button [attr.name]="'cancelRemoveStatus-'+$index" (click)="cancelRemoveStatus()" [disabled]="busy()">Cancel</button>
                   } @else {<button class="danger" [attr.name]="'startRemoveStatus-'+$index" (click)="askRemoveStatus(st)" [disabled]="busy()">Remove</button>}
@@ -650,7 +657,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
       }
     </main>
   `,
-  styles: [`.status-add-preview,.origin-add-preview {margin:.75rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .status-add-preview h3,.origin-add-preview h3 {margin-top:0} .status-add-preview code,.origin-add-preview code {white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word} .status-add-preview li,.origin-add-preview li {min-width:0} .new-member-form label,.new-group-form label {display:flex;flex-direction:column;gap:.25rem;min-width:0;max-width:100%} .saml-display code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .loaded-general {margin:1rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .loaded-general h3 {margin-top:0} .loaded-general dt {font-weight:600} .loaded-general dd {margin:.25rem 0 .75rem;min-width:0} .loaded-general-value {white-space:pre-wrap;overflow-wrap:anywhere} .missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
+  styles: [`.status-choice-list .badge {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .status-remove-preview {width:100%;box-sizing:border-box} .status-remove-preview li {display:list-item;padding:0;list-style:decimal} .status-add-preview,.origin-add-preview,.status-remove-preview {margin:.75rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .status-add-preview h3,.origin-add-preview h3,.status-remove-preview h3 {margin-top:0} .status-add-preview code,.origin-add-preview code,.status-remove-preview code {white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word} .status-add-preview li,.origin-add-preview li,.status-remove-preview li {min-width:0} .new-member-form label,.new-group-form label {display:flex;flex-direction:column;gap:.25rem;min-width:0;max-width:100%} .saml-display code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .loaded-general {margin:1rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .loaded-general h3 {margin-top:0} .loaded-general dt {font-weight:600} .loaded-general dd {margin:.25rem 0 .75rem;min-width:0} .loaded-general-value {white-space:pre-wrap;overflow-wrap:anywhere} .missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
 })
 export class SettingsComponent implements OnInit, OnDestroy {
   project = signal<Project | null>(null);
@@ -1530,6 +1537,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     } catch (e) { this.error.set(e instanceof Error ? e.message : 'Failed'); }
     finally { this.busy.set(false); }
   }
+  statusRemovePreview(st:string):string[] {return (this.project()?.customStatuses ?? []).filter(entry=>entry!==st);}
   confirmingStatus = signal<string|null>(null);
   statusRemoveNotice = signal('');
   askRemoveStatus(st:string) {if(!this.busy() && this.project()?.customStatuses?.includes(st))this.confirmingStatus.set(st);}

@@ -2520,3 +2520,9 @@ Shows exact trimmed draft and ordered loaded allowlist plus draft, duplicates as
 sent. No URL repair, saved-state, merge, ownership/trust/permission claim or site
 contact. Explicit Add scope stated. Existing actions unchanged.
 [Review0641](reviews/0641-origin-add-preview.md).
+
+### Custom-status Remove replacement preview
+Existing confirmation shows exact ordered remaining loaded entries or explicit
+empty list. Read-only, removes all exact selected matches as existing handler does;
+no merge/newer-server/saved-state/translation-change claim. Existing actions stay.
+[Review0642](reviews/0642-status-remove-preview.md).
