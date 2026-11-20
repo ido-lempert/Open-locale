@@ -2122,3 +2122,10 @@ Exact enabled loaded provider required before button/Enter/captured handler effe
 Empty/missing/disabled choice retained with result/error/drafts, no fallback or
 provider enablement. Server owns current availability/readiness/permission checks.
 [Review0637](docs/reviews/0637-mt-provider-preflight.md).
+
+### New-rule target selection preflight
+Pretranslation rules require 1 to 5 exact loaded non-base targets before Add rule.
+Empty/base/missing selections stay checked and keep the draft, receipt and error;
+explicit correction required. Inactive task/notify locale drafts do not block.
+No rule run, locale repair or current grants/provider/permission promise.
+See [review0638](docs/reviews/0638-rule-locale-preflight.md).

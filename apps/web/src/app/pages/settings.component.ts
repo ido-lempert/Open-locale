@@ -373,13 +373,14 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                 @if(missingMtProvider(newRuleProvider())){<option [value]="newRuleProvider()">{{newRuleProvider()}} (not in loaded providers)</option>}
                 @for (p of mtProviders(); track p.id) { <option [value]="p.id">{{ p.name }}</option> }
               </select>
-              @if(missingRuleLocales().length){<p role="status" name="settingsRuleLocalesMissing">These checked new-rule target locales are not in the loaded non-base locale choices. Exact codes and the rule draft are kept, not replaced. Uncheck a retained target to remove it from this draft only. This does not add locales, repair saved rules or check current availability or permission.</p>}
+              @if(missingRuleLocales().length){<p role="status" name="settingsRuleLocalesMissing">These checked new-rule target locales are not in the loaded non-base locale choices. Exact codes and the rule draft are kept, not replaced. Add rule is blocked until every selected target is loaded and non-base. Uncheck a retained target to remove it from this draft only. This does not add locales, repair saved rules or check current availability or permission.</p>}
+              <p class="muted" id="settingsRuleLocaleRules" name="settingsRuleLocaleRules">Choose 1 to 5 exact loaded non-base target locales before adding this test-data rule. Selected: {{newRuleLocales().length}}. Empty, missing and base targets are blocked without replacing your choices or clearing earlier receipts. Uncheck retained targets or Refresh locale list to read choices again. This does not add locales, repair saved rules or check current grants, provider readiness or permission. Saving delegates future actions as described above; it does not run the rule now.</p>
               @for (code of missingRuleLocales(); track code) {
-                <label class="missing-rule-locale"><input type="checkbox" [checked]="true" (change)="toggleRuleLocale(code)" name="missingRuleLoc-{{code}}" /> {{code}} (not in loaded target locales)</label>
+                <label class="missing-rule-locale"><input type="checkbox" [checked]="true" (change)="toggleRuleLocale(code)" name="missingRuleLoc-{{code}}" aria-describedby="settingsRuleLocaleRules" [attr.aria-invalid]="!validNewRuleLocales()" /> {{code}} (not in loaded target locales)</label>
               }
               @for (l of project()?.locales ?? []; track l.code) {
                 @if (l.code !== project()?.baseLocale) {
-                  <label><input type="checkbox" [checked]="newRuleLocales().includes(l.code)" (change)="toggleRuleLocale(l.code)" name="ruleLoc-{{ l.code }}" /> {{ l.code }}</label>
+                  <label class="missing-rule-locale"><input type="checkbox" [checked]="newRuleLocales().includes(l.code)" (change)="toggleRuleLocale(l.code)" name="ruleLoc-{{ l.code }}" aria-describedby="settingsRuleLocaleRules" [attr.aria-invalid]="!validNewRuleLocales()" /> {{ l.code }}</label>
                 }
               }
             } @else if (newRuleAction() === 'task.create') {
@@ -387,7 +388,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             } @else {
               <input aria-label="Notification message" placeholder="Message ({key} = key name)" [ngModel]="newRuleMessage()" (ngModelChange)="newRuleMessage.set($event)" name="newRuleMessage" aria-describedby="settingsRulePayloadRules" [attr.aria-invalid]="!validNewRulePayload()" />
             }
-            <button type="submit" name="addSettingsRule" [disabled]="busy() || !validNewRuleName() || !validNewRulePayload()">Add rule</button>
+            <button type="submit" name="addSettingsRule" [disabled]="busy() || !validNewRuleName() || !validNewRulePayload() || !validNewRuleLocales()">Add rule</button>
           </form>
           <button type="button" name="discardSettingsRuleName" (click)="discardRuleNameDraft()" [disabled]="!canDiscardRuleNameDraft()">Discard rule name draft</button>
           <p class="muted">Discard only clears the local rule name. Trigger, action, provider, locales, title and message stay. It does not refresh Settings, change saved rules or run an action; other forms stay as they are.</p>
@@ -1419,8 +1420,13 @@ export class SettingsComponent implements OnInit, OnDestroy {
     const text=action==='notify'?this.newRuleMessage():this.newRuleTitle();
     return text.trim().length>0 && text.length<=200;
   }
+  validNewRuleLocales():boolean {
+    if(this.newRuleAction()!=='pretranslate')return true;
+    const project=this.project(),locales=this.newRuleLocales();
+    return !!project && locales.length>=1 && locales.length<=5 && locales.every(code=>project.locales.some(locale=>locale.code===code && locale.code!==project.baseLocale));
+  }
   async addRule() {
-    if(this.busy() || !this.validNewRuleName() || !this.validNewRulePayload())return;
+    if(this.busy() || !this.validNewRuleName() || !this.validNewRulePayload() || !this.validNewRuleLocales())return;
     this.invalidateRuleListRefresh();
     const submitted=this.ruleDraft();
     this.busy.set(true); this.error.set(''); this.ruleDraftNotice.set('');
