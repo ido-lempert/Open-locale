@@ -268,6 +268,7 @@
     "test:settings-token-hide-browser": "node scripts/settings-token-hide-browser-test.mjs",
     "test:settings-token-refresh-browser": "node scripts/settings-token-refresh-browser-test.mjs",
     "test:settings-webhook-refresh-browser": "node scripts/settings-webhook-refresh-browser-test.mjs",
+    "test:settings-mt-branch-preflight-browser": "node scripts/settings-mt-branch-preflight-browser-test.mjs",
     "test:settings-ota-branch-preflight-browser": "node scripts/settings-ota-branch-preflight-browser-test.mjs",
     "test:settings-group-locales-validation-browser": "node scripts/settings-group-locales-validation-browser-test.mjs",
     "test:settings-member-locales-validation-browser": "node scripts/settings-member-locales-validation-browser-test.mjs",

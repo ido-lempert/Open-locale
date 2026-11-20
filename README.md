@@ -2103,3 +2103,10 @@ Missing choices are kept, not replaced; no request is sent and prior feedback an
 drafts stay. Refresh choices or explicitly choose a listed branch. The server
 still checks current state and permission. This creates a saved bundle snapshot,
 not CDN/device deployment. [Review0634](docs/reviews/0634-ota-publish-branch-preflight.md).
+
+### Fill empty loaded branch preflight
+Exact missing selected pre-translation branches block button/Enter/captured-handler
+requests before effects, preserving raw choice, earlier result/error and drafts.
+Explicit loaded branch required, no fallback. Server owns current branch/provider/
+locale/permission validation; offline pseudo output is unverified TEST DATA.
+[Review0635](docs/reviews/0635-mt-branch-preflight.md).

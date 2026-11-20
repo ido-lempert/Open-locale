@@ -302,7 +302,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           <p class="muted" id="settingsMtBranchRefreshScope">Reads branch choices only. Your selected provider, locale and branch, earlier pseudo result and other drafts stay. This does not run pre-translation, create, merge or delete branches, reload provider or OTA choices, or validate current branch availability or permission. A missing selected branch is kept, not replaced.</p>
           @if(mtBranchesRefreshing()){<p role="status" name="settingsMtBranchesRefreshing">Refreshing pre-translation branches. The previous choices stay until this read succeeds.</p>}
           @if(mtBranchesRefreshNotice()){<p role="status" name="settingsMtBranchesRefreshNotice">{{mtBranchesRefreshNotice()}}</p>}
-          @if(mtBranchMissing()){<p role="status" name="settingsMtBranchMissing">Selected branch <code>{{mtBranch()}}</code> is not in the loaded choices. It is still selected; choose a loaded branch before pre-translating if needed. This is not a current availability or permission check.</p>}
+          @if(mtBranchMissing()){<p role="status" name="settingsMtBranchMissing">Selected branch <code>{{mtBranch()}}</code> is not in the loaded choices. It is still selected. Fill empty is blocked until you explicitly choose a loaded branch. Your earlier result and other drafts stay. Refresh pre-translation branches to read choices again if needed. This is not a current availability or permission check.</p>}
           <form class="inline" (ngSubmit)="runPretranslate()">
               <select aria-label="Pre-translate provider" [ngModel]="mtProviderId()" (ngModelChange)="mtProviderId.set($event)" name="mtProviderId">
                 @if(missingMtProvider(mtProviderId())){<option [value]="mtProviderId()">{{mtProviderId()}} (not in loaded providers)</option>}
@@ -314,12 +314,13 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                   @if (l.code !== project()?.baseLocale) { <option [value]="l.code">{{ l.code }}</option> }
                 }
               </select>
-              <select aria-label="Branch" [ngModel]="mtBranch()" (ngModelChange)="mtBranch.set($event)" name="mtBranch">
+              <label>Fill empty branch <select aria-label="Branch" [ngModel]="mtBranch()" (ngModelChange)="mtBranch.set($event)" name="mtBranch" aria-describedby="settingsMtBranchRules" [attr.aria-invalid]="mtBranchMissing()">
                 @if(mtBranchMissing()){<option [value]="mtBranch()">{{mtBranch()}} (not in loaded choices)</option>}
                 @for (b of branches(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }
-              </select>
-              <button name="runSettingsPretranslate" type="submit" [disabled]="busy()" title="Fill empty cells with pseudo test data">Fill empty</button>
+              </select></label>
+              <button name="runSettingsPretranslate" type="submit" [disabled]="busy() || mtBranchMissing()" title="Fill empty cells with pseudo test data">Fill empty</button>
             </form>
+            <p class="muted" id="settingsMtBranchRules">Fill empty requires an exact branch in the loaded pre-translation choices. No fallback is selected. This does not check current branch availability, provider readiness, locale grants or permission; the server still checks each request. This offline provider writes unverified pseudo test data, not real translations.</p>
           }
             @if (mtResult()) { <p class="muted" role="status" name="settingsMtResult">{{ mtResult() }}</p> }
           }
@@ -1372,7 +1373,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   }
 
   async runPretranslate() {
-    if(this.busy())return;
+    if(this.busy() || this.tokenCopyDeparted || this.mtBranchMissing())return;
     this.busy.set(true); this.error.set(''); this.mtResult.set('');
     try {
       const r = await this.api.pretranslate(this.projectId, this.mtProviderId(), this.mtLocale(), this.mtBranch());
