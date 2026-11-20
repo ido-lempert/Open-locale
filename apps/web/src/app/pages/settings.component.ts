@@ -294,7 +294,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           @if(mtDraftNotice()){<p role="status" name="settingsMtDraftNotice">{{ mtDraftNotice() }}</p>}
           @if(!validNewMtName()){<p role="status" name="settingsMtNameInvalid">Shorten the provider name before adding. Your full name and provider type stay here and are not sent.</p>}
           }
-          @if(isTeamAdmin() && mtLocaleMissing()){<p role="status" name="settingsMtLocaleMissing">Selected Fill empty target locale <code>{{mtLocale()}}</code> is not in the loaded non-base locale choices. The exact choice and earlier result are kept, not replaced. Choose a listed target before running if needed. This does not add locales, repair saved rules or check current availability or permission.</p>}
+          @if(isTeamAdmin() && mtLocaleMissing()){<p role="status" name="settingsMtLocaleMissing">Selected Fill empty target locale <code>{{mtLocale()}}</code> is not in the loaded non-base locale choices. The exact choice and earlier result are kept, not replaced. Fill empty is blocked until you explicitly choose a loaded non-base target. Refresh locale list to read choices again if needed. This does not add locales, repair saved rules or check current availability or permission.</p>}
           @if(isTeamAdmin() && missingMtProvider(mtProviderId())){<p role="status" name="settingsMtProviderMissing">Selected Fill empty provider <code>{{mtProviderId()}}</code> is not in the loaded provider list. The exact choice and earlier result are kept, not replaced. Refresh provider list or choose a listed provider before running if needed. This is not a current availability or permission check.</p>}
           @if (mtProviders().length) {
             @if (isTeamAdmin()) {
@@ -308,18 +308,20 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                 @if(missingMtProvider(mtProviderId())){<option [value]="mtProviderId()">{{mtProviderId()}} (not in loaded providers)</option>}
                 @for (p of mtProviders(); track p.id) { <option [value]="p.id" [disabled]="!p.enabled">{{ p.name }}</option> }
               </select>
-              <select aria-label="Target locale" [ngModel]="mtLocale()" (ngModelChange)="mtLocale.set($event)" name="mtLocale">
+              <label>Fill empty target <select aria-label="Target locale" [ngModel]="mtLocale()" (ngModelChange)="mtLocale.set($event)" name="mtLocale" aria-describedby="settingsMtLocaleRules" [attr.aria-invalid]="!validMtTarget()">
+                @if(!validMtTarget() && !mtLocaleMissing()){<option [value]="mtLocale()">{{mtLocale() || 'No target selected'}} (not a loaded target)</option>}
                 @if(mtLocaleMissing()){<option [value]="mtLocale()">{{mtLocale()}} (not in loaded target locales)</option>}
                 @for (l of project()?.locales ?? []; track l.code) {
                   @if (l.code !== project()?.baseLocale) { <option [value]="l.code">{{ l.code }}</option> }
                 }
-              </select>
+              </select></label>
               <label>Fill empty branch <select aria-label="Branch" [ngModel]="mtBranch()" (ngModelChange)="mtBranch.set($event)" name="mtBranch" aria-describedby="settingsMtBranchRules" [attr.aria-invalid]="mtBranchMissing()">
                 @if(mtBranchMissing()){<option [value]="mtBranch()">{{mtBranch()}} (not in loaded choices)</option>}
                 @for (b of branches(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }
               </select></label>
-              <button name="runSettingsPretranslate" type="submit" [disabled]="busy() || mtBranchMissing()" title="Fill empty cells with pseudo test data">Fill empty</button>
+              <button name="runSettingsPretranslate" type="submit" [disabled]="busy() || mtBranchMissing() || !validMtTarget()" title="Fill empty cells with pseudo test data">Fill empty</button>
             </form>
+            <p class="muted" id="settingsMtLocaleRules">Fill empty requires an exact loaded non-base target locale. Empty, base and missing targets are blocked without replacing your choice or clearing the earlier result. Choose a loaded target or Refresh locale list. This does not add locales or check current availability, grants or permission.</p>
             <p class="muted" id="settingsMtBranchRules">Fill empty requires an exact branch in the loaded pre-translation choices. No fallback is selected. This does not check current branch availability, provider readiness, locale grants or permission; the server still checks each request. This offline provider writes unverified pseudo test data, not real translations.</p>
           }
             @if (mtResult()) { <p class="muted" role="status" name="settingsMtResult">{{ mtResult() }}</p> }
@@ -962,6 +964,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   }
   missingRuleLocales():string[] {const project=this.project();return project?[...new Set(this.newRuleLocales())].filter(code=>!project.locales.some(locale=>locale.code===code && locale.code!==project.baseLocale)):[];}
   mtLocaleMissing():boolean {const project=this.project();return !!project && this.mtLocale()!=='' && !project.locales.some(locale=>locale.code===this.mtLocale() && locale.code!==project.baseLocale);}
+  validMtTarget():boolean {const project=this.project();return !!project && project.locales.some(locale=>locale.code===this.mtLocale() && locale.code!==project.baseLocale);}
   missingMtProvider(id:string):boolean {return id!=='' && !this.mtProviders().some(provider=>provider.id===id);}
   mtBranchesRefreshing = signal(false);
   mtBranchesRefreshNotice = signal('');
@@ -1373,7 +1376,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   }
 
   async runPretranslate() {
-    if(this.busy() || this.tokenCopyDeparted || this.mtBranchMissing())return;
+    if(this.busy() || this.tokenCopyDeparted || this.mtBranchMissing() || !this.validMtTarget())return;
     this.busy.set(true); this.error.set(''); this.mtResult.set('');
     try {
       const r = await this.api.pretranslate(this.projectId, this.mtProviderId(), this.mtLocale(), this.mtBranch());

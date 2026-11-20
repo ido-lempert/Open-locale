@@ -2483,3 +2483,9 @@ requests before effects, preserving raw choice, earlier result/error and drafts.
 Explicit loaded branch required, no fallback. Server owns current branch/provider/
 locale/permission validation; offline pseudo output is unverified TEST DATA.
 [Review0635](reviews/0635-mt-branch-preflight.md).
+
+### Fill empty loaded target preflight
+Empty/base/missing exact targets block button/Enter/captured handler before effects.
+Raw target, earlier result/error and other drafts stay, no fallback/locale repair.
+Explicit loaded non-base choice required, server remains current-state authority.
+[Review0636](reviews/0636-mt-target-preflight.md).
