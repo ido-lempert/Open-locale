@@ -255,9 +255,19 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           @if (isTeamAdmin()) {
           @if(originRemoveNotice()){<p role="status" name="settingsOriginRemoveNotice">{{originRemoveNotice()}}</p>}
           <form class="inline" (ngSubmit)="addOrigin()">
-            <input aria-label="New embed origin" placeholder="https://app.example.com" [ngModel]="newOrigin()" (ngModelChange)="newOrigin.set($event)" name="newOrigin" required aria-describedby="settingsOriginRules" [attr.aria-invalid]="newOrigin()!=='' && !validNewOrigin()" />
+            <label>New embed origin <input aria-label="New embed origin" placeholder="https://app.example.com" [ngModel]="newOrigin()" (ngModelChange)="newOrigin.set($event)" name="newOrigin" required aria-describedby="settingsOriginRules settingsOriginPreviewScope" [attr.aria-invalid]="newOrigin()!=='' && !validNewOrigin()" /></label>
             <button type="submit" name="addSettingsOrigin" [disabled]="busy() || !validNewOrigin()">Add origin</button>
           </form>
+          <section class="origin-add-preview" name="settingsOriginPreview" aria-label="Unsaved embed-origin Add preview">
+            <h3>Unsaved origin Add preview</h3>
+            <p class="muted" id="settingsOriginPreviewScope">Local preview only. Add origin submits the loaded allowlist followed by the trimmed draft below, replacing the saved list. Duplicate entries are shown as sent; the server validates and deduplicates them. This is not a conflict-checked merge or a read of newer server values. Nothing is saved or contacted by this preview. It does not verify site ownership, trust or permission. Explicit Add allows that origin to embed this project's editor.</p>
+            <p>Trimmed draft, without URL repair: <code name="settingsOriginTrimmed">{{newOrigin().trim() || '(empty)'}}</code></p>
+            @if(!validNewOrigin()){<p name="settingsOriginPreviewInvalid">This draft cannot be added. Correct the origin above; the full raw draft stays.</p>}
+            @if(project()){
+              <p>Outgoing embed-origin entries, in order:</p>
+              <ol name="settingsOriginPreviewEntries">@for(entry of originAddPreview(); track $index){<li><code>{{entry || '(empty)'}}</code></li>}</ol>
+            } @else {<p name="settingsOriginPreviewUnavailable">Loaded project metadata is unavailable. This preview cannot show the replacement allowlist.</p>}
+          </section>
           <button type="button" name="discardSettingsOrigin" (click)="discardOriginDraft()" [disabled]="!canDiscardOriginDraft()">Discard origin draft</button>
           <p class="muted">Discard only clears the local new-origin field. It does not refresh Settings or remove any saved origin; other forms stay as they are.</p>
           <p class="muted" id="settingsOriginRules" name="settingsOriginRules">Use a canonical http:// or https:// bare origin, such as https://app.example.com or http://localhost:4200. No path, trailing slash, query, fragment or credentials. Outer whitespace is trimmed when adding; other text is not repaired or truncated. This checks the new origin's syntax only, not site ownership, trust, permission or newer server settings. Adding an origin allows it to embed this project's editor as described above; a successful addition refreshes project data only and keeps other unsaved forms.</p>
@@ -640,7 +650,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
       }
     </main>
   `,
-  styles: [`.status-add-preview {margin:.75rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .status-add-preview h3 {margin-top:0} .status-add-preview code {white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word} .status-add-preview li {min-width:0} .new-member-form label,.new-group-form label {display:flex;flex-direction:column;gap:.25rem;min-width:0;max-width:100%} .saml-display code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .loaded-general {margin:1rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .loaded-general h3 {margin-top:0} .loaded-general dt {font-weight:600} .loaded-general dd {margin:.25rem 0 .75rem;min-width:0} .loaded-general-value {white-space:pre-wrap;overflow-wrap:anywhere} .missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
+  styles: [`.status-add-preview,.origin-add-preview {margin:.75rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .status-add-preview h3,.origin-add-preview h3 {margin-top:0} .status-add-preview code,.origin-add-preview code {white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word} .status-add-preview li,.origin-add-preview li {min-width:0} .new-member-form label,.new-group-form label {display:flex;flex-direction:column;gap:.25rem;min-width:0;max-width:100%} .saml-display code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .loaded-general {margin:1rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .loaded-general h3 {margin-top:0} .loaded-general dt {font-weight:600} .loaded-general dd {margin:.25rem 0 .75rem;min-width:0} .loaded-general-value {white-space:pre-wrap;overflow-wrap:anywhere} .missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
 })
 export class SettingsComponent implements OnInit, OnDestroy {
   project = signal<Project | null>(null);
@@ -1294,6 +1304,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     if(this.originDraftNotice())this.originDraftNotice.set('The submitted embed origin was saved. The local new-origin draft was discarded without refreshing Settings or removing any saved origin.');
   }
   originDraftNotice = signal('');
+  originAddPreview():string[] {return [...(this.project()?.embedOrigins ?? []),this.newOrigin().trim()];}
   validNewOrigin():boolean {
     const origin=this.newOrigin().trim();
     try {const url=new URL(origin);return (url.protocol==='https:' || url.protocol==='http:') && url.origin===origin;}

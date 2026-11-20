@@ -2514,3 +2514,9 @@ Exact normalized name and ordered outgoing loaded-list-plus-draft entries before
 explicit Add; duplicates visible as sent, full escaped wrapped text. Explicit local
 preview/whole-list replacement/server validation/no merge/no translation change
 limits. Existing actions unchanged. [Review0640](reviews/0640-status-add-preview.md).
+
+### Read-only embed-origin Add preview
+Shows exact trimmed draft and ordered loaded allowlist plus draft, duplicates as
+sent. No URL repair, saved-state, merge, ownership/trust/permission claim or site
+contact. Explicit Add scope stated. Existing actions unchanged.
+[Review0641](reviews/0641-origin-add-preview.md).
