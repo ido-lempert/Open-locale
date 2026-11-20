@@ -2526,3 +2526,9 @@ Existing confirmation shows exact ordered remaining loaded entries or explicit
 empty list. Read-only, removes all exact selected matches as existing handler does;
 no merge/newer-server/saved-state/translation-change claim. Existing actions stay.
 [Review0642](reviews/0642-status-remove-preview.md).
+
+### Embed-origin Remove replacement preview
+Existing confirmation shows ordered remaining loaded allowlist or explicit empty
+result, matching exact-filter removal. Read-only/no URL repair/site contact/trust
+claim or promise to close existing frames. Existing handlers/API unchanged.
+[Review0643](reviews/0643-origin-remove-preview.md).

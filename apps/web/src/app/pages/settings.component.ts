@@ -244,13 +244,20 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           @if(originListRefreshNotice()){<p role="status" name="settingsOriginListRefreshNotice">{{originListRefreshNotice()}}</p>}
 
           <p class="muted">Origins allowed to embed the in-context editor (served by the API at /embed/projects/{{ projectId }}) in an iframe and exchange messages with it. Bare origins only (https://app.example.com - no path or trailing slash). The embedded frame answers only these origins and never exposes your session to the host page. Serve /embed/host.js from the API on your page and call OpenLocaleEmbed.init with your iframe element to run the handshake and click-to-locate annotated elements (data-ol-key). Changes here require a signed-in session, not an API token.</p>
-          <ul class="locale-list">
-            @for (o of project()?.embedOrigins ?? []; track o) {
+          <ul class="locale-list origin-choice-list">
+            @for (o of project()?.embedOrigins ?? []; track $index) {
               <li>
                 <code>{{ o }}</code>
                 @if (isTeamAdmin()) {
                   @if(confirmingOrigin()===o){
                     <span>Remove this origin? It will no longer be allowlisted for this project's embed endpoint. This does not sign users out or promise to close frames already open. The currently loaded list, minus this origin, will replace the saved list.</span>
+                    <section class="origin-remove-preview" name="settingsOriginRemovePreview" aria-label="Unsaved embed-origin Remove preview">
+                      <h3>Unsaved origin Remove preview</h3>
+                      <p class="muted">Local preview only. Confirming removes all exact matches of <code name="settingsOriginRemoveSelected">{{o}}</code> from the loaded allowlist and submits the remaining entries in this order, replacing the saved list. The server validates and deduplicates entries. This is not a conflict-checked merge or a read of newer server values. Nothing is saved or contacted by this preview. It does not verify site ownership, trust or permission, sign users out or promise to close frames already open.</p>
+                      @if(originRemovePreview(o).length){
+                        <ol name="settingsOriginRemovePreviewEntries">@for(entry of originRemovePreview(o); track $index){<li><code>{{entry || '(empty)'}}</code></li>}</ol>
+                      } @else {<p name="settingsOriginRemovePreviewEmpty">The outgoing embed-origin allowlist is empty. No origins will be allowlisted for new embed requests.</p>}
+                    </section>
                     <button class="danger" [attr.name]="'confirmRemoveOrigin-'+$index" (click)="removeOrigin(o)" [disabled]="busy()">Yes, remove</button>
                     <button [attr.name]="'cancelRemoveOrigin-'+$index" (click)="cancelRemoveOrigin()" [disabled]="busy()">Cancel</button>
                   } @else {<button class="danger" [attr.name]="'startRemoveOrigin-'+$index" (click)="askRemoveOrigin(o)" [disabled]="busy()">Remove</button>}
@@ -657,7 +664,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
       }
     </main>
   `,
-  styles: [`.status-choice-list .badge {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .status-remove-preview {width:100%;box-sizing:border-box} .status-remove-preview li {display:list-item;padding:0;list-style:decimal} .status-add-preview,.origin-add-preview,.status-remove-preview {margin:.75rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .status-add-preview h3,.origin-add-preview h3,.status-remove-preview h3 {margin-top:0} .status-add-preview code,.origin-add-preview code,.status-remove-preview code {white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word} .status-add-preview li,.origin-add-preview li,.status-remove-preview li {min-width:0} .new-member-form label,.new-group-form label {display:flex;flex-direction:column;gap:.25rem;min-width:0;max-width:100%} .saml-display code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .loaded-general {margin:1rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .loaded-general h3 {margin-top:0} .loaded-general dt {font-weight:600} .loaded-general dd {margin:.25rem 0 .75rem;min-width:0} .loaded-general-value {white-space:pre-wrap;overflow-wrap:anywhere} .missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
+  styles: [`.origin-choice-list code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .status-choice-list .badge {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .status-remove-preview,.origin-remove-preview {width:100%;box-sizing:border-box} .status-remove-preview li,.origin-remove-preview li {display:list-item;padding:0;list-style:decimal} .status-add-preview,.origin-add-preview,.status-remove-preview,.origin-remove-preview {margin:.75rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .status-add-preview h3,.origin-add-preview h3,.status-remove-preview h3,.origin-remove-preview h3 {margin-top:0} .status-add-preview code,.origin-add-preview code,.status-remove-preview code,.origin-remove-preview code {white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word} .status-add-preview li,.origin-add-preview li,.status-remove-preview li,.origin-remove-preview li {min-width:0} .new-member-form label,.new-group-form label {display:flex;flex-direction:column;gap:.25rem;min-width:0;max-width:100%} .saml-display code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .loaded-general {margin:1rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .loaded-general h3 {margin-top:0} .loaded-general dt {font-weight:600} .loaded-general dd {margin:.25rem 0 .75rem;min-width:0} .loaded-general-value {white-space:pre-wrap;overflow-wrap:anywhere} .missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
 })
 export class SettingsComponent implements OnInit, OnDestroy {
   project = signal<Project | null>(null);
@@ -1332,6 +1339,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     finally { this.busy.set(false); }
   }
 
+  originRemovePreview(origin:string):string[] {return (this.project()?.embedOrigins ?? []).filter(entry=>entry!==origin);}
   confirmingOrigin = signal<string|null>(null);
   originRemoveNotice = signal('');
   askRemoveOrigin(origin:string) {if(!this.busy() && this.project()?.embedOrigins?.includes(origin))this.confirmingOrigin.set(origin);}
