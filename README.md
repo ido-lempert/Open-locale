@@ -2129,3 +2129,9 @@ Empty/base/missing selections stay checked and keep the draft, receipt and error
 explicit correction required. Inactive task/notify locale drafts do not block.
 No rule run, locale repair or current grants/provider/permission promise.
 See [review0638](docs/reviews/0638-rule-locale-preflight.md).
+
+### New-rule loaded provider preflight
+Pretranslation Add rule requires an exact loaded provider, retaining empty/missing
+choices with full draft/receipt/error until explicit correction. Listed disabled
+providers remain saveable references, not enabled or promised ready. Other actions
+ignore inactive provider draft. [Review0639](docs/reviews/0639-rule-provider-preflight.md).

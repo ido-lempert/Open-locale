@@ -368,11 +368,13 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
               <option value="notify">notify project webhooks</option>
             </select>
             @if (newRuleAction() === 'pretranslate') {
-              @if(missingMtProvider(newRuleProvider())){<p role="status" name="settingsRuleProviderMissing">Selected new-rule provider <code>{{newRuleProvider()}}</code> is not in the loaded provider list. The exact choice and rule draft are kept, not replaced. Refresh provider list or choose a listed provider before saving if needed. This does not repair saved rules or check current availability or permission.</p>}
-              <select aria-label="Rule provider" [ngModel]="newRuleProvider()" (ngModelChange)="newRuleProvider.set($event)" name="newRuleProvider">
+              @if(missingMtProvider(newRuleProvider())){<p role="status" name="settingsRuleProviderMissing">Selected new-rule provider <code>{{newRuleProvider()}}</code> is not in the loaded provider list. The exact choice and rule draft are kept, not replaced. Add rule is blocked until you explicitly choose a loaded provider. Refresh provider list to read choices again if needed. This does not repair saved rules or check current availability or permission.</p>}
+              <label>New-rule provider <select aria-label="Rule provider" [ngModel]="newRuleProvider()" (ngModelChange)="newRuleProvider.set($event)" name="newRuleProvider" aria-describedby="settingsRuleProviderRules" [attr.aria-invalid]="!validNewRuleProvider()">
+                @if(newRuleProvider()===''){<option value="">No provider selected (choose a loaded provider)</option>}
                 @if(missingMtProvider(newRuleProvider())){<option [value]="newRuleProvider()">{{newRuleProvider()}} (not in loaded providers)</option>}
-                @for (p of mtProviders(); track p.id) { <option [value]="p.id">{{ p.name }}</option> }
-              </select>
+                @for (p of mtProviders(); track p.id) { <option [value]="p.id">{{ p.name }}{{p.enabled ? '' : ' (disabled in loaded list)'}}</option> }
+              </select></label>
+              <p class="muted" id="settingsRuleProviderRules">Choose an exact provider in the loaded list before adding this test-data rule. Empty or missing choices block Add without replacing your choice or clearing earlier receipts. Refresh provider list to read choices again. A listed disabled provider can be saved as a rule reference, but this does not enable it or promise a later run will work. This does not repair saved rules, run the rule or check current readiness, grants or permission.</p>
               @if(missingRuleLocales().length){<p role="status" name="settingsRuleLocalesMissing">These checked new-rule target locales are not in the loaded non-base locale choices. Exact codes and the rule draft are kept, not replaced. Add rule is blocked until every selected target is loaded and non-base. Uncheck a retained target to remove it from this draft only. This does not add locales, repair saved rules or check current availability or permission.</p>}
               <p class="muted" id="settingsRuleLocaleRules" name="settingsRuleLocaleRules">Choose 1 to 5 exact loaded non-base target locales before adding this test-data rule. Selected: {{newRuleLocales().length}}. Empty, missing and base targets are blocked without replacing your choices or clearing earlier receipts. Uncheck retained targets or Refresh locale list to read choices again. This does not add locales, repair saved rules or check current grants, provider readiness or permission. Saving delegates future actions as described above; it does not run the rule now.</p>
               @for (code of missingRuleLocales(); track code) {
@@ -388,7 +390,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             } @else {
               <input aria-label="Notification message" placeholder="Message ({key} = key name)" [ngModel]="newRuleMessage()" (ngModelChange)="newRuleMessage.set($event)" name="newRuleMessage" aria-describedby="settingsRulePayloadRules" [attr.aria-invalid]="!validNewRulePayload()" />
             }
-            <button type="submit" name="addSettingsRule" [disabled]="busy() || !validNewRuleName() || !validNewRulePayload() || !validNewRuleLocales()">Add rule</button>
+            <button type="submit" name="addSettingsRule" [disabled]="busy() || !validNewRuleName() || !validNewRulePayload() || !validNewRuleLocales() || !validNewRuleProvider()">Add rule</button>
           </form>
           <button type="button" name="discardSettingsRuleName" (click)="discardRuleNameDraft()" [disabled]="!canDiscardRuleNameDraft()">Discard rule name draft</button>
           <p class="muted">Discard only clears the local rule name. Trigger, action, provider, locales, title and message stay. It does not refresh Settings, change saved rules or run an action; other forms stay as they are.</p>
@@ -1425,8 +1427,9 @@ export class SettingsComponent implements OnInit, OnDestroy {
     const project=this.project(),locales=this.newRuleLocales();
     return !!project && locales.length>=1 && locales.length<=5 && locales.every(code=>project.locales.some(locale=>locale.code===code && locale.code!==project.baseLocale));
   }
+  validNewRuleProvider():boolean {return this.newRuleAction()!=='pretranslate' || this.mtProviders().some(provider=>provider.id===this.newRuleProvider());}
   async addRule() {
-    if(this.busy() || !this.validNewRuleName() || !this.validNewRulePayload() || !this.validNewRuleLocales())return;
+    if(this.busy() || !this.validNewRuleName() || !this.validNewRulePayload() || !this.validNewRuleLocales() || !this.validNewRuleProvider())return;
     this.invalidateRuleListRefresh();
     const submitted=this.ruleDraft();
     this.busy.set(true); this.error.set(''); this.ruleDraftNotice.set('');

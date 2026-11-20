@@ -2502,3 +2502,9 @@ create/list-refresh/error/receipt effects. Exact draft retained; explicit unchec
 or loaded selection recovery. Task/notify ignore inactive locales, valid raw list
 unchanged. No rule run or current-state promise.
 [Review0638](reviews/0638-rule-locale-preflight.md).
+
+### New-rule exact loaded provider preflight
+Empty/missing provider references block active pretranslation Add before effects.
+Full choice/draft/receipt kept, explicit loaded choice required, no fallback.
+Disabled loaded references preserve API save behavior without enabling or running.
+[Review0639](reviews/0639-rule-provider-preflight.md).
