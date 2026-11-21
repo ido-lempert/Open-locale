@@ -2550,3 +2550,9 @@ Existing confirmation shows exact loaded ID, enabled state, trigger, action and 
 JSON configuration to distinguish same-name rules and hidden config options. Local
 read-only review, no current-server/authority/readiness/history promise. Existing
 handlers/API unchanged. [Review0646](reviews/0646-rule-remove-details.md).
+
+### Webhook Delete loaded registration review
+Existing confirmation shows exact loaded ID, text-only endpoint, enabled state and
+ordered event names to distinguish duplicate registrations. Local read-only review,
+no endpoint contact/ownership/delivery/newer-server promise. Existing handlers/API
+unchanged. [Review0647](reviews/0647-webhook-delete-details.md).

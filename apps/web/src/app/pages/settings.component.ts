@@ -162,11 +162,23 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             @for (h of webhooks(); track h.id) {
               <li>
                 <span class="hook-url">{{ h.url }}</span>
-                <span class="muted">{{ h.events.join(' + ') }} · created {{ h.createdAt | date:'mediumDate' }}</span>
+                <span class="muted loaded-hook-events">{{ h.events.join(' + ') }} · created {{ h.createdAt | date:'mediumDate' }}</span>
                 @if (!h.active) { <span class="badge">disabled</span> }
                 @if (isTeamAdmin()) {
                   @if (confirmingHook() === h.id) {
                     <span>Delete this webhook and its delivery history? Deliveries stop immediately. This cannot be undone.</span>
+                    <section class="locale-remove-dependencies" style="overflow-wrap:anywhere;word-break:break-word" name="settingsWebhookDeleteDetails" aria-label="Loaded webhook selected for deletion">
+                      <h3>Review loaded webhook</h3>
+                      <p class="muted">Local review of this loaded registration only, not a read of newer server values, current permission or delivery history. This does not contact the endpoint, verify ownership or delivery, copy a signing secret, enable or send anything. Confirming deletes this webhook ID and its delivery history only, not other registrations at the same URL. Earlier copies of its secret or delivered payloads are not erased.</p>
+                      <dl>
+                        <dt>Webhook ID</dt><dd name="settingsWebhookDeleteId">{{h.id}}</dd>
+                        <dt>Endpoint (text only)</dt><dd name="settingsWebhookDeleteUrl">{{h.url}}</dd>
+                        <dt>Loaded state</dt><dd name="settingsWebhookDeleteState">{{h.active ? 'enabled' : 'disabled'}}</dd>
+                      </dl>
+                      <p>Full loaded event names in loaded order, not a delivery receipt:</p>
+                      @if(webhookDeletionEvents(h).length){<ol name="settingsWebhookDeleteEvents">@for(event of webhookDeletionEvents(h); track $index){<li>{{event || '(empty event name)'}}</li>}</ol>}
+                      @else{<p name="settingsWebhookDeleteNoEvents">No event names in this loaded registration.</p>}
+                    </section>
                     <button class="danger" [attr.name]="'confirmDeleteHook-'+h.id" (click)="removeHook(h.id)" [disabled]="busy()">Yes, delete</button>
                     <button [attr.name]="'cancelDeleteHook-'+h.id" (click)="cancelDeleteHook()" [disabled]="busy()">Cancel</button>
                   } @else {
@@ -696,7 +708,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
       }
     </main>
   `,
-  styles: [`.locale-remove-dependencies {width:100%;box-sizing:border-box;margin:.75rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .locale-remove-dependencies h3 {margin-top:0} .locale-remove-dependencies li {display:list-item;padding:0;list-style:decimal} .locale-reference-state {display:block;margin-top:.25rem} .loaded-rule-label {min-width:0;overflow-wrap:anywhere;word-break:break-word} .locale-reference-name {white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word} .origin-choice-list code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .status-choice-list .badge {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .status-remove-preview,.origin-remove-preview {width:100%;box-sizing:border-box} .status-remove-preview li,.origin-remove-preview li {display:list-item;padding:0;list-style:decimal} .status-add-preview,.origin-add-preview,.status-remove-preview,.origin-remove-preview {margin:.75rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .status-add-preview h3,.origin-add-preview h3,.status-remove-preview h3,.origin-remove-preview h3 {margin-top:0} .status-add-preview code,.origin-add-preview code,.status-remove-preview code,.origin-remove-preview code {white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word} .status-add-preview li,.origin-add-preview li,.status-remove-preview li,.origin-remove-preview li {min-width:0} .new-member-form label,.new-group-form label {display:flex;flex-direction:column;gap:.25rem;min-width:0;max-width:100%} .saml-display code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .loaded-general {margin:1rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .loaded-general h3 {margin-top:0} .loaded-general dt {font-weight:600} .loaded-general dd {margin:.25rem 0 .75rem;min-width:0} .loaded-general-value {white-space:pre-wrap;overflow-wrap:anywhere} .missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
+  styles: [`.loaded-hook-events {min-width:0;overflow-wrap:anywhere;word-break:break-word} .locale-remove-dependencies {width:100%;box-sizing:border-box;margin:.75rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .locale-remove-dependencies h3 {margin-top:0} .locale-remove-dependencies li {display:list-item;padding:0;list-style:decimal} .locale-reference-state {display:block;margin-top:.25rem} .loaded-rule-label {min-width:0;overflow-wrap:anywhere;word-break:break-word} .locale-reference-name {white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word} .origin-choice-list code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .status-choice-list .badge {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .status-remove-preview,.origin-remove-preview {width:100%;box-sizing:border-box} .status-remove-preview li,.origin-remove-preview li {display:list-item;padding:0;list-style:decimal} .status-add-preview,.origin-add-preview,.status-remove-preview,.origin-remove-preview {margin:.75rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .status-add-preview h3,.origin-add-preview h3,.status-remove-preview h3,.origin-remove-preview h3 {margin-top:0} .status-add-preview code,.origin-add-preview code,.status-remove-preview code,.origin-remove-preview code {white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word} .status-add-preview li,.origin-add-preview li,.status-remove-preview li,.origin-remove-preview li {min-width:0} .new-member-form label,.new-group-form label {display:flex;flex-direction:column;gap:.25rem;min-width:0;max-width:100%} .saml-display code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .loaded-general {margin:1rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .loaded-general h3 {margin-top:0} .loaded-general dt {font-weight:600} .loaded-general dd {margin:.25rem 0 .75rem;min-width:0} .loaded-general-value {white-space:pre-wrap;overflow-wrap:anywhere} .missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
 })
 export class SettingsComponent implements OnInit, OnDestroy {
   project = signal<Project | null>(null);
@@ -1215,6 +1227,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     finally{this.busy.set(false);}
   }
   hookDeleteNotice = signal('');
+  webhookDeletionEvents(hook:WebhookInfo):string[] {return [...hook.events];}
   askDeleteHook(id:string) {if(!this.busy() && this.webhooks().some(h=>h.id===id))this.confirmingHook.set(id);}
   cancelDeleteHook() {if(!this.busy())this.confirmingHook.set(null);}
   async removeHook(id: string) {
