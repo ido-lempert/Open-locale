@@ -271,6 +271,7 @@
     "test:settings-token-hide-browser": "node scripts/settings-token-hide-browser-test.mjs",
     "test:settings-token-refresh-browser": "node scripts/settings-token-refresh-browser-test.mjs",
     "test:settings-webhook-refresh-browser": "node scripts/settings-webhook-refresh-browser-test.mjs",
+    "test:settings-provider-remove-details-browser": "node scripts/settings-provider-remove-details-browser-test.mjs",
     "test:settings-provider-remove-dependencies-browser": "node scripts/settings-provider-remove-dependencies-browser-test.mjs",
     "test:settings-locale-remove-dependencies-browser": "node scripts/settings-locale-remove-dependencies-browser-test.mjs",
     "test:settings-origin-remove-preview-browser": "node scripts/settings-origin-remove-preview-browser-test.mjs",

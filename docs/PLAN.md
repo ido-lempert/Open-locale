@@ -2562,3 +2562,9 @@ Existing confirmation shows exact loaded ID, ordered scopes and raw created/last
 expiry metadata to distinguish same-name tokens. Local read-only review, no secret
 display/current validity/usage/dependency promise. Existing handlers/API unchanged.
 [Review0648](reviews/0648-token-revoke-details.md).
+
+### Provider Remove loaded identity review
+Existing confirmation shows exact loaded ID/type/state/raw creation timestamp above
+its separate reference review. No config/credential display, current permission/
+readiness/history promise or new request. Existing handlers/API unchanged. Provider
+names remain unique per project on the server. [Review0649](reviews/0649-provider-remove-details.md).
