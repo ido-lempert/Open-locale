@@ -399,6 +399,18 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                 @if (isTeamAdmin()) {
                   @if(confirmingRule()===r.id){
                     <span>Remove <strong>{{r.name}}</strong>? This cannot be undone. Earlier effects are not undone, and a run already in progress may finish.</span>
+                    <section class="locale-remove-dependencies" name="settingsRuleRemoveDetails" aria-label="Loaded rule selected for removal">
+                      <h3>Review loaded rule</h3>
+                      <p class="muted">Local review of the selected loaded rule only, not a read of newer server values, current permission or creator authority, configuration readiness or run history. Nothing is saved, enabled, repaired or run by this review. Confirming removes this rule ID only; earlier effects are not undone and work already in progress may finish.</p>
+                      <dl>
+                        <dt>Rule ID</dt><dd name="settingsRuleRemoveId">{{r.id}}</dd>
+                        <dt>Loaded state</dt><dd name="settingsRuleRemoveState">{{r.enabled ? 'enabled' : 'disabled'}}</dd>
+                        <dt>Trigger</dt><dd name="settingsRuleRemoveTrigger">{{r.trigger}}</dd>
+                        <dt>Action</dt><dd name="settingsRuleRemoveAction">{{r.action}}</dd>
+                      </dl>
+                      <p>Full loaded configuration (JSON, not a validation or execution preview):</p>
+                      <pre name="settingsRuleRemoveConfig" style="white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%">{{ruleRemovalConfig(r)}}</pre>
+                    </section>
                     <button class="danger" [attr.name]="'confirmRemoveRule-'+r.id" (click)="removeRule(r)" [disabled]="busy()">Yes, remove</button>
                     <button [attr.name]="'cancelRemoveRule-'+r.id" (click)="cancelRemoveRule()" [disabled]="busy()">Cancel</button>
                   } @else {<button class="danger" [attr.name]="'startRemoveRule-'+r.id" (click)="askRemoveRule(r.id)" [disabled]="busy()">Remove</button>}
@@ -1525,6 +1537,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     finally{this.busy.set(false);}
   }
 
+  ruleRemovalConfig(rule:AutomationRuleInfo):string {return JSON.stringify(rule.config,null,2);}
   confirmingRule = signal<string|null>(null);
   ruleRemoveNotice = signal('');
   askRemoveRule(id:string) {if(!this.busy() && this.autoRules().some(r=>r.id===id))this.confirmingRule.set(id);}

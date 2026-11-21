@@ -2171,3 +2171,9 @@ Existing confirmation shows exact loaded pretranslation rule references and curr
 Fill empty/retained new-rule provider choices. Local incomplete review only. Existing
 accepted-removal Fill empty fallback explicitly stated, without enable/run/repair
 claim. [Review0645](docs/reviews/0645-provider-remove-dependencies.md).
+
+### Automation Remove loaded rule review
+Existing confirmation shows exact loaded ID, enabled state, trigger, action and full
+JSON configuration to distinguish same-name rules and hidden config options. Local
+read-only review, no current-server/authority/readiness/history promise. Existing
+handlers/API unchanged. [Review0646](docs/reviews/0646-rule-remove-details.md).
