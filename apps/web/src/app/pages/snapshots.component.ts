@@ -47,6 +47,11 @@ import { ApiService, SnapshotMeta } from '../api.service';
             @if (s.automatic) { <span class="auto-badge">auto</span> }
             <span class="muted">{{ s.keyCount }} keys, {{ s.translationCount }} translations</span>
             <time class="muted">{{ s.createdAt | date:'short' }}</time>
+            <details name="snapshotLoadedReview" style="width:100%;min-width:0;overflow-wrap:anywhere;word-break:break-word">
+              <summary>Review loaded snapshot identity</summary>
+              <p class="muted">Local metadata only, not snapshot contents, newer server values, current permission or a scan of what restoring would change in the current project. Counts belong to the loaded snapshot, not the current project or a total restore-impact count. This does not capture or restore anything. The Restore confirmation still requires a separate decision.</p>
+              <dl><dt>Project ID</dt><dd name="snapshotReviewProjectId">{{projectId}}</dd><dt>Snapshot ID</dt><dd name="snapshotReviewId">{{s.id}}</dd><dt>Raw loaded capture time</dt><dd name="snapshotReviewCreated">{{s.createdAt || '(empty loaded capture time)'}}</dd><dt>Loaded kind</dt><dd name="snapshotReviewKind">{{s.automatic ? 'automatic' : 'manual'}}</dd><dt>Loaded key count</dt><dd>{{s.keyCount}}</dd><dt>Loaded translation count</dt><dd>{{s.translationCount}}</dd></dl>
+            </details>
             <button class="restore" [attr.aria-label]="'Restore snapshot ' + s.label" (click)="restore(s)" [disabled]="!restoreReady(s)">Restore</button>
           </li>
         } @empty {
@@ -163,11 +168,15 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
     return !this.destroyed && !this.loading() && !this.listError() && !this.restoring() && !this.creating() && !this.restoreUnknown() && !this.captureUnknown() && this.items().some(item=>item===s);
   }
 
+  restoreIdentity(s:SnapshotMeta):string {
+    return `Project ID: ${this.projectId}\nSnapshot ID: ${s.id}\nLoaded capture time: ${s.createdAt || '(empty loaded capture time)'}\nLoaded kind: ${s.automatic ? 'automatic' : 'manual'}\nLoaded snapshot counts: ${s.keyCount} keys, ${s.translationCount} translations\nLocal metadata only, not contents, current permission or a current-project impact scan.\n\n`;
+  }
+
   async restore(s: SnapshotMeta) {
     if (!this.restoreReady(s)) return;
     const scope=this.projectGeneration,projectId=this.projectId,generation=this.readGeneration;
     if (!confirm(
-      `Restore the project to "${s.label}"?\n\n` +
+      `Restore the project to "${s.label}"?\n\n` + this.restoreIdentity(s) +
       `- Keys and translations return to the snapshot state.\n` +
       `- Keys added after this snapshot are permanently removed, with their comments and screenshots.\n` +
       `- Keys deleted after this snapshot come back, but their old comments and screenshot links are not recovered.\n` +

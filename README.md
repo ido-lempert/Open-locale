@@ -2219,3 +2219,9 @@ Existing confirmation shows exact loaded project ID/slug/base locale/full ordere
 locale codes, separate from unsaved drafts. Local review only, no current permission,
 complete dependency or recovery promise. Existing destructive warning/handler/API
 unchanged. [Review0653](docs/reviews/0653-project-delete-details.md).
+
+### Snapshot Restore loaded identity review
+Wrapped read-only row details and existing confirmation show exact project/snapshot
+IDs, raw capture time, kind and loaded counts for same-label captures. Metadata only,
+not contents/current permission/current-project impact. Existing restore warning,
+guards and API unchanged. [Review0654](docs/reviews/0654-snapshot-restore-identity.md).
