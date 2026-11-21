@@ -113,10 +113,23 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           <ul class="locale-list">
             @for (tok of tokens(); track tok.id) {
               <li>
-                <span>{{ tok.name }}</span>
-                <span class="muted">{{ tok.scopes.join('+') }} · created {{ tok.createdAt | date:'mediumDate' }}{{ tok.lastUsedAt ? ' · used ' + (tok.lastUsedAt | date:'short') : ' · never used' }}</span>
+                <span class="loaded-token-text">{{ tok.name }}</span>
+                <span class="muted loaded-token-text">{{ tok.scopes.join('+') }} · created {{ tok.createdAt | date:'mediumDate' }}{{ tok.lastUsedAt ? ' · used ' + (tok.lastUsedAt | date:'short') : ' · never used' }}</span>
                 @if (confirmingToken() === tok.id) {
                   <span>Revoke <strong>{{ tok.name }}</strong>? Scripts using it stop immediately. This cannot be undone.</span>
+                  <section class="locale-remove-dependencies" style="overflow-wrap:anywhere;word-break:break-word" name="settingsTokenRevokeDetails" aria-label="Loaded token selected for revocation">
+                    <h3>Review loaded token</h3>
+                    <p class="muted">Local review of this loaded token metadata only, not a read of newer server values, current validity or permission, complete usage history or dependent scripts. This does not reveal or copy a token, check expiry against the current time, change scopes or make a request with it. Confirming revokes this ID only, not other tokens with the same name. Earlier copies are not erased.</p>
+                    <dl>
+                      <dt>Token ID</dt><dd name="settingsTokenRevokeId">{{tok.id}}</dd>
+                      <dt>Created (raw loaded value)</dt><dd name="settingsTokenRevokeCreated">{{tok.createdAt || '(empty loaded value)'}}</dd>
+                      <dt>Last used (raw loaded value)</dt><dd name="settingsTokenRevokeLastUsed">{{tok.lastUsedAt === null ? 'No last-use timestamp in loaded metadata' : tok.lastUsedAt || '(empty loaded value)'}}</dd>
+                      <dt>Expires (raw loaded value)</dt><dd name="settingsTokenRevokeExpiry">{{tok.expiresAt === null ? 'No expiry timestamp in loaded metadata' : tok.expiresAt || '(empty loaded value)'}}</dd>
+                    </dl>
+                    <p>Full loaded scope names in loaded order, not a current access check:</p>
+                    @if(tokenRevocationScopes(tok).length){<ol name="settingsTokenRevokeScopes">@for(scope of tokenRevocationScopes(tok); track $index){<li>{{scope || '(empty scope name)'}}</li>}</ol>}
+                    @else{<p name="settingsTokenRevokeNoScopes">No scope names in this loaded metadata.</p>}
+                  </section>
                   <button class="danger" [attr.name]="'confirmRevokeToken-'+tok.id" (click)="revokeToken(tok.id)" [disabled]="busy()">Yes, revoke</button>
                   <button [attr.name]="'cancelRevokeToken-'+tok.id" (click)="cancelRevokeToken()" [disabled]="busy()">Cancel</button>
                 } @else {
@@ -708,7 +721,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
       }
     </main>
   `,
-  styles: [`.loaded-hook-events {min-width:0;overflow-wrap:anywhere;word-break:break-word} .locale-remove-dependencies {width:100%;box-sizing:border-box;margin:.75rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .locale-remove-dependencies h3 {margin-top:0} .locale-remove-dependencies li {display:list-item;padding:0;list-style:decimal} .locale-reference-state {display:block;margin-top:.25rem} .loaded-rule-label {min-width:0;overflow-wrap:anywhere;word-break:break-word} .locale-reference-name {white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word} .origin-choice-list code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .status-choice-list .badge {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .status-remove-preview,.origin-remove-preview {width:100%;box-sizing:border-box} .status-remove-preview li,.origin-remove-preview li {display:list-item;padding:0;list-style:decimal} .status-add-preview,.origin-add-preview,.status-remove-preview,.origin-remove-preview {margin:.75rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .status-add-preview h3,.origin-add-preview h3,.status-remove-preview h3,.origin-remove-preview h3 {margin-top:0} .status-add-preview code,.origin-add-preview code,.status-remove-preview code,.origin-remove-preview code {white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word} .status-add-preview li,.origin-add-preview li,.status-remove-preview li,.origin-remove-preview li {min-width:0} .new-member-form label,.new-group-form label {display:flex;flex-direction:column;gap:.25rem;min-width:0;max-width:100%} .saml-display code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .loaded-general {margin:1rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .loaded-general h3 {margin-top:0} .loaded-general dt {font-weight:600} .loaded-general dd {margin:.25rem 0 .75rem;min-width:0} .loaded-general-value {white-space:pre-wrap;overflow-wrap:anywhere} .missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
+  styles: [`.loaded-token-text {min-width:0;overflow-wrap:anywhere;word-break:break-word} .loaded-hook-events {min-width:0;overflow-wrap:anywhere;word-break:break-word} .locale-remove-dependencies {width:100%;box-sizing:border-box;margin:.75rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .locale-remove-dependencies h3 {margin-top:0} .locale-remove-dependencies li {display:list-item;padding:0;list-style:decimal} .locale-reference-state {display:block;margin-top:.25rem} .loaded-rule-label {min-width:0;overflow-wrap:anywhere;word-break:break-word} .locale-reference-name {white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word} .origin-choice-list code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .status-choice-list .badge {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .status-remove-preview,.origin-remove-preview {width:100%;box-sizing:border-box} .status-remove-preview li,.origin-remove-preview li {display:list-item;padding:0;list-style:decimal} .status-add-preview,.origin-add-preview,.status-remove-preview,.origin-remove-preview {margin:.75rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .status-add-preview h3,.origin-add-preview h3,.status-remove-preview h3,.origin-remove-preview h3 {margin-top:0} .status-add-preview code,.origin-add-preview code,.status-remove-preview code,.origin-remove-preview code {white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word} .status-add-preview li,.origin-add-preview li,.status-remove-preview li,.origin-remove-preview li {min-width:0} .new-member-form label,.new-group-form label {display:flex;flex-direction:column;gap:.25rem;min-width:0;max-width:100%} .saml-display code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .loaded-general {margin:1rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .loaded-general h3 {margin-top:0} .loaded-general dt {font-weight:600} .loaded-general dd {margin:.25rem 0 .75rem;min-width:0} .loaded-general-value {white-space:pre-wrap;overflow-wrap:anywhere} .missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
 })
 export class SettingsComponent implements OnInit, OnDestroy {
   project = signal<Project | null>(null);
@@ -1245,6 +1258,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     finally { this.busy.set(false); }
   }
   tokenRevokeNotice = signal('');
+  tokenRevocationScopes(token:ApiTokenInfo):string[] {return [...token.scopes];}
   askRevokeToken(id:string) {if(!this.busy() && this.tokens().some(t=>t.id===id))this.confirmingToken.set(id);}
   cancelRevokeToken() {if(!this.busy())this.confirmingToken.set(null);}
   async revokeToken(id: string) {

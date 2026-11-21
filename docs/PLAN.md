@@ -2556,3 +2556,9 @@ Existing confirmation shows exact loaded ID, text-only endpoint, enabled state a
 ordered event names to distinguish duplicate registrations. Local read-only review,
 no endpoint contact/ownership/delivery/newer-server promise. Existing handlers/API
 unchanged. [Review0647](reviews/0647-webhook-delete-details.md).
+
+### Token Revoke loaded metadata review
+Existing confirmation shows exact loaded ID, ordered scopes and raw created/last-use/
+expiry metadata to distinguish same-name tokens. Local read-only review, no secret
+display/current validity/usage/dependency promise. Existing handlers/API unchanged.
+[Review0648](reviews/0648-token-revoke-details.md).

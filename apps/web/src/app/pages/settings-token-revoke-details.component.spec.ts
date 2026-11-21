@@ -1,0 +1,10 @@
+import {SettingsComponent} from './settings.component';
+const make=()=>{const api={revokeToken:jest.fn(),listTokens:jest.fn()},c=new SettingsComponent(api as any,{snapshot:{paramMap:{get:()=> 'p'}}} as any,{} as any);c.projectId='p';return {c,api};};
+const token=(scopes:string[])=>({id:'exact',name:'Same name',scopes,createdAt:'2026-11-21T00:00:00Z',lastUsedAt:null,expiresAt:null});
+describe('loaded token revocation scope review',()=>{
+ for(const scopes of [[],['read'],['write','read','write'],['',' raw ','<img>'+ 'X'.repeat(300)],['READ','read']])it('complete loaded scope order '+JSON.stringify(scopes),()=>{const {c}=make();expect(c.tokenRevocationScopes(token(scopes))).toEqual(scopes);});
+ it('fresh output cannot mutate loaded membership',()=>{const {c}=make(),row=token(['read','write']);c.tokens.set([row]);c.tokenRevocationScopes(row).pop();expect(row.scopes).toEqual(['read','write']);expect(c.tokenRevocationScopes(row)).not.toBe(row.scopes);});
+ it('reflects replacement scopes without timestamp change',()=>{const {c}=make(),row=token(['read']);expect(c.tokenRevocationScopes({...row,scopes:['write']})).toEqual(['write']);expect(row).toEqual(token(['read']));});
+ it('review preserves draft receipts errors confirmation reveal and no requests',()=>{const {c,api}=make();c.tokenName.set('Unsent');c.tokenRevokeNotice.set('Earlier receipt');c.error.set('Other');c.confirmingToken.set('other');c.createdToken.set({id:'retained',name:'Kept',token:'synthetic-only'});c.tokenRevocationScopes(token(['read']));expect([c.tokenName(),c.tokenRevokeNotice(),c.error(),c.confirmingToken(),c.busy(),c.createdToken()?.id]).toEqual(['Unsent','Earlier receipt','Other','other',false,'retained']);expect(api.revokeToken).not.toHaveBeenCalled();expect(api.listTokens).not.toHaveBeenCalled();});
+ it('review cannot establish revocation confirmation',async()=>{const {c,api}=make(),row=token(['read']);c.tokens.set([row]);c.tokenRevocationScopes(row);await c.revokeToken(row.id);expect(c.confirmingToken()).toBe(null);expect(api.revokeToken).not.toHaveBeenCalled();});
+});
