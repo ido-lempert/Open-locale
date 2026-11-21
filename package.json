@@ -237,6 +237,7 @@
     "test:settings-rule-toggle-browser": "node scripts/settings-rule-toggle-browser-test.mjs",
     "test:settings-mt-toggle-browser": "node scripts/settings-mt-toggle-browser-test.mjs",
     "test:settings-webhook-toggle-browser": "node scripts/settings-webhook-toggle-browser-test.mjs",
+    "test:settings-member-remove-details-browser": "node scripts/settings-member-remove-details-browser-test.mjs",
     "test:settings-member-remove-browser": "node scripts/settings-member-remove-browser-test.mjs",
     "test:settings-group-member-remove-browser": "node scripts/settings-group-member-remove-browser-test.mjs",
     "test:settings-group-remove-browser": "node scripts/settings-group-remove-browser-test.mjs",

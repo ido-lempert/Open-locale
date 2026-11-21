@@ -1,0 +1,10 @@
+import {SettingsComponent} from './settings.component';
+const make=()=>{const api={removeMember:jest.fn(),listMembers:jest.fn()},c=new SettingsComponent(api as any,{snapshot:{paramMap:{get:()=> 'p'}}} as any,{} as any);c.projectId='p';return {c,api};};
+const row=(allowedLocales:string[])=>({id:'exact',displayName:'Member',email:'member@example.com',role:'MEMBER',allowedLocales});
+describe('loaded direct membership removal locale review',()=>{
+ for(const locales of [[],['he'],['he','fr','he'],['',' raw ','<img>'+ 'X'.repeat(300)],['HE','he']])it('preserves ordered raw locale scope '+JSON.stringify(locales),()=>{const {c}=make();expect(c.memberRemovalLocales(row(locales))).toEqual(locales);});
+ it('fresh array cannot alter loaded scope',()=>{const {c}=make(),m=row(['he','fr']);c.memberRemovalLocales(m).pop();expect(m.allowedLocales).toEqual(['he','fr']);expect(c.memberRemovalLocales(m)).not.toBe(m.allowedLocales);});
+ it('reads loaded scope rather than unsaved locale and role drafts',()=>{const {c}=make(),m=row(['he']);c.memberLocalesPick.set({exact:'fr'});c.memberRolePick.set({exact:'ADMIN'});expect(c.memberRemovalLocales(m)).toEqual(['he']);expect(c.memberRemovalLocales({...m,allowedLocales:['fr','he']})).toEqual(['fr','he']);expect(c.memberLocalesPick()).toEqual({exact:'fr'});});
+ it('review preserves drafts receipts errors target without requests',()=>{const {c,api}=make();c.memberEmail.set('Unsent@example.com');c.memberRemoveNotice.set('Earlier receipt');c.error.set('Independent');c.confirmingMember.set('other');c.memberRemovalLocales(row(['he']));expect([c.memberEmail(),c.memberRemoveNotice(),c.error(),c.confirmingMember(),c.busy()]).toEqual(['Unsent@example.com','Earlier receipt','Independent','other',false]);expect(api.removeMember).not.toHaveBeenCalled();expect(api.listMembers).not.toHaveBeenCalled();});
+ it('review cannot authorize removal',async()=>{const {c,api}=make(),m=row(['he']);c.members.set([m]);c.myEmail=()=> 'owner@example.com';c.memberRemovalLocales(m);await c.removeMember(m);expect(c.confirmingMember()).toBe(null);expect(api.removeMember).not.toHaveBeenCalled();});
+});

@@ -2195,3 +2195,9 @@ Existing confirmation shows exact loaded ID/type/state/raw creation timestamp ab
 its separate reference review. No config/credential display, current permission/
 readiness/history promise or new request. Existing handlers/API unchanged. Provider
 names remain unique per project on the server. [Review0649](docs/reviews/0649-provider-remove-details.md).
+
+### Member Remove loaded direct grant review
+Existing confirmation shows exact loaded user ID/direct role/full ordered locale
+scope separate from unsaved edits. Local review only, not effective access or a
+complete group/task scan. Existing team-wide removal and saved-group reactivation
+warning/handlers/API unchanged. [Review0650](docs/reviews/0650-member-remove-details.md).
