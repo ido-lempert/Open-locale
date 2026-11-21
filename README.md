@@ -2165,3 +2165,9 @@ Existing confirmation shows exact loaded pretranslation rule references, enabled
 and disabled, plus current Fill empty and retained new-rule locale choices. Local
 review only, no complete scan/current-server/permission/repair/run promise. Existing
 count and removal unchanged. [Review0644](docs/reviews/0644-locale-remove-dependencies.md).
+
+### Provider Remove loaded reference review
+Existing confirmation shows exact loaded pretranslation rule references and current
+Fill empty/retained new-rule provider choices. Local incomplete review only. Existing
+accepted-removal Fill empty fallback explicitly stated, without enable/run/repair
+claim. [Review0645](docs/reviews/0645-provider-remove-dependencies.md).

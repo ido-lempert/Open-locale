@@ -314,6 +314,16 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                 @if (isTeamAdmin()) {
                   @if(confirmingMtProvider()===p.id){
                     <span>Remove <strong>{{p.name}}</strong>? This cannot be undone. Existing translations are not undone. Saved rules referencing it are not repaired and may fail; work already in progress may finish.</span>
+                    <section class="locale-remove-dependencies" name="settingsProviderRemoveDependencies" aria-label="Loaded provider references">
+                      <h3>Review loaded provider references</h3>
+                      <p class="muted">Local review only, using rules and choices loaded on this screen. This is not a complete dependency scan, a read of newer server values or a permission or provider-readiness check. Nothing is saved, repaired, enabled or run by this review. Saved rules and the retained new-rule provider choice are not repaired by removal.</p>
+                      <p name="settingsProviderRemoveFillReference">Current Fill empty provider: {{mtProviderId()===p.id ? 'references this provider' : 'does not reference this provider'}}. If selected when removal is accepted, the first remaining loaded provider is selected, or none. Review that selection before running; this does not enable or run it.</p>
+                      <p name="settingsProviderRemoveDraftReference">Retained new-rule provider choice: {{newRuleProvider()===p.id ? 'references this provider' : 'does not reference this provider'}}. This choice can be inactive for the selected action; it is not a saved rule.</p>
+                      <p>Loaded pretranslation rules with this exact provider:</p>
+                      @if(providerRemovalRules(p.id).length){
+                        <ol name="settingsProviderRemoveRuleReferences">@for(rule of providerRemovalRules(p.id); track $index){<li><span class="locale-reference-name">{{rule.name || '(empty name)'}}</span><span class="locale-reference-state">{{rule.enabled ? 'enabled' : 'disabled'}}</span></li>}</ol>
+                      } @else {<p name="settingsProviderRemoveNoRuleReferences">No matching loaded pretranslation rules. This does not prove there are no other references.</p>}
+                    </section>
                     <button class="danger" [attr.name]="'confirmRemoveMtProvider-'+p.id" (click)="removeMtProvider(p)" [disabled]="busy()">Yes, remove</button>
                     <button [attr.name]="'cancelRemoveMtProvider-'+p.id" (click)="cancelRemoveMtProvider()" [disabled]="busy()">Cancel</button>
                   } @else {<button class="danger" [attr.name]="'startRemoveMtProvider-'+p.id" (click)="askRemoveMtProvider(p.id)" [disabled]="busy()">Remove</button>}
@@ -1410,6 +1420,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     finally{this.busy.set(false);}
   }
 
+  providerRemovalRules(id:string):AutomationRuleInfo[] {return this.autoRules().filter(rule=>rule.action==='pretranslate' && rule.config['providerId']===id);}
   confirmingMtProvider = signal<string|null>(null);
   mtRemoveNotice = signal('');
   askRemoveMtProvider(id:string) {if(!this.busy() && this.mtProviders().some(p=>p.id===id))this.confirmingMtProvider.set(id);}
