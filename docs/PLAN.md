@@ -2532,3 +2532,9 @@ Existing confirmation shows ordered remaining loaded allowlist or explicit empty
 result, matching exact-filter removal. Read-only/no URL repair/site contact/trust
 claim or promise to close existing frames. Existing handlers/API unchanged.
 [Review0643](reviews/0643-origin-remove-preview.md).
+
+### Locale Remove loaded reference review
+Existing confirmation shows exact loaded pretranslation rule references, enabled
+and disabled, plus current Fill empty and retained new-rule locale choices. Local
+review only, no complete scan/current-server/permission/repair/run promise. Existing
+count and removal unchanged. [Review0644](reviews/0644-locale-remove-dependencies.md).

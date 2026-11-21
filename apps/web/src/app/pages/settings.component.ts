@@ -59,6 +59,16 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                 @if (l.code === p.baseLocale) { <span class="muted">base</span> }
                 @else if (confirmingLocale() === l.code) {
                   <span>Remove <strong>{{ l.code }}</strong>? This cannot be undone. All translations for this locale and their history are deleted across all branches, including empty rows. The loaded default-branch preview contains {{ localeTxCount() }} nonempty translation{{ localeTxCount() === 1 ? '' : 's' }}; it is not a total deletion count. Saved rules and local locale choices are not repaired. Review them before running work.</span>
+                  <section class="locale-remove-dependencies" name="settingsLocaleRemoveDependencies" aria-label="Loaded locale references">
+                    <h3>Review loaded locale references</h3>
+                    <p class="muted">Local review only, using rules and choices loaded on this screen. This is not a complete dependency scan, a read of newer server values, a total deletion count or a permission check. Nothing is saved, repaired or run by this review. Removing the locale does not repair these references.</p>
+                    <p name="settingsLocaleRemoveFillReference">Current Fill empty target: {{mtLocale()===l.code ? 'references this locale' : 'does not reference this locale'}}.</p>
+                    <p name="settingsLocaleRemoveDraftReference">Retained new-rule target choices: {{newRuleLocales().includes(l.code) ? 'include this locale' : 'do not include this locale'}}. Choices can be inactive for the selected action; they are not saved rules.</p>
+                    <p>Loaded pretranslation rules with this exact target:</p>
+                    @if(localeRemovalRules(l.code).length){
+                      <ol name="settingsLocaleRemoveRuleReferences">@for(rule of localeRemovalRules(l.code); track $index){<li><span class="locale-reference-name">{{rule.name || '(empty name)'}}</span> <span class="locale-reference-state">{{rule.enabled ? 'enabled' : 'disabled'}}</span></li>}</ol>
+                    } @else {<p name="settingsLocaleRemoveNoRuleReferences">No matching loaded pretranslation rules. This does not prove there are no other references.</p>}
+                  </section>
                   <button class="danger" [attr.name]="'confirmRemoveLocale-'+l.code" (click)="removeLocale(l.code)" [disabled]="busy()">Yes, remove</button>
                   <button [attr.name]="'cancelRemoveLocale-'+l.code" (click)="cancelRemoveLocale()" [disabled]="busy()">Cancel</button>
                 }
@@ -374,7 +384,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           <ul class="locale-list">
             @for (r of autoRules(); track r.id) {
               <li>
-                <span>{{ r.name }} <span class="muted">{{ r.trigger }} &rarr; {{ ruleSummary(r) }}</span></span>
+                <span class="loaded-rule-label">{{ r.name }} <span class="muted">{{ r.trigger }} &rarr; {{ ruleSummary(r) }}</span></span>
                 @if (isTeamAdmin()) { <button [attr.name]="'toggleRule-'+r.id" (click)="toggleRule(r)" [disabled]="busy()">{{ r.enabled ? 'Disable' : 'Enable' }}</button> }
                 @if (isTeamAdmin()) {
                   @if(confirmingRule()===r.id){
@@ -664,7 +674,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
       }
     </main>
   `,
-  styles: [`.origin-choice-list code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .status-choice-list .badge {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .status-remove-preview,.origin-remove-preview {width:100%;box-sizing:border-box} .status-remove-preview li,.origin-remove-preview li {display:list-item;padding:0;list-style:decimal} .status-add-preview,.origin-add-preview,.status-remove-preview,.origin-remove-preview {margin:.75rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .status-add-preview h3,.origin-add-preview h3,.status-remove-preview h3,.origin-remove-preview h3 {margin-top:0} .status-add-preview code,.origin-add-preview code,.status-remove-preview code,.origin-remove-preview code {white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word} .status-add-preview li,.origin-add-preview li,.status-remove-preview li,.origin-remove-preview li {min-width:0} .new-member-form label,.new-group-form label {display:flex;flex-direction:column;gap:.25rem;min-width:0;max-width:100%} .saml-display code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .loaded-general {margin:1rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .loaded-general h3 {margin-top:0} .loaded-general dt {font-weight:600} .loaded-general dd {margin:.25rem 0 .75rem;min-width:0} .loaded-general-value {white-space:pre-wrap;overflow-wrap:anywhere} .missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
+  styles: [`.locale-remove-dependencies {width:100%;box-sizing:border-box;margin:.75rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .locale-remove-dependencies h3 {margin-top:0} .locale-remove-dependencies li {display:list-item;padding:0;list-style:decimal} .locale-reference-state {display:block;margin-top:.25rem} .loaded-rule-label {min-width:0;overflow-wrap:anywhere;word-break:break-word} .locale-reference-name {white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word} .origin-choice-list code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .status-choice-list .badge {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .status-remove-preview,.origin-remove-preview {width:100%;box-sizing:border-box} .status-remove-preview li,.origin-remove-preview li {display:list-item;padding:0;list-style:decimal} .status-add-preview,.origin-add-preview,.status-remove-preview,.origin-remove-preview {margin:.75rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .status-add-preview h3,.origin-add-preview h3,.status-remove-preview h3,.origin-remove-preview h3 {margin-top:0} .status-add-preview code,.origin-add-preview code,.status-remove-preview code,.origin-remove-preview code {white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word} .status-add-preview li,.origin-add-preview li,.status-remove-preview li,.origin-remove-preview li {min-width:0} .new-member-form label,.new-group-form label {display:flex;flex-direction:column;gap:.25rem;min-width:0;max-width:100%} .saml-display code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .loaded-general {margin:1rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .loaded-general h3 {margin-top:0} .loaded-general dt {font-weight:600} .loaded-general dd {margin:.25rem 0 .75rem;min-width:0} .loaded-general-value {white-space:pre-wrap;overflow-wrap:anywhere} .missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
 })
 export class SettingsComponent implements OnInit, OnDestroy {
   project = signal<Project | null>(null);
@@ -1218,6 +1228,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     finally { this.busy.set(false); }
   }
   localeRemoveNotice = signal('');
+  localeRemovalRules(code:string):AutomationRuleInfo[] {return this.autoRules().filter(rule=>rule.action==='pretranslate' && Array.isArray(rule.config['locales']) && rule.config['locales'].includes(code));}
   private removableLocale(code:string):boolean {return !!this.project()?.locales.some(l=>l.code===code) && code!==this.project()?.baseLocale;}
   cancelRemoveLocale() {if(!this.busy())this.confirmingLocale.set(null);}
   async askRemoveLocale(code: string) {
