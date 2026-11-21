@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
+import { Component, Inject, LOCALE_ID, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -7,7 +7,7 @@ import { ApiService, SnapshotMeta } from '../api.service';
 
 @Component({
   selector: 'ol-snapshots',
-  imports: [FormsModule, RouterLink, DatePipe],
+  imports: [FormsModule, RouterLink],
   template: `
     <header class="bar">
       <a [routerLink]="['/projects', projectId]" class="back">&larr; Editor</a>
@@ -44,13 +44,13 @@ import { ApiService, SnapshotMeta } from '../api.service';
         @for (s of visibleItems(); track s.id) {
           <li class="snapshot-row">
             <span class="snapshot-label">{{ s.label }}</span>
-            @if (s.automatic) { <span class="auto-badge">auto</span> }
+            @if (s.automatic === true) { <span class="auto-badge">auto</span> } @else if (s.automatic !== false) { <span class="muted" name="snapshotUnknownKind">unknown loaded kind</span> }
             <span class="muted">{{ s.keyCount }} keys, {{ s.translationCount }} translations</span>
-            <time class="muted">{{ s.createdAt | date:'short' }}</time>
+            <time class="muted" name="snapshotCaptureTime">{{captureTimeLabel(s.createdAt)}}</time>
             <details name="snapshotLoadedReview" style="width:100%;min-width:0;overflow-wrap:anywhere;word-break:break-word">
               <summary>Review loaded snapshot identity</summary>
               <p class="muted">Local metadata only, not snapshot contents, newer server values, current permission or a scan of what restoring would change in the current project. Counts belong to the loaded snapshot, not the current project or a total restore-impact count. This does not capture or restore anything. The Restore confirmation still requires a separate decision.</p>
-              <dl><dt>Project ID</dt><dd name="snapshotReviewProjectId">{{projectId}}</dd><dt>Snapshot ID</dt><dd name="snapshotReviewId">{{s.id}}</dd><dt>Raw loaded capture time</dt><dd name="snapshotReviewCreated">{{s.createdAt || '(empty loaded capture time)'}}</dd><dt>Loaded kind</dt><dd name="snapshotReviewKind">{{s.automatic ? 'automatic' : 'manual'}}</dd><dt>Loaded key count</dt><dd>{{s.keyCount}}</dd><dt>Loaded translation count</dt><dd>{{s.translationCount}}</dd></dl>
+              <dl><dt>Project ID</dt><dd name="snapshotReviewProjectId">{{projectId}}</dd><dt>Snapshot ID</dt><dd name="snapshotReviewId">{{s.id}}</dd><dt>Raw loaded capture time</dt><dd name="snapshotReviewCreated">{{s.createdAt || '(empty loaded capture time)'}}</dd><dt>Loaded kind</dt><dd name="snapshotReviewKind">{{snapshotKindLabel(s.automatic)}}</dd><dt>Loaded key count</dt><dd>{{s.keyCount}}</dd><dt>Loaded translation count</dt><dd>{{s.translationCount}}</dd></dl>
             </details>
             <button class="restore" [attr.aria-label]="'Restore snapshot ' + s.label" (click)="restore(s)" [disabled]="!restoreReady(s)">Restore</button>
           </li>
@@ -88,7 +88,7 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
   error = signal('');
   notice = signal('');
 
-  constructor(private readonly route: ActivatedRoute, private readonly api: ApiService) {}
+  constructor(private readonly route: ActivatedRoute, private readonly api: ApiService, @Inject(LOCALE_ID) private readonly displayLocale='en-US') {}
 
   ngOnInit() {
     this.routeSub=this.route.paramMap.subscribe(pm=>this.initForProject(pm.get('id')??''));
@@ -168,8 +168,17 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
     return !this.destroyed && !this.loading() && !this.listError() && !this.restoring() && !this.creating() && !this.restoreUnknown() && !this.captureUnknown() && this.items().some(item=>item===s);
   }
 
+  snapshotKindLabel(value:unknown):string {
+    return value===true ? 'automatic' : value===false ? 'manual' : 'unknown loaded kind';
+  }
+  captureTimeLabel(value:unknown):string {
+    if(typeof value!=='string' || !value.trim())return 'Capture time unavailable';
+    try {return new DatePipe(this.displayLocale).transform(value,'short') || 'Capture time unavailable';}
+    catch {return 'Capture time unavailable';}
+  }
+
   restoreIdentity(s:SnapshotMeta):string {
-    return `Project ID: ${this.projectId}\nSnapshot ID: ${s.id}\nLoaded capture time: ${s.createdAt || '(empty loaded capture time)'}\nLoaded kind: ${s.automatic ? 'automatic' : 'manual'}\nLoaded snapshot counts: ${s.keyCount} keys, ${s.translationCount} translations\nLocal metadata only, not contents, current permission or a current-project impact scan.\n\n`;
+    return `Project ID: ${this.projectId}\nSnapshot ID: ${s.id}\nLoaded capture time: ${s.createdAt || '(empty loaded capture time)'}\nLoaded kind: ${this.snapshotKindLabel(s.automatic)}\nLoaded snapshot counts: ${s.keyCount} keys, ${s.translationCount} translations\nLocal metadata only, not contents, current permission or a current-project impact scan.\n\n`;
   }
 
   async restore(s: SnapshotMeta) {

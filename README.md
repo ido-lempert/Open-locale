@@ -2225,3 +2225,9 @@ Wrapped read-only row details and existing confirmation show exact project/snaps
 IDs, raw capture time, kind and loaded counts for same-label captures. Metadata only,
 not contents/current permission/current-project impact. Existing restore warning,
 guards and API unchanged. [Review0654](docs/reviews/0654-snapshot-restore-identity.md).
+
+### Snapshot metadata display fallback
+Malformed capture times no longer interrupt snapshot-row rendering. Unknown kind
+metadata is not described as manual. Raw values remain in loaded review/downloads;
+fallbacks do not validate snapshot contents or change restore guards/API.
+[Review0655](docs/reviews/0655-snapshot-metadata-fallback.md).
