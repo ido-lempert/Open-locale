@@ -645,13 +645,22 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
               <li class="muted group-members" style="padding-left: 1rem;">
                 Members: {{ g.members.length ? '' : 'none' }}
                 @for (gm of g.members; track gm.userId) {
-                  <span>{{ gm.user.displayName }} @if (canManageGroup(g)) {
+                  <div class="loaded-group-text">{{ gm.user.displayName }} @if (canManageGroup(g)) {
                     @if(confirmingGroupMember()?.groupId===g.id && confirmingGroupMember()?.userId===gm.userId){
                       <span>Remove <strong>{{gm.user.displayName}}</strong> from <strong>{{g.name}}</strong>? This removes this group's grant for them across the team, not only this project. Direct team membership and other group grants remain. Group task assignments, tasks and translations are not changed.</span>
+                      <section class="locale-remove-dependencies" style="overflow-wrap:anywhere;word-break:break-word" name="settingsGroupMemberRemoveDetails" aria-label="Loaded group membership selected for removal">
+                        <h3>Review loaded group membership</h3>
+                        <p class="muted">Local review of this loaded group and member pair, not unsaved group name, role, locale or add-member choices. This is not a read of newer server values, current permission or effective access, or a complete membership or task-assignment scan. Nothing is saved by this review. Confirming removes this user ID from this group ID across the team, not their account, direct membership or other group memberships. Group task assignments stay as described above.</p>
+                        <dl><dt>Group ID</dt><dd name="settingsGroupMemberRemoveGroupId">{{g.id}}</dd><dt>Membership user ID</dt><dd name="settingsGroupMemberRemoveUserId">{{gm.userId}}</dd><dt>Loaded member email</dt><dd name="settingsGroupMemberRemoveEmail">{{gm.user.email || '(empty loaded email)'}}</dd><dt>Loaded group role</dt><dd name="settingsGroupMemberRemoveRole">{{g.role || '(empty loaded role)'}}</dd></dl>
+                        <p>Full loaded group locale codes in loaded order, not unsaved locale text:</p>
+                        @if(groupRemovalLocales(g).length){<ol name="settingsGroupMemberRemoveLocales">@for(locale of groupRemovalLocales(g); track $index){<li>{{locale || '(empty locale code)'}}</li>}</ol>}
+                        @else{<p name="settingsGroupMemberRemoveAllLocales">No locale restriction in this loaded group grant.</p>}
+                        <p class="muted">This is the group's grant, not the member's direct role or scope. Locale restrictions apply to MEMBER translation writes, not ADMIN grants. Direct and other group grants can widen access; this list is not effective access.</p>
+                      </section>
                       <button class="danger" [attr.name]="'confirmRemoveGroupMember-'+g.id+'-'+gm.userId" (click)="removeGroupMember(g,gm.userId)" [disabled]="busy() || groupWorkPending(g.id)">Yes, remove from group</button>
                       <button [attr.name]="'cancelRemoveGroupMember-'+g.id+'-'+gm.userId" (click)="cancelRemoveGroupMember()" [disabled]="busy()">Cancel</button>
                     }@else{<button class="danger" aria-label="Remove from group" [attr.name]="'startRemoveGroupMember-'+g.id+'-'+gm.userId" [disabled]="busy() || groupWorkPending(g.id)" (click)="askRemoveGroupMember(g.id,gm.userId)">Remove from group</button>}
-                  }</span>
+                  }</div>
                 }
                 @if (canManageGroup(g)) {
                   <select aria-label="Add member to group" [attr.name]="'gadd-'+g.id" [ngModel]="groupPick()[g.id] ?? ''" (ngModelChange)="pickGroupMember(g.id, $event)">

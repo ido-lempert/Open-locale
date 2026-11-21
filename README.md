@@ -2207,3 +2207,9 @@ Existing confirmation shows exact loaded group ID/role/full ordered locale scope
 separate from unsaved name/role/locale edits. Local review only, not effective access
 or a complete member/task scan. Existing team-wide grant removal/task-unassignment
 warning/handlers/API unchanged. [Review0651](docs/reviews/0651-group-remove-details.md).
+
+### Group-member Remove loaded membership review
+Existing confirmation shows exact loaded group/user IDs, member email and group
+role/full ordered locale scope, separate from unsaved edits. Local review only, not
+effective access or a complete membership/task scan. Existing team-wide grant
+removal and unchanged task-assignment warning/handlers/API stay. [Review0652](docs/reviews/0652-group-member-remove-details.md).
