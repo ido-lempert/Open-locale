@@ -535,7 +535,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                 <span class="loaded-member-text">{{ m.displayName }} <span class="muted">{{ m.email }}</span></span>
                 <span class="role-badge">{{ m.role.toLowerCase() }}</span>
                 <span class="muted loaded-member-text">{{ m.role === 'MEMBER' && m.allowedLocales.length ? 'locales: ' + m.allowedLocales.join(', ') : 'all locales' }}</span>
-                @if (effectiveNote(m); as note) { <span class="muted" aria-label="Effective grant">{{ note }}</span> }
+                @if (effectiveNote(m); as note) { <span class="muted loaded-member-text" aria-label="Effective grant">{{ note }}</span> }
                 @if (m.role !== 'OWNER' && isTeamAdmin()) {
                   <select aria-label="Role" [ngModel]="memberRolePick()[m.id] ?? m.role" (ngModelChange)="pickMemberRole(m.id, $event)" [attr.name]="'role-'+m.id">
                     <option value="MEMBER">member</option>
@@ -601,9 +601,9 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
           <ul class="locale-list">
             @for (g of groups(); track g.id) {
               <li class="group-row">
-                <span><strong>{{ g.name }}</strong></span>
+                <span class="loaded-group-text"><strong>{{ g.name }}</strong></span>
                 <span class="role-badge">{{ g.role.toLowerCase() }}</span>
-                <span class="muted">{{ g.role === 'MEMBER' && g.allowedLocales.length ? 'locales: ' + g.allowedLocales.join(', ') : 'all locales' }}</span>
+                <span class="muted loaded-group-text">{{ g.role === 'MEMBER' && g.allowedLocales.length ? 'locales: ' + g.allowedLocales.join(', ') : 'all locales' }}</span>
                 @if (canManageGroup(g)) {
                   <label>Group name <input [attr.name]="'group-name-'+g.id" [ngModel]="groupNamePick()[g.id] ?? g.name" (ngModelChange)="pickGroupName(g.id, $event)" [attr.aria-describedby]="'group-name-help-'+g.id" [attr.aria-invalid]="!validGroupName(g)" /></label>
                   <button type="button" [attr.name]="'group-name-save-'+g.id" (click)="saveGroupName(g)" [disabled]="!canSaveGroupName(g)">{{ groupNamePending()[g.id] ? 'Saving name...' : 'Save name' }}</button>
@@ -628,6 +628,15 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
                   <span class="muted">Discard only clears this group's local name, role, locale and add-member drafts. It uses the last loaded or accepted values, does not refresh the server and does not undo saved changes.</span>
                   @if(confirmingGroup()===g.id){
                     <span>Delete group <strong>{{g.name}}</strong>? This cannot be undone. This removes the group and its grant across the team, not only this project. Direct team membership and other group grants remain. Tasks assigned to this group become unassigned; tasks and translations are not deleted.</span>
+                    <section class="locale-remove-dependencies" style="overflow-wrap:anywhere;word-break:break-word" name="settingsGroupRemoveDetails" aria-label="Loaded group selected for deletion">
+                      <h3>Review loaded group grant</h3>
+                      <p class="muted">Local review of this loaded group ID and grant, not unsaved name, role or locale edits. This is not a read of newer server values, current permission or effective access, or a complete membership or task-assignment scan. Nothing is saved by this review. Confirming deletes this group ID and its grant across the team, not other groups. Direct membership and other grants remain; assigned tasks become unassigned as described above.</p>
+                      <dl><dt>Group ID</dt><dd name="settingsGroupRemoveId">{{g.id}}</dd><dt>Loaded group role</dt><dd name="settingsGroupRemoveRole">{{g.role || '(empty loaded role)'}}</dd></dl>
+                      <p>Full loaded group locale codes in loaded order, not unsaved locale text:</p>
+                      @if(groupRemovalLocales(g).length){<ol name="settingsGroupRemoveLocales">@for(locale of groupRemovalLocales(g); track $index){<li>{{locale || '(empty locale code)'}}</li>}</ol>}
+                      @else{<p name="settingsGroupRemoveAllLocales">No locale restriction in this loaded group grant.</p>}
+                      <p class="muted">Locale restrictions apply to MEMBER translation writes, not ADMIN grants. Other grants can widen access; this list is not effective access.</p>
+                    </section>
                     <button class="danger" [attr.name]="'confirmRemoveGroup-'+g.id" (click)="removeGroup(g)" [disabled]="busy() || groupWorkPending(g.id)">Yes, delete group</button>
                     <button [attr.name]="'cancelRemoveGroup-'+g.id" (click)="cancelRemoveGroup()" [disabled]="busy()">Cancel</button>
                   }@else{<button class="danger" [attr.name]="'startRemoveGroup-'+g.id" (click)="askRemoveGroup(g.id)" [disabled]="busy() || groupWorkPending(g.id)">Delete</button>}
@@ -735,7 +744,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
       }
     </main>
   `,
-  styles: [`.loaded-member-text {min-width:0;overflow-wrap:anywhere;word-break:break-word} .loaded-provider-text {min-width:0;overflow-wrap:anywhere;word-break:break-word} .loaded-token-text {min-width:0;overflow-wrap:anywhere;word-break:break-word} .loaded-hook-events {min-width:0;overflow-wrap:anywhere;word-break:break-word} .locale-remove-dependencies {width:100%;box-sizing:border-box;margin:.75rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .locale-remove-dependencies h3 {margin-top:0} .locale-remove-dependencies li {display:list-item;padding:0;list-style:decimal} .locale-reference-state {display:block;margin-top:.25rem} .loaded-rule-label {min-width:0;overflow-wrap:anywhere;word-break:break-word} .locale-reference-name {white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word} .origin-choice-list code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .status-choice-list .badge {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .status-remove-preview,.origin-remove-preview {width:100%;box-sizing:border-box} .status-remove-preview li,.origin-remove-preview li {display:list-item;padding:0;list-style:decimal} .status-add-preview,.origin-add-preview,.status-remove-preview,.origin-remove-preview {margin:.75rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .status-add-preview h3,.origin-add-preview h3,.status-remove-preview h3,.origin-remove-preview h3 {margin-top:0} .status-add-preview code,.origin-add-preview code,.status-remove-preview code,.origin-remove-preview code {white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word} .status-add-preview li,.origin-add-preview li,.status-remove-preview li,.origin-remove-preview li {min-width:0} .new-member-form label,.new-group-form label {display:flex;flex-direction:column;gap:.25rem;min-width:0;max-width:100%} .saml-display code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .loaded-general {margin:1rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .loaded-general h3 {margin-top:0} .loaded-general dt {font-weight:600} .loaded-general dd {margin:.25rem 0 .75rem;min-width:0} .loaded-general-value {white-space:pre-wrap;overflow-wrap:anywhere} .missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
+  styles: [`.loaded-group-text {min-width:0;overflow-wrap:anywhere;word-break:break-word} .loaded-member-text {min-width:0;overflow-wrap:anywhere;word-break:break-word} .loaded-provider-text {min-width:0;overflow-wrap:anywhere;word-break:break-word} .loaded-token-text {min-width:0;overflow-wrap:anywhere;word-break:break-word} .loaded-hook-events {min-width:0;overflow-wrap:anywhere;word-break:break-word} .locale-remove-dependencies {width:100%;box-sizing:border-box;margin:.75rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .locale-remove-dependencies h3 {margin-top:0} .locale-remove-dependencies li {display:list-item;padding:0;list-style:decimal} .locale-reference-state {display:block;margin-top:.25rem} .loaded-rule-label {min-width:0;overflow-wrap:anywhere;word-break:break-word} .locale-reference-name {white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word} .origin-choice-list code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .status-choice-list .badge {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .status-remove-preview,.origin-remove-preview {width:100%;box-sizing:border-box} .status-remove-preview li,.origin-remove-preview li {display:list-item;padding:0;list-style:decimal} .status-add-preview,.origin-add-preview,.status-remove-preview,.origin-remove-preview {margin:.75rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .status-add-preview h3,.origin-add-preview h3,.status-remove-preview h3,.origin-remove-preview h3 {margin-top:0} .status-add-preview code,.origin-add-preview code,.status-remove-preview code,.origin-remove-preview code {white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word} .status-add-preview li,.origin-add-preview li,.status-remove-preview li,.origin-remove-preview li {min-width:0} .new-member-form label,.new-group-form label {display:flex;flex-direction:column;gap:.25rem;min-width:0;max-width:100%} .saml-display code {overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:100%} .loaded-general {margin:1rem 0;padding:.75rem;border:1px solid #cbd5e1;border-radius:.5rem;min-width:0} .loaded-general h3 {margin-top:0} .loaded-general dt {font-weight:600} .loaded-general dd {margin:.25rem 0 .75rem;min-width:0} .loaded-general-value {white-space:pre-wrap;overflow-wrap:anywhere} .missing-rule-locale {display:inline-flex;align-items:center;gap:.4rem;overflow-wrap:anywhere;max-width:100%} .missing-rule-locale input {width:auto;flex:none}`],
 })
 export class SettingsComponent implements OnInit, OnDestroy {
   project = signal<Project | null>(null);
@@ -1814,6 +1823,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
     }
   }
 
+  groupRemovalLocales(group:GroupInfo):string[] {return [...group.allowedLocales];}
   confirmingGroup = signal<string|null>(null);
   deletingGroup = signal<string|null>(null);
   groupRemoveNotice = signal('');

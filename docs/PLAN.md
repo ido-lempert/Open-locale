@@ -2574,3 +2574,9 @@ Existing confirmation shows exact loaded user ID/direct role/full ordered locale
 scope separate from unsaved edits. Local review only, not effective access or a
 complete group/task scan. Existing team-wide removal and saved-group reactivation
 warning/handlers/API unchanged. [Review0650](reviews/0650-member-remove-details.md).
+
+### Group Delete loaded grant review
+Existing confirmation shows exact loaded group ID/role/full ordered locale scope
+separate from unsaved name/role/locale edits. Local review only, not effective access
+or a complete member/task scan. Existing team-wide grant removal/task-unassignment
+warning/handlers/API unchanged. [Review0651](reviews/0651-group-remove-details.md).

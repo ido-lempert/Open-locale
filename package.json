@@ -240,6 +240,7 @@
     "test:settings-member-remove-details-browser": "node scripts/settings-member-remove-details-browser-test.mjs",
     "test:settings-member-remove-browser": "node scripts/settings-member-remove-browser-test.mjs",
     "test:settings-group-member-remove-browser": "node scripts/settings-group-member-remove-browser-test.mjs",
+    "test:settings-group-remove-details-browser": "node scripts/settings-group-remove-details-browser-test.mjs",
     "test:settings-group-remove-browser": "node scripts/settings-group-remove-browser-test.mjs",
     "test:settings-locale-remove-browser": "node scripts/settings-locale-remove-browser-test.mjs",
     "test:settings-status-remove-browser": "node scripts/settings-status-remove-browser-test.mjs",
