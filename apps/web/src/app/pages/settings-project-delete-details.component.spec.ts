@@ -1,0 +1,10 @@
+import {SettingsComponent} from './settings.component';
+const make=()=>{const api={deleteProject:jest.fn(),getProject:jest.fn()},c=new SettingsComponent(api as any,{snapshot:{paramMap:{get:()=> 'p'}}} as any,{navigate:jest.fn()} as any);c.projectId='p';return {c,api};};
+const row=(codes:string[])=>({id:'p',name:'Loaded',slug:'slug',description:'Loaded description',baseLocale:'en',locales:codes.map(code=>({code}))});
+describe('loaded project deletion locale review',()=>{
+ for(const codes of [[],['he'],['he','fr','he'],['',' raw ','<img>'+ 'X'.repeat(300)],['HE','he']])it('preserves ordered raw project locale codes '+JSON.stringify(codes),()=>{const {c}=make();expect(c.projectRemovalLocales(row(codes))).toEqual(codes);});
+ it('fresh array cannot alter loaded locale metadata',()=>{const {c}=make(),p=row(['he','fr']);c.projectRemovalLocales(p).pop();expect(p.locales.map(l=>l.code)).toEqual(['he','fr']);expect(c.projectRemovalLocales(p)).not.toBe(c.projectRemovalLocales(p));});
+ it('loaded scope ignores unsaved general and locale drafts',()=>{const {c}=make(),p=row(['he']);c.name.set('Unsaved');c.description.set('Draft');c.newLocale.set('fr');expect(c.projectRemovalLocales(p)).toEqual(['he']);expect(c.projectRemovalLocales({...p,locales:[{code:'fr'}]})).toEqual(['fr']);expect([c.name(),c.description(),c.newLocale()]).toEqual(['Unsaved','Draft','fr']);});
+ it('review preserves confirmation result error and sends no request',()=>{const {c,api}=make();c.confirming.set(true);c.error.set('Independent');c.generalDraftNotice.set('Earlier receipt');c.projectRemovalLocales(row(['he']));expect([c.confirming(),c.error(),c.generalDraftNotice(),c.busy()]).toEqual([true,'Independent','Earlier receipt',false]);expect(api.deleteProject).not.toHaveBeenCalled();expect(api.getProject).not.toHaveBeenCalled();});
+ it('review cannot authorize deletion',async()=>{const {c,api}=make();c.project.set(row(['he']));c.projectRemovalLocales(row(['he']));await c.remove();expect(c.confirming()).toBe(false);expect(api.deleteProject).not.toHaveBeenCalled();});
+});

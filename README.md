@@ -2213,3 +2213,9 @@ Existing confirmation shows exact loaded group/user IDs, member email and group
 role/full ordered locale scope, separate from unsaved edits. Local review only, not
 effective access or a complete membership/task scan. Existing team-wide grant
 removal and unchanged task-assignment warning/handlers/API stay. [Review0652](docs/reviews/0652-group-member-remove-details.md).
+
+### Project Delete loaded identity review
+Existing confirmation shows exact loaded project ID/slug/base locale/full ordered
+locale codes, separate from unsaved drafts. Local review only, no current permission,
+complete dependency or recovery promise. Existing destructive warning/handler/API
+unchanged. [Review0653](docs/reviews/0653-project-delete-details.md).

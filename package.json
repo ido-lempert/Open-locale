@@ -247,6 +247,7 @@
     "test:settings-status-remove-browser": "node scripts/settings-status-remove-browser-test.mjs",
     "test:settings-origin-remove-browser": "node scripts/settings-origin-remove-browser-test.mjs",
     "test:settings-mt-remove-browser": "node scripts/settings-mt-remove-browser-test.mjs",
+    "test:settings-project-delete-details-browser": "node scripts/settings-project-delete-details-browser-test.mjs",
     "test:settings-project-delete-browser": "node scripts/settings-project-delete-browser-test.mjs",
     "test:settings-member-email-discard-browser": "node scripts/settings-member-email-discard-browser-test.mjs",
     "test:settings-group-name-discard-browser": "node scripts/settings-group-name-discard-browser-test.mjs",
