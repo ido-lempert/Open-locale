@@ -2278,3 +2278,9 @@ The editor can download local JSON of the current loaded comment thread,
 including author/mention details, with an explicit private-content warning.
 Unsent forms, translations and screenshots are excluded; it is not a restorable
 backup or confirmation of a write. [Review0662](docs/reviews/0662-editor-comment-thread-download.md).
+
+### Edit loaded task details
+Tasks can open a local title/description editor with explicit Save and Close.
+Exact loaded-task binding and text limits guard saves; stale or unconfirmed
+results keep local text without automatic retry. Dates and assignments are
+unchanged. [Review0663](docs/reviews/0663-task-details-edit.md).

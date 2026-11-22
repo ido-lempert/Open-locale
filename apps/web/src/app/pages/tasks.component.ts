@@ -94,6 +94,19 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
       <button type="button" name="downloadTasks" [disabled]="!downloadReady()" (click)="download()">Download loaded task metadata (.json)</button>
       <p class="muted" name="taskDownloadScope">Downloads all loaded tasks under the current assignee and status filters, regardless of title search. Not newer server changes or complete project history. Includes task IDs, titles, status, due date, displayed assignee/group names, predecessor IDs and lock/key metadata. Omits descriptions, emails and creator details. The file can contain private project metadata; downloading does not share it or confirm task outcomes.</p>
       @if (downloadNotice()) { <p role="status" name="taskDownloadNotice">{{downloadNotice()}}</p> }
+      @if (detailsEdit(); as edit) {
+        <section class="panel" aria-label="Edit loaded task details" style="overflow-wrap:anywhere;min-width:0">
+          <h2>Edit task details</h2>
+          <p class="muted" name="taskDetailsScope">Local title and description for loaded task {{edit.id}} in project {{edit.projectId}}. Save sends only these two fields, not dates, status, assignments, dependencies or locks. This is not a fresh permission check or newer server state. Text is not saved automatically or restored after leaving. Copy text before closing or reopening.</p>
+          <label>Title <input name="editTaskTitle" aria-describedby="taskDetailsRules" [attr.aria-invalid]="!validDetailsText()" style="width:100%;box-sizing:border-box" [disabled]="detailsSaving()" [ngModel]="detailsTitle()" (ngModelChange)="detailsTitle.set($event)" /></label>
+          <label>Description <textarea name="editTaskDescription" aria-describedby="taskDetailsRules" rows="4" style="width:100%;box-sizing:border-box" [disabled]="detailsSaving()" [ngModel]="detailsDescription()" (ngModelChange)="detailsDescription.set($event)"></textarea></label>
+          <p class="muted" id="taskDetailsRules" name="taskDetailsRules">Title: 1-200 characters; description: up to 2,000 using the API count. Outer whitespace is trimmed on Save. Empty description clears the stored description. Text is not truncated.</p>
+          @if (!validDetailsText()) { <p role="status" name="taskDetailsInvalid">Correct the title or description before saving. Your text is kept here and not sent.</p> }
+          @if (!detailsCurrent() && !detailsSaving()) { <p role="status" name="taskDetailsStale">This loaded task is no longer current or available for editing. Your local text is kept here. Copy it, close this editor, check tasks and reopen the task before saving. No automatic retry is made.</p> }
+          @if (detailsSaving()) { <p role="status" name="taskDetailsSaving">Saving task details. Do not repeat this request.</p> }
+          <div class="toolbar"><button type="button" name="saveTaskDetails" [disabled]="!detailsSaveReady()" (click)="saveDetails()">Save task details</button><button type="button" name="cancelTaskDetails" [disabled]="detailsSaving()" (click)="closeDetails()">Close local editor</button></div>
+        </section>
+      }
       <ul class="task-list">
         @for (t of visibleTasks(); track t.id) {
           <li class="task-row" [attr.aria-busy]="rowPending(t.id)">
@@ -128,6 +141,7 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
             @if (t.dueDate) { <time class="muted">due {{ t.dueDate | date:'mediumDate' }}</time> }
             @if (updatingIds().includes(t.id)) { <span role="status" name="taskUpdating">Updating task...</span> }
             @if (deletingIds().includes(t.id)) { <span role="status" name="taskDeleting">Deleting task...</span> }
+            <button type="button" [disabled]="!canOpenDetails(t)" [attr.aria-label]="'Edit details for ' + t.title" (click)="openDetails(t)">Edit details</button>
             <button [disabled]="!rowReady(t)" class="danger" [attr.aria-label]="'Delete task ' + t.title" (click)="requestRemove(t)">&times;</button>
           </li>
         } @empty {
@@ -147,6 +161,33 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
   `,
 })
 export class TasksComponent implements OnInit, OnDestroy {
+  detailsEdit=signal<{row:TaskItem;projectId:string;scope:number;generation:number;id:string;title:string;description:string}|null>(null);
+  detailsTitle=signal('');detailsDescription=signal('');detailsSaving=signal(false);
+  canOpenDetails(t:TaskItem){return !this.detailsEdit()&&!this.mutationsPending()&&!this.createUnknown()&&this.rowReady(t);}
+  openDetails(t:TaskItem){
+    if(!this.canOpenDetails(t))return;
+    this.cancelRemove();this.detailsTitle.set(t.title);this.detailsDescription.set(t.description);
+    const edit={row:t,projectId:this.projectId,scope:this.projectGeneration,generation:this.fetchSeq,id:t.id,title:t.title,description:t.description};this.detailsEdit.set(edit);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{if(this.destroyed||this.detailsEdit()!==edit)return;const input=document.querySelector<HTMLInputElement>('[name=editTaskTitle]');input?.scrollIntoView({block:'center'});input?.focus({preventScroll:true});}));
+  }
+  closeDetails(){if(this.detailsSaving())return;this.detailsEdit.set(null);this.detailsTitle.set('');this.detailsDescription.set('');}
+  detailsCurrent(){const e=this.detailsEdit();return !!e&&e.projectId===this.projectId&&e.scope===this.projectGeneration&&e.generation===this.fetchSeq&&e.row.id===e.id&&e.row.title===e.title&&e.row.description===e.description&&this.rowReady(e.row)&&!this.createUnknown();}
+  validDetailsText(){const title=this.detailsTitle().trim();return !!title&&this.apiTextLength(title)<=200&&this.apiTextLength(this.detailsDescription().trim())<=2000;}
+  detailsSaveReady(){const e=this.detailsEdit();return !!e&&!this.detailsSaving()&&!this.mutationsPending()&&this.detailsCurrent()&&this.validDetailsText()&&(this.detailsTitle().trim()!==e.title||this.detailsDescription().trim()!==e.description);}
+  async saveDetails(){
+    if(!this.detailsSaveReady())return;
+    const edit=this.detailsEdit()!,projectId=this.projectId,scope=this.projectGeneration,patch={title:this.detailsTitle().trim(),description:this.detailsDescription().trim()},action=++this.actionSeq;
+    const current=()=>!this.destroyed&&scope===this.projectGeneration;
+    ++this.mutationEpoch;this.cancelRemove();this.detailsSaving.set(true);this.updatingIds.update(ids=>[...ids,edit.id]);this.loaded.set(false);this.downloadNotice.set('');this.actionNotice.set('');this.error.set('');
+    try{
+      await this.api.updateTask(projectId,edit.id,patch);
+      if(!current())return;
+      if(this.detailsEdit()===edit){this.detailsEdit.set(null);this.detailsTitle.set('');this.detailsDescription.set('');}
+      if(action===this.actionSeq)this.actionNotice.set('Task details were updated. If the list is unavailable, retry its read without repeating the change.');
+      await this.fetch();
+    }catch{if(current()){++this.mutationEpoch;this.actionUnknown.set(true);this.error.set('Task update failed. Check the task list before trying again.');}}
+    finally{if(current()){this.detailsSaving.set(false);this.updatingIds.update(ids=>ids.filter(id=>id!==edit.id));}}
+  }
   pendingTaskDelete=signal<{row:TaskItem;projectId:string;scope:number;generation:number;id:string;title:string}|null>(null);
   projectId = '';
   tasks = signal<TaskItem[]>([]);
@@ -227,13 +268,14 @@ export class TasksComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    this.cancelRemove();this.cancelDraftReset();this.draftResetResult.set(null);this.destroyed=true;++this.fetchSeq;++this.projectGeneration;
+    this.detailsEdit.set(null);this.detailsSaving.set(false);this.cancelRemove();this.cancelDraftReset();this.draftResetResult.set(null);this.destroyed=true;++this.fetchSeq;++this.projectGeneration;
     this.routeSub?.unsubscribe();
   }
 
   private initForProject(pid: string) {
     if(this.destroyed)return;
     ++this.projectGeneration;
+    this.detailsEdit.set(null);this.detailsTitle.set('');this.detailsDescription.set('');this.detailsSaving.set(false);
     this.cancelRemove();this.cancelDraftReset();this.draftResetResult.set(null);this.projectId = pid;this.draftDownloadResult.set(null);
     this.fetchSeq++; // invalidate every in-flight fetch from the previous project
     ++this.mutationEpoch;this.actionUnknown.set(false);this.createUnknown.set(false);this.error.set('');this.createNotice.set('');this.actionNotice.set('');this.creating.set(false);this.updatingIds.set([]);this.deletingIds.set([]);
