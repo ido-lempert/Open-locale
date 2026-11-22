@@ -2638,3 +2638,10 @@ confirmation bound to its exact key, pane and project/branch/grid scope.
 Pointer opening/cancel retains focused local translation text without blur-save.
 Existing screenshot-only refresh and unknown-result recovery remain unchanged.
 [Review0660](reviews/0660-editor-shot-delete-confirmation.md).
+
+### Comment deletion confirmation
+Editor parent-comment and reply deletion now require a separate cancelable
+loaded-comment confirmation. It names reply cascades and author-only permission,
+binds exact comment/thread/key/project scope and preserves focused local text.
+Existing comment-only refresh and unknown-result recovery remain unchanged.
+[Review0661](reviews/0661-editor-comment-delete-confirmation.md).

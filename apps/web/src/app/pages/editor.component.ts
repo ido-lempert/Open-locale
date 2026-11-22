@@ -343,7 +343,7 @@ interface CellState {
                           --> }</span>
                           <span class="muted">{{ cm.author?.displayName ?? 'unknown' }} · {{ cm.createdAt | date:'short' }}</span>
                           <button [attr.aria-label]="'Reply to comment'" (mousedown)="$event.preventDefault()" [disabled]="!commentReplyReady(k,cm.id)" (click)="selectCommentReply(k,cm.id)">reply</button>
-                          <button class="danger" [attr.aria-label]="'Delete comment'" [disabled]="commentsSaving() || commentsMutationError().includes(k.id)" (click)="deleteComment(k, cm.id)">&times;</button>
+                          <button class="danger" [attr.aria-label]="'Delete comment'" [disabled]="commentsSaving() || commentsMutationError().includes(k.id)" (pointerdown)="$event.preventDefault()" (click)="requestCommentRemove(k, cm)">&times;</button>
                           @if (repliesOf(cm.id).length > 0) {
                             <ul class="history-list replies">
                               @for (rp of repliesOf(cm.id); track rp.id) {
@@ -353,7 +353,7 @@ interface CellState {
                                     -->@if (seg.mention) { <span class="mention">{{ seg.text }}</span> } @else { <span>{{ seg.text }}</span> }<!--
                                   --> }</span>
                                   <span class="muted">{{ rp.author?.displayName ?? 'unknown' }} · {{ rp.createdAt | date:'short' }}</span>
-                                  <button class="danger" [attr.aria-label]="'Delete comment'" [disabled]="commentsSaving() || commentsMutationError().includes(k.id)" (click)="deleteComment(k, rp.id)">&times;</button>
+                                  <button class="danger" [attr.aria-label]="'Delete comment'" [disabled]="commentsSaving() || commentsMutationError().includes(k.id)" (pointerdown)="$event.preventDefault()" (click)="requestCommentRemove(k, rp)">&times;</button>
                                 </li>
                               }
                             </ul>
@@ -404,6 +404,15 @@ interface CellState {
         </table>
       }
     </main>
+    @if (pendingCommentDelete(); as pending) {
+      <div class="modal-backdrop"><section class="modal" role="dialog" aria-label="Confirm comment deletion" style="max-height:calc(100dvh - 2rem);overflow-y:auto;overflow-wrap:anywhere;min-width:0">
+        <h3>Delete comment?</h3>
+        <p>This deletes this stored comment. Deleting a parent comment also deletes its replies, including replies by other authors. Mention links for deleted comments are removed. The key, translations, screenshots and unrelated comments are not deleted by this action. This page does not offer comment undo. Copy anything you need first.</p>
+        <p class="muted" name="commentDeleteScope">Identity and reply count from the loaded thread only, not a fresh permission check, newer server state or complete impact scan. Only the comment author can delete it; the server checks permission. No deletion has run. Local comment text, translation values and the new-key form are not included. A confirmed delete refreshes only the current comment thread.</p>
+        <dl><dt>Project ID</dt><dd name="commentDeleteProjectId">{{pending.projectId}}</dd><dt>Loaded branch</dt><dd name="commentDeleteBranch">{{pending.branch}}</dd><dt>Key ID</dt><dd name="commentDeleteKeyId">{{pending.keyId}}</dd><dt>Loaded key name</dt><dd name="commentDeleteKeyName">{{pending.keyName}}</dd><dt>Comment ID</dt><dd name="commentDeleteId">{{pending.id}}</dd><dt>Parent comment ID</dt><dd name="commentDeleteParent">{{pending.parentId ?? 'none (parent comment)'}}</dd><dt>Loaded language scope</dt><dd name="commentDeleteLocale">{{pending.locale ?? 'all languages'}}</dd><dt>Loaded direct replies</dt><dd name="commentDeleteReplies">{{pending.replies}}</dd><dt>Loaded comment text</dt><dd name="commentDeleteBody" style="white-space:pre-wrap">{{pending.body}}</dd></dl>
+        <div class="modal-actions"><button type="button" class="danger" name="confirmCommentDelete" (pointerdown)="$event.preventDefault()" (click)="confirmCommentRemove()">Delete comment</button><button type="button" name="cancelCommentDelete" (pointerdown)="$event.preventDefault()" (click)="cancelCommentRemove()">Keep comment</button></div>
+      </section></div>
+    }
     @if (pendingShotDelete(); as pending) {
       <div class="modal-backdrop"><section class="modal" role="dialog" aria-label="Confirm screenshot deletion" style="max-height:calc(100dvh - 2rem);overflow-y:auto;overflow-wrap:anywhere;min-width:0">
         <h3>Delete screenshot?</h3>
@@ -447,6 +456,7 @@ interface CellState {
   `,
 })
 export class EditorComponent implements OnInit, OnDestroy {
+  pendingCommentDelete=signal<{row:Key;comment:CommentEntry;projectId:string;branch:string;scope:number;generation:number;thread:number;keyId:string;keyName:string;id:string;parentId:string|null;locale:string|null;body:string;replies:number;metadata:string}|null>(null);
   pendingShotDelete=signal<{row:Key;shot:ScreenshotMeta;projectId:string;branch:string;scope:number;generation:number;pane:number;keyId:string;keyName:string;id:string;filename:string;metadata:string}|null>(null);
   pendingKeyDelete=signal<{row:Key;projectId:string;branch:string;scope:number;generation:number;id:string;name:string;cells:string}|null>(null);
   project = signal<Project | null>(null);
@@ -526,7 +536,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   async ngOnInit() { await this.loadProject(); }
   async loadProject() {
     if (this.destroyed) return;
-    this.cancelShotRemove();this.cancelKeyRemove();
+    this.cancelCommentRemove();this.cancelShotRemove();this.cancelKeyRemove();
     ++this.localeRecoveryGeneration;this.localeRecoveryLoading.set(false);this.localeRecoveryError.set(false);this.localeRecoveryCodes.set(null);
     const generation = ++this.projectGeneration, projectId = this.projectId;
     const current = () => !this.destroyed && generation === this.projectGeneration;
@@ -781,6 +791,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     finally { if (!this.destroyed) this.tagsSaving.update(ids => ids.filter(id => id !== k.id)); }
   }
   private clearComments() {
+    this.cancelCommentRemove();
     ++this.commentsGeneration; this.commentsFor.set(null); this.comments.set([]);
     this.commentsLoading.set(false); this.commentsError.set(false); this.replyTo.set(null);
   }
@@ -799,6 +810,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   recoverComments(k:Key) { if(this.commentsRecoveryReady(k))return this.readComments(k);return Promise.resolve(); }
   async readComments(k: Key) {
     if (this.destroyed || this.commentsFor() !== k.id) return;
+    this.cancelCommentRemove();
     const generation = ++this.commentsGeneration, projectId = this.projectId, keyId = k.id;
     const current = () => !this.destroyed && generation === this.commentsGeneration && this.commentsFor() === keyId;
     const mutationEpoch = this.commentsMutationEpoch.get(keyId) ?? 0;
@@ -859,6 +871,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     });
   }
   private async changeComments(k: Key, write: () => Promise<unknown>, onConfirmed?: () => void) {
+    this.cancelCommentRemove();
     const generation = this.commentsGeneration;
     this.commentsMutationEpoch.set(k.id, (this.commentsMutationEpoch.get(k.id) ?? 0) + 1);
     this.commentsSaving.set(true);
@@ -1016,6 +1029,23 @@ export class EditorComponent implements OnInit, OnDestroy {
     finally { if (!this.destroyed) { this.shotsMutationEpoch.set(k.id, (this.shotsMutationEpoch.get(k.id) ?? 0) + 1); this.shotsMutating.update(ids => ids.filter(id => id !== k.id)); } }
     // Refresh is an independent read, never relabel a confirmed mutation as failed.
     if (confirmed && !this.destroyed && generation === this.shotsGeneration && this.shotsFor() === k.id) await this.readShots(k);
+  }
+  private commentDeleteMetadata(cm:CommentEntry) {
+    return JSON.stringify(this.comments().filter(c=>c===cm||c.parentId===cm.id).map(c=>({id:c.id,keyId:c.keyId,parentId:c.parentId,localeCode:c.localeCode,body:c.body,createdAt:c.createdAt,author:c.author,mentions:c.mentions})).sort((a,b)=>a.id.localeCompare(b.id)));
+  }
+  private commentDeleteReviewReady(k:Key,cm:CommentEntry) {
+    const loaded=this.loadedGridScope();
+    return !this.projectLoading()&&!this.projectError()&&loaded?.projectId===this.projectId&&loaded.branch===this.branch()&&this.keys().some(row=>row===k)&&this.comments().some(c=>c===cm)&&cm.keyId===k.id&&this.canChangeComments(k);
+  }
+  requestCommentRemove(k:Key,cm:CommentEntry) {
+    if(!this.commentDeleteReviewReady(k,cm))return;
+    this.pendingCommentDelete.set({row:k,comment:cm,projectId:this.projectId,branch:this.branch(),scope:this.projectGeneration,generation:this.keysGeneration,thread:this.commentsGeneration,keyId:k.id,keyName:k.name,id:cm.id,parentId:cm.parentId,locale:cm.localeCode,body:cm.body,replies:this.repliesOf(cm.id).length,metadata:this.commentDeleteMetadata(cm)});
+  }
+  cancelCommentRemove() {this.pendingCommentDelete.set(null);}
+  async confirmCommentRemove() {
+    const pending=this.pendingCommentDelete();this.cancelCommentRemove();
+    if(!pending||pending.projectId!==this.projectId||pending.branch!==this.branch()||pending.scope!==this.projectGeneration||pending.generation!==this.keysGeneration||pending.thread!==this.commentsGeneration||pending.row.id!==pending.keyId||pending.row.name!==pending.keyName||pending.comment.id!==pending.id||pending.metadata!==this.commentDeleteMetadata(pending.comment)||!this.commentDeleteReviewReady(pending.row,pending.comment))return;
+    await this.deleteComment(pending.row,pending.id);
   }
   async deleteComment(k: Key, commentId: string) {
     if (!this.canChangeComments(k) || !this.comments().some(c => c.id === commentId)) return;
