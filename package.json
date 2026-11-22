@@ -107,6 +107,7 @@
     "test:editor-key-create-browser": "node scripts/editor-key-create-browser-test.mjs",
     "test:editor-locale-create-browser": "node scripts/editor-locale-create-browser-test.mjs",
     "test:editor-key-delete-browser": "node scripts/editor-key-delete-browser-test.mjs",
+    "test:editor-merge-identity-browser": "node scripts/editor-merge-identity-browser-test.mjs",
     "test:editor-merge-browser": "node scripts/editor-merge-browser-test.mjs",
     "test:editor-import-scope-browser": "node scripts/editor-import-scope-browser-test.mjs",
     "test:editor-import-drafts-browser": "node scripts/editor-import-drafts-browser-test.mjs",

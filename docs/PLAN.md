@@ -2604,3 +2604,9 @@ Malformed capture times no longer interrupt snapshot-row rendering. Unknown kind
 metadata is not described as manual. Raw values remain in loaded review/downloads;
 fallbacks do not validate snapshot contents or change restore guards/API.
 [Review0655](reviews/0655-snapshot-metadata-fallback.md).
+
+### Merge preview request identity
+Existing confirmation exposes project/source-branch IDs, source name, fixed target
+main and raw preview timestamp. Loaded-preview metadata only, not fresh permission
+or a complete conflict scan. Existing counts/warnings/API/guards unchanged.
+[Review0656](reviews/0656-merge-preview-identity.md).

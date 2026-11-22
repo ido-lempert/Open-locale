@@ -406,9 +406,13 @@ interface CellState {
     </main>
     @if (mergePreview(); as mp) {
       <div class="modal-backdrop">
-        <div class="modal" role="dialog" aria-label="Merge preview">
+        <div class="modal" style="max-height:calc(100dvh - 2rem);overflow-y:auto;overflow-wrap:anywhere;min-width:0" role="dialog" aria-label="Merge preview">
           <h3>Merge {{ mp.from }} into main</h3>
           <p class="muted">Copy-forward: {{ mp.from }} itself stays as it is. Only saved server values are merged; local unsaved drafts are not included.</p>
+          <section name="mergePreviewIdentity" style="overflow-wrap:anywhere;word-break:break-word" aria-label="Loaded merge preview identity">
+            <p class="muted">Identity from this loaded preview only, not a fresh permission check, a complete conflict scan or confirmation that a merge has run. The preview counts below describe saved server values, not local drafts. Review again if the source or target changes.</p>
+            <dl><dt>Project ID</dt><dd name="mergeReviewProjectId">{{projectId}}</dd><dt>Source branch ID</dt><dd name="mergeReviewBranchId">{{mp.branchId}}</dd><dt>Source branch name</dt><dd name="mergeReviewSource">{{mp.from}}</dd><dt>Target branch</dt><dd name="mergeReviewTarget">main</dd><dt>Raw preview timestamp</dt><dd name="mergeReviewTimestamp">{{mp.previewAt || '(empty loaded preview time)'}}</dd></dl>
+          </section>
           <ul class="merge-diff">
             @for (line of mp.lines; track line) {
               <li [class.warn]="line.startsWith('WARNING')">{{ line }}</li>
