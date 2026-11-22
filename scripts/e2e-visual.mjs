@@ -1766,6 +1766,8 @@ try {
     const row = [...document.querySelectorAll('.task-row')].find((r) => (r.querySelector('.task-body strong')?.textContent || '').includes('Persistence probe'));
     row.querySelector('button[aria-label^="Delete task"]').click();
   });
+  await page.waitForSelector('[name=confirmTaskDelete]');
+  await page.click('[name=confirmTaskDelete]');
   await page.waitForFunction(() => ![...document.querySelectorAll('.task-row')].some(
     (r) => (r.querySelector('.task-body strong')?.textContent || '').includes('Persistence probe')), { timeout: 10000 });
   check('probe task deleted after the persistence check', true);

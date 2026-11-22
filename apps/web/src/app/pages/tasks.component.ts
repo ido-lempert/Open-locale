@@ -128,16 +128,26 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
             @if (t.dueDate) { <time class="muted">due {{ t.dueDate | date:'mediumDate' }}</time> }
             @if (updatingIds().includes(t.id)) { <span role="status" name="taskUpdating">Updating task...</span> }
             @if (deletingIds().includes(t.id)) { <span role="status" name="taskDeleting">Deleting task...</span> }
-            <button [disabled]="!rowReady(t)" class="danger" [attr.aria-label]="'Delete task ' + t.title" (click)="remove(t)">&times;</button>
+            <button [disabled]="!rowReady(t)" class="danger" [attr.aria-label]="'Delete task ' + t.title" (click)="requestRemove(t)">&times;</button>
           </li>
         } @empty {
           @if (!loading() && !listError()) { <li class="muted" name="taskListEmpty">{{ query() ? 'No loaded tasks match this search. Clear search to show the current filtered list.' : hasFilters() ? 'No tasks match these filters' : 'No tasks yet' }}</li> }
         }
       </ul>
     </main>
+    @if (pendingTaskDelete(); as pending) {
+      <div class="modal-backdrop"><section class="modal" role="dialog" aria-label="Confirm task deletion" style="max-height:calc(100dvh - 2rem);overflow-y:auto;overflow-wrap:anywhere;min-width:0">
+        <h3>Delete task?</h3>
+        <p>This removes the task, not translation keys or values. This page does not offer task undo. Linked-task and lock effects are not previewed here.</p>
+        <p class="muted" name="taskDeleteScope">Identity from the loaded task only, not a fresh permission check or newer server state. No deletion has run. The local new-task form is not included.</p>
+        <dl><dt>Project ID</dt><dd name="taskDeleteProjectId">{{pending.projectId}}</dd><dt>Task ID</dt><dd name="taskDeleteId">{{pending.id}}</dd><dt>Loaded task title</dt><dd name="taskDeleteTitle">{{pending.title}}</dd></dl>
+        <div class="modal-actions"><button type="button" class="danger" name="confirmTaskDelete" (click)="confirmRemove()">Delete task</button><button type="button" name="cancelTaskDelete" (click)="cancelRemove()">Keep task</button></div>
+      </section></div>
+    }
   `,
 })
 export class TasksComponent implements OnInit, OnDestroy {
+  pendingTaskDelete=signal<{row:TaskItem;projectId:string;scope:number;generation:number;id:string;title:string}|null>(null);
   projectId = '';
   tasks = signal<TaskItem[]>([]);
   query=signal('');
@@ -217,14 +227,14 @@ export class TasksComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    this.cancelDraftReset();this.draftResetResult.set(null);this.destroyed=true;++this.fetchSeq;++this.projectGeneration;
+    this.cancelRemove();this.cancelDraftReset();this.draftResetResult.set(null);this.destroyed=true;++this.fetchSeq;++this.projectGeneration;
     this.routeSub?.unsubscribe();
   }
 
   private initForProject(pid: string) {
     if(this.destroyed)return;
     ++this.projectGeneration;
-    this.cancelDraftReset();this.draftResetResult.set(null);this.projectId = pid;this.draftDownloadResult.set(null);
+    this.cancelRemove();this.cancelDraftReset();this.draftResetResult.set(null);this.projectId = pid;this.draftDownloadResult.set(null);
     this.fetchSeq++; // invalidate every in-flight fetch from the previous project
     ++this.mutationEpoch;this.actionUnknown.set(false);this.createUnknown.set(false);this.error.set('');this.createNotice.set('');this.actionNotice.set('');this.creating.set(false);this.updatingIds.set([]);this.deletingIds.set([]);
     this.loaded.set(false);this.downloadNotice.set('');this.tasks.set([]); this.members.set([]); this.groups.set([]); this.keys.set([]);
@@ -319,6 +329,7 @@ export class TasksComponent implements OnInit, OnDestroy {
     // overlapping fetches; only the newest response may touch the list,
     // the error banner or the loading flag.
     if(this.destroyed)return;
+    this.cancelRemove();
     const seq = ++this.fetchSeq,epoch=this.mutationEpoch,pending=this.mutationsPending(),unfiltered=!this.hasFilters();
     this.loaded.set(false);this.downloadNotice.set('');this.tasks.set([]);this.listError.set(false);
     this.loading.set(true);
@@ -431,6 +442,20 @@ export class TasksComponent implements OnInit, OnDestroy {
       if (el && revertValue !== undefined) el.value = revertValue;
       if(known)await this.fetch();
     } finally { if(current())this.updatingIds.update(ids=>ids.filter(id=>id!==t.id)); }
+  }
+
+  requestRemove(t:TaskItem) {
+    if(!this.rowReady(t))return;
+    this.pendingTaskDelete.set({row:t,projectId:this.projectId,scope:this.projectGeneration,generation:this.fetchSeq,id:t.id,title:t.title});
+  }
+
+  cancelRemove() {this.pendingTaskDelete.set(null);}
+
+  async confirmRemove() {
+    const pending=this.pendingTaskDelete();
+    this.cancelRemove();
+    if(!pending||pending.projectId!==this.projectId||pending.scope!==this.projectGeneration||pending.generation!==this.fetchSeq||pending.row.id!==pending.id||pending.row.title!==pending.title||!this.rowReady(pending.row))return;
+    await this.remove(pending.row);
   }
 
   async remove(t: TaskItem) {

@@ -2237,3 +2237,10 @@ Existing confirmation exposes project/source-branch IDs, source name, fixed targ
 main and raw preview timestamp. Loaded-preview metadata only, not fresh permission
 or a complete conflict scan. Existing counts/warnings/API/guards unchanged.
 [Review0656](docs/reviews/0656-merge-preview-identity.md).
+
+### Task deletion confirmation
+A task row now opens a separate cancelable confirmation before deletion. It shows
+loaded project/task IDs and title, with explicit loaded-state and impact limits.
+Cancel keeps the task and local new-task form; confirmation rechecks current row
+and project/list scope before the existing delete lifecycle.
+[Review0657](docs/reviews/0657-task-delete-confirmation.md).
