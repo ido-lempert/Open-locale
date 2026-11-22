@@ -311,7 +311,7 @@ interface CellState {
                         <li>
                           <img [src]="shotUrls()[sh.id]" [alt]="'Screenshot ' + sh.filename" width="160" />
                           <span class="muted">{{ sh.filename }} · {{ sh.uploader?.displayName ?? 'unknown' }}</span>
-                          <button class="danger" [attr.aria-label]="'Delete screenshot ' + sh.filename" [disabled]="shotsMutating().includes(k.id) || shotsMutationError().includes(k.id)" (click)="deleteShot(k, sh.id)">&times;</button>
+                          <button class="danger" [attr.aria-label]="'Delete screenshot ' + sh.filename" [disabled]="shotsMutating().includes(k.id) || shotsMutationError().includes(k.id)" (pointerdown)="$event.preventDefault()" (click)="requestShotRemove(k, sh)">&times;</button>
                         </li>
                       }
                     </ul>
@@ -404,6 +404,15 @@ interface CellState {
         </table>
       }
     </main>
+    @if (pendingShotDelete(); as pending) {
+      <div class="modal-backdrop"><section class="modal" role="dialog" aria-label="Confirm screenshot deletion" style="max-height:calc(100dvh - 2rem);overflow-y:auto;overflow-wrap:anywhere;min-width:0">
+        <h3>Delete screenshot?</h3>
+        <p>This deletes this stored screenshot and its image bytes for this key. The key, translations, comments and other screenshots are not deleted by this action. This page does not offer screenshot undo. Save a copy you need before continuing.</p>
+        <p class="muted" name="shotDeleteScope">Identity from the loaded screenshot pane only, not a fresh permission check or newer server state. No deletion has run. Local translation values and the local new-key form are not included. A confirmed delete refreshes only the current screenshot pane.</p>
+        <dl><dt>Project ID</dt><dd name="shotDeleteProjectId">{{pending.projectId}}</dd><dt>Loaded branch</dt><dd name="shotDeleteBranch">{{pending.branch}}</dd><dt>Key ID</dt><dd name="shotDeleteKeyId">{{pending.keyId}}</dd><dt>Loaded key name</dt><dd name="shotDeleteKeyName">{{pending.keyName}}</dd><dt>Screenshot ID</dt><dd name="shotDeleteId">{{pending.id}}</dd><dt>Loaded filename</dt><dd name="shotDeleteFilename">{{pending.filename}}</dd></dl>
+        <div class="modal-actions"><button type="button" class="danger" name="confirmShotDelete" (pointerdown)="$event.preventDefault()" (click)="confirmShotRemove()">Delete screenshot</button><button type="button" name="cancelShotDelete" (pointerdown)="$event.preventDefault()" (click)="cancelShotRemove()">Keep screenshot</button></div>
+      </section></div>
+    }
     @if (pendingKeyDelete(); as pending) {
       <div class="modal-backdrop"><section class="modal" role="dialog" aria-label="Confirm key deletion" style="max-height:calc(100dvh - 2rem);overflow-y:auto;overflow-wrap:anywhere;min-width:0">
         <h3>Delete translation key?</h3>
@@ -438,6 +447,7 @@ interface CellState {
   `,
 })
 export class EditorComponent implements OnInit, OnDestroy {
+  pendingShotDelete=signal<{row:Key;shot:ScreenshotMeta;projectId:string;branch:string;scope:number;generation:number;pane:number;keyId:string;keyName:string;id:string;filename:string;metadata:string}|null>(null);
   pendingKeyDelete=signal<{row:Key;projectId:string;branch:string;scope:number;generation:number;id:string;name:string;cells:string}|null>(null);
   project = signal<Project | null>(null);
   keys = signal<Key[]>([]);
@@ -516,7 +526,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   async ngOnInit() { await this.loadProject(); }
   async loadProject() {
     if (this.destroyed) return;
-    this.cancelKeyRemove();
+    this.cancelShotRemove();this.cancelKeyRemove();
     ++this.localeRecoveryGeneration;this.localeRecoveryLoading.set(false);this.localeRecoveryError.set(false);this.localeRecoveryCodes.set(null);
     const generation = ++this.projectGeneration, projectId = this.projectId;
     const current = () => !this.destroyed && generation === this.projectGeneration;
@@ -910,7 +920,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     for (const url of Object.values(urls)) URL.revokeObjectURL(url);
   }
   private clearShots() {
-    this.shotUploadTooLargeFor.set(null);
+    this.cancelShotRemove();this.shotUploadTooLargeFor.set(null);
     ++this.shotsGeneration; this.shotsFor.set(null); this.shotsLoading.set(false); this.shotsError.set(false);
     this.revokeShots(this.shotUrls()); this.shotUrls.set({}); this.shots.set([]);
   }
@@ -930,6 +940,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   recoverShots(k:Key) { if(this.shotsRecoveryReady(k))return this.readShots(k);return Promise.resolve(); }
   async readShots(k: Key) {
     if (this.destroyed || this.shotsFor() !== k.id) return;
+    this.cancelShotRemove();
     const generation = ++this.shotsGeneration, projectId = this.projectId, keyId = k.id;
     const current = () => !this.destroyed && generation === this.shotsGeneration && this.shotsFor() === keyId;
     this.revokeShots(this.shotUrls()); this.shotUrls.set({}); this.shots.set([]);
@@ -973,11 +984,27 @@ export class EditorComponent implements OnInit, OnDestroy {
     this.shotUploadTooLargeFor.set(null);
     await this.changeShots(k, () => this.api.uploadScreenshot(this.projectId, k.id, file), 1);
   }
+  private shotDeleteMetadata(sh:ScreenshotMeta) {return JSON.stringify({filename:sh.filename,mimeType:sh.mimeType,byteSize:sh.byteSize,createdAt:sh.createdAt});}
+  private shotDeleteReviewReady(k:Key,sh:ScreenshotMeta) {
+    const loaded=this.loadedGridScope();
+    return !this.projectLoading()&&!this.projectError()&&loaded?.projectId===this.projectId&&loaded.branch===this.branch()&&this.keys().some(row=>row===k)&&this.shots().some(shot=>shot===sh)&&this.canChangeShots(k);
+  }
+  requestShotRemove(k:Key,sh:ScreenshotMeta) {
+    if(!this.shotDeleteReviewReady(k,sh))return;
+    this.pendingShotDelete.set({row:k,shot:sh,projectId:this.projectId,branch:this.branch(),scope:this.projectGeneration,generation:this.keysGeneration,pane:this.shotsGeneration,keyId:k.id,keyName:k.name,id:sh.id,filename:sh.filename,metadata:this.shotDeleteMetadata(sh)});
+  }
+  cancelShotRemove() {this.pendingShotDelete.set(null);}
+  async confirmShotRemove() {
+    const pending=this.pendingShotDelete();this.cancelShotRemove();
+    if(!pending||pending.projectId!==this.projectId||pending.branch!==this.branch()||pending.scope!==this.projectGeneration||pending.generation!==this.keysGeneration||pending.pane!==this.shotsGeneration||pending.row.id!==pending.keyId||pending.row.name!==pending.keyName||pending.shot.id!==pending.id||pending.metadata!==this.shotDeleteMetadata(pending.shot)||!this.shotDeleteReviewReady(pending.row,pending.shot))return;
+    await this.deleteShot(pending.row,pending.id);
+  }
   async deleteShot(k: Key, shotId: string) {
     if (!this.canChangeShots(k) || !this.shots().some(sh => sh.id === shotId)) return;
     await this.changeShots(k, () => this.api.deleteScreenshot(this.projectId, k.id, shotId), -1);
   }
   private async changeShots(k: Key, write: () => Promise<unknown>, delta: number) {
+    this.cancelShotRemove();
     const generation = this.shotsGeneration, keysGeneration = this.keysGeneration;
     this.shotsMutationEpoch.set(k.id, (this.shotsMutationEpoch.get(k.id) ?? 0) + 1);
     this.shotsMutating.update(ids => [...ids,k.id]);

@@ -2631,3 +2631,10 @@ It binds project, branch, exact row, grid generation and selected cell state bef
 the existing guarded delete lifecycle. Pointer opening/cancel does not blur-save
 a focused unrelated translation. Stored deletion scope and loaded-state limits
 are shown before the choice. [Review0659](reviews/0659-editor-key-delete-confirmation.md).
+
+### Screenshot deletion confirmation
+Editor screenshot deletion now requires a separate cancelable loaded-screenshot
+confirmation bound to its exact key, pane and project/branch/grid scope.
+Pointer opening/cancel retains focused local translation text without blur-save.
+Existing screenshot-only refresh and unknown-result recovery remain unchanged.
+[Review0660](reviews/0660-editor-shot-delete-confirmation.md).
