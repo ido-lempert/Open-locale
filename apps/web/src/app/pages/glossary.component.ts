@@ -84,7 +84,7 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
                 </td>
               }
               <td class="muted" data-label="Notes">{{ t.notes }}</td>
-              <td data-label="Actions">@if (localTextChanged(t)) { <span role="status" name="glossaryLocalDraft">Unsaved local text. Leave the translation field to save, or copy/download the local draft before refreshing.</span><button type="button" name="resetGlossaryLocalText" (pointerdown)="$event.preventDefault()" (click)="resetLocalText(t)">Reset local translation text</button> }@if (unknownSaveIds().includes(t.id)) { <span class="error" role="alert" name="glossarySaveUnknown">Save unconfirmed. Copy text before Refresh.</span> }@if (unknownDeleteIds().includes(t.id)) { <span class="error" role="alert" name="glossaryDeleteUnknown">Delete unconfirmed. Refresh required.</span> }@if (savingIds().includes(t.id)) { <span role="status" name="glossarySaving">Saving translation...</span> }@if (deletingIds().includes(t.id)) { <span role="status" name="glossaryDeleting">Deleting term...</span> }<button [disabled]="rowPending(t.id)" class="danger" [attr.aria-label]="'Delete term ' + t.term" (click)="remove(t)">&times;</button></td>
+              <td data-label="Actions">@if (localTextChanged(t)) { <span role="status" name="glossaryLocalDraft">Unsaved local text. Leave the translation field to save, or copy/download the local draft before refreshing.</span><button type="button" name="resetGlossaryLocalText" (pointerdown)="$event.preventDefault()" (click)="resetLocalText(t)">Reset local translation text</button> }@if (unknownSaveIds().includes(t.id)) { <span class="error" role="alert" name="glossarySaveUnknown">Save unconfirmed. Copy text before Refresh.</span> }@if (unknownDeleteIds().includes(t.id)) { <span class="error" role="alert" name="glossaryDeleteUnknown">Delete unconfirmed. Refresh required.</span> }@if (savingIds().includes(t.id)) { <span role="status" name="glossarySaving">Saving translation...</span> }@if (deletingIds().includes(t.id)) { <span role="status" name="glossaryDeleting">Deleting term...</span> }<button [disabled]="rowPending(t.id)" class="danger" [attr.aria-label]="'Delete term ' + t.term" (pointerdown)="$event.preventDefault()" (click)="requestRemove(t)">&times;</button></td>
             </tr>
           } @empty {
             @if (!loading() && !listError()) { <tr name="glossaryListEmpty"><td colspan="9" class="muted">{{ query() || attention()!=='all' ? 'No loaded terms match these filters. Clear search and choose All loaded terms to show all loaded terms.' : 'No glossary terms yet' }}</td></tr> }
@@ -92,9 +92,19 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
         </tbody>
       </table> }
     </main>
+    @if (pendingTermDelete(); as pending) {
+      <div class="modal-backdrop"><section class="modal" role="dialog" aria-label="Confirm glossary term deletion" style="max-height:calc(100dvh - 2rem);overflow-y:auto;overflow-wrap:anywhere;min-width:0">
+        <h3>Delete glossary term?</h3>
+        <p>This deletes the glossary term and its stored term translations. Any unsaved translation text for this term will be lost if deleted. Copy or download text you need before continuing. This page does not offer term undo.</p>
+        <p class="muted" name="termDeleteScope">Identity from the loaded term only, not a fresh permission check or newer server state. No deletion has run. Other term drafts and the local new-term form are not included.</p>
+        <dl><dt>Project ID</dt><dd name="termDeleteProjectId">{{pending.projectId}}</dd><dt>Term ID</dt><dd name="termDeleteId">{{pending.id}}</dd><dt>Loaded term</dt><dd name="termDeleteName">{{pending.term}}</dd></dl>
+        <div class="modal-actions"><button type="button" class="danger" name="confirmTermDelete" (pointerdown)="$event.preventDefault()" (click)="confirmRemove()">Delete term</button><button type="button" name="cancelTermDelete" (pointerdown)="$event.preventDefault()" (click)="cancelRemove()">Keep term</button></div>
+      </section></div>
+    }
   `,
 })
 export class GlossaryComponent implements OnInit, OnDestroy {
+  pendingTermDelete=signal<{row:GlossaryTermItem;projectId:string;scope:number;generation:number;id:string;term:string;translations:string}|null>(null);
   projectId = '';
   draftDownloadNotice=signal('');
   loaded=signal(false);
@@ -165,7 +175,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   private initForProject(pid:string) {
     if(this.destroyed)return;
     ++this.projectGeneration;
-    this.cancelNewTermReset();this.newTermResetResult.set(null);this.newTermDownloadResult.set(null);this.projectId=pid;++this.fetchSeq;this.savedTranslations.clear();
+    this.cancelRemove();this.cancelNewTermReset();this.newTermResetResult.set(null);this.newTermDownloadResult.set(null);this.projectId=pid;++this.fetchSeq;this.savedTranslations.clear();
     this.localReset.set(null);this.loaded.set(false);this.draftDownloadNotice.set('');this.terms.set([]);this.locales.set([]);this.error.set('');this.createNotice.set('');this.listError.set(false);this.creating.set(false);this.deletingIds.set([]);this.savingIds.set([]);this.unknownDeleteIds.set([]);this.unknownSaveIds.set([]);++this.saveEpoch;this.createUnknown.set(false);++this.createEpoch;
     this.term.set('');this.notes.set('');this.doNotTranslate.set(false);this.query.set('');this.attention.set('all');
     void this.fetch();
@@ -183,7 +193,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   }
 
   private current(scope:number) { return !this.destroyed&&scope===this.projectGeneration; }
-  ngOnDestroy() { this.newTermDownloadResult.set(null);this.cancelNewTermReset();this.newTermResetResult.set(null);this.localReset.set(null);this.destroyed=true;++this.fetchSeq;++this.projectGeneration;this.routeSub?.unsubscribe(); }
+  ngOnDestroy() { this.cancelRemove();this.newTermDownloadResult.set(null);this.cancelNewTermReset();this.newTermResetResult.set(null);this.localReset.set(null);this.destroyed=true;++this.fetchSeq;++this.projectGeneration;this.routeSub?.unsubscribe(); }
 
   draftDownloadReady() {return !this.destroyed&&this.loaded()&&!this.loading()&&!this.listError()&&!this.mutationsPending();}
   downloadDraft() {
@@ -203,6 +213,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
 
   async fetch() {
     if(this.destroyed||this.deletingIds().length>0)return;
+    this.cancelRemove();
     const seq=++this.fetchSeq,epoch=this.saveEpoch,pendingSave=this.savingIds().length>0,createEpoch=this.createEpoch,pendingCreate=this.creating();
     this.localReset.set(null);this.loaded.set(false);this.draftDownloadNotice.set('');this.terms.set([]);this.listError.set(false);this.loading.set(true);
     try {
@@ -247,7 +258,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
 
   setTranslation(t: GlossaryTermItem, locale: string, value: string) {
     if(this.destroyed||this.unknownSaveIds().includes(t.id))return;
-    this.localReset.set(null);this.draftDownloadNotice.set('');
+    this.cancelRemove();this.localReset.set(null);this.draftDownloadNotice.set('');
     this.terms.update((all) => all.map((x) => x.id === t.id
       ? { ...x, translations: { ...x.translations, [locale]: value } } : x));
   }
@@ -297,6 +308,23 @@ export class GlossaryComponent implements OnInit, OnDestroy {
       }
     } catch {if(this.current(scope)){++this.saveEpoch;this.unknownSaveIds.update(ids=>[...new Set([...ids,t.id])]);this.error.set('Save outcome unconfirmed. Copy local translation drafts, then refresh the glossary before trying again.');}}
     finally {if(this.current(scope))this.savingIds.update(ids=>ids.filter(id=>id!==t.id));}
+  }
+
+  private deleteReviewReady(t:GlossaryTermItem) {
+    return !this.destroyed&&!this.loading()&&!this.listError()&&!this.rowPending(t.id)&&this.terms().some(row=>row===t);
+  }
+
+  requestRemove(t:GlossaryTermItem) {
+    if(!this.deleteReviewReady(t))return;
+    this.pendingTermDelete.set({row:t,projectId:this.projectId,scope:this.projectGeneration,generation:this.fetchSeq,id:t.id,term:t.term,translations:JSON.stringify(t.translations)});
+  }
+
+  cancelRemove() {this.pendingTermDelete.set(null);}
+
+  async confirmRemove() {
+    const pending=this.pendingTermDelete();this.cancelRemove();
+    if(!pending||pending.projectId!==this.projectId||!this.current(pending.scope)||pending.generation!==this.fetchSeq||pending.row.id!==pending.id||pending.row.term!==pending.term||JSON.stringify(pending.row.translations)!==pending.translations||!this.deleteReviewReady(pending.row))return;
+    await this.remove(pending.row);
   }
 
   async remove(t: GlossaryTermItem) {

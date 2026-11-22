@@ -2617,3 +2617,10 @@ loaded project/task IDs and title, with explicit loaded-state and impact limits.
 Cancel keeps the task and local new-task form; confirmation rechecks current row
 and project/list scope before the existing delete lifecycle.
 [Review0657](reviews/0657-task-delete-confirmation.md).
+
+### Glossary deletion confirmation
+Term deletion now requires a separate cancelable loaded-term confirmation.
+It binds project/term identity and local translation text before the existing delete
+lifecycle. Pointer opening/cancel keeps focused local translation text without a
+blur-save. List/project/row changes invalidate the review. No server API change.
+[Review0658](reviews/0658-glossary-delete-confirmation.md).

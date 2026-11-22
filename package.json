@@ -80,6 +80,7 @@
     "test:webhook-status-browser": "node scripts/webhook-status-browser-test.mjs",
     "test:webhook-deliveries-browser": "node scripts/webhook-deliveries-browser-test.mjs",
     "test:glossary-save-unknown-browser": "node scripts/glossary-save-unknown-browser-test.mjs",
+    "test:glossary-delete-confirm-browser": "node scripts/glossary-delete-confirm-browser-test.mjs",
     "test:glossary-browser": "node scripts/glossary-browser-test.mjs",
     "test:editor-history-browser": "node scripts/editor-history-browser-test.mjs",
     "test:editor-shots-browser": "node scripts/editor-shots-browser-test.mjs",
