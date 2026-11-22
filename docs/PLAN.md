@@ -2624,3 +2624,10 @@ It binds project/term identity and local translation text before the existing de
 lifecycle. Pointer opening/cancel keeps focused local translation text without a
 blur-save. List/project/row changes invalidate the review. No server API change.
 [Review0658](reviews/0658-glossary-delete-confirmation.md).
+
+### Translation-key deletion confirmation
+Editor key deletion now requires a separate cancelable loaded-key confirmation.
+It binds project, branch, exact row, grid generation and selected cell state before
+the existing guarded delete lifecycle. Pointer opening/cancel does not blur-save
+a focused unrelated translation. Stored deletion scope and loaded-state limits
+are shown before the choice. [Review0659](reviews/0659-editor-key-delete-confirmation.md).

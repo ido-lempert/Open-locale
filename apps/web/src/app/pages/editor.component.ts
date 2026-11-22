@@ -293,7 +293,7 @@ interface CellState {
                     }
                   </td>
                 }
-                <td><button class="danger" [attr.aria-label]="'Delete key ' + k.name" title="Delete key (save local drafts and wait for pending work first)" [disabled]="!canRemoveKey(k)" (click)="removeKey(k)">&times;</button></td>
+                <td><button class="danger" [attr.aria-label]="'Delete key ' + k.name" title="Delete key (save local drafts and wait for pending work first)" [disabled]="!canRemoveKey(k)" (pointerdown)="$event.preventDefault()" (click)="requestKeyRemove(k)">&times;</button></td>
               </tr>
               @if (keyDeleting().includes(k.id)) { <tr><td [attr.colspan]="2 + p.locales.length"><span role="status" name="keyDeleting">Deleting key "{{ k.name }}"...</span></td></tr> }
               @if (shotsFor() === k.id) {
@@ -404,6 +404,15 @@ interface CellState {
         </table>
       }
     </main>
+    @if (pendingKeyDelete(); as pending) {
+      <div class="modal-backdrop"><section class="modal" role="dialog" aria-label="Confirm key deletion" style="max-height:calc(100dvh - 2rem);overflow-y:auto;overflow-wrap:anywhere;min-width:0">
+        <h3>Delete translation key?</h3>
+        <p>This deletes this key and all its stored locale translations, translation history, comments and screenshot records. Linked task-key records are also removed. This page does not offer key undo. Copy or download anything you need first.</p>
+        <p class="muted" name="keyDeleteScope">Identity from the loaded grid only, not a fresh permission check, newer server state or a complete impact preview. No deletion has run. Other keys, their local translation values and the local new-key form are not included.</p>
+        <dl><dt>Project ID</dt><dd name="keyDeleteProjectId">{{pending.projectId}}</dd><dt>Loaded branch</dt><dd name="keyDeleteBranch">{{pending.branch}}</dd><dt>Key ID</dt><dd name="keyDeleteId">{{pending.id}}</dd><dt>Loaded key name</dt><dd name="keyDeleteName">{{pending.name}}</dd></dl>
+        <div class="modal-actions"><button type="button" class="danger" name="confirmKeyDelete" (pointerdown)="$event.preventDefault()" (click)="confirmKeyRemove()">Delete key</button><button type="button" name="cancelKeyDelete" (pointerdown)="$event.preventDefault()" (click)="cancelKeyRemove()">Keep key</button></div>
+      </section></div>
+    }
     @if (mergePreview(); as mp) {
       <div class="modal-backdrop">
         <div class="modal" style="max-height:calc(100dvh - 2rem);overflow-y:auto;overflow-wrap:anywhere;min-width:0" role="dialog" aria-label="Merge preview">
@@ -429,6 +438,7 @@ interface CellState {
   `,
 })
 export class EditorComponent implements OnInit, OnDestroy {
+  pendingKeyDelete=signal<{row:Key;projectId:string;branch:string;scope:number;generation:number;id:string;name:string;cells:string}|null>(null);
   project = signal<Project | null>(null);
   keys = signal<Key[]>([]);
   keysLoading = signal(false);
@@ -506,6 +516,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   async ngOnInit() { await this.loadProject(); }
   async loadProject() {
     if (this.destroyed) return;
+    this.cancelKeyRemove();
     ++this.localeRecoveryGeneration;this.localeRecoveryLoading.set(false);this.localeRecoveryError.set(false);this.localeRecoveryCodes.set(null);
     const generation = ++this.projectGeneration, projectId = this.projectId;
     const current = () => !this.destroyed && generation === this.projectGeneration;
@@ -543,6 +554,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   }
   onSearch() {
     if (!this.canChangeKeyFilters()) return;
+    this.cancelKeyRemove();
     ++this.keysGeneration; this.keysLoading.set(true); this.keysError.set(false);
     this.clearHistory(); this.clearShots(); this.clearComments(); this.clearTm();
     if (this.searchTimer) clearTimeout(this.searchTimer);
@@ -556,7 +568,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   async reload() {
     if (this.destroyed) return;
     if (this.searchTimer) { clearTimeout(this.searchTimer); this.searchTimer = null; }
-    this.cancelMerge(); this.cancelImportPick();
+    this.cancelKeyRemove();this.cancelMerge(); this.cancelImportPick();
     const generation = ++this.keysGeneration, projectId = this.projectId, createEpoch=this.keyCreateEpoch, readBranch=this.branch(), unfiltered=!this.hasKeyFilters();
     const current = () => !this.destroyed && generation === this.keysGeneration;
     const readScope={projectId,branch:readBranch,search:this.search()||null,tag:this.filterTag()||null,status:this.filterStatus()||null,locale:this.filterStatus()?this.ioLocale():null};
@@ -618,11 +630,11 @@ export class EditorComponent implements OnInit, OnDestroy {
     return s;
   }
   edit(k: Key, locale: string, value: string) {
-    this.clearTm();
+    this.cancelKeyRemove();this.clearTm();
     this.cell(k.id, locale).update((c) => ({ ...c, value }));
   }
   editForm(k: Key, locale: string, category: string, value: string) {
-    this.clearTm();
+    this.cancelKeyRemove();this.clearTm();
     this.cell(k.id, locale).update((c) => ({ ...c, forms: { ...c.forms, [category]: value } }));
   }
   loadedLengthLimit(k: Key): number | null { return Number.isSafeInteger(k.maxLength) && k.maxLength! > 0 ? k.maxLength : null; }
@@ -1014,7 +1026,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     finally { if(current())this.historyLoading.set(false); }
   }
   ngOnDestroy() {
-    this.invalidateExport();
+    this.cancelKeyRemove();this.invalidateExport();
     this.destroyed=true; ++this.importGeneration; ++this.mergeGeneration; ++this.branchListGeneration; ++this.projectGeneration; ++this.keysGeneration; ++this.historyGeneration; this.clearShots(); this.clearComments(); this.clearTm();
     if(this.searchTimer)clearTimeout(this.searchTimer);
   }
@@ -1056,6 +1068,21 @@ export class EditorComponent implements OnInit, OnDestroy {
       && !this.commentsSaving() && !this.commentsMutationError().includes(k.id) && !this.tagsSaving().includes(k.id) && !this.shotsMutating().includes(k.id) && !this.shotsMutationError().includes(k.id) && this.keys().some(key => key.id === k.id)
       && ![...this.cells.entries()].some(([id,sig]) => { const c = sig(); return id.startsWith(`${k.id}:`)
         && (c.needsReload || c.reviewing || c.status === 'saving' || c.value !== c.saved || !this.sameForms(c.forms,c.savedForms)); });
+  }
+  private keyDeleteCells(k:Key) {return JSON.stringify([...this.cells.entries()].filter(([id])=>id.startsWith(`${k.id}:`)).map(([id,sig])=>[id,sig()]));}
+  private keyDeleteReviewReady(k:Key) {
+    const loaded=this.loadedGridScope();
+    return !this.projectLoading()&&!this.projectError()&&loaded?.projectId===this.projectId&&loaded.branch===this.branch()&&this.keys().some(row=>row===k)&&this.canRemoveKey(k);
+  }
+  requestKeyRemove(k:Key) {
+    if(!this.keyDeleteReviewReady(k))return;
+    this.pendingKeyDelete.set({row:k,projectId:this.projectId,branch:this.branch(),scope:this.projectGeneration,generation:this.keysGeneration,id:k.id,name:k.name,cells:this.keyDeleteCells(k)});
+  }
+  cancelKeyRemove() {this.pendingKeyDelete.set(null);}
+  async confirmKeyRemove() {
+    const pending=this.pendingKeyDelete();this.cancelKeyRemove();
+    if(!pending||pending.projectId!==this.projectId||pending.branch!==this.branch()||pending.scope!==this.projectGeneration||pending.generation!==this.keysGeneration||pending.row.id!==pending.id||pending.row.name!==pending.name||pending.cells!==this.keyDeleteCells(pending.row)||!this.keyDeleteReviewReady(pending.row))return;
+    await this.removeKey(pending.row);
   }
   async removeKey(k: Key) {
     if (!this.canRemoveKey(k)) return;
