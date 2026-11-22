@@ -330,6 +330,9 @@ interface CellState {
                   @if (commentsMutationError().includes(k.id)) { <p class="error" role="alert" name="commentsMutationError">Comment change could not be confirmed. Keep your draft and check current comments before another change.</p><button type="button" name="checkCurrentComments" (mousedown)="$event.preventDefault()" [disabled]="!commentsRecoveryReady(k)" (click)="recoverComments(k)">Check current comments</button> }
                   @if (!commentsError() && !commentsMutationError().includes(k.id)) { <button type="button" name="refreshComments" (mousedown)="$event.preventDefault()" [disabled]="!commentsRefreshReady(k)" (click)="refreshComments(k)">Refresh comments</button> }
                   <p class="muted" name="commentsRefreshScope" style="white-space:normal;max-width:40rem">Refresh reads this key's current thread only, not translations. Your comment text and locale stay here; a reply target missing from the new thread is cleared. It does not post, delete or retry a comment.</p>
+                  <button type="button" name="downloadCommentThread" aria-describedby="commentThreadDownloadScope" (pointerdown)="$event.preventDefault()" [disabled]="!commentThreadDownloadReady(k)" (click)="downloadCommentThread(k)">Download loaded comment thread (.json)</button>
+                  <p class="muted" id="commentThreadDownloadScope" name="commentThreadDownloadScope" style="white-space:normal;max-width:40rem">Local JSON of all comments in this loaded thread, including private bodies, IDs, author emails and mention details. Excludes unsent comment text, translation values, screenshots and the new-key form. Not a restorable backup, complete history, newer server state or confirmation of a post or deletion. Downloading does not share or change the project.</p>
+                  @if(commentThreadDownloadNotice()){<p class="muted" role="status" name="commentThreadDownloadNotice">{{commentThreadDownloadNotice()}}</p>}
                   @if (commentsLoading()) { <p class="muted" role="status" name="commentsLoading">Loading comments...</p> }
                   @else if (commentsError()) { <p class="error" role="alert" name="commentsError">Comments unavailable. No thread is shown.</p><button type="button" name="retryComments" (mousedown)="$event.preventDefault()" [disabled]="!commentsRecoveryReady(k)" (click)="recoverComments(k)">Retry comments</button> }
                   @else {
@@ -456,6 +459,7 @@ interface CellState {
   `,
 })
 export class EditorComponent implements OnInit, OnDestroy {
+  commentThreadDownloadNotice=signal('');
   pendingCommentDelete=signal<{row:Key;comment:CommentEntry;projectId:string;branch:string;scope:number;generation:number;thread:number;keyId:string;keyName:string;id:string;parentId:string|null;locale:string|null;body:string;replies:number;metadata:string}|null>(null);
   pendingShotDelete=signal<{row:Key;shot:ScreenshotMeta;projectId:string;branch:string;scope:number;generation:number;pane:number;keyId:string;keyName:string;id:string;filename:string;metadata:string}|null>(null);
   pendingKeyDelete=signal<{row:Key;projectId:string;branch:string;scope:number;generation:number;id:string;name:string;cells:string}|null>(null);
@@ -791,6 +795,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     finally { if (!this.destroyed) this.tagsSaving.update(ids => ids.filter(id => id !== k.id)); }
   }
   private clearComments() {
+    this.commentThreadDownloadNotice.set('');
     this.cancelCommentRemove();
     ++this.commentsGeneration; this.commentsFor.set(null); this.comments.set([]);
     this.commentsLoading.set(false); this.commentsError.set(false); this.replyTo.set(null);
@@ -809,6 +814,7 @@ export class EditorComponent implements OnInit, OnDestroy {
   commentsRecoveryReady(k:Key) { return !this.destroyed && this.commentsFor()===k.id && !this.commentsLoading() && !this.commentsSaving() && (this.commentsError() || this.commentsMutationError().includes(k.id)) && !this.keysLoading() && !this.keysError() && !this.keyDeleting().includes(k.id) && !this.keyDeleteErrorFor().includes(k.id) && this.keys().some(key=>key.id===k.id); }
   recoverComments(k:Key) { if(this.commentsRecoveryReady(k))return this.readComments(k);return Promise.resolve(); }
   async readComments(k: Key) {
+    this.commentThreadDownloadNotice.set('');
     if (this.destroyed || this.commentsFor() !== k.id) return;
     this.cancelCommentRemove();
     const generation = ++this.commentsGeneration, projectId = this.projectId, keyId = k.id;
@@ -871,6 +877,7 @@ export class EditorComponent implements OnInit, OnDestroy {
     });
   }
   private async changeComments(k: Key, write: () => Promise<unknown>, onConfirmed?: () => void) {
+    this.commentThreadDownloadNotice.set('');
     this.cancelCommentRemove();
     const generation = this.commentsGeneration;
     this.commentsMutationEpoch.set(k.id, (this.commentsMutationEpoch.get(k.id) ?? 0) + 1);
@@ -1029,6 +1036,21 @@ export class EditorComponent implements OnInit, OnDestroy {
     finally { if (!this.destroyed) { this.shotsMutationEpoch.set(k.id, (this.shotsMutationEpoch.get(k.id) ?? 0) + 1); this.shotsMutating.update(ids => ids.filter(id => id !== k.id)); } }
     // Refresh is an independent read, never relabel a confirmed mutation as failed.
     if (confirmed && !this.destroyed && generation === this.shotsGeneration && this.shotsFor() === k.id) await this.readShots(k);
+  }
+  commentThreadDownloadReady(k:Key) {
+    const loaded=this.loadedGridScope();
+    return !this.projectLoading()&&!this.projectError()&&loaded?.projectId===this.projectId&&loaded.branch===this.branch()&&this.keys().some(row=>row===k)&&this.comments().every(cm=>cm.keyId===k.id)&&this.canChangeComments(k);
+  }
+  downloadCommentThread(k:Key) {
+    if(!this.commentThreadDownloadReady(k))return;
+    let url:string|undefined;
+    try {
+      const content=JSON.stringify({schemaVersion:1,scope:'loaded-comment-thread',restorable:false,projectId:this.projectId,branch:this.branch(),key:{id:k.id,name:k.name},comments:this.comments().map(cm=>({id:cm.id,keyId:cm.keyId,parentId:cm.parentId,localeCode:cm.localeCode,body:cm.body,createdAt:cm.createdAt,author:cm.author,mentions:cm.mentions}))},null,2);
+      url=URL.createObjectURL(new Blob([content],{type:'application/json;charset=utf-8'}));
+      const anchor=document.createElement('a');anchor.href=url;anchor.download='comment-thread.json';anchor.click();
+      this.commentThreadDownloadNotice.set('Download requested for the loaded comment thread. This does not confirm the file was saved or a post or deletion completed.');
+    }catch{this.commentThreadDownloadNotice.set('Download could not be started. Try again from the current loaded thread.');}
+    finally{if(url)URL.revokeObjectURL(url);}
   }
   private commentDeleteMetadata(cm:CommentEntry) {
     return JSON.stringify(this.comments().filter(c=>c===cm||c.parentId===cm.id).map(c=>({id:c.id,keyId:c.keyId,parentId:c.parentId,localeCode:c.localeCode,body:c.body,createdAt:c.createdAt,author:c.author,mentions:c.mentions})).sort((a,b)=>a.id.localeCompare(b.id)));

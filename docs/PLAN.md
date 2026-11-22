@@ -2645,3 +2645,9 @@ loaded-comment confirmation. It names reply cascades and author-only permission,
 binds exact comment/thread/key/project scope and preserves focused local text.
 Existing comment-only refresh and unknown-result recovery remain unchanged.
 [Review0661](reviews/0661-editor-comment-delete-confirmation.md).
+
+### Loaded comment-thread download
+The editor can download local JSON of the current loaded comment thread,
+including author/mention details, with an explicit private-content warning.
+Unsent forms, translations and screenshots are excluded; it is not a restorable
+backup or confirmation of a write. [Review0662](reviews/0662-editor-comment-thread-download.md).
