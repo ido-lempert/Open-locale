@@ -35,8 +35,15 @@ try {
   await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.evaluate(t=>localStorage.setItem('ol_token',t),token);
 
 
-  const task=await call(`${P}/tasks`,{title:'Loaded title',description:'Stored description',dueDate:'2026-12-12T17:45:00.123Z'},token),other=await call(`${P}/tasks`,{title:'Other task'},token);
-  await page.goto(`${WEB}${P}/tasks`,{waitUntil:'networkidle0'});await page.waitForSelector('[aria-label="Edit details for Loaded title"]');await page.type('[name=taskTitle]','UNSENT NEW TASK');
+  const task=await call(`${P}/tasks`,{title:'Loaded title',description:'Stored description',dueDate:'2026-12-12T00:00:00.123Z'},token),other=await call(`${P}/tasks`,{title:'Other task'},token);
+  const lateTask=await call(`${P}/tasks`,{title:'Late UTC task',dueDate:'2026-12-12T23:59:59.999Z'},token);
+  for(const timezone of ['America/Los_Angeles','Asia/Tokyo','UTC']){
+    await page.emulateTimezone(timezone);await page.goto(`${WEB}${P}/tasks`,{waitUntil:'networkidle0'});await page.waitForSelector('[aria-label="Edit details for Loaded title"]');
+    check(`UTC row day and full datetime survive ${timezone}`,await page.$$eval('[name=taskDueDate]',(items,dates)=>items.length===2&&items.every(e=>e.textContent.trim()==='due Dec 12, 2026 (UTC)')&&dates.every(d=>items.some(e=>e.getAttribute('datetime')===d)),[task.dueDate,lateTask.dueDate]));
+  }
+  await page.emulateTimezone('America/Los_Angeles');await page.goto(`${WEB}${P}/tasks`,{waitUntil:'networkidle0'});await page.waitForSelector('[aria-label="Edit details for Loaded title"]');
+  await page.$eval('[name=taskDueDate]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/task-due-date-utc-desktop.png'});await page.setViewport({width:390,height:844});await page.$eval('[aria-label="Edit details for Loaded title"]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/task-due-date-utc-mobile.png'});await page.setViewport({width:1280,height:900});
+  await page.type('[name=taskTitle]','UNSENT NEW TASK');
   let writes=0,reads=0,posts=0;const sent=[];
   page.on('request',req=>{const p=new URL(req.url()).pathname;if(req.method()==='PATCH'&&p.includes('/tasks/')){writes++;sent.push({path:p,body:JSON.parse(req.postData())});}if(req.method()==='GET'&&p===`/api${P}/tasks`)reads++;if(req.method()==='POST'&&p===`/api${P}/tasks`)posts++;});
   const click=async selector=>{const button=await page.$(selector);if(!button)throw new Error('Missing button '+selector);await button.evaluate(e=>e.scrollIntoView({block:'center'}));await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await button.click();};
@@ -65,8 +72,10 @@ try {
   check('empty description explicitly clears server description without changing title',writes===2&&stored.title==='Edited title'&&stored.description==='');
   await open('Edited title');check('date editor loads UTC calendar day',await page.$eval('[name=editTaskDueDate]',e=>e.value==='2026-12-12'));await fill('[name=editTaskDueDate]','2027-02-28');await click('[name=saveTaskDetails]');await page.waitForFunction(()=>!document.querySelector('[name=editTaskTitle]')&&!document.querySelector('[name=taskListLoading]'));stored=(await call(`${P}/tasks`,null,token)).find(t=>t.id===task.id);
   check('explicit date save persists midnight UTC only when changed',writes===3&&sent[2].body.dueDate==='2027-02-28T00:00:00.000Z'&&stored.dueDate==='2027-02-28T00:00:00.000Z');
+  check('saved UTC calendar day agrees with row west of UTC',await page.$eval(`[name=taskDueDate][datetime="2027-02-28T00:00:00.000Z"]`,e=>e.textContent.trim()==='due Feb 28, 2027 (UTC)'));
   await open('Edited title');await fill('[name=editTaskDueDate]','');await click('[name=saveTaskDetails]');await page.waitForFunction(()=>!document.querySelector('[name=editTaskTitle]')&&!document.querySelector('[name=taskListLoading]'));stored=(await call(`${P}/tasks`,null,token)).find(t=>t.id===task.id);
   check('empty date explicitly clears server due date',writes===4&&sent[3].body.dueDate===null&&stored.dueDate===null);
+  check('clearing removes only the edited row date',await page.$$eval('[name=taskDueDate]',(items,date)=>items.length===1&&items[0].getAttribute('datetime')===date,lateTask.dueDate));
   await open('Edited title');await fill('[name=editTaskTitle]','Failed retained title');mode='fail';await click('[name=saveTaskDetails]');await page.waitForSelector('[name=taskActionUnknown]');await page.waitForFunction(()=>!document.querySelector('[name=taskDetailsSaving]'));await page.evaluate(async()=>ng.getComponent(document.querySelector('ol-tasks')).saveDetails());
   check('real failed PATCH keeps edit text pauses retry and hides private error',writes===5&&await page.$eval('[name=editTaskTitle]',e=>e.value==='Failed retained title')&&await page.$eval('[name=saveTaskDetails]',e=>e.disabled)&&!(await page.content()).includes('PRIVATE_FAILURE'));
   mode='live';await click('[name=recoverTaskActions]');await page.waitForFunction(()=>!document.querySelector('[name=taskActionUnknown]')&&!document.querySelector('[name=taskListLoading]'));await page.evaluate(async()=>ng.getComponent(document.querySelector('ol-tasks')).saveDetails());

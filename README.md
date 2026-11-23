@@ -8,7 +8,8 @@ Nx monorepo with an Angular web app, a NestJS API and PostgreSQL.
 
 Existing task details support explicit due-date changes and clearing. The editor
 labels UTC calendar dates, preserves untouched stored timestamps, and never retries
-an uncertain write. See [review0670](docs/reviews/0670-task-due-date-edit.md).
+an uncertain write. Task rows also show explicitly labeled UTC dates in every
+browser timezone, with the full stored timestamp in the time element. See [review0670](docs/reviews/0670-task-due-date-edit.md).
 
 ## Stack
 

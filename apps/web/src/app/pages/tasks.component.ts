@@ -141,7 +141,7 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
               @for (g of groups(); track g.id) { <option [value]="'g:' + g.id">Group: {{ g.name }}</option> }
             </select>
             @if (rowAssigneeMissing(t) || rowPredecessorMissing(t)) { <p class="muted" name="taskRowRetainedChoices">Selections from this loaded task are outside the loaded options. They are not cleared or verified as currently available or allowed. Refresh tasks or retry option reads to check newer state; this notice does not change the task.</p> }
-            @if (t.dueDate) { <time class="muted">due {{ t.dueDate | date:'mediumDate' }}</time> }
+            @if (t.dueDate) { <time class="muted" name="taskDueDate" [attr.datetime]="t.dueDate">due {{ t.dueDate | date:'mediumDate':'UTC' }} (UTC)</time> }
             @if (updatingIds().includes(t.id)) { <span role="status" name="taskUpdating">Updating task...</span> }
             @if (deletingIds().includes(t.id)) { <span role="status" name="taskDeleting">Deleting task...</span> }
             <button type="button" [disabled]="!canOpenDetails(t)" [attr.aria-label]="'Edit details for ' + t.title" (click)="openDetails(t)">Edit details</button>

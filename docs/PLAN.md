@@ -2694,3 +2694,9 @@ The loaded-task details editor can set a UTC calendar date or explicitly clear
 it. Untouched full timestamps are omitted from the update, invalid calendar dates
 cannot save, and changed loaded dates invalidate the editor. Unknown writes stay
 blocked without automatic replay. [Review0670](reviews/0670-task-due-date-edit.md).
+
+### Consistent UTC task due-date display
+Task rows now render and label due dates in UTC, matching the calendar editor
+rather than shifting midnight dates to the previous day in western timezones.
+The time element retains the full stored timestamp. Browser checks cover western,
+eastern and UTC zones. [Review0671](reviews/0671-task-due-date-utc.md).
