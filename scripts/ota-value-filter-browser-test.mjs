@@ -8,12 +8,14 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55725, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.OTA_BROWSER_TEST_PG_PORT ?? 55725), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 const downloadDir=mkdtempSync(join(tmpdir(),'ol-ota-download-'));
 process.exitCode = 1;
+// Preserve failures even if incomplete startup cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-ota-download-browser-'));
@@ -48,8 +50,8 @@ try {
   await page.select('[name=bundleValueFilter]','empty');await page.type('[name=bundleSearch]','key0');await page.waitForFunction(()=>document.querySelector('[name=bundleMatches]')?.textContent.includes('1 of 51'));await page.$eval('[name=refreshBundle]',e=>e.click());for(let n=0;n<100&&reads!==1;n++)await new Promise(r=>setTimeout(r,20));await page.waitForFunction(()=>!document.querySelector('[name=bundleLoading]')&&!!document.querySelector('.bundle-row'));check('explicit current retained refresh preserves filter and search, not newer live editor value',reads===1&&writes===0&&await page.$eval('[name=bundleValueFilter]',e=>e.value==='empty')&&await page.$eval('[name=bundleSearch]',e=>e.value==='key0')&&await page.$eval('.bundle-value',e=>e.textContent===''));
   await page.evaluate(p=>{history.pushState({},'',p);dispatchEvent(new PopStateEvent('popstate'));},`${P}/ota/1/en?branch=main`);await page.waitForFunction(()=>!document.querySelector('[name=bundleLoading]')&&document.querySelector('[name=bundleIdentity]')?.textContent.includes('Unpinned'));check('query-only publication visit resets filter and search',await page.$eval('[name=bundleValueFilter]',e=>e.value==='')&&await page.$eval('[name=bundleSearch]',e=>e.value==='')&&await page.$$eval('.bundle-row',es=>es.length===50));
   await page.evaluate(()=>{window.lastBundle=ng.getComponent(document.querySelector('ol-ota-bundle'));history.pushState({},'','/projects');dispatchEvent(new PopStateEvent('popstate'));});await page.waitForFunction(()=>!document.querySelector('ol-ota-bundle'));await page.evaluate(()=>window.lastBundle.setValueFilter('empty'));check('departed captured filter handler cannot change state',await page.evaluate(()=>window.lastBundle.valueFilter()==='')&&writes===0);
-  check('no OTA value filter runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  check('no OTA value filter runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();rmSync(downloadDir,{recursive:true,force:true});
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -64,4 +66,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

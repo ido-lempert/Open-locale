@@ -135,6 +135,11 @@ Malformed/empty publication timestamps show an unavailable label without breakin
 retained translations. Invalid datetime attributes are omitted; original JSON
 metadata stays unchanged. See [review0699](docs/reviews/0699-ota-time-fallback.md).
 
+### Fail-closed retained OTA browser verification
+Three older retained-OTA browser scripts preserve failed startup exits.
+`npm run test:ota-browser-harness` checks four real occupied-port paths, including
+the existing timestamp guard. See [review0700](docs/reviews/0700-ota-browser-harness.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`

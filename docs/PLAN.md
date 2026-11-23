@@ -2855,3 +2855,9 @@ assertion exits. Actual occupied-port harness rejects unmatched selections.
 Fixed fallback and invalid datetime omission preserve bundle rendering while
 valid locale/timezone labels, publication identity and raw downloads remain.
 [Review0699](reviews/0699-ota-time-fallback.md).
+
+
+### Fail-closed retained OTA browser checks
+Three older bundle/download/value-filter scripts now retain failed/incomplete
+startup exits. Four-path harness includes unchanged timestamp guard.
+[Review0700](reviews/0700-ota-browser-harness.md).
