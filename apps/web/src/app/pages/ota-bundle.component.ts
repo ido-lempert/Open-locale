@@ -1,12 +1,12 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
+import { Component, Inject, LOCALE_ID, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { combineLatest, Subscription } from 'rxjs';
 import { ApiService, OtaBundle } from '../api.service';
 
 @Component({
- selector:'ol-ota-bundle',imports:[RouterLink,DatePipe,FormsModule],
+ selector:'ol-ota-bundle',imports:[RouterLink,FormsModule],
  styles:[`.bundle-scope,.bundle-key,.bundle-value{overflow-wrap:anywhere}.bundle-list{list-style:none;padding:0}.bundle-row{padding:1rem 0;border-bottom:1px solid #ddd}.bundle-value{white-space:pre-wrap;margin:.5rem 0}.bundle-pages{display:flex;gap:.75rem;align-items:center;flex-wrap:wrap}`],
  template:`
  <header class="bar"><a [routerLink]="['/projects',projectId,'settings']">&larr; Settings</a><h1>OTA bundle</h1></header>
@@ -21,7 +21,7 @@ import { ApiService, OtaBundle } from '../api.service';
    @if(loading()){<p role="status" name="bundleLoading">Loading published bundle...</p>}
    @if(error()){<p role="alert" class="error">Bundle unavailable. Project membership and a retained publication are required. No translation values are shown. Try refreshing.</p>}
    @if(bundle();as b){
-     <p class="bundle-scope muted">Project: {{b.project}}; published <time [attr.datetime]="b.publishedAt">{{b.publishedAt|date:'medium'}} {{b.publishedAt|date:'z'}}</time>. {{rows().length}} translation values. Showing {{visibleRows().length}} on page {{page()+1}} of {{pageCount()}}.</p>
+     <p class="bundle-scope muted">Project: {{b.project}}; published <time name="bundlePublishedTime" [attr.datetime]="validPublishedTime(b.publishedAt)?b.publishedAt:null">{{timeLabel(b.publishedAt)}}</time>. {{rows().length}} translation values. Showing {{visibleRows().length}} on page {{page()+1}} of {{pageCount()}}.</p>
      <label>Published value <select name="bundleValueFilter" [ngModel]="valueFilter()" (ngModelChange)="setValueFilter($event)"><option value="">all values</option><option value="empty">empty values</option><option value="nonempty">non-empty values</option></select></label>
      <button type="button" name="clearBundleValueFilter" [disabled]="!valueFilter()" (click)="setValueFilter('')">Clear value filter</button>
      <p class="muted" name="bundleValueScope">Empty means exactly an empty string in this retained locale. Whitespace is non-empty. This filter does not find missing keys, run QA, read live editor values or confirm client delivery.</p>
@@ -43,7 +43,9 @@ export class OtaBundleComponent implements OnInit,OnDestroy{
  setValueFilter(value:string){if(this.destroyed||!['','empty','nonempty'].includes(value))return;this.valueFilter.set(value as ''|'empty'|'nonempty');this.page.set(0);}
  emptyLabel(){if(this.valueFilter())return 'No retained values match this value filter and search. Clear value filter or search to show other retained values.';return this.query()?'No published keys or values match this search.':'No translation values in this published locale.';}
  private generation=0;private destroyed=false;private sub?:Subscription;
- constructor(private readonly route:ActivatedRoute,private readonly api:ApiService){}
+ constructor(private readonly route:ActivatedRoute,private readonly api:ApiService,@Inject(LOCALE_ID) private readonly displayLocale='en-US'){}
+ validPublishedTime(value:unknown):value is string{return typeof value==='string'&&!!value.trim()&&Number.isFinite(Date.parse(value));}
+ timeLabel(value:unknown):string{if(!this.validPublishedTime(value))return 'Publication time unavailable';try{const pipe=new DatePipe(this.displayLocale);return `${pipe.transform(value,'medium')} ${pipe.transform(value,'z')}`;}catch{return 'Publication time unavailable';}}
  ngOnInit(){this.sub=combineLatest([this.route.paramMap,this.route.queryParamMap]).subscribe(([p,q])=>this.visit(p.get('id')??'',q.get('branch')??'main',p.get('version')??'',p.get('locale')??'',q.get('publicationId')??undefined));}
  visit(projectId:string,branch:string,version:string,locale:string,publicationId?:string){if(this.destroyed)return;this.projectId=projectId;this.branch=branch;this.version=version;this.locale=locale;this.publicationId=publicationId;this.query.set('');this.valueFilter.set('');void this.reload();}
  search(query:string){if(this.destroyed)return;this.query.set(query.slice(0,200));this.page.set(0);}

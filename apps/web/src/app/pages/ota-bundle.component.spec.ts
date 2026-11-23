@@ -18,3 +18,10 @@ describe('local literal publication search',()=>{
  it('search resets pagination, clamps page count to filtered rows and does not fetch',()=>{const api={getOtaBundle:jest.fn()},c=make(api);c.rows.set(Array.from({length:101},(_,n)=>['key'+n,'value'+n]));c.changePage(2);expect(c.page()).toBe(2);c.search('value100');expect(c.page()).toBe(0);expect(c.pageCount()).toBe(1);expect(c.visibleRows()).toEqual([['key100','value100']]);c.changePage(10);expect(c.page()).toBe(0);c.search('no-match');expect(c.visibleRows()).toEqual([]);expect(c.pageCount()).toBe(1);c.search('');expect(c.visibleRows()).toHaveLength(50);expect(api.getOtaBundle).not.toHaveBeenCalled();});
  it('refresh preserves local query while route scope clears it and destruction suppresses search',async()=>{const c=make({getOtaBundle:()=>Promise.resolve(bundle({key:'value'}))});c.search('value');await c.reload();expect(c.query()).toBe('value');expect(c.filteredRows()).toEqual([['key','value']]);c.visit('new','feature','2','fr','pin');expect(c.query()).toBe('');c.search('x'.repeat(250));expect(c.query()).toHaveLength(200);c.ngOnDestroy();c.search('ignored');expect(c.query()).toHaveLength(200);});
 });
+
+
+describe('retained OTA publication-time fallback',()=>{
+ const makeTime=()=>new OtaBundleComponent({} as any,{} as any,'en-US');
+ for(const value of [undefined,null,'','  ','invalid','<img src=x>',42,{},[]])it(`bounds malformed publication time ${String(value)}`,()=>{const c=makeTime();expect(c.timeLabel(value)).toBe('Publication time unavailable');expect(c.validPublishedTime(value)).toBe(false);});
+ it('preserves exact valid locale and timezone formatting',()=>{const c=makeTime(),{DatePipe}=require('@angular/common'),pipe=new DatePipe('en-US');for(const value of ['2026-12-12T23:59:59.123Z','2026-12-13T01:59:59.123+02:00']){expect(c.validPublishedTime(value)).toBe(true);expect(c.timeLabel(value)).toBe(`${pipe.transform(value,'medium')} ${pipe.transform(value,'z')}`);}});
+});

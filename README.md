@@ -130,6 +130,11 @@ OIDC/SAML link browser suites retain startup failure across incomplete cleanup.
 `npm run test:link-browser-harness` checks actual occupied ports.
 See [review0698](docs/reviews/0698-link-browser-harness.md).
 
+### Retained OTA publication-time fallback
+Malformed/empty publication timestamps show an unavailable label without breaking
+retained translations. Invalid datetime attributes are omitted; original JSON
+metadata stays unchanged. See [review0699](docs/reviews/0699-ota-time-fallback.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`

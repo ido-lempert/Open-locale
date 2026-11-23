@@ -2849,3 +2849,9 @@ source order. [Review0697](reviews/0697-sync-history-order.md).
 Both full OIDC/SAML link browser scripts preserve incomplete startup and failed
 assertion exits. Actual occupied-port harness rejects unmatched selections.
 [Review0698](reviews/0698-link-browser-harness.md).
+
+
+### Guard retained OTA publication-time display
+Fixed fallback and invalid datetime omission preserve bundle rendering while
+valid locale/timezone labels, publication identity and raw downloads remain.
+[Review0699](reviews/0699-ota-time-fallback.md).
