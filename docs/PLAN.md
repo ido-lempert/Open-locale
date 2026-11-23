@@ -2861,3 +2861,9 @@ valid locale/timezone labels, publication identity and raw downloads remain.
 Three older bundle/download/value-filter scripts now retain failed/incomplete
 startup exits. Four-path harness includes unchanged timestamp guard.
 [Review0700](reviews/0700-ota-browser-harness.md).
+
+
+### Guard webhook journal recorded timestamps
+Bounded fallback prevents malformed metadata from interrupting loaded rows.
+Valid locale/timezone labels, raw downloads and read-only status semantics remain.
+[Review0701](reviews/0701-webhook-time-fallback.md).

@@ -1,13 +1,13 @@
 import { FormsModule } from '@angular/forms';
 import { DatePipe } from '@angular/common';
-import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
+import { Component, Inject, LOCALE_ID, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { ApiService, WebhookDeliveryInfo } from '../api.service';
 
 @Component({
   selector:'ol-webhook-deliveries',
-  imports:[RouterLink,DatePipe,FormsModule],
+  imports:[RouterLink,FormsModule],
   styles:[`.delivery-list{list-style:none;padding:0}.delivery-row{border-bottom:1px solid #ddd;padding:1rem 0;display:flex;gap:.75rem;flex-wrap:wrap}.delivery-event{overflow-wrap:anywhere;min-width:0}`],
   template:`
     <header class="bar"><a [routerLink]="['/projects',projectId,'settings']">&larr; Settings</a><h1>Webhook deliveries</h1></header>
@@ -35,7 +35,7 @@ import { ApiService, WebhookDeliveryInfo } from '../api.service';
             <li class="delivery-row">
               <strong>{{d.success?'Succeeded':'Failed'}}</strong><span class="delivery-event">{{d.event}}</span>
               <span>HTTP {{d.httpStatus===null?'unavailable':d.httpStatus}}</span><span>{{d.attempts}} attempt(s)</span>
-              <span>{{d.durationMs}} ms</span><time [attr.datetime]="d.createdAt">{{d.createdAt|date:'medium'}} {{d.createdAt|date:'z'}}</time>
+              <span>{{d.durationMs}} ms</span><time name="deliveryTime" [attr.datetime]="validTime(d.createdAt)?d.createdAt:null">{{timeLabel(d.createdAt)}}</time>
             </li>
           }@empty{<li name="deliveriesEmpty" class="muted">{{query().trim() ? 'No loaded records match this event search and status. Clear event search or status filter to widen the results.' : status() ? 'No loaded records match this status. Clear status filter to show all loaded records.' : 'No recorded deliveries for this webhook.'}}</li>}
         </ul>
@@ -50,7 +50,9 @@ export class WebhookDeliveriesComponent implements OnInit,OnDestroy {
   visibleItems=computed(()=>{const status=this.status(),query=this.query().trim().toLowerCase();return status||query?this.items().filter(item=>(!status||item.success===(status==='succeeded'))&&(!query||item.event.toLowerCase().includes(query))):this.items();});
   setStatus(value:string){if(!this.destroyed&&(value===''||value==='succeeded'||value==='failed'))this.status.set(value);}
   private generation=0;private destroyed=false;private routeSub?:Subscription;
-  constructor(private readonly route:ActivatedRoute,private readonly api:ApiService){}
+  constructor(private readonly route:ActivatedRoute,private readonly api:ApiService,@Inject(LOCALE_ID) private readonly displayLocale='en-US'){}
+  validTime(value:unknown):value is string{return typeof value==='string'&&!!value.trim()&&Number.isFinite(Date.parse(value));}
+  timeLabel(value:unknown):string{if(!this.validTime(value))return 'Recorded time unavailable';try{const pipe=new DatePipe(this.displayLocale);return `${pipe.transform(value,'medium')} ${pipe.transform(value,'z')}`;}catch{return 'Recorded time unavailable';}}
   ngOnInit(){this.routeSub=this.route.paramMap.subscribe(p=>this.visit(p.get('id')??'',p.get('hookId')??''));}
   visit(projectId:string,hookId:string){if(this.destroyed)return;this.projectId=projectId;this.hookId=hookId;this.status.set('');this.query.set('');void this.reload();}
   refresh(){if(!this.loading())void this.reload();}

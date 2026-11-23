@@ -140,6 +140,11 @@ Three older retained-OTA browser scripts preserve failed startup exits.
 `npm run test:ota-browser-harness` checks four real occupied-port paths, including
 the existing timestamp guard. See [review0700](docs/reviews/0700-ota-browser-harness.md).
 
+### Webhook journal recorded-time fallback
+Invalid/empty recorded timestamps show an unavailable label without breaking
+success/failure rows. Invalid datetime attributes omitted, raw download unchanged.
+See [review0701](docs/reviews/0701-webhook-time-fallback.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`

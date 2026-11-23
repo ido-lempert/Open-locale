@@ -9,3 +9,10 @@ describe('webhook delivery journal',()=>{
  it('latest refresh wins and destruction suppresses pending/future work',async()=>{const wait=deferred(),api={listWebhookDeliveries:jest.fn().mockReturnValueOnce(wait.promise).mockResolvedValueOnce([])},c=make(api);const first=c.reload();await c.reload();wait.resolve([{id:'old'}]);await first;expect(c.items()).toEqual([]);c.ngOnDestroy();await c.reload();c.visit('new','new');expect(api.listWebhookDeliveries).toHaveBeenCalledTimes(2);});
  it('destroy fences held read',async()=>{const wait=deferred(),c=make({listWebhookDeliveries:()=>wait.promise});const pending=c.reload();c.ngOnDestroy();wait.resolve([{id:'private'}]);await pending;expect(c.items()).toEqual([]);});
 });
+
+
+describe('webhook delivery recorded-time fallback',()=>{
+ const time=()=>new WebhookDeliveriesComponent({} as any,{} as any,'en-US');
+ for(const value of [undefined,null,'','  ','invalid','<img src=x>',42,{},[]])it(`bounds malformed recorded time ${String(value)}`,()=>{const c=time();expect(c.timeLabel(value)).toBe('Recorded time unavailable');expect(c.validTime(value)).toBe(false);});
+ it('preserves exact valid locale and timezone display',()=>{const c=time(),{DatePipe}=require('@angular/common'),pipe=new DatePipe('en-US');for(const value of ['2026-12-12T23:59:59.123Z','2026-12-13T01:59:59.123+02:00']){expect(c.validTime(value)).toBe(true);expect(c.timeLabel(value)).toBe(`${pipe.transform(value,'medium')} ${pipe.transform(value,'z')}`);}});
+});
