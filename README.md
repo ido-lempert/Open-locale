@@ -6,6 +6,10 @@ Nx monorepo with an Angular web app, a NestJS API and PostgreSQL.
 > Status: early development. See [docs/PLAN.md](docs/PLAN.md) for the capability map
 > and the prioritized phase plan. Not yet licensed - see "License" below.
 
+Existing task details support explicit due-date changes and clearing. The editor
+labels UTC calendar dates, preserves untouched stored timestamps, and never retries
+an uncertain write. See [review0670](docs/reviews/0670-task-due-date-edit.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`

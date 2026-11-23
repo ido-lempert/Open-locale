@@ -97,10 +97,13 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
       @if (detailsEdit(); as edit) {
         <section class="panel" aria-label="Edit loaded task details" style="overflow-wrap:anywhere;min-width:0">
           <h2>Edit task details</h2>
-          <p class="muted" name="taskDetailsScope">Local title and description for loaded task {{edit.id}} in project {{edit.projectId}}. Save sends only these two fields, not dates, status, assignments, dependencies or locks. This is not a fresh permission check or newer server state. Text is not saved automatically or restored after leaving. Copy text before closing or reopening.</p>
+          <p class="muted" name="taskDetailsScope">Local title, description and UTC due date for loaded task {{edit.id}} in project {{edit.projectId}}. Save sends title and description, plus due date only when changed. Status, assignments, dependencies and locks are not sent. This is not a fresh permission check or newer server state. Text is not saved automatically or restored after leaving. Copy text before closing or reopening.</p>
           <label>Title <input name="editTaskTitle" aria-describedby="taskDetailsRules" [attr.aria-invalid]="!validDetailsText()" style="width:100%;box-sizing:border-box" [disabled]="detailsSaving()" [ngModel]="detailsTitle()" (ngModelChange)="detailsTitle.set($event)" /></label>
           <label>Description <textarea name="editTaskDescription" aria-describedby="taskDetailsRules" rows="4" style="width:100%;box-sizing:border-box" [disabled]="detailsSaving()" [ngModel]="detailsDescription()" (ngModelChange)="detailsDescription.set($event)"></textarea></label>
+          <label>Due date (UTC calendar date) <input type="date" min="0001-01-01" max="9999-12-31" name="editTaskDueDate" aria-describedby="taskDetailsDateRules" [attr.aria-invalid]="!validDetailsDate()" [disabled]="detailsSaving()" [ngModel]="detailsDueDate()" (ngModelChange)="detailsDueDate.set($event)" /></label>
+          <p class="muted" id="taskDetailsDateRules" name="taskDetailsDateScope">Stored UTC timestamp: {{edit.dueDate || 'none'}}. Changing this date sets midnight UTC. Empty clears the due date. An untouched stored timestamp is not sent or changed.</p>
           <p class="muted" id="taskDetailsRules" name="taskDetailsRules">Title: 1-200 characters; description: up to 2,000 using the API count. Outer whitespace is trimmed on Save. Empty description clears the stored description. Text is not truncated.</p>
+          @if (!validDetailsDate()) { <p role="status" name="taskDetailsDateInvalid">Choose a valid calendar date from year 0001 to 9999, or leave it empty to clear. Nothing has been sent.</p> }
           @if (!validDetailsText()) { <p role="status" name="taskDetailsInvalid">Correct the title or description before saving. Your text is kept here and not sent.</p> }
           @if (!detailsCurrent() && !detailsSaving()) { <p role="status" name="taskDetailsStale">This loaded task is no longer current or available for editing. Your local text is kept here. Copy it, close this editor, check tasks and reopen the task before saving. No automatic retry is made.</p> }
           @if (detailsSaving()) { <p role="status" name="taskDetailsSaving">Saving task details. Do not repeat this request.</p> }
@@ -161,28 +164,29 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
   `,
 })
 export class TasksComponent implements OnInit, OnDestroy {
-  detailsEdit=signal<{row:TaskItem;projectId:string;scope:number;generation:number;id:string;title:string;description:string}|null>(null);
-  detailsTitle=signal('');detailsDescription=signal('');detailsSaving=signal(false);
+  detailsEdit=signal<{row:TaskItem;projectId:string;scope:number;generation:number;id:string;title:string;description:string;dueDate:string|null}|null>(null);
+  detailsTitle=signal('');detailsDescription=signal('');detailsDueDate=signal('');detailsSaving=signal(false);
   canOpenDetails(t:TaskItem){return !this.detailsEdit()&&!this.mutationsPending()&&!this.createUnknown()&&this.rowReady(t);}
   openDetails(t:TaskItem){
     if(!this.canOpenDetails(t))return;
-    this.cancelRemove();this.detailsTitle.set(t.title);this.detailsDescription.set(t.description);
-    const edit={row:t,projectId:this.projectId,scope:this.projectGeneration,generation:this.fetchSeq,id:t.id,title:t.title,description:t.description};this.detailsEdit.set(edit);
+    this.cancelRemove();this.detailsTitle.set(t.title);this.detailsDescription.set(t.description);this.detailsDueDate.set(t.dueDate?.slice(0,10)??'');
+    const edit={row:t,projectId:this.projectId,scope:this.projectGeneration,generation:this.fetchSeq,id:t.id,title:t.title,description:t.description,dueDate:t.dueDate??null};this.detailsEdit.set(edit);
     requestAnimationFrame(()=>requestAnimationFrame(()=>{if(this.destroyed||this.detailsEdit()!==edit)return;const input=document.querySelector<HTMLInputElement>('[name=editTaskTitle]');input?.scrollIntoView({block:'center'});input?.focus({preventScroll:true});}));
   }
-  closeDetails(){if(this.detailsSaving())return;this.detailsEdit.set(null);this.detailsTitle.set('');this.detailsDescription.set('');}
-  detailsCurrent(){const e=this.detailsEdit();return !!e&&e.projectId===this.projectId&&e.scope===this.projectGeneration&&e.generation===this.fetchSeq&&e.row.id===e.id&&e.row.title===e.title&&e.row.description===e.description&&this.rowReady(e.row)&&!this.createUnknown();}
+  closeDetails(){if(this.detailsSaving())return;this.detailsEdit.set(null);this.detailsTitle.set('');this.detailsDescription.set('');this.detailsDueDate.set('');}
+  detailsCurrent(){const e=this.detailsEdit();return !!e&&e.projectId===this.projectId&&e.scope===this.projectGeneration&&e.generation===this.fetchSeq&&e.row.id===e.id&&e.row.title===e.title&&(e.row.dueDate??null)===e.dueDate&&e.row.description===e.description&&this.rowReady(e.row)&&!this.createUnknown();}
   validDetailsText(){const title=this.detailsTitle().trim();return !!title&&this.apiTextLength(title)<=200&&this.apiTextLength(this.detailsDescription().trim())<=2000;}
-  detailsSaveReady(){const e=this.detailsEdit();return !!e&&!this.detailsSaving()&&!this.mutationsPending()&&this.detailsCurrent()&&this.validDetailsText()&&(this.detailsTitle().trim()!==e.title||this.detailsDescription().trim()!==e.description);}
+  validDetailsDate(){const value=this.detailsDueDate();if(!value)return true;if(!/^(?!0000)\d{4}-\d{2}-\d{2}$/.test(value))return false;const date=new Date(value+'T00:00:00.000Z');return Number.isFinite(date.getTime())&&date.toISOString().slice(0,10)===value;}
+  detailsSaveReady(){const e=this.detailsEdit();return !!e&&!this.detailsSaving()&&!this.mutationsPending()&&this.detailsCurrent()&&this.validDetailsText()&&this.validDetailsDate()&&(this.detailsTitle().trim()!==e.title||this.detailsDescription().trim()!==e.description||this.detailsDueDate()!==(e.dueDate?.slice(0,10)??''));}
   async saveDetails(){
     if(!this.detailsSaveReady())return;
-    const edit=this.detailsEdit()!,projectId=this.projectId,scope=this.projectGeneration,patch={title:this.detailsTitle().trim(),description:this.detailsDescription().trim()},action=++this.actionSeq;
+    const edit=this.detailsEdit()!,projectId=this.projectId,scope=this.projectGeneration,patch={title:this.detailsTitle().trim(),description:this.detailsDescription().trim(),...(this.detailsDueDate()!==(edit.dueDate?.slice(0,10)??'')?{dueDate:this.detailsDueDate()?this.detailsDueDate()+'T00:00:00.000Z':null}:{})},action=++this.actionSeq;
     const current=()=>!this.destroyed&&scope===this.projectGeneration;
     ++this.mutationEpoch;this.cancelRemove();this.detailsSaving.set(true);this.updatingIds.update(ids=>[...ids,edit.id]);this.loaded.set(false);this.downloadNotice.set('');this.actionNotice.set('');this.error.set('');
     try{
       await this.api.updateTask(projectId,edit.id,patch);
       if(!current())return;
-      if(this.detailsEdit()===edit){this.detailsEdit.set(null);this.detailsTitle.set('');this.detailsDescription.set('');}
+      if(this.detailsEdit()===edit){this.detailsEdit.set(null);this.detailsTitle.set('');this.detailsDescription.set('');this.detailsDueDate.set('');}
       if(action===this.actionSeq)this.actionNotice.set('Task details were updated. If the list is unavailable, retry its read without repeating the change.');
       await this.fetch();
     }catch{if(current()){++this.mutationEpoch;this.actionUnknown.set(true);this.error.set('Task update failed. Check the task list before trying again.');}}
@@ -275,7 +279,7 @@ export class TasksComponent implements OnInit, OnDestroy {
   private initForProject(pid: string) {
     if(this.destroyed)return;
     ++this.projectGeneration;
-    this.detailsEdit.set(null);this.detailsTitle.set('');this.detailsDescription.set('');this.detailsSaving.set(false);
+    this.detailsEdit.set(null);this.detailsTitle.set('');this.detailsDescription.set('');this.detailsDueDate.set('');this.detailsSaving.set(false);
     this.cancelRemove();this.cancelDraftReset();this.draftResetResult.set(null);this.projectId = pid;this.draftDownloadResult.set(null);
     this.fetchSeq++; // invalidate every in-flight fetch from the previous project
     ++this.mutationEpoch;this.actionUnknown.set(false);this.createUnknown.set(false);this.error.set('');this.createNotice.set('');this.actionNotice.set('');this.creating.set(false);this.updatingIds.set([]);this.deletingIds.set([]);

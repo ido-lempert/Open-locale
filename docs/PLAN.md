@@ -2688,3 +2688,9 @@ new-term fields stay intact. [Review0668](reviews/0668-glossary-dnt-edit.md).
 The separate loaded-term editor can download its raw local fields and bound
 identity, including stale/unconfirmed labels. No translations, import, retry or
 server write is included. [Review0669](reviews/0669-glossary-edit-download.md).
+
+### Edit loaded task due date
+The loaded-task details editor can set a UTC calendar date or explicitly clear
+it. Untouched full timestamps are omitted from the update, invalid calendar dates
+cannot save, and changed loaded dates invalidate the editor. Unknown writes stay
+blocked without automatic replay. [Review0670](reviews/0670-task-due-date-edit.md).
