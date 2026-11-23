@@ -70,6 +70,10 @@ Diagnostic preview history keeps rendering when a recorded timestamp is malforme
 or empty, using a fixed unavailable label while valid times retain locale display.
 No record is changed or applied. See [review0686](docs/reviews/0686-sync-history-time-fallback.md).
 
+Linked identity rows retain their metadata and unlink protections when a recorded
+link time is malformed or empty, showing a fixed unavailable label. Valid locale
+display is unchanged. See [review0687](docs/reviews/0687-identity-time-fallback.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`

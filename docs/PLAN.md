@@ -2778,3 +2778,8 @@ or stored-data repair. [Review0685](reviews/0685-task-date-fallback.md).
 Malformed/empty recorded times cannot interrupt loaded preview-history records.
 Valid locale formatting, read-only diagnostic semantics and downloaded source
 metadata remain unchanged. [Review0686](reviews/0686-sync-history-time-fallback.md).
+
+### Guard linked identity timestamps
+Malformed/empty link times cannot interrupt linked-identity metadata. Fixed fallback
+and valid locale display leave current-password unlink/session protections unchanged.
+[Review0687](reviews/0687-identity-time-fallback.md).

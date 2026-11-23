@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, Inject, LOCALE_ID, OnDestroy, OnInit, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -6,7 +6,7 @@ import { ApiService } from '../api.service';
 
 @Component({
   selector: 'ol-identities',
-  imports: [RouterLink, DatePipe, FormsModule],
+  imports: [RouterLink, FormsModule],
   styles: [
     `
       main {
@@ -97,7 +97,7 @@ import { ApiService } from '../api.service';
                 <dt>Provider email (unverified metadata)</dt>
                 <dd class="provider-email">{{ identity.email }}</dd>
                 <dt>Linked</dt>
-                <dd>{{ identity.createdAt | date: 'medium' }}</dd>
+                <dd name="identityLinkedTime">{{timeLabel(identity.createdAt)}}</dd>
               </dl>
               @if (selected() === identity.id) {
                 <section
@@ -239,7 +239,13 @@ export class IdentitiesComponent implements OnInit, OnDestroy {
   constructor(
     private api: ApiService,
     private router: Router,
+    @Inject(LOCALE_ID) private readonly displayLocale='en-US',
   ) {}
+  timeLabel(value:unknown):string {
+    if(typeof value!=='string'||!value.trim())return 'Link time unavailable';
+    try{return new DatePipe(this.displayLocale).transform(value,'medium')||'Link time unavailable';}
+    catch{return 'Link time unavailable';}
+  }
   ngOnInit() {
     void this.load();
   }
