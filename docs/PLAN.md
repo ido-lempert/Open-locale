@@ -2738,3 +2738,8 @@ nor rereads project dashboards. [Review0677](reviews/0677-reports-retained-branc
 QA selectors preserve exact selected scope when option reads omit a branch or
 locale. Scope warnings and independent refreshes neither clear selections nor
 rerun findings. [Review0678](reviews/0678-qa-retained-scope.md).
+
+### Local task deadline order
+Optional earliest-deadline ordering sorts loaded rows by full stored timestamp,
+keeps stable ties and puts undated rows last. Default server order, dependency
+choices and downloaded metadata remain unchanged. [Review0679](reviews/0679-task-due-order.md).

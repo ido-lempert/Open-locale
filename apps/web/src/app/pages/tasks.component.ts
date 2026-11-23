@@ -92,6 +92,8 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
       @if (!listError()) { <button type="button" name="refreshTaskList" [disabled]="loading() || mutationsPending()" (click)="refresh()">Refresh tasks</button> }
       <div class="task-search" style="margin-top:1rem"><label>Find in loaded task titles or descriptions <input type="search" name="taskSearch" maxlength="200" [ngModel]="query()" (ngModelChange)="search($event)" /></label>
       <button type="button" name="clearTaskSearch" [disabled]="!query()" (click)="search('')">Clear search</button></div>
+      <label>Order loaded task rows <select name="taskOrder" [ngModel]="order()" (ngModelChange)="setOrder($event)"><option value="loaded">Loaded order</option><option value="due">Earliest due date first</option></select></label>
+      <p class="muted" name="taskOrderScope">Local display order only. Earliest due date uses the full stored timestamp; tasks without a valid due date come last, equal dates keep loaded order. Search combines with this order. Dependency choices, downloads and server data keep loaded order. Refresh does not make deadlines live.</p>
       @if (!loading() && !listError()) { <p class="muted" role="status" name="taskMatches">{{ visibleTasks().length }} of {{ tasks().length }} loaded tasks match. Search is a literal, case-insensitive substring within the current assignee and status filters. Refresh tasks to read newer changes.</p> }
       <button type="button" name="downloadTasks" [disabled]="!downloadReady()" (click)="download()">Download loaded task metadata (.json)</button>
       <p class="muted" name="taskDownloadScope">Downloads all loaded tasks under the current assignee and status filters, regardless of title search. Not newer server changes or complete project history. Includes task IDs, titles, status, due date, displayed assignee/group names, predecessor IDs and lock/key metadata. Omits descriptions, emails and creator details. The file can contain private project metadata; downloading does not share it or confirm task outcomes.</p>
@@ -200,7 +202,9 @@ export class TasksComponent implements OnInit, OnDestroy {
   projectId = '';
   tasks = signal<TaskItem[]>([]);
   query=signal('');
-  visibleTasks=computed(()=>{const query=this.query().toLowerCase();return query?this.tasks().filter(t=>[t.title,t.description??''].some(value=>value.toLowerCase().includes(query))):this.tasks();});
+  order=signal<'loaded'|'due'>('loaded');
+  setOrder(value:string){if(!this.destroyed&&(value==='loaded'||value==='due'))this.order.set(value);}
+  visibleTasks=computed(()=>{const query=this.query().toLowerCase(),rows=query?this.tasks().filter(t=>[t.title,t.description??''].some(value=>value.toLowerCase().includes(query))):this.tasks();if(this.order()!=='due')return rows;const deadline=(task:TaskItem)=>{const value=task.dueDate?Date.parse(task.dueDate):NaN;return Number.isFinite(value)?value:Infinity;};return [...rows].sort((a,b)=>{const left=deadline(a),right=deadline(b);return left===right?0:left<right?-1:1;});});
   search(query:string) {if(!this.destroyed)this.query.set(query.slice(0,200));}
   members = signal<MemberInfo[]>([]);
   groups = signal<GroupInfo[]>([]);
@@ -290,7 +294,7 @@ export class TasksComponent implements OnInit, OnDestroy {
     this.loaded.set(false);this.downloadNotice.set('');this.tasks.set([]); this.members.set([]); this.groups.set([]); this.keys.set([]);
     this.title.set(''); this.description.set(''); this.dueDate.set('');
     this.assigneeId.set(''); this.dependsOnId.set(''); this.selectedKeyIds.set([]); this.lockKeys.set(false);
-    this.statusFilter.set(''); this.mineFilter.set('');this.query.set('');
+    this.statusFilter.set(''); this.mineFilter.set('');this.query.set('');this.order.set('loaded');
     // Restore the assignee/status filters chosen on a previous visit to
     // this project's tasks page (best-effort; storage may be unavailable).
     try {

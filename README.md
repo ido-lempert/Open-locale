@@ -35,6 +35,10 @@ QA keeps selected branch and locale visible outside loaded options, with exact
 scope notices and independent option refreshes that do not rerun checks. See
 [review0678](docs/reviews/0678-qa-retained-scope.md).
 
+Tasks offer optional local earliest-deadline ordering, using full stored timestamps
+with undated rows last and stable ties. Loaded server order remains the default;
+dependencies and downloads are unchanged. See [review0679](docs/reviews/0679-task-due-order.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`
