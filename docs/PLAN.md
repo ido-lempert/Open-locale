@@ -2733,3 +2733,8 @@ or reread the activity filter. [Review0676](reviews/0676-activity-retained-actor
 Reports preserve the exact selected branch in an explicit fallback when loaded
 branch options omit it. Independent option refresh neither switches report scope
 nor rereads project dashboards. [Review0677](reviews/0677-reports-retained-branch.md).
+
+### Retain QA branch and locale outside options
+QA selectors preserve exact selected scope when option reads omit a branch or
+locale. Scope warnings and independent refreshes neither clear selections nor
+rerun findings. [Review0678](reviews/0678-qa-retained-scope.md).

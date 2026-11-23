@@ -31,6 +31,10 @@ Reports keep the selected branch visible when loaded branch options omit it,
 with a scope notice and independent option refresh. See
 [review0677](docs/reviews/0677-reports-retained-branch.md).
 
+QA keeps selected branch and locale visible outside loaded options, with exact
+scope notices and independent option refreshes that do not rerun checks. See
+[review0678](docs/reviews/0678-qa-retained-scope.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`

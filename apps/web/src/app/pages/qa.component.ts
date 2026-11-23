@@ -12,21 +12,25 @@ import { ApiService, BranchInfo, Project, QaIssue } from '../api.service';
     <header class="bar">
       <a [routerLink]="['/projects', projectId]" class="back">&larr; Editor</a>
       <h1>QA checks</h1>
-      <select aria-label="QA branch" name="qaBranch" [attr.aria-busy]="branchesLoading()" [ngModel]="branch()" (ngModelChange)="branch.set($event); void fetch()">
-        @if (!branches().length) { <option value="main">main</option> }
+      <select aria-label="QA branch" name="qaBranch" style="min-width:0;max-width:100%" [attr.aria-busy]="branchesLoading()" [ngModel]="branch()" (ngModelChange)="branch.set($event); void fetch()">
+        @if(branchMissing()){<option [value]="branch()">Selected branch outside options</option>}
         @for (b of branches(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }
       </select>
     </header>
     <main [attr.aria-busy]="loading()">
       <p class="muted" name="qaBranchScope">Checks cover saved translations on branch {{ branch() }} only. To fix findings, open Editor and select this branch.</p>
+      @if(branchMissing() || localeMissing()){<p class="muted" role="status" name="qaRetainedScope" style="overflow-wrap:anywhere">Selected scope outside loaded options: @if(branchMissing()){branch {{branch()}}; } @if(localeMissing()){locale {{locale()}}; } Selections and loaded findings are retained, not verified as currently available. Option refresh does not run checks again. Choose another scope to change it.</p>}
+      @if(branchMissing()){<button type="button" name="refreshQaBranches" [disabled]="branchesLoading()" (click)="void loadBranches()">Refresh branch options</button>}
+      @if(localeMissing()){<button type="button" name="refreshQaLocales" [disabled]="localesLoading()" (click)="void loadLocales()">Refresh locale options</button>}
       @if (branchesLoading()) { <p role="status" name="qaBranchesLoading">Loading branch options. Main checks load independently.</p> }
       @if (branchesError()) { <p role="alert" class="error" name="qaBranchesError">Branch options unavailable. Current checks remain available.</p><button type="button" name="retryQaBranches" (click)="void loadBranches()">Retry branch options</button> }
       @if (error(); as e) { <p class="error" role="alert">{{ e }}</p><button type="button" name="retryQa" (click)="void fetch()">Retry QA checks</button> }
       @if (localesLoading()) { <p role="status" name="qaLocalesLoading">Loading locale filter options. Checks load independently.</p> }
       @if (localesError()) { <p class="error" role="alert" name="qaLocalesError">Locale filter options unavailable. Checks remain available.</p><button type="button" name="retryQaLocales" (click)="void loadLocales()">Retry locale options</button> }
       <div class="toolbar">
-        <select aria-label="Filter by locale" name="qaLocale" [attr.aria-busy]="localesLoading()" [ngModel]="locale()" (ngModelChange)="locale.set($event); void fetch()">
+        <select aria-label="Filter by locale" name="qaLocale" style="min-width:0;max-width:100%" [attr.aria-busy]="localesLoading()" [ngModel]="locale()" (ngModelChange)="locale.set($event); void fetch()">
           <option value="">all target locales</option>
+          @if(localeMissing()){<option [value]="locale()">Selected locale outside options</option>}
           @for (l of targetLocales(); track l) { <option [value]="l">{{ l }}</option> }
         </select>
         @if (!error()) { <button type="button" name="refreshQa" [disabled]="loading()" (click)="refresh()">Run checks again</button> }
@@ -97,6 +101,9 @@ export class QaComponent implements OnInit, OnDestroy {
     ++this.projectGeneration;this.projectId=projectId;this.locale.set('');this.targetLocales.set([]);this.branch.set('main');this.branches.set([]);this.issueType.set('');this.query.set('');
     await Promise.all([this.loadLocales(),this.loadBranches(),this.fetch()]);
   }
+  branchMissing(){return !!this.branch()&&!this.branches().some(branch=>branch.name===this.branch());}
+  localeMissing(){return !!this.locale()&&!this.targetLocales().includes(this.locale());}
+
   async loadBranches() {
     if(this.destroyed)return;
     const scope=this.projectGeneration,generation=++this.branchGeneration,projectId=this.projectId;
