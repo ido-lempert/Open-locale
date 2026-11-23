@@ -2310,3 +2310,8 @@ verify the race without weakening uniqueness. [Review0667](docs/reviews/0667-glo
 The loaded-term editor now supports an explicit do-not-translate checkbox.
 Only changed boolean choices are sent with Save; translations and unrelated
 new-term fields stay intact. [Review0668](docs/reviews/0668-glossary-dnt-edit.md).
+
+### Download local glossary term edit
+The separate loaded-term editor can download its raw local fields and bound
+identity, including stale/unconfirmed labels. No translations, import, retry or
+server write is included. [Review0669](docs/reviews/0669-glossary-edit-download.md).

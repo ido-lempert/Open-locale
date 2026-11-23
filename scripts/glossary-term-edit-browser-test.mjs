@@ -1,7 +1,7 @@
 // Real local browser -> Glossary screen -> built API + Postgres.
 // No external provider requests. Requires nx build api.
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, existsSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
@@ -14,7 +14,7 @@ let failures = 0, api, web, browser, prisma;
 process.exitCode = 1;
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
-const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-glossary-dnt-edit-browser-'));
+const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-glossary-term-edit-download-browser-'));
 const pg = new EmbeddedPostgres({ databaseDir: dataDir, user: 'postgres', password: 'postgres', port: PG_PORT, persistent: false });
 try {
   await pg.initialise();await pg.start();await pg.createDatabase('glossary_term_edit_browser');
@@ -39,6 +39,8 @@ try {
   page.on('request',req=>{const p=new URL(req.url()).pathname;if(req.method()==='PATCH'&&p.includes('/glossary/')){writes++;sent.push({path:p,body:JSON.parse(req.postData())});}if(req.method()==='GET'&&p===`/api${P}/glossary`)reads++;if(req.method()==='POST'&&p===`/api${P}/glossary`)posts++;});
   const click=async selector=>{const button=await page.$(selector);if(!button)throw new Error('Missing button '+selector);await button.evaluate(e=>e.scrollIntoView({block:'center'}));await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await button.click();};
   const fill=async(selector,value)=>{await page.$eval(selector,(e,v)=>{e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}));},value);};
+  const downloadDir=mkdtempSync(join(tmpdir(),'ol-term-edit-download-'));const cdp=await page.createCDPSession();await cdp.send('Page.setDownloadBehavior',{behavior:'allow',downloadPath:downloadDir});
+  const downloadEdit=async()=>{const path=join(downloadDir,'glossary-term-local-edit.json');if(existsSync(path))unlinkSync(path);await click('[name=downloadTermEdit]');for(let n=0;n<100&&!existsSync(path);n++)await new Promise(r=>setTimeout(r,20));if(!existsSync(path))throw new Error('Download missing');return JSON.parse(readFileSync(path,'utf8'));};
   const open=async label=>{await click(`[aria-label="Edit details for ${label}"]`);await page.waitForSelector('[name=editGlossaryTerm]');await page.waitForFunction(()=>document.activeElement?.getAttribute('name')==='editGlossaryTerm');};
   await page.focus('[aria-label="Loaded term in he"]');await fill('[aria-label="Loaded term in he"]','UNSAVED TRANSLATION');
   await open('Loaded term');
@@ -47,7 +49,9 @@ try {
   check('scope labels local not autosaved text and unrelated fields',await page.$eval('[name=termEditScope]',e=>e.textContent.includes('Translations are not sent')&&e.textContent.includes('not saved automatically'))&&await page.$eval('[name=saveGlossaryTermEdit]',e=>e.disabled));
   await fill('[name=editGlossaryTerm]','x'.repeat(201));await fill('[name=editGlossaryNotes]','Private local notes');await page.waitForSelector('[name=termEditInvalid]');await page.evaluate(async()=>ng.getComponent(document.querySelector('ol-glossary')).saveTermEdit());
   check('invalid text retained and direct save does not write',writes===0&&await page.$eval('[name=editGlossaryTerm]',e=>e.value.length===201)&&await page.$eval('[name=saveGlossaryTermEdit]',e=>e.disabled));
-  await fill('[name=editGlossaryTerm]','  Edited term  ');await fill('[name=editGlossaryNotes]','  Edited <markup> notes  ');await page.$eval('[name=editGlossaryTerm]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/glossary-dnt-edit-desktop.png'});await page.setViewport({width:390,height:844});await page.$eval('[aria-label="Edit loaded glossary term"]',e=>e.scrollIntoView({block:'start'}));await page.evaluate(()=>window.scrollBy(0,-110));await page.screenshot({path:'/downloads/glossary-dnt-edit-mobile.png'});await page.$eval('[name=saveGlossaryTermEdit]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/glossary-dnt-edit-mobile-bottom.png'});
+  const localCopy=await downloadEdit();
+  check('download copies raw invalid local edit and bound identity without reads writes or unrelated drafts',localCopy.projectId===project.id&&localCopy.termId===term.id&&localCopy.draft.term==='x'.repeat(201)&&localCopy.draft.notes==='Private local notes'&&localCopy.serverStateConfirmed===false&&localCopy.importable===false&&localCopy.canWrite===false&&!JSON.stringify(localCopy).includes('UNSENT NEW TERM')&&!('translations' in localCopy.draft)&&writes===0&&reads===0);
+  await fill('[name=editGlossaryTerm]','  Edited term  ');await fill('[name=editGlossaryNotes]','  Edited <markup> notes  ');await page.$eval('[name=editGlossaryTerm]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/glossary-term-edit-download-desktop.png'});await page.setViewport({width:390,height:844});await page.$eval('[aria-label="Edit loaded glossary term"]',e=>e.scrollIntoView({block:'start'}));await page.evaluate(()=>window.scrollBy(0,-110));await page.screenshot({path:'/downloads/glossary-term-edit-download-mobile.png'});await page.$eval('[name=saveGlossaryTermEdit]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/glossary-term-edit-download-mobile-bottom.png'});
   check('390px local editor inputs fit their panel width',await page.$eval('[aria-label="Edit loaded glossary term"]',e=>e.scrollWidth<=e.clientWidth&&[...e.querySelectorAll('input,textarea')].every(x=>x.getBoundingClientRect().right<=innerWidth)));
   await click('[name=cancelGlossaryTermEdit]');await page.waitForFunction(()=>!document.querySelector('[name=editGlossaryTerm]'));await page.evaluate(async()=>ng.getComponent(document.querySelector('ol-glossary')).saveTermEdit());
   check('close discards only edit text without requests and keeps new-term draft',writes===0&&reads===0&&!await page.$('[name=editGlossaryTerm]')&&await page.$eval('[name=gTerm]',e=>e.value==='UNSENT NEW TERM'));
@@ -56,6 +60,7 @@ try {
   await click('[name=cancelGlossaryTermEdit]');await open('Loaded term');await fill('[name=editGlossaryTerm]',' Edited term ');await fill('[name=editGlossaryNotes]',' Edited <markup> notes ');
   let mode='hold',held;await page.setRequestInterception(true);page.on('request',req=>{const p=new URL(req.url()).pathname;if(req.method()==='PATCH'&&p===`/api${P}/glossary/${term.id}`){if(mode==='hold'){held=req;return;}if(mode==='fail')return req.respond({status:503,contentType:'application/json',body:JSON.stringify({message:'PRIVATE_FAILURE'})});}return req.continue();});
   await click('[name=saveGlossaryTermEdit]');for(let n=0;n<100&&!held;n++)await new Promise(r=>setTimeout(r,20));if(!held)throw new Error('Save not held');await page.waitForSelector('[name=termEditSaving]');await page.evaluate(async()=>{const c=ng.getComponent(document.querySelector('ol-glossary'));c.closeTermEdit();await c.saveTermEdit();});
+  check('pending edit blocks local copy',await page.$eval('[name=downloadTermEdit]',e=>e.disabled));
   check('pending real PATCH blocks duplicate save close and text changes',writes===1&&await page.$eval('[name=editGlossaryTerm]',e=>e.disabled)&&await page.$eval('[name=cancelGlossaryTermEdit]',e=>e.disabled)&&await page.$eval('[name=saveGlossaryTermEdit]',e=>e.disabled)&&!await page.$('[name=termEditStale]'));
   mode='live';await held.continue();held=null;await page.waitForSelector('[aria-label="Edit details for Edited term"]');await page.waitForFunction(()=>!document.querySelector('[name=editGlossaryTerm]'));
   let stored=(await call(`${P}/glossary`,null,token)).find(t=>t.id===term.id);
@@ -71,9 +76,11 @@ try {
   check('explicit checkbox save persists false and removes badge',writes===4&&sent[3].body.doNotTranslate===false&&stored.doNotTranslate===false&&!await page.$('.dnt-badge'));
   await open('Edited term');await fill('[name=editGlossaryTerm]','Failed retained term');mode='fail';await click('[name=saveGlossaryTermEdit]');await page.waitForSelector('[name=glossarySaveUnknown]');await page.waitForFunction(()=>!document.querySelector('[name=termEditSaving]'));await page.evaluate(async()=>ng.getComponent(document.querySelector('ol-glossary')).saveTermEdit());
   check('real failed PATCH keeps edit text pauses retry and hides private error',writes===5&&await page.$eval('[name=editGlossaryTerm]',e=>e.value==='Failed retained term')&&await page.$eval('[name=saveGlossaryTermEdit]',e=>e.disabled)&&!(await page.content()).includes('PRIVATE_FAILURE'));
+  const failedCopy=await downloadEdit();check('failed write copy preserves local edit and unconfirmed status without replay',failedCopy.saveOutcomeUnconfirmed===true&&failedCopy.loadedRowStillCurrent===false&&failedCopy.draft.term==='Failed retained term'&&writes===5);
   mode='live';await click('[name=refreshGlossaryList]');await page.waitForFunction(()=>!document.querySelector('[name=glossarySaveUnknown]')&&!document.querySelector('[name=glossaryListLoading]'));await page.evaluate(async()=>ng.getComponent(document.querySelector('ol-glossary')).saveTermEdit());
   check('explicit refresh reads server but does not replay stale edit',writes===5&&await page.$('[name=termEditStale]')&&await page.$eval('[name=editGlossaryTerm]',e=>e.value==='Failed retained term')&&(await call(`${P}/glossary`,null,token)).find(t=>t.id===term.id).term==='Edited term');
-  await click('[name=cancelGlossaryTermEdit]');await page.$eval('[name=refreshGlossaryList]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/glossary-dnt-edit-result.png'});await page.$eval('[aria-label="Edit details for Edited term"]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/glossary-dnt-edit-result-row.png'});
+  const staleCopy=await downloadEdit();check('refreshed stale edit copy stays local and not current',staleCopy.loadedRowStillCurrent===false&&staleCopy.draft.term==='Failed retained term'&&writes===5);rmSync(downloadDir,{recursive:true,force:true});
+  await click('[name=cancelGlossaryTermEdit]');await page.$eval('[name=refreshGlossaryList]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/glossary-term-edit-download-result.png'});await page.$eval('[aria-label="Edit details for Edited term"]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/glossary-term-edit-download-result-row.png'});
   check('no glossary term edit runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
 } catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {

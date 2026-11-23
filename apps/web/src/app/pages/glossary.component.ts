@@ -74,15 +74,18 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
       @if (termEdit(); as edit) {
         <section class="panel" aria-label="Edit loaded glossary term" style="overflow-wrap:anywhere;min-width:0">
           <h2>Edit glossary term</h2>
-          <p class="muted" name="termEditScope">Local term, notes and do-not-translate choice for loaded term {{edit.id}} in project {{edit.projectId}}. Save sends term and notes, plus the do-not-translate choice only when changed. Translations are not sent. This is not a fresh permission check or newer server state. Text is not saved automatically or restored after leaving. Copy text before closing or reopening.</p>
-          <label>Term <input name="editGlossaryTerm" aria-describedby="termEditRules" [attr.aria-invalid]="!validTermEditText()" style="width:100%;box-sizing:border-box" [disabled]="termEditSaving()" [ngModel]="termEditTerm()" (ngModelChange)="termEditTerm.set($event)" /></label>
-          <label>Notes <textarea name="editGlossaryNotes" aria-describedby="termEditRules" rows="3" style="width:100%;box-sizing:border-box" [disabled]="termEditSaving()" [ngModel]="termEditNotes()" (ngModelChange)="termEditNotes.set($event)"></textarea></label>
-          <label class="dnt" style="display:flex;align-items:center;gap:0.5rem"><input style="width:auto;margin:0;flex:0 0 auto" type="checkbox" name="editGlossaryDnt" [disabled]="termEditSaving()" [ngModel]="termEditDnt()" (ngModelChange)="termEditDnt.set($event)" /> do not translate this term</label>
+          <p class="muted" name="termEditScope">Local term, notes and do-not-translate choice for loaded term {{edit.id}} in project {{edit.projectId}}. Save sends term and notes, plus the do-not-translate choice only when changed. Translations are not sent. This is not a fresh permission check or newer server state. Text is not saved automatically or restored after leaving. Copy or download this local edit before closing or reopening.</p>
+          <label>Term <input name="editGlossaryTerm" aria-describedby="termEditRules" [attr.aria-invalid]="!validTermEditText()" style="width:100%;box-sizing:border-box" [disabled]="termEditSaving()" [ngModel]="termEditTerm()" (ngModelChange)="termEditDownloadResult.set(null);termEditTerm.set($event)" /></label>
+          <label>Notes <textarea name="editGlossaryNotes" aria-describedby="termEditRules" rows="3" style="width:100%;box-sizing:border-box" [disabled]="termEditSaving()" [ngModel]="termEditNotes()" (ngModelChange)="termEditDownloadResult.set(null);termEditNotes.set($event)"></textarea></label>
+          <label class="dnt" style="display:flex;align-items:center;gap:0.5rem"><input style="width:auto;margin:0;flex:0 0 auto" type="checkbox" name="editGlossaryDnt" [disabled]="termEditSaving()" [ngModel]="termEditDnt()" (ngModelChange)="termEditDownloadResult.set(null);termEditDnt.set($event)" /> do not translate this term</label>
           <p class="muted" id="termEditRules" name="termEditRules">Term: 1-200 characters; notes: up to 1,000 using the API count. Outer whitespace is trimmed on Save. Empty notes clears the stored notes. Text is not truncated.</p>
           @if (!validTermEditText()) { <p role="status" name="termEditInvalid">Correct the term or notes before saving. Your text is kept here and not sent.</p> }
           @if (!termEditCurrent() && !termEditSaving()) { <p role="status" name="termEditStale">This loaded term is no longer current or available for editing. Your local text is kept here. Copy it, close this editor, check the glossary and reopen the term before saving. No automatic retry is made.</p> }
           @if (termEditSaving()) { <p role="status" name="termEditSaving">Saving term details. Do not repeat this request.</p> }
           <div class="toolbar"><button type="button" name="saveGlossaryTermEdit" [disabled]="!termEditSaveReady()" (click)="saveTermEdit()">Save term details</button><button type="button" name="cancelGlossaryTermEdit" [disabled]="termEditSaving()" (click)="closeTermEdit()">Close local editor</button></div>
+          <button type="button" name="downloadTermEdit" (pointerdown)="$event.preventDefault()" [disabled]="!termEditDownloadReady()" (click)="downloadTermEdit()">Download local term edit (.json)</button>
+          <p class="muted" name="termEditDownloadScope">Copies only this editor identity, local term, notes and do-not-translate choice. Excludes translations and the new-term form. May contain private text and unconfirmed changes. Not newer server state, a restorable backup, an import or proof of a write. Downloading does not share, save or retry changes.</p>
+          @if(termEditDownloadNotice()){<p role="status" name="termEditDownloadNotice">{{termEditDownloadNotice()}}</p>}
         </section>
       }
       @if (!listError()) { <table class="glossary-table">
@@ -119,12 +122,23 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
 })
 export class GlossaryComponent implements OnInit, OnDestroy {
   termEdit=signal<{row:GlossaryTermItem;projectId:string;scope:number;generation:number;id:string;term:string;notes:string;doNotTranslate:boolean}|null>(null);
+  termEditDownloadResult=signal<{snapshot:string;message:string}|null>(null);
+  termEditDownloadNotice=computed(()=>{const result=this.termEditDownloadResult();return result&&this.termEdit()&&result.snapshot===this.termEditDownloadJson()?result.message:'';});
+  termEditDownloadReady(){const edit=this.termEdit();return !this.destroyed&&!!edit&&edit.projectId===this.projectId&&edit.scope===this.projectGeneration&&!this.termEditSaving();}
+  private termEditDownloadJson(){const edit=this.termEdit();return JSON.stringify({schemaVersion:1,scope:'current-local-glossary-term-edit',projectId:edit?.projectId,termId:edit?.id,serverStateConfirmed:false,importable:false,canWrite:false,saveOutcomeUnconfirmed:!!edit&&this.unknownSaveIds().includes(edit.id),loadedRowStillCurrent:this.termEditCurrent(),draft:{term:this.termEditTerm(),notes:this.termEditNotes(),doNotTranslate:this.termEditDnt()}},null,2);}
+  downloadTermEdit(){
+    if(!this.termEditDownloadReady())return;
+    const snapshot=this.termEditDownloadJson();let url:string|undefined;
+    try{url=URL.createObjectURL(new Blob([snapshot],{type:'application/json;charset=utf-8'}));const anchor=document.createElement('a');anchor.href=url;anchor.download='glossary-term-local-edit.json';anchor.click();this.termEditDownloadResult.set({snapshot,message:'Download requested for this local term edit. This does not confirm the file was saved, shared or any change reached the server.'});}
+    catch{this.termEditDownloadResult.set({snapshot,message:'Download could not be started. Copy your local edit before closing.'});}
+    finally{if(url)URL.revokeObjectURL(url);}
+  }
   private termEditFocusing=false;
   termEditTerm=signal('');termEditNotes=signal('');termEditDnt=signal(false);termEditSaving=signal(false);
   canOpenTermEdit(t:GlossaryTermItem){return !this.destroyed&&!this.rowPending(t.id)&&!this.termEdit()&&!this.mutationsPending()&&!this.createUnknown()&&!this.loading()&&!this.listError()&&this.terms().some(row=>row===t);}
   openTermEdit(t:GlossaryTermItem){
     if(!this.canOpenTermEdit(t))return;
-    this.cancelRemove();this.termEditTerm.set(t.term);this.termEditNotes.set(t.notes??'');this.termEditDnt.set(t.doNotTranslate);
+    this.termEditDownloadResult.set(null);this.cancelRemove();this.termEditTerm.set(t.term);this.termEditNotes.set(t.notes??'');this.termEditDnt.set(t.doNotTranslate);
     const edit={row:t,projectId:this.projectId,scope:this.projectGeneration,generation:this.fetchSeq,id:t.id,term:t.term,notes:t.notes??'',doNotTranslate:t.doNotTranslate};this.termEdit.set(edit);
     requestAnimationFrame(()=>requestAnimationFrame(()=>{if(this.destroyed||this.termEdit()!==edit)return;const input=document.querySelector<HTMLInputElement>('[name=editGlossaryTerm]');input?.scrollIntoView({block:'center'});this.termEditFocusing=true;try{input?.focus({preventScroll:true});}finally{this.termEditFocusing=false;}}));
   }
