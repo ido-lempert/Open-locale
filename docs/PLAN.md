@@ -2897,3 +2897,9 @@ rejects unmatched selections. [Review0705](reviews/0705-editor-history-browser-h
 Full valid instants sort newest-first before the50-row cutoff; equal/unavailable
 ties retain locale/read order. No source metadata repair or extra reads.
 [Review0706](reviews/0706-editor-history-order.md).
+
+
+### Local webhook journal recorded-time order
+Optional newest/oldest order uses full instants, stable ties and unavailable-last
+semantics in loaded records. Filters combine; downloads preserve loaded order.
+[Review0707](reviews/0707-webhook-order.md).

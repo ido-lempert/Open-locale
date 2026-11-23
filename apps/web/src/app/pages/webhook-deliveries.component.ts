@@ -26,6 +26,8 @@ import { ApiService, WebhookDeliveryInfo } from '../api.service';
       <label>Find loaded event names <input type="search" name="deliveryEventSearch" maxlength="200" [ngModel]="query()" (ngModelChange)="setQuery($event)" /></label>
       <button type="button" name="clearDeliveryEventSearch" [disabled]="!query()" (click)="setQuery('')">Clear event search</button>
       <p class="muted">Event search is a trimmed, literal, case-insensitive substring in loaded event names only. Clear event search and the status filter to show all loaded records.</p>
+      <label>Order loaded deliveries <select name="deliveryOrder" [ngModel]="order()" (ngModelChange)="setOrder($event)"><option value="loaded">Loaded order</option><option value="newest">Newest recorded first</option><option value="oldest">Oldest recorded first</option></select></label>
+      <p class="muted" name="deliveryOrderScope">Local display order only, using full recorded timestamps. Unavailable times come last; equal times keep loaded order. Event search and status combine with this order. Downloads keep loaded order. This does not read more records, send or retry deliveries, or confirm receiver processing.</p>
       @if(loading()){<p role="status">Loading deliveries...</p>}
       @if(error()){<p role="alert" class="error">Deliveries unavailable. This journal requires project admin access and an existing webhook. No deliveries are shown. Try refreshing.</p>}
       @if(!loading()&&!error()){
@@ -47,14 +49,16 @@ export class WebhookDeliveriesComponent implements OnInit,OnDestroy {
   status=signal<''|'succeeded'|'failed'>('');
   query=signal('');loaded=signal(false);downloadNotice=signal('');
   setQuery(value:string){if(!this.destroyed)this.query.set(value.slice(0,200));}
-  visibleItems=computed(()=>{const status=this.status(),query=this.query().trim().toLowerCase();return status||query?this.items().filter(item=>(!status||item.success===(status==='succeeded'))&&(!query||item.event.toLowerCase().includes(query))):this.items();});
+  order=signal<'loaded'|'newest'|'oldest'>('loaded');
+  setOrder(value:string){if(!this.destroyed&&(value==='loaded'||value==='newest'||value==='oldest'))this.order.set(value);}
+  visibleItems=computed(()=>{const status=this.status(),query=this.query().trim().toLowerCase(),rows=status||query?this.items().filter(item=>(!status||item.success===(status==='succeeded'))&&(!query||item.event.toLowerCase().includes(query))):this.items();const order=this.order();if(order==='loaded')return rows;const time=(value:unknown)=>{const parsed=typeof value==='string'&&value.trim()?Date.parse(value):NaN;return Number.isFinite(parsed)?parsed:null;};return [...rows].sort((a,b)=>{const left=time(a.createdAt),right=time(b.createdAt);if(left===right)return 0;if(left===null)return 1;if(right===null)return -1;return order==='oldest'?left-right:right-left;});});
   setStatus(value:string){if(!this.destroyed&&(value===''||value==='succeeded'||value==='failed'))this.status.set(value);}
   private generation=0;private destroyed=false;private routeSub?:Subscription;
   constructor(private readonly route:ActivatedRoute,private readonly api:ApiService,@Inject(LOCALE_ID) private readonly displayLocale='en-US'){}
   validTime(value:unknown):value is string{return typeof value==='string'&&!!value.trim()&&Number.isFinite(Date.parse(value));}
   timeLabel(value:unknown):string{if(!this.validTime(value))return 'Recorded time unavailable';try{const pipe=new DatePipe(this.displayLocale);return `${pipe.transform(value,'medium')} ${pipe.transform(value,'z')}`;}catch{return 'Recorded time unavailable';}}
   ngOnInit(){this.routeSub=this.route.paramMap.subscribe(p=>this.visit(p.get('id')??'',p.get('hookId')??''));}
-  visit(projectId:string,hookId:string){if(this.destroyed)return;this.projectId=projectId;this.hookId=hookId;this.status.set('');this.query.set('');void this.reload();}
+  visit(projectId:string,hookId:string){if(this.destroyed)return;this.projectId=projectId;this.hookId=hookId;this.status.set('');this.query.set('');this.order.set('loaded');void this.reload();}
   refresh(){if(!this.loading())void this.reload();}
   download(){
     if(this.destroyed||this.loading()||this.error()||!this.loaded())return;

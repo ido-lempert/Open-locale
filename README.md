@@ -2484,3 +2484,8 @@ Optional `EDITOR_HISTORY_HARNESS_FILTER` narrows cases; unmatched selections fai
 Saved history sorts valid full instants newest-first before the50-row cutoff;
 unavailable times follow and equal/unavailable ties keep locale/read order.
 No source values or fetch scope change. [Review0706](docs/reviews/0706-editor-history-order.md).
+
+### Local webhook journal time order
+Loaded/newest/oldest order uses full recorded instants, stable ties and unavailable
+last. Combines with event/status filters; downloads keep source loaded order.
+[Review0707](docs/reviews/0707-webhook-order.md).
