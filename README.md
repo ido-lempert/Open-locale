@@ -90,6 +90,11 @@ Local metadata search combines with this view; full instants, stable ties and
 unavailable-last ordering leave server filters, pagination and JSON source order
 unchanged. See [review0690](docs/reviews/0690-activity-time-order.md).
 
+### Bounded identity unlink feedback
+Unconfirmed identity unlink results show fixed cautious recovery text instead of
+raw API/network errors. Password clearing and verified successful sign-out remain
+unchanged. See [review0691](docs/reviews/0691-identity-unlink-error.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`

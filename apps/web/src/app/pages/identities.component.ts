@@ -227,10 +227,10 @@ export class IdentitiesComponent implements OnInit, OnDestroy {
             'Identity unlinked. Sign in again with your local password and second factor.',
         },
       });
-    } catch (e) {
+    } catch {
       if (generation === this.generation)
         this.unlinkError.set(
-          e instanceof Error ? e.message : 'Could not unlink identity',
+          'Unlink result could not be confirmed. Sign in again before trying another unlink. Your password was cleared.',
         );
     } finally {
       if (generation === this.generation) this.busy.set(false);

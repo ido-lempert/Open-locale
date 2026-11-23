@@ -2800,3 +2800,10 @@ Optional newest/oldest ordering composes with local metadata search, preserves
 full stored timestamps and stable ties, and puts unavailable values last. Loaded
 inventory and download order remain unchanged; project changes reset display order.
 [Review0690](reviews/0690-activity-time-order.md).
+
+
+### Bound identity unlink errors
+Fixed uncertain-result recovery text replaces arbitrary exception messages.
+Passwords clear before submission; local rows/session stay unchanged on an
+unconfirmed response. No automatic replay, new retry control or auth policy change.
+[Review0691](reviews/0691-identity-unlink-error.md).
