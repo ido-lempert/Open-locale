@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
+import { Component, Inject, LOCALE_ID, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { DatePipe } from '@angular/common';
@@ -7,7 +7,7 @@ import { ApiService, SyncPreviewRecord } from '../api.service';
 
 @Component({
   selector: 'ol-sync-history',
-  imports: [RouterLink, DatePipe, FormsModule],
+  imports: [RouterLink, FormsModule],
   styles: [
     `
       main {
@@ -133,7 +133,7 @@ import { ApiService, SyncPreviewRecord } from '../api.service';
               <article>
                 <h2>{{ r.branch }} / {{ r.locale }}</h2>
                 <p>
-                  {{ r.createdAt | date: 'medium' }} · Caller-file diagnostic,
+                  <span name="syncHistoryTime">{{timeLabel(r.createdAt)}}</span> · Caller-file diagnostic,
                   not applied
                 </p>
                 <p>
@@ -205,7 +205,13 @@ export class SyncHistoryComponent implements OnInit, OnDestroy {
   constructor(
     private route: ActivatedRoute,
     private api: ApiService,
+    @Inject(LOCALE_ID) private readonly displayLocale='en-US',
   ) {}
+  timeLabel(value:unknown):string {
+    if(typeof value!=='string'||!value.trim())return 'Recorded time unavailable';
+    try{return new DatePipe(this.displayLocale).transform(value,'medium')||'Recorded time unavailable';}
+    catch{return 'Recorded time unavailable';}
+  }
   ngOnInit() {
     this.subscription = this.route.paramMap.subscribe((p) => {
       void this.load(p.get('id') ?? '');

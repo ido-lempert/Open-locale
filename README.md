@@ -66,6 +66,10 @@ Task rows show a fixed unavailable label for malformed loaded due dates without
 interrupting the list or emitting an invalid datetime attribute. Valid dates keep
 UTC labels and full timestamps; absent dates stay absent. See [review0685](docs/reviews/0685-task-date-fallback.md).
 
+Diagnostic preview history keeps rendering when a recorded timestamp is malformed
+or empty, using a fixed unavailable label while valid times retain locale display.
+No record is changed or applied. See [review0686](docs/reviews/0686-sync-history-time-fallback.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`

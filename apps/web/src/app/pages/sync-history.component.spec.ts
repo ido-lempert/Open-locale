@@ -7,3 +7,8 @@ describe('diagnostic history read boundaries',()=>{
  it('older project success or failure cannot settle current read',async()=>{for(const fail of [false,true]){const old=deferred(),fresh=deferred(),c=make({listSyncPreviewRecords:jest.fn().mockReturnValueOnce(old.promise).mockReturnValueOnce(fresh.promise)});const a=c.load('old'),b=c.load('new');if(fail)old.reject(new Error('PRIVATE'));else old.resolve({records:[{id:'old'}]});await a;expect(c.records()).toEqual([]);expect(c.error()).toBe('');expect(c.loading()).toBe(true);fresh.resolve({records:[{id:'new'}]});await b;expect(c.projectId).toBe('new');expect(c.records()[0].id).toBe('new');}});
  it('destroy prevents responses and every new read including captured refresh',async()=>{const wait=deferred(),api={listSyncPreviewRecords:jest.fn().mockReturnValue(wait.promise)},c=make(api);const pending=c.load('p');c.ngOnDestroy();wait.resolve({records:[{id:'late'}]});await pending;c.loading.set(false);c.refresh();await c.load('other');expect(c.records()).toEqual([]);expect(c.projectId).toBe('p');expect(api.listSyncPreviewRecords).toHaveBeenCalledTimes(1);});
 });
+
+describe('diagnostic recorded-time fallback',()=>{
+ for(const value of [undefined,null,'','   ','not-a-date','<img src=x>',42,{},[]])it(`bounds invalid recorded time ${String(value)}`,()=>{expect(make({}).timeLabel(value)).toBe('Recorded time unavailable');});
+ it('keeps exact valid locale formatting',()=>{const {DatePipe}=require('@angular/common'),value='2026-12-12T23:59:59.123Z',c=new SyncHistoryComponent({} as any,{} as any,'en-US');expect(c.timeLabel(value)).toBe(new DatePipe('en-US').transform(value,'medium'));});
+});

@@ -2773,3 +2773,8 @@ and download payloads stay unchanged. [Review0684](reviews/0684-activity-time-fa
 Malformed dates cannot interrupt task row rendering. Valid UTC labels and full
 datetime values remain unchanged; absent dates remain absent. No task mutation
 or stored-data repair. [Review0685](reviews/0685-task-date-fallback.md).
+
+### Guard diagnostic history timestamps
+Malformed/empty recorded times cannot interrupt loaded preview-history records.
+Valid locale formatting, read-only diagnostic semantics and downloaded source
+metadata remain unchanged. [Review0686](reviews/0686-sync-history-time-fallback.md).
