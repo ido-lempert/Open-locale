@@ -19,6 +19,10 @@ The task-details and new-task validation browser harnesses fail closed if databa
 startup aborts before cleanup finishes. Run `npm run test:tasks-details-harness`
 to verify both real occupied-port failure paths. See [review0673](docs/reviews/0673-task-details-harness.md).
 
+Activity supports literal local search across loaded actor/action/key/locale
+metadata without extra requests. Server filters, pagination and full loaded
+metadata download remain separate. See [review0675](docs/reviews/0675-activity-local-search.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`

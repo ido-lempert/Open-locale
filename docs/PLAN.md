@@ -2717,3 +2717,9 @@ that this cannot return zero or count application assertions.
 New-task validation browser checks now retain failure status on incomplete
 startup cleanup. The existing task harness regression covers both details and
 creation-validation suites. [Review0674](reviews/0674-task-create-harness.md).
+
+### Search loaded activity metadata
+Local literal case-insensitive search covers displayed actor names, action labels
+and codes, keys and locales only. No extra reads, detail-text search or narrower
+download; server filters and pagination remain separate.
+[Review0675](reviews/0675-activity-local-search.md).

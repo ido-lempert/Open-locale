@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -80,8 +80,12 @@ function roleSnapshot(value: unknown): value is { role: string; allowedLocales: 
       <button type="button" name="downloadActivity" [disabled]="loading() || !!error() || !loaded()" (click)="download()">Download loaded activity metadata (.json)</button>
       <p class="muted" name="activityDownloadScope">Downloads only currently loaded pages under these action, actor and key filters, not complete history or newer server changes. Includes record IDs, action, displayed actor name, key, locale and time. Omits raw detail, translation/comment text, actor emails and private errors. The file can contain private project metadata; downloading does not share it or confirm an action succeeded.</p>
       @if (downloadNotice()) { <p role="status" name="activityDownloadNotice">{{downloadNotice()}}</p> }
+      <label>Find in loaded activity metadata <input type="search" name="activitySearch" maxlength="200" [ngModel]="query()" (ngModelChange)="search($event)" /></label>
+      <button type="button" name="clearActivitySearch" [disabled]="!query()" (click)="search('')">Clear local search</button>
+      <p class="muted" name="activitySearchScope">Literal, case-insensitive search of loaded actor names, action labels/codes, keys and locales only. Raw detail and translation/comment text are not searched. Server filters and Load more still control which entries are loaded. Download includes all loaded entries regardless of this local search.</p>
+      @if(loaded() && !loading() && !error()){<p role="status" name="activityMatches">{{visibleItems().length}} of {{items().length}} loaded entries match.</p>}
       <ul class="activity-list">
-        @for (ev of items(); track ev.id) {
+        @for (ev of visibleItems(); track ev.id) {
           <li class="activity-row">
             <span class="activity-actor">{{ ev.actor?.displayName ?? 'Former user' }}</span>
             <span class="activity-action">{{ label(ev.action) }}</span>
@@ -91,7 +95,7 @@ function roleSnapshot(value: unknown): value is { role: string; allowedLocales: 
             <time class="muted">{{ ev.createdAt | date:'short' }}</time>
           </li>
         } @empty {
-          @if (!loading() && !error()) { <li class="muted" name="activityEmpty">{{ hasFilters() ? 'No activity matches these filters' : 'No activity yet' }}</li> }
+          @if (!loading() && !error()) { <li class="muted" name="activityEmpty">{{ query().trim() ? 'No loaded activity metadata matches this search. Clear local search or load earlier entries.' : hasFilters() ? 'No activity matches these filters' : 'No activity yet' }}</li> }
         }
       </ul>
       @if (nextCursor() && !error()) {
@@ -102,6 +106,10 @@ function roleSnapshot(value: unknown): value is { role: string; allowedLocales: 
 })
 export class ActivityComponent implements OnInit, OnDestroy {
   projectId = '';
+  query=signal('');
+  search(value:string){if(!this.destroyed)this.query.set(value.slice(0,200));}
+  visibleItems=computed(()=>{const query=this.query().trim().toLocaleLowerCase();return query?this.items().filter(ev=>[ev.actor?.displayName??'Former user',ev.action,this.label(ev.action),ev.keyName??'',ev.localeCode??''].some(value=>value.toLocaleLowerCase().includes(query))):this.items();});
+
   items = signal<ActivityEntry[]>([]);
   nextCursor = signal<string | null>(null);
   actionFilter = signal('');
@@ -129,7 +137,7 @@ export class ActivityComponent implements OnInit, OnDestroy {
   }
   async loadProject(projectId:string) {
     if(this.destroyed)return;
-    ++this.projectGeneration;this.projectId=projectId;
+    ++this.projectGeneration;this.projectId=projectId;this.query.set('');
     if(this.keyTimer)clearTimeout(this.keyTimer);this.keyTimer=null;
     this.actionFilter.set('');this.actorFilter.set('');this.keyFilter.set('');this.members.set([]);
     await Promise.all([this.loadMembers(),this.fetch(true)]);
