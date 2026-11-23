@@ -384,7 +384,7 @@ interface CellState {
               @if (historyFor() === k.id) {
                 <tr class="history-row"><td [attr.colspan]="2 + p.locales.length">
                   @if (!historyError()) { <button type="button" name="refreshHistory" (mousedown)="$event.preventDefault()" [disabled]="!historyRefreshReady(k)" (click)="refreshHistory(k)">Refresh history</button> }
-                  <p class="muted" name="historyRefreshScope" style="white-space:normal;max-width:40rem">Refresh reads this key's saved translation history across loaded project locales and shows at most 50 newest returned changes. Separate locale reads are not one database snapshot or complete history. It does not reload translations, discard local values or restore a change.</p>
+                  <p class="muted" name="historyRefreshScope" style="white-space:normal;max-width:40rem">Refresh reads this key's saved translation history across loaded project locales and shows at most 50 returned changes, valid times newest first. Unavailable times follow valid times; equal or unavailable times keep locale/read order. Separate locale reads are not one database snapshot or complete history. It does not reload translations, discard local values or restore a change.</p>
                   @if (historyLoading()) { <p class="muted" role="status" name="historyLoading">Loading history...</p> }
                   @else if (historyError()) { <p class="error" role="alert" name="historyError">History unavailable. No changes are shown. Retry this read.</p><button type="button" name="retryHistory" (mousedown)="$event.preventDefault()" [disabled]="!historyRecoveryReady(k)" (click)="recoverHistory(k)">Retry history</button> }
                   @else if (historyEntries().length === 0) { <p class="muted" name="historyEmpty">No changes recorded yet.</p> }
@@ -1104,7 +1104,10 @@ export class EditorComponent implements OnInit, OnDestroy {
       const locales = this.project()?.locales ?? [];
       const all = await Promise.all(locales.map(async l =>
         (await this.api.getHistory(projectId, keyId, l.code)).map(h => ({ ...h, locale:l.code }))));
-      if(current())this.historyEntries.set(all.flat().sort((x,y)=>new Date(y.createdAt).getTime()-new Date(x.createdAt).getTime()).slice(0,50));
+      if(current()){
+        const time=(value:unknown)=>{const parsed=typeof value==='string'&&value.trim()?Date.parse(value):NaN;return Number.isFinite(parsed)?parsed:null;};
+        this.historyEntries.set(all.flat().sort((x,y)=>{const left=time(x.createdAt),right=time(y.createdAt);if(left===right)return 0;if(left===null)return 1;if(right===null)return -1;return right-left;}).slice(0,50));
+      }
     } catch { if(current())this.historyError.set(true); }
     finally { if(current())this.historyLoading.set(false); }
   }

@@ -2891,3 +2891,9 @@ with fixed unavailable labels. Existing editing and refresh semantics stay.
 Four older history suites preserve incomplete startup and failed assertion exits.
 Actual occupied-port harness covers unchanged timestamp verification too and
 rejects unmatched selections. [Review0705](reviews/0705-editor-history-browser-harness.md).
+
+
+### Stable unavailable-last editor history order
+Full valid instants sort newest-first before the50-row cutoff; equal/unavailable
+ties retain locale/read order. No source metadata repair or extra reads.
+[Review0706](reviews/0706-editor-history-order.md).

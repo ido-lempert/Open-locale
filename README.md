@@ -2479,3 +2479,8 @@ failures through cleanup. `npm run test:editor-history-browser-harness` checks
 five actual occupied-port paths, including unchanged timestamp verification.
 Optional `EDITOR_HISTORY_HARNESS_FILTER` narrows cases; unmatched selections fail.
 [Review0705](docs/reviews/0705-editor-history-browser-harness.md).
+
+### Editor history valid-time ordering
+Saved history sorts valid full instants newest-first before the50-row cutoff;
+unavailable times follow and equal/unavailable ties keep locale/read order.
+No source values or fetch scope change. [Review0706](docs/reviews/0706-editor-history-order.md).

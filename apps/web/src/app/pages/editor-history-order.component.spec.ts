@@ -1,0 +1,9 @@
+import {EditorComponent} from './editor.component';
+const key={id:'k'} as any;
+const run=async(en:any[],he:any[]=[])=>{const api={getHistory:jest.fn().mockImplementation(async(_p,_k,l)=>l==='en'?en:he)},c=new EditorComponent(api as any,{snapshot:{paramMap:{get:()=> 'p'}}} as any);c.project.set({locales:[{code:'en'},{code:'he'}]} as any);c.historyFor.set('k');await c.readHistory(key);return{c,api};};
+describe('editor history valid-time order',()=>{
+ it('orders full instants across offsets and keeps invalid last without mutating sources',async()=>{const en=[{id:'bad',createdAt:'invalid'},{id:'old',createdAt:'2026-12-12T23:59:59.100Z'},{id:'new',createdAt:'2026-12-13T02:00:00.001+02:00'}],before=JSON.stringify(en),{c,api}=await run(en);expect(c.historyEntries().map(r=>r.id)).toEqual(['new','old','bad']);expect(JSON.stringify(en)).toBe(before);expect(api.getHistory.mock.calls).toEqual([['p','k','en'],['p','k','he']]);});
+ it('preserves equal-time and unavailable locale/read ties',async()=>{const{c}=await run([{id:'a',createdAt:'2026-01-01T00:00:00Z'},{id:'b',createdAt:null},{id:'c',createdAt:''}],[{id:'d',createdAt:'2026-01-01T02:00:00+02:00'},{id:'e',createdAt:42}]);expect(c.historyEntries().map(r=>r.id)).toEqual(['a','d','b','c','e']);});
+ it('applies50 row cutoff after valid-time order not unavailable input prefix',async()=>{const{c}=await run(Array.from({length:50},(_,i)=>({id:'bad'+i,createdAt:'bad'})),[{id:'valid',createdAt:'1970-01-01T00:00:00Z'}]);expect(c.historyEntries()).toHaveLength(50);expect(c.historyEntries()[0].id).toBe('valid');expect(c.historyEntries()[49].id).toBe('bad48');});
+ for(const value of [undefined,null,'','  ','invalid',42,{},[]])it(`bounds unavailable time ${String(value)}`,async()=>{const{c}=await run([{id:'bad',createdAt:value},{id:'valid',createdAt:'1960-01-01T00:00:00Z'}]);expect(c.historyEntries().map(r=>r.id)).toEqual(['valid','bad']);expect(c.historyError()).toBe(false);});
+});
