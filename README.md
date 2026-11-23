@@ -11,6 +11,10 @@ labels UTC calendar dates, preserves untouched stored timestamps, and never retr
 an uncertain write. Task rows also show explicitly labeled UTC dates in every
 browser timezone, with the full stored timestamp in the time element. See [review0670](docs/reviews/0670-task-due-date-edit.md).
 
+New-task due dates also validate real calendar days before sending. Invalid
+dates keep the local form without starting a request or an unknown-outcome pause.
+See [review0672](docs/reviews/0672-task-create-date.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`

@@ -2700,3 +2700,9 @@ Task rows now render and label due dates in UTC, matching the calendar editor
 rather than shifting midnight dates to the previous day in western timezones.
 The time element retains the full stored timestamp. Browser checks cover western,
 eastern and UTC zones. [Review0671](reviews/0671-task-due-date-utc.md).
+
+### Validate new-task calendar dates
+New-task creation shares the date editor's real-calendar validator, labels UTC
+midnight semantics and blocks invalid direct Create calls without requests or
+form loss. Empty dates remain omitted from the existing payload.
+[Review0672](reviews/0672-task-create-date.md).

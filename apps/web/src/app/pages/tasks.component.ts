@@ -45,7 +45,7 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
             [ngModel]="title()" (ngModelChange)="formDraftEdited();title.set($event)" name="taskTitle" required />
           <input aria-label="Description (optional)" placeholder="Details, key names, context" aria-describedby="newTaskTextRules" [attr.aria-invalid]="!validNewDescription()"
             [ngModel]="description()" (ngModelChange)="formDraftEdited();description.set($event)" name="taskDescription" />
-          <input aria-label="Due date (optional)" type="date"
+          <input aria-label="Due date (optional, UTC calendar date)" aria-describedby="newTaskDateRules" [attr.aria-invalid]="!validNewDueDate()" min="0001-01-01" max="9999-12-31" type="date"
             [ngModel]="dueDate()" (ngModelChange)="formDraftEdited();dueDate.set($event)" name="taskDue" />
           <select aria-label="Assignee (optional)" [ngModel]="assigneeId()" (ngModelChange)="formDraftEdited();assigneeId.set($event)" name="taskAssignee">
             <option value="">unassigned</option>
@@ -69,10 +69,12 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
             lock the selected keys while this task is open
           </label>
           <span class="muted lock-scope-note">A lock blocks editor saves, status changes, MT fills, branch merges, snapshot restores and key deletion for everyone except the assignee and team admins. Imports skip locked keys and report them in the run; other keys still import.</span>
-          <button class="primary" type="submit" [disabled]="!validNewTitle() || !validNewDescription() || creating() || createUnknown()">Create task</button>
+          <button class="primary" type="submit" [disabled]="!validNewTitle() || !validNewDescription() || !validNewDueDate() || creating() || createUnknown()">Create task</button>
           @if (creating()) { <span role="status" name="taskCreating">Creating task...</span> }
         </form>
-        <p class="muted" id="newTaskTextRules" name="newTaskTextRules">New task title: 1-200 characters; optional description: up to 2,000 characters using the API count. Outer whitespace is trimmed when creating. Text is not truncated or automatically submitted. These checks do not verify dates, selected IDs, assignments or locks.</p>
+        <p class="muted" id="newTaskTextRules" name="newTaskTextRules">New task title: 1-200 characters; optional description: up to 2,000 characters using the API count. Outer whitespace is trimmed when creating. Text is not truncated or automatically submitted. These text checks do not verify selected IDs, assignments or locks.</p>
+        <p class="muted" id="newTaskDateRules" name="newTaskDateRules">Optional due date: a real calendar day from year 0001 to 9999, stored at midnight UTC. Empty means no due date. Dates do not follow the viewer's timezone.</p>
+        @if(!validNewDueDate()){<p role="status" name="newTaskDateInvalid">Correct the due date or clear it before creating. Your form is kept here and nothing has been sent.</p>}
         @if((title() && !validNewTitle()) || !validNewDescription()){<p role="status" name="newTaskTextInvalid">Correct the title or description before creating. Invalid text and your other form choices are kept here and not sent.</p>}
         <button type="button" name="downloadTaskDraft" [disabled]="!draftDownloadReady()" (click)="downloadDraft()">Download new-task form (.json)</button>
         <p class="muted" name="taskDraftDownloadScope">Backs up only the current local new-task form, including description and selected IDs, not loaded tasks or server state. Choices may be stale or unavailable. This file is not importable and does not create, retry or confirm a task. Unconfirmed creation stays unconfirmed; check tasks before creating again. The file can contain private project text; downloading does not share it.</p>
@@ -176,7 +178,9 @@ export class TasksComponent implements OnInit, OnDestroy {
   closeDetails(){if(this.detailsSaving())return;this.detailsEdit.set(null);this.detailsTitle.set('');this.detailsDescription.set('');this.detailsDueDate.set('');}
   detailsCurrent(){const e=this.detailsEdit();return !!e&&e.projectId===this.projectId&&e.scope===this.projectGeneration&&e.generation===this.fetchSeq&&e.row.id===e.id&&e.row.title===e.title&&(e.row.dueDate??null)===e.dueDate&&e.row.description===e.description&&this.rowReady(e.row)&&!this.createUnknown();}
   validDetailsText(){const title=this.detailsTitle().trim();return !!title&&this.apiTextLength(title)<=200&&this.apiTextLength(this.detailsDescription().trim())<=2000;}
-  validDetailsDate(){const value=this.detailsDueDate();if(!value)return true;if(!/^(?!0000)\d{4}-\d{2}-\d{2}$/.test(value))return false;const date=new Date(value+'T00:00:00.000Z');return Number.isFinite(date.getTime())&&date.toISOString().slice(0,10)===value;}
+  validDetailsDate(){return this.validCalendarDate(this.detailsDueDate());}
+  validNewDueDate(){return this.validCalendarDate(this.dueDate());}
+  private validCalendarDate(value:string){if(!value)return true;if(!/^(?!0000)\d{4}-\d{2}-\d{2}$/.test(value))return false;const date=new Date(value+'T00:00:00.000Z');return Number.isFinite(date.getTime())&&date.toISOString().slice(0,10)===value;}
   detailsSaveReady(){const e=this.detailsEdit();return !!e&&!this.detailsSaving()&&!this.mutationsPending()&&this.detailsCurrent()&&this.validDetailsText()&&this.validDetailsDate()&&(this.detailsTitle().trim()!==e.title||this.detailsDescription().trim()!==e.description||this.detailsDueDate()!==(e.dueDate?.slice(0,10)??''));}
   async saveDetails(){
     if(!this.detailsSaveReady())return;
@@ -422,7 +426,7 @@ export class TasksComponent implements OnInit, OnDestroy {
   validNewDescription():boolean {return this.apiTextLength(this.description().trim())<=2000;}
   async create() {
     const title = this.title().trim();
-    if (!this.validNewTitle() || !this.validNewDescription() || this.creating()||this.createUnknown()||this.destroyed) return;
+    if (!this.validNewTitle() || !this.validNewDescription() || !this.validNewDueDate() || this.creating()||this.createUnknown()||this.destroyed) return;
     const scope=this.projectGeneration,projectId=this.projectId;
     const current=()=>!this.destroyed&&scope===this.projectGeneration;
     const draft={title:this.title(),description:this.description(),dueDate:this.dueDate(),
