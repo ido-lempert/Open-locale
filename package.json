@@ -26,6 +26,7 @@
     "test:cli": "node scripts/cli-test.mjs",
     "test:sdk": "node scripts/sdk-test.mjs",
     "test:snapshots": "node scripts/snapshots-test.mjs",
+    "test:snapshots-harness": "node scripts/snapshots-harness-test.mjs",
     "test:permissions": "node scripts/permissions-test.mjs",
     "test:review": "node scripts/review-workflow-test.mjs",
     "test:migration": "node scripts/migration-status-test.mjs",

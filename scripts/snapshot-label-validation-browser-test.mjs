@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55942, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.SNAPSHOT_BROWSER_TEST_PG_PORT ?? 55942), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+// Preserve startup/assertion failure when incomplete cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-snapshot-validation-'));
@@ -45,7 +47,7 @@ try {
   await replace(' '+ '😀'.repeat(200)+' ');await page.waitForFunction(()=>!document.querySelector('.snapshot-create button').disabled);await page.$eval('.snapshot-create button',e=>e.scrollIntoView({block:'center'}));await page.click('.snapshot-create button');await page.waitForFunction(()=>document.querySelector('[name=label]').value==='');await page.waitForFunction(()=>!document.querySelector('[name=snapshotListLoading]'));const list=await call(`${P}/snapshots`,null,token);check('corrected trimmed Unicode200 label persists once without restore',posts===1&&reads===1&&restores===0&&payloads[0].label==='😀'.repeat(200)&&list.some(s=>s.label==='😀'.repeat(200)&&s.automatic===false));
   await replace('  literal <img>  ');await page.$eval('.snapshot-create button',e=>e.scrollIntoView({block:'center'}));await page.click('.snapshot-create button');await page.waitForFunction(()=>document.querySelector('[name=label]').value==='');await page.waitForFunction(()=>!document.querySelector('[name=snapshotListLoading]'));check('literal label rendered as text after existing trim',posts===2&&reads===2&&restores===0&&payloads[1].label==='literal <img>'&&await page.$$eval('.snapshot-label',es=>es.some(e=>e.textContent==='literal <img>'&&!e.querySelector('img'))));
   failCreate=true;await replace('keep valid label');await page.$eval('.snapshot-create button',e=>e.scrollIntoView({block:'center'}));await page.click('.snapshot-create button');await page.waitForSelector('[name=snapshotCaptureUnknown]');await page.evaluate(()=>ng.getComponent(document.querySelector('ol-snapshots')).create(new Event('submit')));check('valid failure keeps label and pauses replay without private error',posts===3&&reads===2&&restores===0&&await page.$eval('[name=label]',e=>e.value==='keep valid label')&&await page.$eval('.snapshot-create button',e=>e.disabled)&&!(await page.$eval('main',e=>e.innerText)).includes('PRIVATE_'));
-  check('no snapshot label validation runtime error',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
+  check('no snapshot label validation runtime error',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
 } catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??String(e)}`);process.exitCode=1;}
 finally {
   await browser?.close();
@@ -61,4 +63,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(failures?1:0);
+process.exit(!completed||failures?1:0);

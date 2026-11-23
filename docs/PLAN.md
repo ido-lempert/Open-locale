@@ -2748,3 +2748,8 @@ choices and downloaded metadata remain unchanged. [Review0679](reviews/0679-task
 Remaining15 task browser suites preserve startup/assertion failures across incomplete
 cleanup. Occupied-port coverage now spans17 entry points, with bounded optional
 filtering that rejects empty selections. [Review0680](reviews/0680-task-browser-harness.md).
+
+### Fail-closed snapshot browser verification set
+All10 snapshot browser entry points share explicit completion/failure guards and
+real occupied-port checks. Existing partial guards are aligned, not claimed newly
+protected from scratch. [Review0681](reviews/0681-snapshot-browser-harness.md).

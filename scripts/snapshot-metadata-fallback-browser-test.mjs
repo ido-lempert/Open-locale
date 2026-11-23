@@ -7,12 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 56136, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.SNAPSHOT_BROWSER_TEST_PG_PORT ?? 56136), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
-let completed=false;process.on('exit',()=>{if(!completed)process.exitCode=1;});
+// Preserve startup/assertion failure when incomplete cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-snapshot-ready-browser-'));
@@ -54,7 +55,7 @@ try {
   damaged=false;await page.click('[name=refreshSnapshots]');await page.waitForFunction(()=>{const el=document.querySelector('[name=snapshotCaptureTime]');return !!el&&el.textContent!=='Capture time unavailable';});await page.click('[name=snapshotLoadedReview] summary');
   check('explicit reread replaces fallback with valid server time and manual kind',reads===2&&writes===0&&await page.$eval('[name=snapshotReviewKind]',e=>e.textContent==='manual')&&await page.$eval('[name=snapshotReviewCreated]',e=>e.textContent.startsWith('2026-')));
   await page.setViewport({width:1280,height:900});await page.screenshot({path:'/downloads/snapshot-metadata-fallback-recovered-desktop.png'});await page.setViewport({width:390,height:844});await page.$eval('[name=snapshotLoadedReview]',e=>scrollTo(0,scrollY+e.getBoundingClientRect().top-60));await page.screenshot({path:'/downloads/snapshot-metadata-fallback-recovered-mobile.png'});
-  check('no snapshot restore runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955|InvalidPipeArgument|NG02100/.test(d)));process.exitCode=failures?1:0;
+  check('no snapshot restore runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955|InvalidPipeArgument|NG02100/.test(d)));completed=true;process.exitCode=failures?1:0;
 } catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();
@@ -70,4 +71,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-completed=failures===0;process.exit(failures?1:0);
+process.exit(!completed||failures?1:0);

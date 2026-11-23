@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55668, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.SNAPSHOT_BROWSER_TEST_PG_PORT ?? 55668), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+// Preserve startup/assertion failure when incomplete cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-snapshot-unknown-browser-'));
@@ -39,8 +41,8 @@ try {
   let restores=0,captures=0,reads=0,failRead=true;await page.setRequestInterception(true);page.on('request',req=>{const path=new URL(req.url()).pathname;if(req.method()==='POST'&&path.endsWith('/restore')){restores++;return req.respond({status:503,contentType:'application/json',body:JSON.stringify({message:'PRIVATE'})});}if(req.method()==='POST'&&path===`/api${P}/snapshots`)captures++;if(req.method()==='GET'&&path===`/api${P}/snapshots`){reads++;if(failRead)return req.respond({status:503,contentType:'application/json',body:'{}'});}req.continue();});let dialogs=0;page.on('dialog',async d=>{dialogs++;await d.accept();});await page.click('.restore');await page.waitForSelector('[name=snapshotRestoreUnknown]');await page.waitForFunction(()=>!document.querySelector('[name=snapshotRestoring]'));
   await page.evaluate(async()=>{const c=ng.getComponent(document.querySelector('ol-snapshots'));await c.restore(c.items()[0]);await c.create({preventDefault(){}});});check('unknown restore blocks capture and destructive replay without list GET',restores===1&&captures===0&&dialogs===1&&reads===0&&await page.$eval('.restore',e=>e.disabled)&&await page.$eval('.snapshot-create button',e=>e.disabled)&&await page.$eval('[name=label]',e=>e.value==='Keep capture draft')&&!(await page.content()).includes('PRIVATE'));await page.screenshot({path:'/downloads/snapshot-restore-unknown.png',fullPage:false});
   await page.click('[name=refreshSnapshots]');await page.waitForSelector('[name=retrySnapshotList]');check('failed explicit read keeps unknown recovery state and capture blocked',reads===1&&!!await page.$('[name=snapshotRestoreUnknown]')&&await page.$eval('.snapshot-create button',e=>e.disabled));failRead=false;await page.click('[name=retrySnapshotList]');await page.waitForFunction(()=>!document.querySelector('[name=snapshotRestoreUnknown]')&&document.querySelector('.restore')?.disabled===false);check('successful explicit current read unlocks without restore replay or draft loss',restores===1&&captures===0&&reads===2&&await page.$eval('[name=label]',e=>e.value==='Keep capture draft')&&!await page.$eval('.snapshot-create button',e=>e.disabled));
-  check('no snapshot restore runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  check('no snapshot restore runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -55,4 +57,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

@@ -44,6 +44,11 @@ database startup cleanup. The occupied-port harness discovers task browser scrip
 from the package scripts and checks17 entry points. Use `TASK_HARNESS_FILTER`
 (regex) for bounded groups; an empty match fails. See [review0680](docs/reviews/0680-task-browser-harness.md).
 
+Snapshot browser startup checks now retain failure status on incomplete database
+cleanup. `npm run test:snapshots-harness` checks all10 snapshot browser entries;
+`SNAPSHOT_HARNESS_FILTER` accepts a regex for bounded groups and rejects empty
+matches. See [review0681](docs/reviews/0681-snapshot-browser-harness.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`
