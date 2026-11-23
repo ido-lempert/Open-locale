@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55940, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.TASK_CREATE_VALIDATION_TEST_PG_PORT ?? 55940), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+// Startup abort cleanup can await an already-fired PostgreSQL exit event.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-task-validation-'));
@@ -50,7 +52,7 @@ try {
   await replace('[name=taskTitle]',' '+ '😀'.repeat(200)+' ');await replace('[name=taskDescription]',' '+ '✈️'.repeat(2000)+' ');await page.waitForFunction(()=>!document.querySelector('.task-form button[type=submit]').disabled);await page.click('.task-form button[type=submit]');await page.waitForSelector('[name=taskCreateNotice]');await page.waitForFunction(()=>document.querySelector('[name=taskTitle]').value==='');const list=await call(`${P}/tasks`,null,token);check('corrected Unicode200 and presentation2000 persist once with trim and due date',posts===1&&reads===1&&patches===0&&payloads[0].title==='😀'.repeat(200)&&payloads[0].description==='✈️'.repeat(2000)&&payloads[0].dueDate==='2028-02-29'&&list.some(t=>t.title==='😀'.repeat(200)&&t.description==='✈️'.repeat(2000)&&t.dueDate==='2028-02-29T00:00:00.000Z')&&list.some(t=>t.title==='Existing task'));
   await replace('[name=taskTitle]','  literal <img>  ');await replace('[name=taskDescription]','   ');await page.click('.task-form button[type=submit]');await page.waitForFunction(()=>document.querySelector('[name=taskTitle]').value===''&&[...document.querySelectorAll('.task-body strong')].some(e=>e.textContent==='literal <img>'&&!e.querySelector('img')));check('whitespace description omitted and title literal after trim',posts===2&&reads===2&&!('description' in payloads[1])&&payloads[1].title==='literal <img>'&&(await call(`${P}/tasks`,null,token)).some(t=>t.title==='literal <img>')&&await page.$$eval('.task-body strong',es=>es.some(e=>e.textContent==='literal <img>'&&!e.querySelector('img'))));
   failCreate=true;await replace('[name=taskTitle]','valid failure');await replace('[name=taskDescription]','keep context');await page.click('.task-form button[type=submit]');await page.waitForSelector('[name=taskCreateUnknown]');await page.evaluate(()=>ng.getComponent(document.querySelector('ol-tasks')).create());check('valid failure keeps form and pauses replay without private text',posts===3&&reads===2&&patches===0&&await page.$eval('[name=taskTitle]',e=>e.value==='valid failure')&&await page.$eval('[name=taskDescription]',e=>e.value==='keep context')&&await page.$eval('.task-form button[type=submit]',e=>e.disabled)&&!(await page.$eval('main',e=>e.innerText)).includes('PRIVATE_'));
-  check('no task text validation runtime error',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
+  check('no task text validation runtime error',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
 } catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??String(e)}`);process.exitCode=1;}
 finally {
   await browser?.close();
@@ -66,4 +68,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(failures?1:0);
+process.exit(!completed||failures?1:0);

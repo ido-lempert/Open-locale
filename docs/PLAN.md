@@ -2712,3 +2712,8 @@ Task-details browser checks now retain failure status if database startup aborts
 and cleanup cannot finish. An actual occupied-port subprocess regression checks
 that this cannot return zero or count application assertions.
 [Review0673](reviews/0673-task-details-harness.md).
+
+### Fail-closed new-task validation verification
+New-task validation browser checks now retain failure status on incomplete
+startup cleanup. The existing task harness regression covers both details and
+creation-validation suites. [Review0674](reviews/0674-task-create-harness.md).
