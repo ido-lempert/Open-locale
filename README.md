@@ -110,6 +110,11 @@ OIDC/SAML login-start faults show fixed provider-specific reload guidance, not
 arbitrary API/network messages. Local password/signup diagnostics and same-tab
 state behavior unchanged. See [review0694](docs/reviews/0694-login-start-error.md).
 
+### Fail-closed older authentication browser checks
+Five login/callback/OIDC/SAML browser suites preserve failed startup status across
+incomplete cleanup. Run `npm run test:auth-browser-harness` for real occupied-port
+checks. See [review0695](docs/reviews/0695-auth-browser-harness.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`

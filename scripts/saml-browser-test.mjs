@@ -9,11 +9,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55478, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.AUTH_BROWSER_TEST_PG_PORT ?? 55478), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, mock, browser, prisma;
+let failures = 0, completed = false, api, web, mock, browser, prisma;
 process.exitCode = 1;
+// Preserve failures even if incomplete startup cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-saml-browser-'));
@@ -215,8 +217,8 @@ try {
   check('SAML failed pending verification consumes entry',failed.status===401);
   check('SAML pending capacity recovers after consumption',!!(await pendingFlow()).pendingToken);
   console.log(failures?'SAML BROWSER CHECKS FAILED':'ALL SAML BROWSER CHECKS PASSED');
-  process.exitCode=failures?1:0;
-} catch(e){ console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1; }
+  completed=true;process.exitCode=failures?1:0;
+} catch(e){ failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1; }
 finally {
   await browser?.close();
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -231,4 +233,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

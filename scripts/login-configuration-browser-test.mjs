@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55698, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.AUTH_BROWSER_TEST_PG_PORT ?? 55698), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;const downloadDir=mkdtempSync(join(tmpdir(),'ol-qa-download-'));
+let failures = 0, completed = false, api, web, browser, prisma;const downloadDir=mkdtempSync(join(tmpdir(),'ol-qa-download-'));
 process.exitCode = 1;
+// Preserve failures even if incomplete startup cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-project-list-browser-'));
@@ -40,8 +42,8 @@ try {
   for(const provider of ['oidc','saml']){
     const other=provider==='oidc'?'saml':'oidc',before=reads[provider],otherBefore=reads[other];modes[provider]='hold';held[provider]=undefined;await page.click(`[name=${provider}ConfigurationRetry]`);for(let n=0;n<100&&!held[provider];n++)await new Promise(r=>setTimeout(r,20));if(!held[provider])throw new Error('provider read not held');await page.evaluate(p=>ng.getComponent(document.querySelector('ol-login')).loadProvider(p),provider);await page.waitForSelector(`[name=${provider}ConfigurationLoading]`);await page.waitForSelector(`[name=${provider}ConfigurationRetry]`,{hidden:true});check(`${provider} pending retry makes one GET without sibling read or sign-in`,reads[provider]===before+1&&reads[other]===otherBefore&&posts===0&&starts===0&&await page.$(`[name=${provider}ConfigurationRetry]`)===null);await held[provider].respond({status:200,contentType:'application/json',body:JSON.stringify({configured:true,browserEnabled:true})});await page.waitForSelector(`[name=${provider==='oidc'?'oidcLogin':'samlLogin'}]`);check(`${provider} successful retry reveals provider and preserves password draft without start`,await page.$eval('[name=password]',e=>e.value==='pass1234')&&await page.$eval('[name=email]',e=>e.value==='sync-owner@example.com')&&posts===0&&starts===0);
   }
-  modes.oidc='success';modes.saml='hold';held.saml=undefined;await page.goto(`${WEB}/login`,{waitUntil:'domcontentloaded'});await page.waitForSelector('[name=oidcLogin]');check('held SAML configuration does not delay independent OIDC choice or password login',!!held.saml&&await page.$eval('button.primary',e=>!e.disabled));await page.type('[name=email]','sync-owner@example.com');await page.type('[name=password]','pass1234');await page.click('button.primary');await page.waitForFunction(()=>location.pathname==='/projects');await held.saml.respond({status:200,contentType:'application/json',body:JSON.stringify({browserEnabled:true})}).catch(()=>{});check('password login succeeds while provider-info read remains pending',posts===1&&starts===0&&await page.evaluate(()=>!!localStorage.getItem('ol_token')));check('no provider configuration runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  modes.oidc='success';modes.saml='hold';held.saml=undefined;await page.goto(`${WEB}/login`,{waitUntil:'domcontentloaded'});await page.waitForSelector('[name=oidcLogin]');check('held SAML configuration does not delay independent OIDC choice or password login',!!held.saml&&await page.$eval('button.primary',e=>!e.disabled));await page.type('[name=email]','sync-owner@example.com');await page.type('[name=password]','pass1234');await page.click('button.primary');await page.waitForFunction(()=>location.pathname==='/projects');await held.saml.respond({status:200,contentType:'application/json',body:JSON.stringify({browserEnabled:true})}).catch(()=>{});check('password login succeeds while provider-info read remains pending',posts===1&&starts===0&&await page.evaluate(()=>!!localStorage.getItem('ol_token')));check('no provider configuration runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();rmSync(downloadDir,{recursive:true,force:true});
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -56,4 +58,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

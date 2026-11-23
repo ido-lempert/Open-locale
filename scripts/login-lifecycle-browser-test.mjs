@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55697, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.AUTH_BROWSER_TEST_PG_PORT ?? 55697), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;const downloadDir=mkdtempSync(join(tmpdir(),'ol-qa-download-'));
+let failures = 0, completed = false, api, web, browser, prisma;const downloadDir=mkdtempSync(join(tmpdir(),'ol-qa-download-'));
 process.exitCode = 1;
+// Preserve failures even if incomplete startup cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-project-list-browser-'));
@@ -41,8 +43,8 @@ try {
   await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});const before=posts;await page.evaluate(async()=>{const c=ng.getComponent(document.querySelector('ol-login'));c.oidcConfigured.set(false);c.samlConfigured.set(false);await c.startSso();await c.startSaml();});check('unconfigured captured provider handlers send no start requests',posts===before&&providerStarts===0);
   await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-login'));c.samlConfigured.set(true);window.originalDigest=crypto.subtle.digest.bind(crypto.subtle);crypto.subtle.digest=()=>new Promise(resolve=>window.releaseDigest=resolve);window.pendingSaml=c.startSaml();});await page.waitForFunction(()=>!!window.releaseDigest);await page.screenshot({path:'/downloads/login-lifecycle-pending.png',fullPage:true});await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-login'));c.ngOnDestroy();window.releaseDigest(new Uint8Array(32).buffer);});await page.evaluate(()=>window.pendingSaml);check('destroy during held crypto prevents real SAML start POST',posts===before);await page.evaluate(()=>crypto.subtle.digest=window.originalDigest);
   await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});holdLogin=true;await page.type('[name=email]','sync-owner@example.com');await page.type('[name=password]','pass1234');const loginBefore=posts,providerBefore=providerStarts;held=undefined;await page.click('button.primary');for(let n=0;n<100&&!held;n++)await new Promise(r=>setTimeout(r,20));if(!held)throw new Error('login not held');await page.evaluate(async()=>{const c=ng.getComponent(document.querySelector('ol-login'));c.oidcConfigured.set(true);c.samlConfigured.set(true);await c.submit();await c.startSso();await c.startSaml();});await page.waitForFunction(()=>document.querySelector('button.primary').disabled);check('pending real login suppresses duplicate and competing provider requests',posts===loginBefore+1&&providerStarts===providerBefore&&await page.$eval('button.primary',e=>e.disabled));await page.evaluate(()=>ng.getComponent(document.querySelector('ol-login')).ngOnDestroy());await held.continue();await new Promise(r=>setTimeout(r,250));check('late real password-login response cannot replace token or navigate after destroy',await page.evaluate(t=>location.pathname==='/login'&&localStorage.getItem('ol_token')===t,token));
-  holdLogin=false;await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.type('[name=email]','sync-owner@example.com');await page.type('[name=password]','pass1234');await page.click('button.primary');await page.waitForFunction(()=>location.pathname==='/projects');check('current valid local password sign-in still navigates with usable session',(await page.evaluate(()=>!!localStorage.getItem('ol_token')))&&posts===loginBefore+2);check('no login lifecycle runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  holdLogin=false;await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.type('[name=email]','sync-owner@example.com');await page.type('[name=password]','pass1234');await page.click('button.primary');await page.waitForFunction(()=>location.pathname==='/projects');check('current valid local password sign-in still navigates with usable session',(await page.evaluate(()=>!!localStorage.getItem('ol_token')))&&posts===loginBefore+2);check('no login lifecycle runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();rmSync(downloadDir,{recursive:true,force:true});
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -57,4 +59,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

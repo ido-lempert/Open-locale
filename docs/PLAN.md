@@ -2825,3 +2825,9 @@ replay and lifecycle behavior unchanged. [Review0693](reviews/0693-callback-erro
 Fixed OIDC/SAML guidance replaces raw exceptions only in provider-start catches.
 No local password/signup diagnostic or same-tab state behavior changes.
 [Review0694](reviews/0694-login-start-error.md).
+
+
+### Fail-closed authentication browser verification
+Five older login/callback/OIDC/SAML suites now preserve incomplete startup and
+assertion failures across cleanup. Actual occupied-port harness with optional
+bounded selection. [Review0695](reviews/0695-auth-browser-harness.md).

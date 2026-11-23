@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55699, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.AUTH_BROWSER_TEST_PG_PORT ?? 55699), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;const downloadDir=mkdtempSync(join(tmpdir(),'ol-qa-download-'));
+let failures = 0, completed = false, api, web, browser, prisma;const downloadDir=mkdtempSync(join(tmpdir(),'ol-qa-download-'));
 process.exitCode = 1;
+// Preserve failures even if incomplete startup cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-project-list-browser-'));
@@ -42,8 +44,8 @@ try {
     await page.evaluate(p=>ng.getComponent(document.querySelector(`ol-${p}-callback`)).ngOnDestroy(),provider);await held.respond({status:200,contentType:'application/json',body:JSON.stringify({accessToken:'late-local-fixture'})});await page.evaluate(()=>window.pendingComplete);const latest=requests;await page.evaluate(async p=>{const c=ng.getComponent(document.querySelector(`ol-${p}-callback`));c.busy.set(false);c.pendingToken='captured';c.code='123456';c.restart();await c.complete();},provider);check(`${provider} late completion and destroyed handlers preserve session and current route`,requests===latest&&await page.evaluate(({p,t})=>location.pathname===`/auth/${p}/callback`&&localStorage.getItem('ol_token')===t,{p:provider,t:token}));
     await page.goto(`${WEB}/auth/${provider}/callback`,{waitUntil:'networkidle0'});await page.waitForFunction(()=>!document.querySelector('[name=restartSso]').disabled);await page.click('[name=restartSso]');await page.waitForFunction(()=>location.pathname==='/login');check(`${provider} idle Back to sign-in still navigates`,true);
   }
-  check('no callback readiness runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  check('no callback readiness runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();rmSync(downloadDir,{recursive:true,force:true});
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -58,4 +60,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);
