@@ -2885,3 +2885,9 @@ unavailable, not never-used. [Review0703](reviews/0703-settings-time-fallback.md
 Malformed timestamps retain loaded comment/reply bodies and saved history values
 with fixed unavailable labels. Existing editing and refresh semantics stay.
 [Review0704](reviews/0704-editor-time-fallback.md).
+
+
+### Fail-closed editor history browser verification
+Four older history suites preserve incomplete startup and failed assertion exits.
+Actual occupied-port harness covers unchanged timestamp verification too and
+rejects unmatched selections. [Review0705](reviews/0705-editor-history-browser-harness.md).

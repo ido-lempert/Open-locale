@@ -2472,3 +2472,10 @@ not claim never-used. [Review0703](docs/reviews/0703-settings-time-fallback.md).
 Malformed comment/reply/history times use fixed unavailable labels without
 hiding discussion bodies or saved values. Valid short locale display and source
 metadata stay unchanged. [Review0704](docs/reviews/0704-editor-time-fallback.md).
+
+### Editor history browser verification startup guards
+Four older history browser scripts now retain incomplete startup and assertion
+failures through cleanup. `npm run test:editor-history-browser-harness` checks
+five actual occupied-port paths, including unchanged timestamp verification.
+Optional `EDITOR_HISTORY_HARNESS_FILTER` narrows cases; unmatched selections fail.
+[Review0705](docs/reviews/0705-editor-history-browser-harness.md).
