@@ -62,13 +62,15 @@ function roleSnapshot(value: unknown): value is { role: string; allowedLocales: 
         <option value="">all actions</option>
         @for (a of actions; track a) { <option [value]="a">{{ label(a) }}</option> }
       </select>
-      <select aria-label="Filter by actor" [attr.aria-busy]="membersLoading()" name="actActor" [ngModel]="actorFilter()" (ngModelChange)="setActor($event)">
+      <select aria-label="Filter by actor" [attr.aria-busy]="membersLoading()" name="actActor" style="min-width:0;max-width:100%" [ngModel]="actorFilter()" (ngModelChange)="setActor($event)">
         <option value="">all actors</option>
+        @if(actorFilterMissing()){<option [value]="actorFilter()">Selected actor outside options</option>}
         @for (m of members(); track m.id) { <option [value]="m.id">{{ m.displayName }}</option> }
       </select>
       <input aria-label="Filter by key" name="actKey" placeholder="key contains…" [ngModel]="keyFilter()" (ngModelChange)="onKeyInput($event)">
     </header>
     <main [attr.aria-busy]="loading()">
+      @if(actorFilterMissing()){<p class="muted" role="status" name="activityRetainedActor" style="overflow-wrap:anywhere">Selected actor ID {{actorFilter()}} is outside the loaded actor options. The activity filter is retained, not cleared or verified as a current member. Retry actor options to check the list, or choose all actors to remove this filter.</p><button type="button" name="refreshActivityActors" [disabled]="membersLoading()" (click)="void loadMembers()">Refresh actor options</button>}
       @if (membersLoading()) { <p role="status" name="activityActorsLoading">Loading actor filter options. Activity loads independently.</p> }
       @if (membersError()) { <p class="error" role="alert" name="activityActorsError">Actor filter options unavailable. Activity remains available.</p><button type="button" name="retryActivityActors" (click)="void loadMembers()">Retry actor options</button> }
       @if (error(); as e) { <p class="error" role="alert">{{ e }}</p><button type="button" name="retryActivity" (click)="retry()">Retry activity</button> }
@@ -166,6 +168,8 @@ export class ActivityComponent implements OnInit, OnDestroy {
     if (this.keyTimer) clearTimeout(this.keyTimer);
     this.keyTimer = setTimeout(() => void this.fetch(true), 250);
   }
+
+  actorFilterMissing(){return !!this.actorFilter()&&!this.members().some(member=>member.id===this.actorFilter());}
 
   hasFilters() { return !!(this.actionFilter()||this.actorFilter()||this.keyFilter().trim()); }
 

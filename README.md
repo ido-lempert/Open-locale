@@ -23,6 +23,10 @@ Activity supports literal local search across loaded actor/action/key/locale
 metadata without extra requests. Server filters, pagination and full loaded
 metadata download remain separate. See [review0675](docs/reviews/0675-activity-local-search.md).
 
+Activity actor filters retain selected IDs outside the loaded member options,
+with an explicit fallback and option refresh, rather than appearing unfiltered.
+See [review0676](docs/reviews/0676-activity-retained-actor.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`

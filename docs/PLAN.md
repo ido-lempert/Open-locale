@@ -2723,3 +2723,8 @@ Local literal case-insensitive search covers displayed actor names, action label
 and codes, keys and locales only. No extra reads, detail-text search or narrower
 download; server filters and pagination remain separate.
 [Review0675](reviews/0675-activity-local-search.md).
+
+### Retain activity actor filter outside options
+A selected actor missing from loaded member options stays visible as a fallback
+with its exact ID and a membership-scope notice. Refreshing options does not clear
+or reread the activity filter. [Review0676](reviews/0676-activity-retained-actor.md).
