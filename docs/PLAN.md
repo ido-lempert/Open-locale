@@ -2873,3 +2873,9 @@ Valid locale/timezone labels, raw downloads and read-only status semantics remai
 Four older journal suites now retain incomplete startup and assertion failures
 through cleanup. Actual occupied-port harness includes unchanged time suite and
 rejects unmatched selections. [Review0702](reviews/0702-webhook-browser-harness.md).
+
+
+### Guard loaded settings metadata timestamps
+Malformed token, webhook and OTA publication times cannot interrupt settings.
+Valid locale labels and source metadata preserved; supplied invalid last-use is
+unavailable, not never-used. [Review0703](reviews/0703-settings-time-fallback.md).

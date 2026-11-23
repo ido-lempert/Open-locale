@@ -2461,3 +2461,9 @@ incomplete startup and failed assertion exits through cleanup. Run
 `npm run test:webhook-browser-harness` for five actual occupied-port paths,
 including unchanged timestamp checks. Optional `WEBHOOK_HARNESS_FILTER` narrows
 cases; unmatched selections fail. [Review0702](docs/reviews/0702-webhook-browser-harness.md).
+
+### Settings metadata timestamp fallback
+Loaded token, webhook and OTA publication metadata uses fixed unavailable labels
+for malformed times. Valid locale formatting and source values stay unchanged.
+Null/absent token last-use retains never-used; supplied invalid/empty time does
+not claim never-used. [Review0703](docs/reviews/0703-settings-time-fallback.md).

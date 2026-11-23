@@ -1,12 +1,12 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, Inject, LOCALE_ID, OnDestroy, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicationInfo, ApiTokenInfo, GroupInfo, MemberInfo, Project, WebhookInfo } from '../api.service';
 
 @Component({
   selector: 'ol-settings',
-  imports: [FormsModule, RouterLink, DatePipe],
+  imports: [FormsModule, RouterLink],
   template: `
     <header class="bar">
       <a [routerLink]="['/projects', projectId]" class="back">&larr; Editor</a>
@@ -114,7 +114,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             @for (tok of tokens(); track tok.id) {
               <li>
                 <span class="loaded-token-text">{{ tok.name }}</span>
-                <span class="muted loaded-token-text">{{ tok.scopes.join('+') }} · created {{ tok.createdAt | date:'mediumDate' }}{{ tok.lastUsedAt ? ' · used ' + (tok.lastUsedAt | date:'short') : ' · never used' }}</span>
+                <span class="muted loaded-token-text">{{ tok.scopes.join('+') }} · created <span name="settingsTokenCreatedTime">{{settingsTimeLabel(tok.createdAt,'mediumDate')}}</span>{{ tok.lastUsedAt === null || tok.lastUsedAt === undefined ? ' · never used' : ' · used ' + settingsTimeLabel(tok.lastUsedAt,'short') }}</span>
                 @if (confirmingToken() === tok.id) {
                   <span>Revoke <strong>{{ tok.name }}</strong>? Scripts using it stop immediately. This cannot be undone.</span>
                   <section class="locale-remove-dependencies" style="overflow-wrap:anywhere;word-break:break-word" name="settingsTokenRevokeDetails" aria-label="Loaded token selected for revocation">
@@ -175,7 +175,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             @for (h of webhooks(); track h.id) {
               <li>
                 <span class="hook-url">{{ h.url }}</span>
-                <span class="muted loaded-hook-events">{{ h.events.join(' + ') }} · created {{ h.createdAt | date:'mediumDate' }}</span>
+                <span class="muted loaded-hook-events">{{ h.events.join(' + ') }} · created <span name="settingsWebhookCreatedTime">{{settingsTimeLabel(h.createdAt,'mediumDate')}}</span></span>
                 @if (!h.active) { <span class="badge">disabled</span> }
                 @if (isTeamAdmin()) {
                   @if (confirmingHook() === h.id) {
@@ -710,7 +710,7 @@ import { ApiService, AutomationRuleInfo, BranchInfo, MtProviderInfo, OtaPublicat
             @for (o of otaPubs(); track o.id) {
               <li>
                 <span>{{ o.branch }} <span class="muted">v{{ o.version }}</span></span>
-                <span class="muted">{{ o.locales.join(', ') }} - {{ o.translations }} translations - {{ o.createdAt | date:'medium' }}</span>
+                <span class="muted">{{ o.locales.join(', ') }} - {{ o.translations }} translations - <span name="settingsOtaCreatedTime">{{settingsTimeLabel(o.createdAt,'medium')}}</span></span>
                 @for (locale of o.locales; track locale) { <a [routerLink]="['/projects',projectId,'ota',o.version,locale]" [queryParams]="{branch:o.branch,publicationId:o.id}">Inspect {{locale}}</a> }
               </li>
             }
@@ -786,8 +786,12 @@ export class SettingsComponent implements OnInit, OnDestroy {
   samlInfo = signal<{ configured: boolean; entityId?: string; acsUrl?: string; metadataPath?: string; idpEntryPoint?: string; requestSigning?: boolean } | null>(null);
   projectId = '';
 
-  constructor(private api: ApiService, route: ActivatedRoute, private router: Router) {
+  constructor(private api: ApiService, route: ActivatedRoute, private router: Router, @Inject(LOCALE_ID) private readonly displayLocale='en-US') {
     this.projectId = route.snapshot.paramMap.get('id') ?? '';
+  }
+  settingsTimeLabel(value:unknown,format:'mediumDate'|'short'|'medium'):string {
+    if(typeof value!=='string'||!value.trim()||!Number.isFinite(Date.parse(value)))return 'Time unavailable';
+    try{return new DatePipe(this.displayLocale).transform(value,format)||'Time unavailable';}catch{return 'Time unavailable';}
   }
   private tokenCopyDeparted = false;
   ngOnDestroy() {this.invalidateSamlInfoRefresh();this.invalidateGeneralMetadataRefresh();this.invalidateOriginListRefresh();this.invalidateStatusListRefresh();this.invalidateLocaleListRefresh();this.invalidateMtBranchRefresh();this.invalidateOtaBranchRefresh();this.invalidateOtaListRefresh();this.invalidateRuleListRefresh();this.invalidateMtProviderListRefresh();this.invalidateGroupListRefresh();this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
