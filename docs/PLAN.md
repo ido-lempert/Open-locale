@@ -2903,3 +2903,9 @@ ties retain locale/read order. No source metadata repair or extra reads.
 Optional newest/oldest order uses full instants, stable ties and unavailable-last
 semantics in loaded records. Filters combine; downloads preserve loaded order.
 [Review0707](reviews/0707-webhook-order.md).
+
+
+### Fail-closed editor comment browser verification
+Four older comment suites preserve incomplete startup/assertion failure exits.
+Actual occupied-port harness includes timestamp suite and rejects unmatched
+selections. [Review0708](reviews/0708-editor-comments-browser-harness.md).

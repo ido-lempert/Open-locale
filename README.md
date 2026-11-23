@@ -2489,3 +2489,10 @@ No source values or fetch scope change. [Review0706](docs/reviews/0706-editor-hi
 Loaded/newest/oldest order uses full recorded instants, stable ties and unavailable
 last. Combines with event/status filters; downloads keep source loaded order.
 [Review0707](docs/reviews/0707-webhook-order.md).
+
+### Editor comment browser verification startup guards
+Four older comment browser scripts retain incomplete startup/assertion failures
+through cleanup. `npm run test:editor-comments-browser-harness` covers five
+actual occupied-port paths, including unchanged timestamp verification.
+Optional `EDITOR_COMMENTS_HARNESS_FILTER` narrows cases; unmatched selections fail.
+[Review0708](docs/reviews/0708-editor-comments-browser-harness.md).

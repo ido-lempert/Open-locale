@@ -346,7 +346,8 @@
     "test:editor-time-browser": "node scripts/editor-time-browser-test.mjs",
     "test:editor-history-browser-harness": "node scripts/editor-history-browser-harness-test.mjs",
     "test:editor-history-order-browser": "node scripts/editor-history-order-browser-test.mjs",
-    "test:webhook-order-browser": "node scripts/webhook-order-browser-test.mjs"
+    "test:webhook-order-browser": "node scripts/webhook-order-browser-test.mjs",
+    "test:editor-comments-browser-harness": "node scripts/editor-comments-browser-harness-test.mjs"
   },
   "private": true,
   "dependencies": {
