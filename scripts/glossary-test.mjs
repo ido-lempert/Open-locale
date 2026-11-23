@@ -106,6 +106,34 @@ try {
   check('rename may match another project term',crossRename.status===200&&crossRename.json.term==='Open-LOCALE');
   const deniedRename=await call(`${base}/${t2.id}`,{token:bt,method:'PATCH',body:{term:'Hidden'}});
   check('cross-team rename denied',deniedRename.status===404);
+  // Deterministic race: HTTP precheck sees no winner, then UPDATE waits on our
+  // row lock. Create the winner only after PostgreSQL confirms that wait.
+  const raceBefore=(await call(`/projects/${proj.id}/activity`,{token:at})).json;
+  let unlock,locked;
+  const gate=new Promise(r=>unlock=r),ready=new Promise(r=>locked=r);
+  const blocker=prisma.$transaction(async tx=>{
+    await tx.$queryRaw`SELECT id FROM glossary_terms WHERE id=${t2.id}::uuid FOR UPDATE`;
+    locked();await gate;
+  },{timeout:15000});
+  await ready;
+  let racing,waiting=false,winner;
+  try {
+    racing=call(`${base}/${t2.id}`,{token:at,method:'PATCH',body:{term:'Race winner',notes:'Race notes',translations:{he:'Race translation'}}});
+    for(let n=0;n<100;n++){
+      const rows=await prisma.$queryRaw`SELECT pid FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE 'UPDATE %glossary_terms%'`;
+      if(rows.length){waiting=true;break;}
+      await new Promise(r=>setTimeout(r,20));
+    }
+    if(waiting)winner=await prisma.glossaryTerm.create({data:{projectId:proj.id,term:'RACE WINNER'}});
+  } finally {unlock();await blocker;}
+  const raceResponse=await racing;
+  check('rename race reaches database row lock after precheck',waiting);
+  check('racing unique-index rename returns fixed 409',waiting&&!!winner&&raceResponse.status===409&&raceResponse.json.message==='This term already exists in the glossary',String(raceResponse.status));
+  const raceAfter=(await call(base,{token:at})).json.find(t=>t.id===t2.id);
+  check('race conflict rolls back notes and translations',raceAfter.term==='checkout'&&raceAfter.notes==='Payment flow'&&raceAfter.translations.he==='קופה ראשית');
+  const raceFeed=(await call(`/projects/${proj.id}/activity`,{token:at})).json;
+  check('race conflict leaves activity unchanged',JSON.stringify(raceBefore.items.map(e=>e.id))===JSON.stringify(raceFeed.items.map(e=>e.id)));
+  if(winner)await prisma.glossaryTerm.delete({where:{id:winner.id}});
   await prisma.$disconnect();
 
   const feed = (await call(`/projects/${proj.id}/activity`, { token: at })).json;

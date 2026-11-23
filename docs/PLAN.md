@@ -2668,3 +2668,8 @@ do-not-translate flag are unchanged. [Review0664](reviews/0664-glossary-term-edi
 Glossary renames check case-insensitive duplicates within the project while
 excluding their own row. A racing functional-index conflict becomes a fixed 409,
 with the database uniqueness boundary unchanged. [Review0665](reviews/0665-glossary-rename-conflict.md).
+
+### Real database glossary rename race
+A row-lock integration test now forces a conflicting term to appear after the
+HTTP rename precheck, verifying the unique-index fallback returns 409 and rolls
+back term details and activity. [Review0666](reviews/0666-glossary-rename-race.md).
