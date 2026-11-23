@@ -66,6 +66,8 @@ export class GlossaryService {
     if (input.term !== undefined) {
       const term = input.term.trim();
       if (!term) throw new BadRequestException('Term cannot be empty');
+      const dupe = await this.prisma.glossaryTerm.findFirst({ where: { projectId, id: { not: termId }, term: { equals: term, mode: 'insensitive' } } });
+      if (dupe) throw new ConflictException('This term already exists in the glossary');
       data['term'] = term;
     }
     if (input.notes !== undefined) data['notes'] = input.notes.trim();
@@ -74,7 +76,20 @@ export class GlossaryService {
       data['translations'] = this.cleanTranslations(project.locales.map((l) => l.code), input.translations);
     }
     return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.glossaryTerm.update({ where: { id: termId }, data });
+      let updated;
+      try {
+        updated = await tx.glossaryTerm.update({ where: { id: termId }, data });
+      } catch (error) {
+        // Exact metadata observed from the functional index in PostgreSQL.
+        // Catch only the term write, never an activity or commit failure.
+        const e = error as { code?: string; meta?: { modelName?: string; target?: unknown } } | null;
+        const target = e?.meta?.target;
+        if (input.term !== undefined && e?.code === 'P2002' && e.meta?.modelName === 'GlossaryTerm' &&
+            Array.isArray(target) && target.length === 2 && target[0] === 'projectId' && target[1] === 'lower(term)') {
+          throw new ConflictException('This term already exists in the glossary');
+        }
+        throw error;
+      }
       await this.activity.record(tx, {
         projectId, actorId: userId, action: 'glossary.updated',
         detail: { term: truncate(updated.term, 80), fields: Object.keys(data) },

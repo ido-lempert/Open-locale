@@ -65,6 +65,17 @@ try {
   const terms = list.map((t) => t.term);
   check('list sorted deterministically', list.length === 2 && terms.join('|') === [...terms].sort().join('|'), terms.join('|'));
 
+  const beforeConflict = (await call(`/projects/${proj.id}/activity`, { token: at })).json;
+  const renameConflict = await call(`${base}/${t2.id}`, {token:at,method:'PATCH',body:{term:' open-LOCALE ',notes:'should not stick',translations:{he:'should not stick'}}});
+  check('duplicate rename returns fixed 409', renameConflict.status===409 && renameConflict.json.message==='This term already exists in the glossary', String(renameConflict.status));
+  const preserved = (await call(base,{token:at})).json.find(t=>t.id===t2.id);
+  check('conflicting rename preserves term notes and translations',preserved.term==='checkout'&&preserved.notes==='Payment flow'&&preserved.translations.he==='קופה ראשית');
+  const afterConflict = (await call(`/projects/${proj.id}/activity`, { token: at })).json;
+  check('conflicting rename creates no activity',JSON.stringify(beforeConflict.items.map(e=>e.id))===JSON.stringify(afterConflict.items.map(e=>e.id)));
+  const selfRename=await call(`${base}/${t2.id}`,{token:at,method:'PATCH',body:{term:' CHECKOUT '}});
+  check('same-row case-only rename allowed and trimmed',selfRename.status===200&&selfRename.json.term==='CHECKOUT');
+  await call(`${base}/${t2.id}`,{token:at,method:'PATCH',body:{term:'checkout'}});
+
   const ro = (await call('/auth/tokens', { token: at, method: 'POST', body: { name: 'ro', scopes: ['read'] } })).json;
   const roRead = await call(base, { apiKey: ro.token });
   const roWrite = await call(base, { apiKey: ro.token, method: 'POST', body: { term: 'x' } });
@@ -91,6 +102,10 @@ try {
   const other = (await call('/projects', { token: at, method: 'POST', body: { name: 'GL2', slug: 'gl2', locales: ['en'] } })).json;
   const crossTerm = await call(`/projects/${other.id}/glossary`, { token: at, method: 'POST', body: { term: 'Checkout' } });
   check('same term allowed in another project', crossTerm.status === 201 || crossTerm.status === 200, String(crossTerm.status));
+  const crossRename=await call(`/projects/${other.id}/glossary/${crossTerm.json.id}`,{token:at,method:'PATCH',body:{term:' Open-LOCALE '}});
+  check('rename may match another project term',crossRename.status===200&&crossRename.json.term==='Open-LOCALE');
+  const deniedRename=await call(`${base}/${t2.id}`,{token:bt,method:'PATCH',body:{term:'Hidden'}});
+  check('cross-team rename denied',deniedRename.status===404);
   await prisma.$disconnect();
 
   const feed = (await call(`/projects/${proj.id}/activity`, { token: at })).json;

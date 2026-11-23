@@ -2663,3 +2663,8 @@ Glossary terms can open a local term/notes editor with explicit Save and Close.
 Exact loaded-term binding and text limits guard saves; stale or unconfirmed
 results keep local text without automatic retry. Translations and the
 do-not-translate flag are unchanged. [Review0664](reviews/0664-glossary-term-edit.md).
+
+### Friendly glossary rename conflicts
+Glossary renames check case-insensitive duplicates within the project while
+excluding their own row. A racing functional-index conflict becomes a fixed 409,
+with the database uniqueness boundary unchanged. [Review0665](reviews/0665-glossary-rename-conflict.md).
