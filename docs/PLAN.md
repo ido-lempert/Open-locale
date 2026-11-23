@@ -2678,3 +2678,8 @@ back term details and activity. [Review0666](reviews/0666-glossary-rename-race.m
 Concurrent duplicate glossary creation now returns the existing fixed 409 using
 the precise unique-index error mapper. Real PostgreSQL/HTTP tests force and
 verify the race without weakening uniqueness. [Review0667](reviews/0667-glossary-create-conflict.md).
+
+### Edit loaded glossary do-not-translate choice
+The loaded-term editor now supports an explicit do-not-translate checkbox.
+Only changed boolean choices are sent with Save; translations and unrelated
+new-term fields stay intact. [Review0668](reviews/0668-glossary-dnt-edit.md).

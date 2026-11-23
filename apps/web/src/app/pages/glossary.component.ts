@@ -74,9 +74,10 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
       @if (termEdit(); as edit) {
         <section class="panel" aria-label="Edit loaded glossary term" style="overflow-wrap:anywhere;min-width:0">
           <h2>Edit glossary term</h2>
-          <p class="muted" name="termEditScope">Local term and notes for loaded term {{edit.id}} in project {{edit.projectId}}. Save sends only these two fields, not translations or the do-not-translate flag. This is not a fresh permission check or newer server state. Text is not saved automatically or restored after leaving. Copy text before closing or reopening.</p>
+          <p class="muted" name="termEditScope">Local term, notes and do-not-translate choice for loaded term {{edit.id}} in project {{edit.projectId}}. Save sends term and notes, plus the do-not-translate choice only when changed. Translations are not sent. This is not a fresh permission check or newer server state. Text is not saved automatically or restored after leaving. Copy text before closing or reopening.</p>
           <label>Term <input name="editGlossaryTerm" aria-describedby="termEditRules" [attr.aria-invalid]="!validTermEditText()" style="width:100%;box-sizing:border-box" [disabled]="termEditSaving()" [ngModel]="termEditTerm()" (ngModelChange)="termEditTerm.set($event)" /></label>
           <label>Notes <textarea name="editGlossaryNotes" aria-describedby="termEditRules" rows="3" style="width:100%;box-sizing:border-box" [disabled]="termEditSaving()" [ngModel]="termEditNotes()" (ngModelChange)="termEditNotes.set($event)"></textarea></label>
+          <label class="dnt" style="display:flex;align-items:center;gap:0.5rem"><input style="width:auto;margin:0;flex:0 0 auto" type="checkbox" name="editGlossaryDnt" [disabled]="termEditSaving()" [ngModel]="termEditDnt()" (ngModelChange)="termEditDnt.set($event)" /> do not translate this term</label>
           <p class="muted" id="termEditRules" name="termEditRules">Term: 1-200 characters; notes: up to 1,000 using the API count. Outer whitespace is trimmed on Save. Empty notes clears the stored notes. Text is not truncated.</p>
           @if (!validTermEditText()) { <p role="status" name="termEditInvalid">Correct the term or notes before saving. Your text is kept here and not sent.</p> }
           @if (!termEditCurrent() && !termEditSaving()) { <p role="status" name="termEditStale">This loaded term is no longer current or available for editing. Your local text is kept here. Copy it, close this editor, check the glossary and reopen the term before saving. No automatic retry is made.</p> }
@@ -117,31 +118,31 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
   `,
 })
 export class GlossaryComponent implements OnInit, OnDestroy {
-  termEdit=signal<{row:GlossaryTermItem;projectId:string;scope:number;generation:number;id:string;term:string;notes:string}|null>(null);
+  termEdit=signal<{row:GlossaryTermItem;projectId:string;scope:number;generation:number;id:string;term:string;notes:string;doNotTranslate:boolean}|null>(null);
   private termEditFocusing=false;
-  termEditTerm=signal('');termEditNotes=signal('');termEditSaving=signal(false);
+  termEditTerm=signal('');termEditNotes=signal('');termEditDnt=signal(false);termEditSaving=signal(false);
   canOpenTermEdit(t:GlossaryTermItem){return !this.destroyed&&!this.rowPending(t.id)&&!this.termEdit()&&!this.mutationsPending()&&!this.createUnknown()&&!this.loading()&&!this.listError()&&this.terms().some(row=>row===t);}
   openTermEdit(t:GlossaryTermItem){
     if(!this.canOpenTermEdit(t))return;
-    this.cancelRemove();this.termEditTerm.set(t.term);this.termEditNotes.set(t.notes??'');
-    const edit={row:t,projectId:this.projectId,scope:this.projectGeneration,generation:this.fetchSeq,id:t.id,term:t.term,notes:t.notes??''};this.termEdit.set(edit);
+    this.cancelRemove();this.termEditTerm.set(t.term);this.termEditNotes.set(t.notes??'');this.termEditDnt.set(t.doNotTranslate);
+    const edit={row:t,projectId:this.projectId,scope:this.projectGeneration,generation:this.fetchSeq,id:t.id,term:t.term,notes:t.notes??'',doNotTranslate:t.doNotTranslate};this.termEdit.set(edit);
     requestAnimationFrame(()=>requestAnimationFrame(()=>{if(this.destroyed||this.termEdit()!==edit)return;const input=document.querySelector<HTMLInputElement>('[name=editGlossaryTerm]');input?.scrollIntoView({block:'center'});this.termEditFocusing=true;try{input?.focus({preventScroll:true});}finally{this.termEditFocusing=false;}}));
   }
-  closeTermEdit(){if(this.termEditSaving())return;this.termEdit.set(null);this.termEditTerm.set('');this.termEditNotes.set('');}
-  termEditCurrent(){const e=this.termEdit();return !this.destroyed&&!!e&&!this.loading()&&!this.listError()&&e.projectId===this.projectId&&e.scope===this.projectGeneration&&e.generation===this.fetchSeq&&e.row.id===e.id&&e.row.term===e.term&&(e.row.notes??'')===e.notes&&this.terms().some(row=>row===e.row)&&!this.rowPending(e.id)&&!this.createUnknown();}
+  closeTermEdit(){if(this.termEditSaving())return;this.termEdit.set(null);this.termEditTerm.set('');this.termEditNotes.set('');this.termEditDnt.set(false);}
+  termEditCurrent(){const e=this.termEdit();return !this.destroyed&&!!e&&!this.loading()&&!this.listError()&&e.projectId===this.projectId&&e.scope===this.projectGeneration&&e.generation===this.fetchSeq&&e.row.id===e.id&&e.row.term===e.term&&(e.row.notes??'')===e.notes&&e.row.doNotTranslate===e.doNotTranslate&&this.terms().some(row=>row===e.row)&&!this.rowPending(e.id)&&!this.createUnknown();}
   validTermEditText(){const term=this.termEditTerm().trim();return !!term&&this.apiTextLength(term)<=200&&this.apiTextLength(this.termEditNotes().trim())<=1000;}
-  termEditSaveReady(){const e=this.termEdit();return !!e&&!this.termEditSaving()&&!this.mutationsPending()&&this.termEditCurrent()&&this.validTermEditText()&&(this.termEditTerm().trim()!==e.term||this.termEditNotes().trim()!==e.notes);}
+  termEditSaveReady(){const e=this.termEdit();return !!e&&!this.termEditSaving()&&!this.mutationsPending()&&this.termEditCurrent()&&this.validTermEditText()&&(this.termEditTerm().trim()!==e.term||this.termEditNotes().trim()!==e.notes||this.termEditDnt()!==e.doNotTranslate);}
   async saveTermEdit(){
     if(!this.termEditSaveReady())return;
-    const edit=this.termEdit()!,pid=this.projectId,scope=this.projectGeneration,listGeneration=this.fetchSeq,patch={term:this.termEditTerm().trim(),notes:this.termEditNotes().trim()};
+    const edit=this.termEdit()!,pid=this.projectId,scope=this.projectGeneration,listGeneration=this.fetchSeq,patch={term:this.termEditTerm().trim(),notes:this.termEditNotes().trim(),...(this.termEditDnt()!==edit.doNotTranslate?{doNotTranslate:this.termEditDnt()}: {})};
     this.cancelRemove();this.localReset.set(null);this.draftDownloadNotice.set('');++this.saveEpoch;this.termEditSaving.set(true);this.savingIds.update(ids=>[...ids,edit.id]);this.error.set('');this.createNotice.set('');
     try{
       const updated=await this.api.updateGlossaryTerm(pid,edit.id,patch);
       if(!this.current(scope))return;
-      if(this.termEdit()===edit){this.termEdit.set(null);this.termEditTerm.set('');this.termEditNotes.set('');}
+      if(this.termEdit()===edit){this.termEdit.set(null);this.termEditTerm.set('');this.termEditNotes.set('');this.termEditDnt.set(false);}
       if(listGeneration===this.fetchSeq&&this.terms().some(x=>x===edit.row)){
-        this.terms.update(all=>all.map(x=>x===edit.row?{...x,term:updated.term,notes:updated.notes??''}:x).sort((a,b)=>a.term.localeCompare(b.term)));
-        this.createNotice.set('Term details were updated. Translations and the do-not-translate flag were not changed.');
+        this.terms.update(all=>all.map(x=>x===edit.row?{...x,term:updated.term,notes:updated.notes??'',doNotTranslate:updated.doNotTranslate}:x).sort((a,b)=>a.term.localeCompare(b.term)));
+        this.createNotice.set('Term details were updated. Translations were not changed.');
       } else {
         this.createNotice.set('Term details were updated. The current list was kept; refresh the glossary to read the change.');
       }
@@ -220,7 +221,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
     if(this.destroyed)return;
     ++this.projectGeneration;
     this.cancelRemove();this.cancelNewTermReset();this.newTermResetResult.set(null);this.newTermDownloadResult.set(null);this.projectId=pid;++this.fetchSeq;this.savedTranslations.clear();
-    this.termEdit.set(null);this.termEditTerm.set('');this.termEditNotes.set('');this.termEditSaving.set(false);this.localReset.set(null);this.loaded.set(false);this.draftDownloadNotice.set('');this.terms.set([]);this.locales.set([]);this.error.set('');this.createNotice.set('');this.listError.set(false);this.creating.set(false);this.deletingIds.set([]);this.savingIds.set([]);this.unknownDeleteIds.set([]);this.unknownSaveIds.set([]);++this.saveEpoch;this.createUnknown.set(false);++this.createEpoch;
+    this.termEdit.set(null);this.termEditTerm.set('');this.termEditNotes.set('');this.termEditDnt.set(false);this.termEditSaving.set(false);this.localReset.set(null);this.loaded.set(false);this.draftDownloadNotice.set('');this.terms.set([]);this.locales.set([]);this.error.set('');this.createNotice.set('');this.listError.set(false);this.creating.set(false);this.deletingIds.set([]);this.savingIds.set([]);this.unknownDeleteIds.set([]);this.unknownSaveIds.set([]);++this.saveEpoch;this.createUnknown.set(false);++this.createEpoch;
     this.term.set('');this.notes.set('');this.doNotTranslate.set(false);this.query.set('');this.attention.set('all');
     void this.fetch();
     this.localesLoading.set(false);this.localesError.set(false);
