@@ -58,6 +58,10 @@ cleanup. `npm run test:glossary-harness` checks all16 glossary browser entries;
 `GLOSSARY_HARNESS_FILTER` accepts a regex for bounded groups and rejects empty
 matches. See [review0683](docs/reviews/0683-glossary-browser-harness.md).
 
+Activity rows keep rendering if a recorded timestamp is empty or malformed,
+showing a fixed unavailable label without exposing raw metadata. Valid times retain
+the existing locale display. See [review0684](docs/reviews/0684-activity-time-fallback.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`

@@ -2763,3 +2763,8 @@ precision, stable ties and unavailable-last semantics. [Review0682](reviews/0682
 Fifteen glossary browser scripts now share explicit completion/failure guards;
 new-term-reset already matched and stays unchanged. All16 entry points have actual
 occupied-port coverage. [Review0683](reviews/0683-glossary-browser-harness.md).
+
+### Guard activity timestamp rendering
+Malformed or empty recorded times show a fixed unavailable label rather than
+interrupting activity rendering. Valid times retain locale formatting; source data
+and download payloads stay unchanged. [Review0684](reviews/0684-activity-time-fallback.md).

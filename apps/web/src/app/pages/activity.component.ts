@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
+import { Component, Inject, LOCALE_ID, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -53,7 +53,7 @@ function roleSnapshot(value: unknown): value is { role: string; allowedLocales: 
 
 @Component({
   selector: 'ol-activity',
-  imports: [FormsModule, RouterLink, DatePipe],
+  imports: [FormsModule, RouterLink],
   template: `
     <header class="bar">
       <a [routerLink]="['/projects', projectId]" class="back">&larr; Editor</a>
@@ -94,7 +94,7 @@ function roleSnapshot(value: unknown): value is { role: string; allowedLocales: 
             @if (ev.keyName) { <code class="activity-key">{{ ev.keyName }}</code> }
             @if (ev.localeCode) { <span class="locale-badge">{{ ev.localeCode }}</span> }
             @if (detailText(ev)) { <span class="muted activity-detail">{{ detailText(ev) }}</span> }
-            <time class="muted">{{ ev.createdAt | date:'short' }}</time>
+            <time class="muted" name="activityTime">{{timeLabel(ev.createdAt)}}</time>
           </li>
         } @empty {
           @if (!loading() && !error()) { <li class="muted" name="activityEmpty">{{ query().trim() ? 'No loaded activity metadata matches this search. Clear local search or load earlier entries.' : hasFilters() ? 'No activity matches these filters' : 'No activity yet' }}</li> }
@@ -127,7 +127,12 @@ export class ActivityComponent implements OnInit, OnDestroy {
   actions = Object.keys(ACTION_LABELS);
   private keyTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private route: ActivatedRoute, private api: ApiService) {}
+  constructor(private route: ActivatedRoute, private api: ApiService, @Inject(LOCALE_ID) private readonly displayLocale='en-US') {}
+  timeLabel(value:unknown):string {
+    if(typeof value!=='string'||!value.trim())return 'Activity time unavailable';
+    try{return new DatePipe(this.displayLocale).transform(value,'short')||'Activity time unavailable';}
+    catch{return 'Activity time unavailable';}
+  }
 
   private subscription?:Subscription;
   private generation=0;

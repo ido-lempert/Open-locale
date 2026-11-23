@@ -66,3 +66,8 @@ describe('automation activity safe identity and cautious outcome',()=>{
  it('malformed and missing fields never claim success or stringify nested private data',()=>{for(const detail of [null,undefined,42,'private',[],{rule:{private:'secret'},action:'__proto__'},{rule:['private'],action:'toString'},{rule:' ',action:42},{results:[{error:'private'}]},{results:{he:null}}]){const result=text(detail);expect(result).not.toMatch(/private|secret|succeeded|success|\[object/);expect(result).toMatch(/unavailable|outcome not confirmed/);}});
  it('detects automation entries without depending on selected filter',()=>{const c=make({});expect(c.hasAutomationEntries()).toBe(false);c.items.set([{action:'task.created'}] as never);expect(c.hasAutomationEntries()).toBe(false);c.items.set([{action:'automation.run'}] as never);expect(c.hasAutomationEntries()).toBe(true);});
 });
+
+describe('activity time fallback',()=>{
+ for(const value of [undefined,null,'','   ','not-a-date','<img src=x>',42,{},[]])it(`bounds invalid time ${String(value)}`,()=>{expect(make({}).timeLabel(value)).toBe('Activity time unavailable');});
+ it('preserves valid date-pipe locale formatting',()=>{const {DatePipe}=require('@angular/common'),value='2026-12-12T23:59:59.123Z',c=new ActivityComponent({} as any,{} as any,'en-US');expect(c.timeLabel(value)).toBe(new DatePipe('en-US').transform(value,'short'));});
+});

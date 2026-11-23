@@ -64,6 +64,7 @@
     "test:qa-browser": "node scripts/qa-browser-test.mjs",
     "test:activity-clear-browser": "node scripts/activity-clear-browser-test.mjs",
     "test:activity-browser": "node scripts/activity-browser-test.mjs",
+    "test:activity-time-fallback-browser": "node scripts/activity-time-fallback-browser-test.mjs",
     "test:tasks-row-ready-browser": "node scripts/tasks-row-ready-browser-test.mjs",
     "test:tasks-action-receipt-browser": "node scripts/tasks-action-receipt-browser-test.mjs",
     "test:tasks-action-unknown-browser": "node scripts/tasks-action-unknown-browser-test.mjs",
