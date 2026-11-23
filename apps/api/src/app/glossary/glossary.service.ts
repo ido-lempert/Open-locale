@@ -11,6 +11,16 @@ export class GlossaryService {
     private readonly activity: ActivityService,
   ) {}
 
+  private rethrowTermConflict(error: unknown): never {
+    const e = error as { code?: string; meta?: { modelName?: string; target?: unknown } } | null;
+    const target = e?.meta?.target;
+    if (e?.code === 'P2002' && e.meta?.modelName === 'GlossaryTerm' &&
+        Array.isArray(target) && target.length === 2 && target[0] === 'projectId' && target[1] === 'lower(term)') {
+      throw new ConflictException('This term already exists in the glossary');
+    }
+    throw error;
+  }
+
   // Only the project's own locales, string values only, trimmed and non-empty.
   private cleanTranslations(projectLocales: string[], input?: Record<string, unknown>) {
     const out: Record<string, string> = {};
@@ -46,9 +56,12 @@ export class GlossaryService {
     const dupe = await this.prisma.glossaryTerm.findFirst({ where: { projectId, term: { equals: term, mode: 'insensitive' } } });
     if (dupe) throw new ConflictException('This term already exists in the glossary');
     return this.prisma.$transaction(async (tx) => {
-      const created = await tx.glossaryTerm.create({
-        data: { projectId, term, notes: input.notes?.trim() ?? '', doNotTranslate: input.doNotTranslate ?? false, translations },
-      });
+      let created;
+      try {
+        created = await tx.glossaryTerm.create({
+          data: { projectId, term, notes: input.notes?.trim() ?? '', doNotTranslate: input.doNotTranslate ?? false, translations },
+        });
+      } catch (error) { this.rethrowTermConflict(error); }
       await this.activity.record(tx, {
         projectId, actorId: userId, action: 'glossary.created', detail: { term: truncate(term, 80) },
       });
@@ -80,14 +93,8 @@ export class GlossaryService {
       try {
         updated = await tx.glossaryTerm.update({ where: { id: termId }, data });
       } catch (error) {
-        // Exact metadata observed from the functional index in PostgreSQL.
-        // Catch only the term write, never an activity or commit failure.
-        const e = error as { code?: string; meta?: { modelName?: string; target?: unknown } } | null;
-        const target = e?.meta?.target;
-        if (input.term !== undefined && e?.code === 'P2002' && e.meta?.modelName === 'GlossaryTerm' &&
-            Array.isArray(target) && target.length === 2 && target[0] === 'projectId' && target[1] === 'lower(term)') {
-          throw new ConflictException('This term already exists in the glossary');
-        }
+        // Catch only the term write, never activity or transaction completion.
+        if (input.term !== undefined) this.rethrowTermConflict(error);
         throw error;
       }
       await this.activity.record(tx, {

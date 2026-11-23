@@ -134,6 +134,33 @@ try {
   const raceFeed=(await call(`/projects/${proj.id}/activity`,{token:at})).json;
   check('race conflict leaves activity unchanged',JSON.stringify(raceBefore.items.map(e=>e.id))===JSON.stringify(raceFeed.items.map(e=>e.id)));
   if(winner)await prisma.glossaryTerm.delete({where:{id:winner.id}});
+  // An uncommitted winner is invisible to the HTTP precheck but conflicts
+  // with its INSERT, which must wait for the winning transaction to commit.
+  const createBefore=(await call(`/projects/${proj.id}/activity`,{token:at})).json;
+  let releaseCreate,createLocked,createdWinner;
+  const createGate=new Promise(r=>releaseCreate=r),createReady=new Promise(r=>createLocked=r);
+  const createBlocker=prisma.$transaction(async tx=>{
+    createdWinner=await tx.glossaryTerm.create({data:{projectId:proj.id,term:'CREATE RACE'}});
+    createLocked();await createGate;
+  },{timeout:15000});
+  await createReady;
+  let createRequest,createWaiting=false;
+  try{
+    createRequest=call(base,{token:at,method:'POST',body:{term:'create race',notes:'Losing notes',translations:{he:'Losing translation'}}});
+    for(let n=0;n<100;n++){
+      const rows=await prisma.$queryRaw`SELECT pid FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE 'INSERT INTO %glossary_terms%'`;
+      if(rows.length){createWaiting=true;break;}
+      await new Promise(r=>setTimeout(r,20));
+    }
+  }finally{releaseCreate();await createBlocker;}
+  const createResponse=await createRequest;
+  check('create race reaches unique-index wait after precheck',createWaiting);
+  check('racing create returns fixed409',createWaiting&&createResponse.status===409&&createResponse.json.message==='This term already exists in the glossary',String(createResponse.status));
+  const createRows=(await call(base,{token:at})).json.filter(t=>t.term.toLowerCase()==='create race');
+  check('racing create leaves only winner without losing fields',createRows.length===1&&createRows[0].id===createdWinner.id&&createRows[0].notes===''&&Object.keys(createRows[0].translations).length===0);
+  const createFeed=(await call(`/projects/${proj.id}/activity`,{token:at})).json;
+  check('racing create records no losing activity',JSON.stringify(createBefore.items.map(e=>e.id))===JSON.stringify(createFeed.items.map(e=>e.id)));
+  await prisma.glossaryTerm.delete({where:{id:createdWinner.id}});
   await prisma.$disconnect();
 
   const feed = (await call(`/projects/${proj.id}/activity`, { token: at })).json;

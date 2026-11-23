@@ -2300,3 +2300,8 @@ with the database uniqueness boundary unchanged. [Review0665](docs/reviews/0665-
 A row-lock integration test now forces a conflicting term to appear after the
 HTTP rename precheck, verifying the unique-index fallback returns 409 and rolls
 back term details and activity. [Review0666](docs/reviews/0666-glossary-rename-race.md).
+
+### Friendly glossary creation races
+Concurrent duplicate glossary creation now returns the existing fixed 409 using
+the precise unique-index error mapper. Real PostgreSQL/HTTP tests force and
+verify the race without weakening uniqueness. [Review0667](docs/reviews/0667-glossary-create-conflict.md).
