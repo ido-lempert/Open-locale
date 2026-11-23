@@ -3,6 +3,9 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../api.service';
 
+// Only locally constructed validation errors may select specific callback guidance.
+class CallbackValidationError extends Error {}
+
 @Component({
   selector: 'ol-saml-callback',
   styles: ['button[name=restartSso] { margin-top: 12px; }'],
@@ -42,14 +45,14 @@ export class SamlCallbackComponent implements OnInit, OnDestroy {
     sessionStorage.removeItem('ol.saml.verifier');
     try {
       const codes = params.getAll('code');
-      if (!verifier || codes.length !== 1 || !codes[0]) throw new Error('This SAML sign-in is incomplete or was not started in this tab. Return to sign-in and try again.');
+      if (!verifier || codes.length !== 1 || !codes[0]) throw new CallbackValidationError('This SAML sign-in is incomplete or was not started in this tab. Return to sign-in and try again.');
       const result = await this.api.redeemSamlBrowser(codes[0], verifier);
       if (generation !== this.generation) return;
-      if (result.error) throw new Error('SAML sign-in could not be verified. Return to sign-in and try again.');
+      if (result.error) throw new CallbackValidationError('SAML sign-in could not be verified. Return to sign-in and try again.');
       if (result.requiresTwoFactor && result.pendingToken) this.pendingToken = result.pendingToken;
       else if (result.accessToken) { this.api.token = result.accessToken; await this.router.navigate(['/projects'], { replaceUrl: true }); }
       else throw new Error('The sign-in response was incomplete.');
-    } catch (e) { if (generation === this.generation) this.error.set(e instanceof Error ? e.message : 'Sign-in failed.'); }
+    } catch (e) { if (generation === this.generation) this.error.set(e instanceof CallbackValidationError ? e.message : 'Could not finish single sign-on. Return to sign-in to start again. If you were linking an identity, check linked identities after signing in; this error does not undo a validated link.'); }
     finally { if (generation === this.generation) this.busy.set(false); }
   }
   async complete() {

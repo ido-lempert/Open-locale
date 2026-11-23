@@ -3,6 +3,9 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../api.service';
 
+// Only locally constructed validation errors may select specific callback guidance.
+class CallbackValidationError extends Error {}
+
 @Component({
   selector: 'ol-oidc-callback',
   styles: ['button[name=restartSso] { margin-top: 12px; }'],
@@ -43,15 +46,15 @@ export class OidcCallbackComponent implements OnInit, OnDestroy {
     sessionStorage.removeItem('ol.oidc.state');
     const states = params.getAll('state'), codes = params.getAll('code');
     try {
-      if (!expected || states.length !== 1 || states[0] !== expected) throw new Error('This sign-in was not started in this tab. Return to sign-in and try again.');
-      if (params.has('error')) throw new Error('The identity provider did not complete sign-in. Please try again.');
-      if (codes.length !== 1 || !codes[0]) throw new Error('The sign-in response is missing its authorization code.');
+      if (!expected || states.length !== 1 || states[0] !== expected) throw new CallbackValidationError('This sign-in was not started in this tab. Return to sign-in and try again.');
+      if (params.has('error')) throw new CallbackValidationError('The identity provider did not complete sign-in. Please try again.');
+      if (codes.length !== 1 || !codes[0]) throw new CallbackValidationError('The sign-in response is missing its authorization code.');
       const result = await this.api.callbackOidc(codes[0], states[0]);
       if (generation !== this.generation) return;
       if (result.requiresTwoFactor && result.pendingToken) this.pendingToken = result.pendingToken;
       else if (result.accessToken) { this.api.token = result.accessToken; await this.router.navigate(['/projects'], { replaceUrl: true }); }
       else throw new Error('The sign-in response was incomplete.');
-    } catch (e) { if (generation === this.generation) this.error.set(e instanceof Error ? e.message : 'Sign-in failed.'); }
+    } catch (e) { if (generation === this.generation) this.error.set(e instanceof CallbackValidationError ? e.message : 'Could not finish single sign-on. Return to sign-in to start again. If you were linking an identity, check linked identities after signing in; this error does not undo a validated link.'); }
     finally { if (generation === this.generation) this.busy.set(false); }
   }
   async complete() {

@@ -2813,3 +2813,9 @@ unconfirmed response. No automatic replay, new retry control or auth policy chan
 Both OIDC/SAML start faults show cautious fixed feedback without arbitrary raw
 exception content. Existing password/state clearing, lifecycle and URL checks
 remain unchanged. [Review0692](reviews/0692-identity-link-error.md).
+
+
+### Bound callback redemption errors
+Module-private validation errors retain known local guidance; arbitrary OIDC/SAML
+API/network faults use fixed recovery text. Existing state/URL cleanup, factor,
+replay and lifecycle behavior unchanged. [Review0693](reviews/0693-callback-error.md).

@@ -100,6 +100,11 @@ OIDC/SAML start faults use fixed recovery text instead of raw exception messages
 Typed passwords and failed same-tab handoff state clear. No automatic replay or
 provider acceptance claim. See [review0692](docs/reviews/0692-identity-link-error.md).
 
+### Bounded single sign-on callback faults
+OIDC/SAML redemption faults use fixed cautious restart/link guidance. Known local
+validation messages stay specific; arbitrary API/transport text is not rendered.
+See [review0693](docs/reviews/0693-callback-error.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`
