@@ -2501,3 +2501,8 @@ Optional `EDITOR_COMMENTS_HARNESS_FILTER` narrows cases; unmatched selections fa
 Task due-date and snapshot capture ordering reject nonstring date coercion,
 matching existing unavailable labels. Valid order/ties and source values stay.
 [Review0709](docs/reviews/0709-metadata-order-types.md).
+
+### Loaded webhook HTTP status presence filter
+Find records with recorded or unavailable HTTP status independently of success.
+Combines with search/status/order; downloads retain all loaded source records.
+No diagnosis or send/retry action. [Review0710](docs/reviews/0710-webhook-http-filter.md).

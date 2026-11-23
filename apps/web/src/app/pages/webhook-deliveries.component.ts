@@ -17,7 +17,7 @@ import { ApiService, WebhookDeliveryInfo } from '../api.service';
       <p class="muted">Payloads and signing secrets are not shown. A recorded success means the receiver returned a successful HTTP status, not that it processed the event.</p>
       <button type="button" name="refreshDeliveries" [disabled]="loading()" [attr.aria-busy]="loading()" (click)="refresh()">Refresh deliveries</button>
       <button type="button" name="downloadDeliveries" [disabled]="loading() || error() || !loaded()" (click)="download()">Download loaded journal (.json)</button>
-      <p class="muted" name="deliveryDownloadScope">Downloads all loaded records, regardless of event search or status filter. Not older deliveries or newer server changes. Includes record IDs and displayed delivery metadata, not payloads, private error details or signing secrets. The file can contain private project metadata; downloading does not share it.</p>
+      <p class="muted" name="deliveryDownloadScope">Downloads all loaded records, regardless of event search, recorded status or HTTP status filter. Not older deliveries or newer server changes. Includes record IDs and displayed delivery metadata, not payloads, private error details or signing secrets. The file can contain private project metadata; downloading does not share it.</p>
       @if(downloadNotice()){<p role="status" name="deliveryDownloadNotice">{{downloadNotice()}}</p>}
       <div class="toolbar" style="margin-top:1rem">
         <label>Recorded status <select name="deliveryStatus" [ngModel]="status()" (ngModelChange)="setStatus($event)"><option value="">all recorded statuses</option><option value="succeeded">Succeeded</option><option value="failed">Failed</option></select></label>
@@ -25,7 +25,10 @@ import { ApiService, WebhookDeliveryInfo } from '../api.service';
       </div>
       <label>Find loaded event names <input type="search" name="deliveryEventSearch" maxlength="200" [ngModel]="query()" (ngModelChange)="setQuery($event)" /></label>
       <button type="button" name="clearDeliveryEventSearch" [disabled]="!query()" (click)="setQuery('')">Clear event search</button>
-      <p class="muted">Event search is a trimmed, literal, case-insensitive substring in loaded event names only. Clear event search and the status filter to show all loaded records.</p>
+      <p class="muted">Event search is a trimmed, literal, case-insensitive substring in loaded event names only. Clear event search, recorded status and HTTP status filters to show all loaded records.</p>
+      <label>Recorded HTTP status <select name="deliveryHttpFilter" [ngModel]="httpFilter()" (ngModelChange)="setHttpFilter($event)"><option value="">all records</option><option value="recorded">HTTP status recorded</option><option value="unavailable">HTTP status unavailable</option></select></label>
+      <button type="button" name="clearDeliveryHttpFilter" [disabled]="!httpFilter()" (click)="setHttpFilter('')">Clear HTTP status filter</button>
+      <p class="muted" name="deliveryHttpScope">Local filter for whether the loaded record has an HTTP status, independent of recorded success or failure. An unavailable status does not identify the cause or confirm whether a receiver got or processed the event. Combines with event search, recorded status and time order. Downloads still include all loaded records. This does not send, retry or read newer deliveries.</p>
       <label>Order loaded deliveries <select name="deliveryOrder" [ngModel]="order()" (ngModelChange)="setOrder($event)"><option value="loaded">Loaded order</option><option value="newest">Newest recorded first</option><option value="oldest">Oldest recorded first</option></select></label>
       <p class="muted" name="deliveryOrderScope">Local display order only, using full recorded timestamps. Unavailable times come last; equal times keep loaded order. Event search and status combine with this order. Downloads keep loaded order. This does not read more records, send or retry deliveries, or confirm receiver processing.</p>
       @if(loading()){<p role="status">Loading deliveries...</p>}
@@ -39,7 +42,7 @@ import { ApiService, WebhookDeliveryInfo } from '../api.service';
               <span>HTTP {{d.httpStatus===null?'unavailable':d.httpStatus}}</span><span>{{d.attempts}} attempt(s)</span>
               <span>{{d.durationMs}} ms</span><time name="deliveryTime" [attr.datetime]="validTime(d.createdAt)?d.createdAt:null">{{timeLabel(d.createdAt)}}</time>
             </li>
-          }@empty{<li name="deliveriesEmpty" class="muted">{{query().trim() ? 'No loaded records match this event search and status. Clear event search or status filter to widen the results.' : status() ? 'No loaded records match this status. Clear status filter to show all loaded records.' : 'No recorded deliveries for this webhook.'}}</li>}
+          }@empty{<li name="deliveriesEmpty" class="muted">{{httpFilter() ? 'No loaded records match this HTTP status filter and other choices. Clear HTTP status filter, event search or recorded status to widen the results.' : query().trim() ? 'No loaded records match this event search and status. Clear event search or status filter to widen the results.' : status() ? 'No loaded records match this status. Clear status filter to show all loaded records.' : 'No recorded deliveries for this webhook.'}}</li>}
         </ul>
       }
     </main>`,
@@ -49,16 +52,18 @@ export class WebhookDeliveriesComponent implements OnInit,OnDestroy {
   status=signal<''|'succeeded'|'failed'>('');
   query=signal('');loaded=signal(false);downloadNotice=signal('');
   setQuery(value:string){if(!this.destroyed)this.query.set(value.slice(0,200));}
+  httpFilter=signal<''|'recorded'|'unavailable'>('');
+  setHttpFilter(value:string){if(!this.destroyed&&(value===''||value==='recorded'||value==='unavailable'))this.httpFilter.set(value);}
   order=signal<'loaded'|'newest'|'oldest'>('loaded');
   setOrder(value:string){if(!this.destroyed&&(value==='loaded'||value==='newest'||value==='oldest'))this.order.set(value);}
-  visibleItems=computed(()=>{const status=this.status(),query=this.query().trim().toLowerCase(),rows=status||query?this.items().filter(item=>(!status||item.success===(status==='succeeded'))&&(!query||item.event.toLowerCase().includes(query))):this.items();const order=this.order();if(order==='loaded')return rows;const time=(value:unknown)=>{const parsed=typeof value==='string'&&value.trim()?Date.parse(value):NaN;return Number.isFinite(parsed)?parsed:null;};return [...rows].sort((a,b)=>{const left=time(a.createdAt),right=time(b.createdAt);if(left===right)return 0;if(left===null)return 1;if(right===null)return -1;return order==='oldest'?left-right:right-left;});});
+  visibleItems=computed(()=>{const status=this.status(),http=this.httpFilter(),query=this.query().trim().toLowerCase(),rows=status||http||query?this.items().filter(item=>(!http||(http==='unavailable'?item.httpStatus===null:item.httpStatus!==null))&&(!status||item.success===(status==='succeeded'))&&(!query||item.event.toLowerCase().includes(query))):this.items();const order=this.order();if(order==='loaded')return rows;const time=(value:unknown)=>{const parsed=typeof value==='string'&&value.trim()?Date.parse(value):NaN;return Number.isFinite(parsed)?parsed:null;};return [...rows].sort((a,b)=>{const left=time(a.createdAt),right=time(b.createdAt);if(left===right)return 0;if(left===null)return 1;if(right===null)return -1;return order==='oldest'?left-right:right-left;});});
   setStatus(value:string){if(!this.destroyed&&(value===''||value==='succeeded'||value==='failed'))this.status.set(value);}
   private generation=0;private destroyed=false;private routeSub?:Subscription;
   constructor(private readonly route:ActivatedRoute,private readonly api:ApiService,@Inject(LOCALE_ID) private readonly displayLocale='en-US'){}
   validTime(value:unknown):value is string{return typeof value==='string'&&!!value.trim()&&Number.isFinite(Date.parse(value));}
   timeLabel(value:unknown):string{if(!this.validTime(value))return 'Recorded time unavailable';try{const pipe=new DatePipe(this.displayLocale);return `${pipe.transform(value,'medium')} ${pipe.transform(value,'z')}`;}catch{return 'Recorded time unavailable';}}
   ngOnInit(){this.routeSub=this.route.paramMap.subscribe(p=>this.visit(p.get('id')??'',p.get('hookId')??''));}
-  visit(projectId:string,hookId:string){if(this.destroyed)return;this.projectId=projectId;this.hookId=hookId;this.status.set('');this.query.set('');this.order.set('loaded');void this.reload();}
+  visit(projectId:string,hookId:string){if(this.destroyed)return;this.projectId=projectId;this.hookId=hookId;this.status.set('');this.query.set('');this.order.set('loaded');this.httpFilter.set('');void this.reload();}
   refresh(){if(!this.loading())void this.reload();}
   download(){
     if(this.destroyed||this.loading()||this.error()||!this.loaded())return;

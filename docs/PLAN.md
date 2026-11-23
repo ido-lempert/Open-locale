@@ -2915,3 +2915,9 @@ selections. [Review0708](reviews/0708-editor-comments-browser-harness.md).
 Task due-date and snapshot capture comparators require nonempty finite string
 instants. Numbers/arrays/objects remain unavailable-last without coercion.
 [Review0709](reviews/0709-metadata-order-types.md).
+
+
+### Local webhook HTTP status presence filter
+Recorded/unavailable HTTP status filters combine with event, recorded success and
+time order without reads; full loaded downloads stay unchanged.
+[Review0710](reviews/0710-webhook-http-filter.md).
