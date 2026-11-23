@@ -71,6 +71,19 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
       <label>Find in loaded terms, notes or translations <input type="search" name="glossarySearch" maxlength="200" [ngModel]="query()" (ngModelChange)="search($event)" /></label>
       <button type="button" name="clearGlossarySearch" [disabled]="!query()" (click)="search('')">Clear search</button>
       @if (!loading() && !listError()) { <p class="muted" role="status" name="glossaryMatches">{{ visibleTerms().length }} of {{ terms().length }} terms match. Text search is a literal, case-insensitive substring in loaded rows, including local translation text, combined with the attention filter. It does not read newer server changes.</p> }
+      @if (termEdit(); as edit) {
+        <section class="panel" aria-label="Edit loaded glossary term" style="overflow-wrap:anywhere;min-width:0">
+          <h2>Edit glossary term</h2>
+          <p class="muted" name="termEditScope">Local term and notes for loaded term {{edit.id}} in project {{edit.projectId}}. Save sends only these two fields, not translations or the do-not-translate flag. This is not a fresh permission check or newer server state. Text is not saved automatically or restored after leaving. Copy text before closing or reopening.</p>
+          <label>Term <input name="editGlossaryTerm" aria-describedby="termEditRules" [attr.aria-invalid]="!validTermEditText()" style="width:100%;box-sizing:border-box" [disabled]="termEditSaving()" [ngModel]="termEditTerm()" (ngModelChange)="termEditTerm.set($event)" /></label>
+          <label>Notes <textarea name="editGlossaryNotes" aria-describedby="termEditRules" rows="3" style="width:100%;box-sizing:border-box" [disabled]="termEditSaving()" [ngModel]="termEditNotes()" (ngModelChange)="termEditNotes.set($event)"></textarea></label>
+          <p class="muted" id="termEditRules" name="termEditRules">Term: 1-200 characters; notes: up to 1,000 using the API count. Outer whitespace is trimmed on Save. Empty notes clears the stored notes. Text is not truncated.</p>
+          @if (!validTermEditText()) { <p role="status" name="termEditInvalid">Correct the term or notes before saving. Your text is kept here and not sent.</p> }
+          @if (!termEditCurrent() && !termEditSaving()) { <p role="status" name="termEditStale">This loaded term is no longer current or available for editing. Your local text is kept here. Copy it, close this editor, check the glossary and reopen the term before saving. No automatic retry is made.</p> }
+          @if (termEditSaving()) { <p role="status" name="termEditSaving">Saving term details. Do not repeat this request.</p> }
+          <div class="toolbar"><button type="button" name="saveGlossaryTermEdit" [disabled]="!termEditSaveReady()" (click)="saveTermEdit()">Save term details</button><button type="button" name="cancelGlossaryTermEdit" [disabled]="termEditSaving()" (click)="closeTermEdit()">Close local editor</button></div>
+        </section>
+      }
       @if (!listError()) { <table class="glossary-table">
         <thead><tr><th>Term</th>@for (l of locales(); track l) { <th>{{ l }}</th> }<th>Notes</th><th></th></tr></thead>
         <tbody>
@@ -84,7 +97,7 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
                 </td>
               }
               <td class="muted" data-label="Notes">{{ t.notes }}</td>
-              <td data-label="Actions">@if (localTextChanged(t)) { <span role="status" name="glossaryLocalDraft">Unsaved local text. Leave the translation field to save, or copy/download the local draft before refreshing.</span><button type="button" name="resetGlossaryLocalText" (pointerdown)="$event.preventDefault()" (click)="resetLocalText(t)">Reset local translation text</button> }@if (unknownSaveIds().includes(t.id)) { <span class="error" role="alert" name="glossarySaveUnknown">Save unconfirmed. Copy text before Refresh.</span> }@if (unknownDeleteIds().includes(t.id)) { <span class="error" role="alert" name="glossaryDeleteUnknown">Delete unconfirmed. Refresh required.</span> }@if (savingIds().includes(t.id)) { <span role="status" name="glossarySaving">Saving translation...</span> }@if (deletingIds().includes(t.id)) { <span role="status" name="glossaryDeleting">Deleting term...</span> }<button [disabled]="rowPending(t.id)" class="danger" [attr.aria-label]="'Delete term ' + t.term" (pointerdown)="$event.preventDefault()" (click)="requestRemove(t)">&times;</button></td>
+              <td data-label="Actions">@if (localTextChanged(t)) { <span role="status" name="glossaryLocalDraft">Unsaved local text. Leave the translation field to save, or copy/download the local draft before refreshing.</span><button type="button" name="resetGlossaryLocalText" (pointerdown)="$event.preventDefault()" (click)="resetLocalText(t)">Reset local translation text</button> }@if (unknownSaveIds().includes(t.id)) { <span class="error" role="alert" name="glossarySaveUnknown">Save unconfirmed. Copy text before Refresh.</span> }@if (unknownDeleteIds().includes(t.id)) { <span class="error" role="alert" name="glossaryDeleteUnknown">Delete unconfirmed. Refresh required.</span> }@if (savingIds().includes(t.id)) { <span role="status" name="glossarySaving">Saving translation...</span> }@if (deletingIds().includes(t.id)) { <span role="status" name="glossaryDeleting">Deleting term...</span> }<button type="button" [disabled]="!canOpenTermEdit(t)" [attr.aria-label]="'Edit details for ' + t.term" (pointerdown)="$event.preventDefault()" (click)="openTermEdit(t)">Edit details</button><button [disabled]="rowPending(t.id)" class="danger" [attr.aria-label]="'Delete term ' + t.term" (pointerdown)="$event.preventDefault()" (click)="requestRemove(t)">&times;</button></td>
             </tr>
           } @empty {
             @if (!loading() && !listError()) { <tr name="glossaryListEmpty"><td colspan="9" class="muted">{{ query() || attention()!=='all' ? 'No loaded terms match these filters. Clear search and choose All loaded terms to show all loaded terms.' : 'No glossary terms yet' }}</td></tr> }
@@ -104,6 +117,37 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
   `,
 })
 export class GlossaryComponent implements OnInit, OnDestroy {
+  termEdit=signal<{row:GlossaryTermItem;projectId:string;scope:number;generation:number;id:string;term:string;notes:string}|null>(null);
+  private termEditFocusing=false;
+  termEditTerm=signal('');termEditNotes=signal('');termEditSaving=signal(false);
+  canOpenTermEdit(t:GlossaryTermItem){return !this.destroyed&&!this.rowPending(t.id)&&!this.termEdit()&&!this.mutationsPending()&&!this.createUnknown()&&!this.loading()&&!this.listError()&&this.terms().some(row=>row===t);}
+  openTermEdit(t:GlossaryTermItem){
+    if(!this.canOpenTermEdit(t))return;
+    this.cancelRemove();this.termEditTerm.set(t.term);this.termEditNotes.set(t.notes??'');
+    const edit={row:t,projectId:this.projectId,scope:this.projectGeneration,generation:this.fetchSeq,id:t.id,term:t.term,notes:t.notes??''};this.termEdit.set(edit);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{if(this.destroyed||this.termEdit()!==edit)return;const input=document.querySelector<HTMLInputElement>('[name=editGlossaryTerm]');input?.scrollIntoView({block:'center'});this.termEditFocusing=true;try{input?.focus({preventScroll:true});}finally{this.termEditFocusing=false;}}));
+  }
+  closeTermEdit(){if(this.termEditSaving())return;this.termEdit.set(null);this.termEditTerm.set('');this.termEditNotes.set('');}
+  termEditCurrent(){const e=this.termEdit();return !this.destroyed&&!!e&&!this.loading()&&!this.listError()&&e.projectId===this.projectId&&e.scope===this.projectGeneration&&e.generation===this.fetchSeq&&e.row.id===e.id&&e.row.term===e.term&&(e.row.notes??'')===e.notes&&this.terms().some(row=>row===e.row)&&!this.rowPending(e.id)&&!this.createUnknown();}
+  validTermEditText(){const term=this.termEditTerm().trim();return !!term&&this.apiTextLength(term)<=200&&this.apiTextLength(this.termEditNotes().trim())<=1000;}
+  termEditSaveReady(){const e=this.termEdit();return !!e&&!this.termEditSaving()&&!this.mutationsPending()&&this.termEditCurrent()&&this.validTermEditText()&&(this.termEditTerm().trim()!==e.term||this.termEditNotes().trim()!==e.notes);}
+  async saveTermEdit(){
+    if(!this.termEditSaveReady())return;
+    const edit=this.termEdit()!,pid=this.projectId,scope=this.projectGeneration,listGeneration=this.fetchSeq,patch={term:this.termEditTerm().trim(),notes:this.termEditNotes().trim()};
+    this.cancelRemove();this.localReset.set(null);this.draftDownloadNotice.set('');++this.saveEpoch;this.termEditSaving.set(true);this.savingIds.update(ids=>[...ids,edit.id]);this.error.set('');this.createNotice.set('');
+    try{
+      const updated=await this.api.updateGlossaryTerm(pid,edit.id,patch);
+      if(!this.current(scope))return;
+      if(this.termEdit()===edit){this.termEdit.set(null);this.termEditTerm.set('');this.termEditNotes.set('');}
+      if(listGeneration===this.fetchSeq&&this.terms().some(x=>x===edit.row)){
+        this.terms.update(all=>all.map(x=>x===edit.row?{...x,term:updated.term,notes:updated.notes??''}:x).sort((a,b)=>a.term.localeCompare(b.term)));
+        this.createNotice.set('Term details were updated. Translations and the do-not-translate flag were not changed.');
+      } else {
+        this.createNotice.set('Term details were updated. The current list was kept; refresh the glossary to read the change.');
+      }
+    }catch{if(this.current(scope)){++this.saveEpoch;this.unknownSaveIds.update(ids=>[...new Set([...ids,edit.id])]);this.error.set('Term details save outcome unconfirmed. Copy your local edit text, then refresh the glossary and check the term before trying again.');}}
+    finally{if(this.current(scope)){this.termEditSaving.set(false);this.savingIds.update(ids=>ids.filter(id=>id!==edit.id));}}
+  }
   pendingTermDelete=signal<{row:GlossaryTermItem;projectId:string;scope:number;generation:number;id:string;term:string;translations:string}|null>(null);
   projectId = '';
   draftDownloadNotice=signal('');
@@ -176,7 +220,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
     if(this.destroyed)return;
     ++this.projectGeneration;
     this.cancelRemove();this.cancelNewTermReset();this.newTermResetResult.set(null);this.newTermDownloadResult.set(null);this.projectId=pid;++this.fetchSeq;this.savedTranslations.clear();
-    this.localReset.set(null);this.loaded.set(false);this.draftDownloadNotice.set('');this.terms.set([]);this.locales.set([]);this.error.set('');this.createNotice.set('');this.listError.set(false);this.creating.set(false);this.deletingIds.set([]);this.savingIds.set([]);this.unknownDeleteIds.set([]);this.unknownSaveIds.set([]);++this.saveEpoch;this.createUnknown.set(false);++this.createEpoch;
+    this.termEdit.set(null);this.termEditTerm.set('');this.termEditNotes.set('');this.termEditSaving.set(false);this.localReset.set(null);this.loaded.set(false);this.draftDownloadNotice.set('');this.terms.set([]);this.locales.set([]);this.error.set('');this.createNotice.set('');this.listError.set(false);this.creating.set(false);this.deletingIds.set([]);this.savingIds.set([]);this.unknownDeleteIds.set([]);this.unknownSaveIds.set([]);++this.saveEpoch;this.createUnknown.set(false);++this.createEpoch;
     this.term.set('');this.notes.set('');this.doNotTranslate.set(false);this.query.set('');this.attention.set('all');
     void this.fetch();
     this.localesLoading.set(false);this.localesError.set(false);
@@ -193,7 +237,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   }
 
   private current(scope:number) { return !this.destroyed&&scope===this.projectGeneration; }
-  ngOnDestroy() { this.cancelRemove();this.newTermDownloadResult.set(null);this.cancelNewTermReset();this.newTermResetResult.set(null);this.localReset.set(null);this.destroyed=true;++this.fetchSeq;++this.projectGeneration;this.routeSub?.unsubscribe(); }
+  ngOnDestroy() { this.termEdit.set(null);this.termEditSaving.set(false);this.cancelRemove();this.newTermDownloadResult.set(null);this.cancelNewTermReset();this.newTermResetResult.set(null);this.localReset.set(null);this.destroyed=true;++this.fetchSeq;++this.projectGeneration;this.routeSub?.unsubscribe(); }
 
   draftDownloadReady() {return !this.destroyed&&this.loaded()&&!this.loading()&&!this.listError()&&!this.mutationsPending();}
   downloadDraft() {
@@ -218,7 +262,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
     this.localReset.set(null);this.loaded.set(false);this.draftDownloadNotice.set('');this.terms.set([]);this.listError.set(false);this.loading.set(true);
     try {
       const terms=await this.api.listGlossary(this.projectId);
-      if(seq===this.fetchSeq){this.loaded.set(true);this.terms.set(terms);if(!pendingCreate&&!this.creating()&&createEpoch===this.createEpoch){if(this.createUnknown()&&this.error()==='Adding term failed. Check the glossary before trying again.')this.error.set('');this.createUnknown.set(false);}this.savedTranslations=new Map(terms.map(t=>[t.id,{...t.translations} ]));if(this.unknownDeleteIds().length&&this.error()==='Delete outcome unconfirmed. Copy local translation drafts, then refresh the glossary before trying again.')this.error.set('');this.unknownDeleteIds.set([]);if(!pendingSave&&!this.savingIds().length&&epoch===this.saveEpoch){if(this.unknownSaveIds().length&&this.error()==='Save outcome unconfirmed. Copy local translation drafts, then refresh the glossary before trying again.')this.error.set('');this.unknownSaveIds.set([]);}}
+      if(seq===this.fetchSeq){this.loaded.set(true);this.terms.set(terms);if(!pendingCreate&&!this.creating()&&createEpoch===this.createEpoch){if(this.createUnknown()&&this.error()==='Adding term failed. Check the glossary before trying again.')this.error.set('');this.createUnknown.set(false);}this.savedTranslations=new Map(terms.map(t=>[t.id,{...t.translations} ]));if(this.unknownDeleteIds().length&&this.error()==='Delete outcome unconfirmed. Copy local translation drafts, then refresh the glossary before trying again.')this.error.set('');this.unknownDeleteIds.set([]);if(!pendingSave&&!this.savingIds().length&&epoch===this.saveEpoch){if(this.unknownSaveIds().length&&(this.error()==='Save outcome unconfirmed. Copy local translation drafts, then refresh the glossary before trying again.'||this.error()==='Term details save outcome unconfirmed. Copy your local edit text, then refresh the glossary and check the term before trying again.'))this.error.set('');this.unknownSaveIds.set([]);}}
     } catch { if(seq===this.fetchSeq)this.listError.set(true); }
     finally { if(seq===this.fetchSeq)this.loading.set(false); }
   }
@@ -285,7 +329,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
 
   rowPending(id:string) {return this.deletingIds().includes(id)||this.savingIds().includes(id)||this.unknownDeleteIds().includes(id)||this.unknownSaveIds().includes(id);}
 
-  translationBlur(t:GlossaryTermItem) {if(this.visibleTerms().some(row=>row.id===t.id))void this.saveTranslations(t);}
+  translationBlur(t:GlossaryTermItem) {if(!this.termEditFocusing&&this.visibleTerms().some(row=>row.id===t.id))void this.saveTranslations(t);}
 
   async saveTranslations(t: GlossaryTermItem) {
     if(this.destroyed||this.rowPending(t.id))return;

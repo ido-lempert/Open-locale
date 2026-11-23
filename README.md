@@ -2284,3 +2284,9 @@ Tasks can open a local title/description editor with explicit Save and Close.
 Exact loaded-task binding and text limits guard saves; stale or unconfirmed
 results keep local text without automatic retry. Dates and assignments are
 unchanged. [Review0663](docs/reviews/0663-task-details-edit.md).
+
+### Edit loaded glossary term details
+Glossary terms can open a local term/notes editor with explicit Save and Close.
+Exact loaded-term binding and text limits guard saves; stale or unconfirmed
+results keep local text without automatic retry. Translations and the
+do-not-translate flag are unchanged. [Review0664](docs/reviews/0664-glossary-term-edit.md).

@@ -318,7 +318,8 @@
     "test:settings-member-refresh-browser": "node scripts/settings-member-refresh-browser-test.mjs",
     "test:settings-webhook-copy-browser": "node scripts/settings-webhook-copy-browser-test.mjs",
     "test:settings-token-copy-browser": "node scripts/settings-token-copy-browser-test.mjs",
-    "test:settings-webhook-hide-browser": "node scripts/settings-webhook-hide-browser-test.mjs"
+    "test:settings-webhook-hide-browser": "node scripts/settings-webhook-hide-browser-test.mjs",
+    "test:glossary-term-edit-browser": "node scripts/glossary-term-edit-browser-test.mjs"
   },
   "private": true,
   "dependencies": {
