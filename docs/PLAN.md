@@ -2867,3 +2867,9 @@ startup exits. Four-path harness includes unchanged timestamp guard.
 Bounded fallback prevents malformed metadata from interrupting loaded rows.
 Valid locale/timezone labels, raw downloads and read-only status semantics remain.
 [Review0701](reviews/0701-webhook-time-fallback.md).
+
+
+### Fail-closed webhook journal browser verification
+Four older journal suites now retain incomplete startup and assertion failures
+through cleanup. Actual occupied-port harness includes unchanged time suite and
+rejects unmatched selections. [Review0702](reviews/0702-webhook-browser-harness.md).

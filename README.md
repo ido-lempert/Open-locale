@@ -2454,3 +2454,10 @@ new-term fields stay intact. [Review0668](docs/reviews/0668-glossary-dnt-edit.md
 The separate loaded-term editor can download its raw local fields and bound
 identity, including stale/unconfirmed labels. No translations, import, retry or
 server write is included. [Review0669](docs/reviews/0669-glossary-edit-download.md).
+
+### Webhook browser verification startup guards
+Four older journal/download/event-search/status browser scripts now preserve
+incomplete startup and failed assertion exits through cleanup. Run
+`npm run test:webhook-browser-harness` for five actual occupied-port paths,
+including unchanged timestamp checks. Optional `WEBHOOK_HARNESS_FILTER` narrows
+cases; unmatched selections fail. [Review0702](docs/reviews/0702-webhook-browser-harness.md).
