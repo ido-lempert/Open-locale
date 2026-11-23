@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55684, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.PROJECT_BROWSER_TEST_PG_PORT ?? 55684), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+// Preserve failures even if incomplete startup cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-project-list-browser-'));
@@ -44,8 +46,8 @@ try {
   await search('FR');await page.waitForFunction(()=>document.querySelector('.cards')?.textContent.includes('Checkout [A]'));check('locale code search filters independently of project name',await page.$$eval('.cards a',a=>a.length===1&&a[0].textContent.includes('Checkout [A]')));
   await search('.*');await page.waitForSelector('[name=projectSearchEmpty]');check('regex characters treated literally with distinct no-match guidance',!await page.$('.cards a')&&await page.$eval('[name=projectMatches]',e=>e.textContent.includes('0 of 2'))&&!await page.$('.empty'));
   await page.click('[name=clearProjectSearch]');await page.waitForFunction(()=>document.querySelectorAll('.cards a').length===2);check('clear restores loaded projects preserving form and security without requests',reads===0&&writes===0&&await page.$eval('[name=name]',e=>e.value==='Keep draft')&&await page.$eval('[name=slug]',e=>e.value==='keep-draft')&&await page.$eval('[name=locales]',e=>e.value==='en, he')&&await page.$eval('.tfa',(e,t)=>e.textContent===t,security));
-  await search('[a]');await page.waitForFunction(()=>document.querySelectorAll('.cards a').length===1);await page.screenshot({path:'/downloads/projects-search.png',fullPage:true});await page.setViewport({width:390,height:844});check('project search fits narrow viewport',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:'/downloads/projects-search-narrow.png',fullPage:true});check('no project search runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  await search('[a]');await page.waitForFunction(()=>document.querySelectorAll('.cards a').length===1);await page.screenshot({path:'/downloads/projects-search.png',fullPage:true});await page.setViewport({width:390,height:844});check('project search fits narrow viewport',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:'/downloads/projects-search-narrow.png',fullPage:true});check('no project search runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -60,4 +62,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

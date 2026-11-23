@@ -2831,3 +2831,9 @@ No local password/signup diagnostic or same-tab state behavior changes.
 Five older login/callback/OIDC/SAML suites now preserve incomplete startup and
 assertion failures across cleanup. Actual occupied-port harness with optional
 bounded selection. [Review0695](reviews/0695-auth-browser-harness.md).
+
+
+### Fail-closed project browser verification
+Nine older project list/create/draft scripts now preserve incomplete startup and
+assertion failure across cleanup; actual occupied-port harness rejects empty
+selections. [Review0696](reviews/0696-project-browser-harness.md).

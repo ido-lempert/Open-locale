@@ -115,6 +115,11 @@ Five login/callback/OIDC/SAML browser suites preserve failed startup status acro
 incomplete cleanup. Run `npm run test:auth-browser-harness` for real occupied-port
 checks. See [review0695](docs/reviews/0695-auth-browser-harness.md).
 
+### Fail-closed project browser verification
+Nine project list/create/draft browser checks preserve failed startup status
+across incomplete cleanup. `npm run test:project-browser-harness` runs actual
+occupied-port probes. See [review0696](docs/reviews/0696-project-browser-harness.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`

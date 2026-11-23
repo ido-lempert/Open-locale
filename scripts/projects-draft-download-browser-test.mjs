@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55736, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.PROJECT_BROWSER_TEST_PG_PORT ?? 55736), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 const downloadDir=mkdtempSync(join(tmpdir(),'ol-project-draft-'));process.exitCode = 1;
+// Preserve failures even if incomplete startup cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-project-create-browser-'));
@@ -42,8 +44,8 @@ try {
   failRead=true;await page.$eval('[name=refreshProjects]',e=>e.click());await page.waitForSelector('[name=retryProjects]');await page.$eval('[name=downloadProjectDraft]',e=>e.click());const failed=await readDownload();check('failed project read allows local-only backup preserving uncertainty',failed.createOutcomeUnconfirmed&&failed.draft.slug==='draft-project'&&posts===1&&reads===1&&!await page.$eval('[name=downloadProjectDraft]',e=>e.disabled));failRead=false;await page.$eval('[name=retryProjects]',e=>e.click());await page.waitForFunction(()=>!document.querySelector('[name=projectsLoading]')&&!document.querySelector('[name=projectCreateUnknown]'));await page.$eval('[name=downloadProjectDraft]',e=>e.click());const recovered=await readDownload();check('explicit recovery updates uncertainty flag without creation or form loss',!recovered.createOutcomeUnconfirmed&&recovered.draft.name===unknown.draft.name&&posts===1&&reads===2);
   await page.$eval('form.create',e=>e.requestSubmit());await page.waitForFunction(()=>!document.querySelector('[name=projectCreating]')&&document.querySelector('[name=projectCreateNotice]')?.textContent.includes('was created'));await page.$eval('[name=downloadProjectDraft]',e=>e.click());const empty=await readDownload();check('confirmed unchanged form clears old notice and exports empty form not submission authority',empty.draft.name===''&&empty.draft.slug===''&&empty.draft.localesText===''&&!empty.canCreate&&posts===2&&reads===3);
   await page.evaluate(()=>{URL.createObjectURL=()=>{throw new Error('PRIVATE_DOWNLOAD');};ng.getComponent(document.querySelector('ol-projects')).downloadDraft();});await page.waitForFunction(()=>document.querySelector('[name=projectDraftDownloadNotice]')?.textContent.includes('Copy your form text'));check('bounded local failure excludes raw exception',!(await page.content()).includes('PRIVATE_DOWNLOAD'));
-  await page.evaluate(()=>{window.oldProjects=ng.getComponent(document.querySelector('ol-projects'));window.afterDestroy=0;URL.createObjectURL=()=>{window.afterDestroy++;return 'blob:local';};history.pushState({},'','/account/identities');dispatchEvent(new PopStateEvent('popstate'));});await page.waitForFunction(()=>!document.querySelector('ol-projects'));await page.evaluate(()=>window.oldProjects.downloadDraft());check('departed captured form backup cannot export',await page.evaluate(()=>window.afterDestroy===0)&&readdirSync(downloadDir).length===0&&posts===2);check('no project form-backup runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  await page.evaluate(()=>{window.oldProjects=ng.getComponent(document.querySelector('ol-projects'));window.afterDestroy=0;URL.createObjectURL=()=>{window.afterDestroy++;return 'blob:local';};history.pushState({},'','/account/identities');dispatchEvent(new PopStateEvent('popstate'));});await page.waitForFunction(()=>!document.querySelector('ol-projects'));await page.evaluate(()=>window.oldProjects.downloadDraft());check('departed captured form backup cannot export',await page.evaluate(()=>window.afterDestroy===0)&&readdirSync(downloadDir).length===0&&posts===2);check('no project form-backup runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();rmSync(downloadDir,{recursive:true,force:true});
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -58,4 +60,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55941, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.PROJECT_BROWSER_TEST_PG_PORT ?? 55941), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+// Preserve failures even if incomplete startup cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-project-validation-'));
@@ -45,7 +47,7 @@ try {
   const exactName=' '+ '😀'.repeat(118)+' ';await replace('name',exactName);await replace('slug','unicode-project');await replace('locales',' en, ,he ');await page.waitForFunction(()=>!document.querySelector('form.create button').disabled);await page.$eval('form.create button',e=>e.scrollIntoView({block:'center'}));await page.click('form.create button');await page.waitForSelector('[name=projectCreateNotice]');await page.waitForFunction(()=>document.querySelector('[name=name]').value==='');await page.waitForFunction(()=>{const c=ng.getComponent(document.querySelector('ol-projects'));return !c.busy()&&!c.projectsLoading();});const list=await call('/projects',null,token);check('corrected raw Unicode name120 and parsed locale entries really persist once',posts===1&&reads===1&&payloads[0].name===exactName&&payloads[0].slug==='unicode-project'&&JSON.stringify(payloads[0].locales)==='["en","he"]'&&list.some(p=>p.name===exactName&&p.slug==='unicode-project'));
   await replace('name','literal <img>');await replace('slug','a-');await replace('locales','en');await page.$eval('form.create button',e=>e.scrollIntoView({block:'center'}));await page.click('form.create button');await page.waitForFunction(()=>document.querySelector('[name=name]').value==='');await page.waitForFunction(()=>{const c=ng.getComponent(document.querySelector('ol-projects'));return !c.busy()&&!c.projectsLoading();});check('backend accepted trailing-dash slug persists with literal name',posts===2&&reads===2&&payloads[1].slug==='a-'&&(await call('/projects',null,token)).some(p=>p.slug==='a-'&&p.name==='literal <img>')&&await page.$$eval('.cards strong',es=>es.some(e=>e.textContent==='literal <img>'&&!e.querySelector('img'))));
   failCreate=true;await replace('name','valid failure');await replace('slug','valid-failure');await replace('locales','en');await page.$eval('form.create button',e=>e.scrollIntoView({block:'center'}));await page.click('form.create button');await page.waitForSelector('[name=projectCreateUnknown]');await page.evaluate(()=>ng.getComponent(document.querySelector('ol-projects')).create());check('valid failure keeps form and pauses replay without private error',posts===3&&reads===2&&await page.$eval('[name=name]',e=>e.value==='valid failure')&&await page.$eval('[name=slug]',e=>e.value==='valid-failure')&&await page.$eval('[name=locales]',e=>e.value==='en')&&await page.$eval('form.create button',e=>e.disabled)&&!(await page.$eval('main',e=>e.innerText)).includes('PRIVATE_'));
-  check('no project validation runtime error',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
+  check('no project validation runtime error',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
 } catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??String(e)}`);process.exitCode=1;}
 finally {
   await browser?.close();

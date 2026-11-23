@@ -36,6 +36,7 @@
     "test:ota": "node scripts/ota-test.mjs",
     "test:reports-refresh-browser": "node scripts/reports-refresh-browser-test.mjs",
     "test:reports": "node scripts/reports-test.mjs",
+    "test:project-browser-harness": "node scripts/project-browser-harness-test.mjs",
     "test:auth-browser-harness": "node scripts/auth-browser-harness-test.mjs",
     "test:report-qa-harness": "node scripts/report-qa-harness-test.mjs",
     "test:incontext": "node scripts/incontext-test.mjs",

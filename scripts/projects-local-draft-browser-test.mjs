@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55734, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.PROJECT_BROWSER_TEST_PG_PORT ?? 55734), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+// Preserve failures even if incomplete startup cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-project-create-browser-'));
@@ -41,8 +43,8 @@ try {
   failRead=true;await page.$eval('[name=refreshProjects]',e=>e.click());await page.waitForSelector('[name=retryProjects]');check('failed recovery keeps uncertain local form/copy guidance with no replay',posts===2&&reads===3&&await page.$eval('[name=projectLocalDraft]',e=>e.textContent.includes('Copy the form before leaving'))&&!(await page.content()).includes('PRIVATE_READ'));
   failRead=false;await page.$eval('[name=retryProjects]',e=>e.click());await page.waitForFunction(()=>!document.querySelector('[name=projectsLoading]')&&!document.querySelector('[name=projectCreateUnknown]'));check('explicit current recovery returns local form scope without clearing form',posts===2&&reads===4&&await page.$eval('[name=name]',e=>e.value==='Newer project')&&await page.$eval('[name=projectLocalDraft]',e=>e.textContent.includes('not automatically saved')));
   drop=false;await page.$eval('[name=slug]',e=>{e.value='confirmed-next';e.dispatchEvent(new Event('input',{bubbles:true}));});await page.$eval('form.create',e=>e.requestSubmit());await page.waitForFunction(()=>!document.querySelector('[name=projectCreating]')&&document.querySelector('[name=projectCreateNotice]')?.textContent.includes('was created'));check('confirmed unchanged form clears draft feedback but keeps receipt',posts===3&&reads===5&&!await page.$('[name=projectLocalDraft]')&&await page.$eval('[name=name]',e=>e.value==='')&&await page.$('[name=projectCreateNotice]'));
-  await page.type('[name=locales]','en, ');await page.waitForSelector('[name=projectLocalDraft]');check('locale-only input counts as raw local draft',await page.$eval('[name=name]',e=>e.value===''));await page.$eval('[name=locales]',e=>{e.value='';e.dispatchEvent(new Event('input',{bubbles:true}));});await page.waitForFunction(()=>!document.querySelector('[name=projectLocalDraft]'));check('clearing raw fields removes local feedback without requests',posts===3&&reads===5);check('no project-draft runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  await page.type('[name=locales]','en, ');await page.waitForSelector('[name=projectLocalDraft]');check('locale-only input counts as raw local draft',await page.$eval('[name=name]',e=>e.value===''));await page.$eval('[name=locales]',e=>{e.value='';e.dispatchEvent(new Event('input',{bubbles:true}));});await page.waitForFunction(()=>!document.querySelector('[name=projectLocalDraft]'));check('clearing raw fields removes local feedback without requests',posts===3&&reads===5);check('no project-draft runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -57,4 +59,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

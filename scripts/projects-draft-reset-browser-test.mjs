@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55738, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.PROJECT_BROWSER_TEST_PG_PORT ?? 55738), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 const downloadDir=mkdtempSync(join(tmpdir(),'ol-project-draft-'));process.exitCode = 1;
+// Preserve failures even if incomplete startup cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-project-create-browser-'));
@@ -44,8 +46,8 @@ try {
   // Use a second real creation with a committed response deliberately dropped.
   await page.$eval('[name=name]',e=>{e.value='Committed unseen reset';e.dispatchEvent(new Event('input',{bubbles:true}));});await page.$eval('[name=slug]',e=>{e.value='committed-reset';e.dispatchEvent(new Event('input',{bubbles:true}));});await page.$eval('[name=locales]',e=>{e.value='en';e.dispatchEvent(new Event('input',{bubbles:true}));});drop=true;await page.$eval('form.create',e=>e.requestSubmit());await page.waitForSelector('[name=projectCreateUnknown]');drop=false;const beforePosts=posts,beforeReads=reads;await page.waitForFunction(()=>!document.querySelector('[name=resetProjectDraft]')?.disabled);await page.click('[name=resetProjectDraft]');await page.waitForSelector('[name=confirmProjectDraftReset]');await page.click('[name=confirmProjectDraftReset]');await page.waitForSelector('[name=projectDraftResetNotice]');check('real committed then lost creation stays unknown after local discard with no replay/read',posts===beforePosts&&reads===beforeReads&&JSON.stringify(await form())===JSON.stringify(['','',''])&&!!await page.$('[name=projectCreateUnknown]')&&await page.$eval('form.create button[type=submit]',e=>e.disabled)&&(await call('/projects',null,token)).some(p=>p.slug==='committed-reset'));
   failRead=true;await page.click('[name=refreshProjects]');await page.waitForSelector('[name=retryProjects]');await page.type('[name=name]','Keepable despite failed read');await page.waitForFunction(()=>!document.querySelector('[name=resetProjectDraft]')?.disabled);await page.click('[name=resetProjectDraft]');await page.waitForSelector('[name=confirmProjectDraftReset]');await page.click('[name=confirmProjectDraftReset]');check('failed recovery does not block local discard or clear creation uncertainty',posts===beforePosts&&reads===beforeReads+1&&!!await page.$('[name=projectCreateUnknown]')&&(await form())[0]==='');failRead=false;await page.click('[name=retryProjects]');await page.waitForFunction(()=>!document.querySelector('[name=projectsLoading]')&&!document.querySelector('[name=projectCreateUnknown]'));check('only explicit current project read resolves uncertainty without creation',posts===beforePosts&&reads===beforeReads+2);
-  await page.type('[name=name]','departed');await page.click('[name=resetProjectDraft]');await page.evaluate(()=>{window.oldProjects=ng.getComponent(document.querySelector('ol-projects'));history.pushState({},'','/account/identities');dispatchEvent(new PopStateEvent('popstate'));});await page.waitForFunction(()=>!document.querySelector('ol-projects'));check('departure rejects captured confirmation',await page.evaluate(()=>{window.oldProjects.confirmDraftReset();return window.oldProjects.name()==='departed'&&!window.oldProjects.draftResetPending();}));check('no reset runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  await page.type('[name=name]','departed');await page.click('[name=resetProjectDraft]');await page.evaluate(()=>{window.oldProjects=ng.getComponent(document.querySelector('ol-projects'));history.pushState({},'','/account/identities');dispatchEvent(new PopStateEvent('popstate'));});await page.waitForFunction(()=>!document.querySelector('ol-projects'));check('departure rejects captured confirmation',await page.evaluate(()=>{window.oldProjects.confirmDraftReset();return window.oldProjects.name()==='departed'&&!window.oldProjects.draftResetPending();}));check('no reset runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();rmSync(downloadDir,{recursive:true,force:true});
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -60,4 +62,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

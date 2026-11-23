@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55703, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.PROJECT_BROWSER_TEST_PG_PORT ?? 55703), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+// Preserve failures even if incomplete startup cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-project-create-browser-'));
@@ -41,8 +43,8 @@ try {
   await page.click('[name=refreshProjects]');await page.waitForSelector('[name=retryProjects]');await page.evaluate(()=>ng.getComponent(document.querySelector('ol-projects')).create());check('failed current list read preserves pause without replay',posts===1&&reads===1&&!!await page.$('[name=projectCreateUnknown]')&&await page.$eval('form.create button',e=>e.disabled));
   failRead=false;await page.click('[name=retryProjects]');await page.waitForFunction(()=>!document.querySelector('[name=projectsLoading]')&&!document.querySelector('[name=projectCreateUnknown]')&&[...document.querySelectorAll('.cards strong')].some(e=>e.textContent==='Created despite lost response'));check('successful explicit list read reveals committed project and unlocks without form loss',posts===1&&reads===2&&await page.$eval('[name=name]',e=>e.value==='Created despite lost response')&&await page.$eval('[name=slug]',e=>e.value==='lost-response')&&await page.$eval('[name=locales]',e=>e.value==='en, he')&&!await page.$eval('form.create button',e=>e.disabled)&&!await page.$('[role=alert]'));
   await page.$eval('[name=name]',e=>{e.value='Explicit next project';e.dispatchEvent(new Event('input',{bubbles:true}));});await page.$eval('[name=slug]',e=>{e.value='explicit-next';e.dispatchEvent(new Event('input',{bubbles:true}));});drop=false;await page.click('form.create button');await page.waitForFunction(()=>document.querySelector('[name=projectCreateNotice]')?.textContent.includes('Explicit next project')&&!document.querySelector('[name=projectCreating]'));check('explicit new project after recovery sends once and retains confirmed receipt',posts===2&&reads===3&&await prisma.project.count({where:{slug:'lost-response'}})===1&&await prisma.project.count({where:{slug:'explicit-next'}})===1&&!await page.$('[name=projectCreateUnknown]'));
-  check('no project unknown recovery runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  check('no project unknown recovery runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -57,4 +59,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);
