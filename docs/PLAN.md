@@ -2753,3 +2753,8 @@ filtering that rejects empty selections. [Review0680](reviews/0680-task-browser-
 All10 snapshot browser entry points share explicit completion/failure guards and
 real occupied-port checks. Existing partial guards are aligned, not claimed newly
 protected from scratch. [Review0681](reviews/0681-snapshot-browser-harness.md).
+
+### Local snapshot capture-time order
+Optional oldest/newest display order composes with label and kind filters, keeping
+loaded inventory, restore identity and unknown outcomes unchanged. Full timestamp
+precision, stable ties and unavailable-last semantics. [Review0682](reviews/0682-snapshot-capture-order.md).

@@ -39,6 +39,8 @@ import { ApiService, SnapshotMeta } from '../api.service';
         <button type="button" name="clearSnapshotSearch" [disabled]="!search()" (click)="setSearch('')">Clear search</button>
         @if (!loading() && !listError()) { <span class="muted" role="status" name="snapshotSearchCount">{{ visibleItems().length }} of {{ items().length }} loaded snapshots shown. Search matches labels only and combines with recorded snapshot kind. Refresh snapshots reads newer changes.</span> }
       </div>
+      <label>Order loaded snapshots <select name="snapshotOrder" [ngModel]="order()" (ngModelChange)="setOrder($event)"><option value="loaded">Loaded order</option><option value="newest">Newest capture first</option><option value="oldest">Oldest capture first</option></select></label>
+      <p class="muted" name="snapshotOrderScope">Local display order only, using full stored capture timestamps. Unavailable times come last; equal times keep loaded order. Label search and kind filters combine with this order. Inventory downloads keep loaded order. This does not read newer snapshots, change their contents or restore anything.</p>
       @if (loading()) { <p role="status" name="snapshotListLoading">Loading snapshots...</p> }
       @if (!loading() && !listError()) { <ul class="snapshot-list">
         @for (s of visibleItems(); track s.id) {
@@ -69,7 +71,9 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
   search=signal('');
   kind=signal<''|'manual'|'automatic'>('');
   setKind(value:string) {if(!this.destroyed&&(value===''||value==='manual'||value==='automatic'))this.kind.set(value);}
-  visibleItems=computed(()=>{const query=this.search().trim().toLowerCase(),kind=this.kind();if(!query&&!kind)return this.items();return this.items().filter(item=>(!query||item.label.toLowerCase().includes(query))&&(!kind||(kind==='automatic'?item.automatic===true:item.automatic===false)));});
+  order=signal<'loaded'|'newest'|'oldest'>('loaded');
+  setOrder(value:string){if(!this.destroyed&&(value==='loaded'||value==='newest'||value==='oldest'))this.order.set(value);}
+  visibleItems=computed(()=>{const query=this.search().trim().toLowerCase(),kind=this.kind(),rows=!query&&!kind?this.items():this.items().filter(item=>(!query||item.label.toLowerCase().includes(query))&&(!kind||(kind==='automatic'?item.automatic===true:item.automatic===false)));if(this.order()==='loaded')return rows;const time=(item:SnapshotMeta)=>{const parsed=item.createdAt?Date.parse(item.createdAt):NaN;return Number.isFinite(parsed)?parsed:null;};return [...rows].sort((a,b)=>{const left=time(a),right=time(b);if(left===right)return 0;if(left===null)return 1;if(right===null)return -1;return this.order()==='oldest'?left-right:right-left;});});
   emptyLabel() {if(this.kind())return 'No loaded snapshots match this kind filter and label search. Clear kind filter or search to show other loaded snapshots.';return this.search().trim()?'No loaded snapshots match this label search. Clear search to show all loaded snapshots.':'No snapshots yet';}
   setSearch(value:string) {if(!this.destroyed)this.search.set(value.slice(0,200));}
   label = '';
@@ -97,7 +101,7 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
   private initForProject(id:string) {
     if(this.destroyed)return;
     ++this.projectGeneration;++this.readGeneration;this.projectId=id;
-    this.loaded.set(false);this.downloadNotice.set('');this.items.set([]);this.search.set('');this.kind.set('');this.label='';this.listError.set(false);this.error.set('');this.notice.set('');
+    this.loaded.set(false);this.downloadNotice.set('');this.items.set([]);this.search.set('');this.kind.set('');this.order.set('loaded');this.label='';this.listError.set(false);this.error.set('');this.notice.set('');
     this.creating.set(false);this.restoring.set(false);this.restoreUnknown.set(false);++this.restoreEpoch;this.captureUnknown.set(false);++this.captureEpoch;void this.reload();
   }
   private current(scope:number) { return !this.destroyed&&scope===this.projectGeneration; }

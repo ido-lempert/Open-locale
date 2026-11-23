@@ -49,6 +49,10 @@ cleanup. `npm run test:snapshots-harness` checks all10 snapshot browser entries;
 `SNAPSHOT_HARNESS_FILTER` accepts a regex for bounded groups and rejects empty
 matches. See [review0681](docs/reviews/0681-snapshot-browser-harness.md).
 
+Snapshots offer optional local oldest/newest capture ordering, with full timestamp
+precision, stable ties and unavailable times last. Default loaded order and complete
+inventory downloads are unchanged. See [review0682](docs/reviews/0682-snapshot-capture-order.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`
