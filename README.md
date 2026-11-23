@@ -2467,3 +2467,8 @@ Loaded token, webhook and OTA publication metadata uses fixed unavailable labels
 for malformed times. Valid locale formatting and source values stay unchanged.
 Null/absent token last-use retains never-used; supplied invalid/empty time does
 not claim never-used. [Review0703](docs/reviews/0703-settings-time-fallback.md).
+
+### Editor discussion and history timestamp fallback
+Malformed comment/reply/history times use fixed unavailable labels without
+hiding discussion bodies or saved values. Valid short locale display and source
+metadata stay unchanged. [Review0704](docs/reviews/0704-editor-time-fallback.md).

@@ -342,7 +342,8 @@
     "test:settings-webhook-hide-browser": "node scripts/settings-webhook-hide-browser-test.mjs",
     "test:glossary-term-edit-browser": "node scripts/glossary-term-edit-browser-test.mjs",
     "test:webhook-browser-harness": "node scripts/webhook-browser-harness-test.mjs",
-    "test:settings-time-browser": "node scripts/settings-time-browser-test.mjs"
+    "test:settings-time-browser": "node scripts/settings-time-browser-test.mjs",
+    "test:editor-time-browser": "node scripts/editor-time-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

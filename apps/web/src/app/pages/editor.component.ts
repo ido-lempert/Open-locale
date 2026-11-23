@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnDestroy, OnInit, Optional, signal, WritableSignal } from '@angular/core';
+import { Component, Inject, LOCALE_ID, OnDestroy, OnInit, Optional, signal, WritableSignal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { hintsForTarget, GlossaryHint } from '../glossary-match';
@@ -50,7 +50,7 @@ interface CellState {
     .tags { display: flex; margin: .35rem 0; max-width: 100%; }
     .tag-edit { width: 100%; min-width: 0; flex: 1 1 100%; }
   }`],
-  imports: [FormsModule, RouterLink, DatePipe],
+  imports: [FormsModule, RouterLink],
   template: `
     <header class="bar">
       <a routerLink="/projects" class="back">&larr; Projects</a>
@@ -344,7 +344,7 @@ interface CellState {
                           <span>@for (seg of bodySegments(cm.body); track $index) {<!--
                             -->@if (seg.mention) { <span class="mention">{{ seg.text }}</span> } @else { <span>{{ seg.text }}</span> }<!--
                           --> }</span>
-                          <span class="muted">{{ cm.author?.displayName ?? 'unknown' }} · {{ cm.createdAt | date:'short' }}</span>
+                          <span class="muted">{{ cm.author?.displayName ?? 'unknown' }} · <span name="commentTime">{{editorTimeLabel(cm.createdAt)}}</span></span>
                           <button [attr.aria-label]="'Reply to comment'" (mousedown)="$event.preventDefault()" [disabled]="!commentReplyReady(k,cm.id)" (click)="selectCommentReply(k,cm.id)">reply</button>
                           <button class="danger" [attr.aria-label]="'Delete comment'" [disabled]="commentsSaving() || commentsMutationError().includes(k.id)" (pointerdown)="$event.preventDefault()" (click)="requestCommentRemove(k, cm)">&times;</button>
                           @if (repliesOf(cm.id).length > 0) {
@@ -355,7 +355,7 @@ interface CellState {
                                   <span>@for (seg of bodySegments(rp.body); track $index) {<!--
                                     -->@if (seg.mention) { <span class="mention">{{ seg.text }}</span> } @else { <span>{{ seg.text }}</span> }<!--
                                   --> }</span>
-                                  <span class="muted">{{ rp.author?.displayName ?? 'unknown' }} · {{ rp.createdAt | date:'short' }}</span>
+                                  <span class="muted">{{ rp.author?.displayName ?? 'unknown' }} · <span name="replyTime">{{editorTimeLabel(rp.createdAt)}}</span></span>
                                   <button class="danger" [attr.aria-label]="'Delete comment'" [disabled]="commentsSaving() || commentsMutationError().includes(k.id)" (pointerdown)="$event.preventDefault()" (click)="requestCommentRemove(k, rp)">&times;</button>
                                 </li>
                               }
@@ -395,7 +395,7 @@ interface CellState {
                           <code>{{ h.locale }}</code>
                           <span class="review review-{{ h.status.toLowerCase() }}">{{ h.status.toLowerCase() }}</span>
                           <span class="h-value" [attr.dir]="isRtl(h.locale) ? 'rtl' : 'ltr'">{{ h.value || '(empty)' }}</span>
-                          <span class="muted">{{ h.changedBy?.displayName ?? 'unknown' }} · {{ h.createdAt | date:'short' }}</span>
+                          <span class="muted">{{ h.changedBy?.displayName ?? 'unknown' }} · <span name="historyTime">{{editorTimeLabel(h.createdAt)}}</span></span>
                         </li>
                       }
                     </ul>
@@ -534,7 +534,11 @@ export class EditorComponent implements OnInit, OnDestroy {
   projectError = signal(false);
   private projectGeneration = 0;
 
-  constructor(private api: ApiService, route: ActivatedRoute, @Optional() private router: Router|null=null) {
+  editorTimeLabel(value:unknown):string {
+    if(typeof value!=='string'||!value.trim()||!Number.isFinite(Date.parse(value)))return 'Time unavailable';
+    try{return new DatePipe(this.displayLocale).transform(value,'short')||'Time unavailable';}catch{return 'Time unavailable';}
+  }
+  constructor(private api: ApiService, route: ActivatedRoute, @Optional() private router: Router|null=null, @Inject(LOCALE_ID) private readonly displayLocale='en-US') {
     this.projectId = route.snapshot.paramMap.get('id') ?? '';
   }
   async ngOnInit() { await this.loadProject(); }

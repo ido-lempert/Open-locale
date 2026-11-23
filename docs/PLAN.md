@@ -2879,3 +2879,9 @@ rejects unmatched selections. [Review0702](reviews/0702-webhook-browser-harness.
 Malformed token, webhook and OTA publication times cannot interrupt settings.
 Valid locale labels and source metadata preserved; supplied invalid last-use is
 unavailable, not never-used. [Review0703](reviews/0703-settings-time-fallback.md).
+
+
+### Guard editor discussion/history timestamps
+Malformed timestamps retain loaded comment/reply bodies and saved history values
+with fixed unavailable labels. Existing editing and refresh semantics stay.
+[Review0704](reviews/0704-editor-time-fallback.md).
