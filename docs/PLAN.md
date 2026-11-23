@@ -2706,3 +2706,9 @@ New-task creation shares the date editor's real-calendar validator, labels UTC
 midnight semantics and blocks invalid direct Create calls without requests or
 form loss. Empty dates remain omitted from the existing payload.
 [Review0672](reviews/0672-task-create-date.md).
+
+### Fail-closed task-details browser verification
+Task-details browser checks now retain failure status if database startup aborts
+and cleanup cannot finish. An actual occupied-port subprocess regression checks
+that this cannot return zero or count application assertions.
+[Review0673](reviews/0673-task-details-harness.md).

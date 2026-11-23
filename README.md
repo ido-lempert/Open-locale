@@ -15,6 +15,10 @@ New-task due dates also validate real calendar days before sending. Invalid
 dates keep the local form without starting a request or an unknown-outcome pause.
 See [review0672](docs/reviews/0672-task-create-date.md).
 
+The task-details browser harness fails closed if database startup aborts before
+cleanup finishes. Run `npm run test:tasks-details-harness` to verify its real
+occupied-port failure path. See [review0673](docs/reviews/0673-task-details-harness.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`
