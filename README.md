@@ -105,6 +105,11 @@ OIDC/SAML redemption faults use fixed cautious restart/link guidance. Known loca
 validation messages stay specific; arbitrary API/transport text is not rendered.
 See [review0693](docs/reviews/0693-callback-error.md).
 
+### Bounded provider sign-in start feedback
+OIDC/SAML login-start faults show fixed provider-specific reload guidance, not
+arbitrary API/network messages. Local password/signup diagnostics and same-tab
+state behavior unchanged. See [review0694](docs/reviews/0694-login-start-error.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`

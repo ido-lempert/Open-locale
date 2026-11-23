@@ -216,9 +216,9 @@ export class LoginComponent implements OnInit, OnDestroy {
         throw new Error('Invalid SAML URL');
       sessionStorage.setItem('ol.saml.verifier', verifier);
       window.location.assign(url.toString());
-    } catch (e) {
+    } catch {
       if (this.alive) {
-        this.error.set(e instanceof Error ? e.message : 'SAML could not start');
+        this.error.set('Could not start SAML sign-in. Reload the sign-in page before trying again.');
         this.busy.set(false);
       }
     }
@@ -238,9 +238,9 @@ export class LoginComponent implements OnInit, OnDestroy {
       // No code, JWT, pending token, or provider secret is persisted here.
       sessionStorage.setItem('ol.oidc.state', state);
       window.location.assign(url.toString());
-    } catch (e) {
+    } catch {
       if (this.alive) {
-        this.error.set(e instanceof Error ? e.message : 'SSO could not start');
+        this.error.set('Could not start OIDC sign-in. Reload the sign-in page before trying again.');
         this.busy.set(false);
       }
     }

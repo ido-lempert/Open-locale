@@ -2819,3 +2819,9 @@ remain unchanged. [Review0692](reviews/0692-identity-link-error.md).
 Module-private validation errors retain known local guidance; arbitrary OIDC/SAML
 API/network faults use fixed recovery text. Existing state/URL cleanup, factor,
 replay and lifecycle behavior unchanged. [Review0693](reviews/0693-callback-error.md).
+
+
+### Bound provider sign-in start errors
+Fixed OIDC/SAML guidance replaces raw exceptions only in provider-start catches.
+No local password/signup diagnostic or same-tab state behavior changes.
+[Review0694](reviews/0694-login-start-error.md).

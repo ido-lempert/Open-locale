@@ -133,3 +133,18 @@ describe('login lifecycle', () => {
     }
   });
 });
+
+
+describe('bounded provider sign-in start errors',()=>{
+ let original:PropertyDescriptor|undefined;
+ beforeEach(()=>{original=Object.getOwnPropertyDescriptor(globalThis,'crypto');Object.defineProperty(globalThis,'crypto',{configurable:true,value:{getRandomValues:(b:Uint8Array)=>b.fill(7),subtle:{digest:async()=>new Uint8Array(32).buffer}}});});
+ afterEach(()=>{if(original)Object.defineProperty(globalThis,'crypto',original);sessionStorage.clear();});
+ for(const provider of ['oidc','saml']){
+  const key=provider==='oidc'?'ol.oidc.state':'ol.saml.verifier',message=provider==='oidc'?'Could not start OIDC sign-in. Reload the sign-in page before trying again.':'Could not start SAML sign-in. Reload the sign-in page before trying again.';
+  const ready=(start:any)=>{const api={token:'preserved',startOidc:start,startSamlBrowser:start},c=make(api);c.oidcConfigured.set(true);c.samlConfigured.set(true);return {c,api};};
+  const run=(c:LoginComponent)=>provider==='oidc'?c.startSso():c.startSaml();
+  for(const error of [new Error('PRIVATE <img src=x> '+ 'X'.repeat(400)),new TypeError('PRIVATE transport'),null,'PRIVATE'])it(`${provider} bounds ${error instanceof Error?error.name:typeof error} without session/write claims`,async()=>{const start=jest.fn().mockRejectedValue(error),{c,api}=ready(start);sessionStorage.setItem(key,'prior');await run(c);expect(c.error()).toBe(message);expect(c.busy()).toBe(false);expect(api.token).toBe('preserved');expect(start).toHaveBeenCalledTimes(1);expect(sessionStorage.getItem(key)).toBe('prior');});
+  for(const result of [null,{}, {url:'javascript:alert(1)'},{url:'invalid'}])it(`${provider} malformed URL response gets bounded guidance`,async()=>{const {c}=ready(jest.fn().mockResolvedValue(result));await run(c);expect(c.error()).toBe(message);expect(c.busy()).toBe(false);expect(sessionStorage.getItem(key)).toBeNull();});
+  it(`${provider} late rejected start cannot restore feedback after destruction`,async()=>{let reject!:(v:any)=>void;const start=jest.fn().mockReturnValue(new Promise((_,r)=>reject=r)),{c}=ready(start);const pending=run(c);await Promise.resolve();await Promise.resolve();c.ngOnDestroy();reject(new Error('PRIVATE'));await pending;expect(c.error()).toBe('');});
+ }
+});
