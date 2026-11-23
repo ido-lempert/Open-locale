@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55688, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.REPORT_QA_BROWSER_TEST_PG_PORT ?? 55688), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;const downloadDir=mkdtempSync(join(tmpdir(),'ol-qa-download-'));
+let failures = 0, completed = false, api, web, browser, prisma;const downloadDir=mkdtempSync(join(tmpdir(),'ol-qa-download-'));
 process.exitCode = 1;
+// Preserve startup/assertion failure when incomplete cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-project-list-browser-'));
@@ -49,8 +51,8 @@ try {
   await page.screenshot({path:'/downloads/qa-type-filter.png',fullPage:true});
   await page.click('[name=clearQaType]');await page.waitForFunction(()=>document.querySelector('[name=qaTypeCount]')?.textContent.includes('1 of 1'));check('Clear restores loaded findings without API requests',await page.$eval('[name=qaType]',e=>e.value==='')&&await page.$$eval('table tbody tr',es=>es.length===1)&&reads===0&&writes===0);
   await page.select('[name=qaType]','untranslated');await page.click('[name=refreshQa]');await page.waitForFunction(()=>!document.querySelector('[name=qaLoading]')&&document.querySelector('[name=qaTypeCount]')?.textContent.includes('1 of 1'));check('explicit reread preserves type selection and performs only current read',reads===1&&writes===0&&await page.$eval('[name=qaType]',e=>e.value==='untranslated'));
-  await page.setViewport({width:390,height:844});await page.screenshot({path:'/downloads/qa-type-filter-narrow.png',fullPage:true});check('no type filter runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  await page.setViewport({width:390,height:844});await page.screenshot({path:'/downloads/qa-type-filter-narrow.png',fullPage:true});check('no type filter runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();rmSync(downloadDir,{recursive:true,force:true});
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -65,4 +67,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

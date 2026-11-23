@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55678, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.REPORT_QA_BROWSER_TEST_PG_PORT ?? 55678), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+// Preserve startup/assertion failure when incomplete cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-task-receipt-browser-'));
@@ -45,8 +47,8 @@ try {
   await page.click('[name=refreshBranchReports]');await page.waitForSelector('[name=branchReportLoading]');await page.evaluate(()=>window.rc.refreshBranch());for(let n=0;n<100&&held.length<2;n++)await new Promise(r=>setTimeout(r,20));check('branch refresh captures selected release and guards duplicate without sibling reads',calls.progress===1&&calls.quality===1&&calls.usage===0&&calls.tasks===0&&held.every(r=>new URL(r.url()).searchParams.get('branch')==='release')&&await page.$eval('[name=refreshBranchReports]',e=>e.disabled)&&await page.evaluate(i=>window.rc.usage().totalEvents===i.events&&window.rc.taskReport().total===i.tasks,initial));hold='';for(const r of held)await r.continue();held=[];await page.waitForSelector('.progress-table');check('branch refresh displays real newly persisted release key without changing project dashboard scope',await page.evaluate(i=>window.rc.report().totalKeys===i.keys+1&&window.rc.branch()==='release'&&window.rc.usage().totalEvents===i.events&&window.rc.taskReport().total===i.tasks,initial));
   hold='usage';await page.click('[name=refreshUsageReport]');await page.waitForSelector('[name=usageLoading]');await page.evaluate(()=>window.rc.refreshUsage());for(let n=0;n<100&&!held.length;n++)await new Promise(r=>setTimeout(r,20));check('usage refresh keeps selected seven-day window and independent sibling figures',calls.usage===1&&calls.tasks===0&&calls.progress===1&&new URL(held[0].url()).searchParams.get('days')==='7'&&await page.$eval('[name=refreshUsageReport]',e=>e.disabled)&&await page.evaluate(()=>!!window.rc.report()&&!!window.rc.taskReport()));hold='';await held[0].continue();held=[];await page.waitForFunction(()=>!document.querySelector('[name=usageLoading]'));check('usage refresh displays fresh real activity',await page.evaluate(i=>window.rc.usage().totalEvents>i.events&&window.rc.usageDays()===7,initial));
   hold='tasks';await page.click('[name=refreshTaskReport]');await page.waitForSelector('[name=tasksLoading]');await page.evaluate(()=>window.rc.refreshTasks());for(let n=0;n<100&&!held.length;n++)await new Promise(r=>setTimeout(r,20));check('task refresh duplicate is guarded and other dashboard figures stay visible',calls.tasks===1&&calls.usage===1&&calls.progress===1&&await page.$eval('[name=refreshTaskReport]',e=>e.disabled)&&await page.evaluate(()=>!!window.rc.report()&&!!window.rc.usage()));hold='';await held[0].continue();held=[];await page.waitForFunction(()=>!document.querySelector('[name=tasksLoading]'));check('task refresh displays newly persisted task without resetting branch/window',await page.evaluate(i=>window.rc.taskReport().total===i.tasks+1&&window.rc.branch()==='release'&&window.rc.usageDays()===7,initial));await page.evaluate(()=>{document.documentElement.style.scrollBehavior='auto';scrollTo({top:0,behavior:'instant'});});await page.waitForFunction(()=>scrollY===0);await page.$eval('main',e=>e.scrollTop=0);await page.screenshot({path:'/downloads/reports-refresh.png',fullPage:true});
-  check('no report refresh runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  check('no report refresh runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -61,4 +63,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

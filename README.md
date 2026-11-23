@@ -79,6 +79,11 @@ status across incomplete database cleanup. `npm run test:read-account-harness`
 covers14 entries; `READ_ACCOUNT_HARNESS_FILTER` narrows by regex and rejects empty
 matches. See [review0688](docs/reviews/0688-read-account-browser-harness.md).
 
+Reports and QA browser startup checks now retain failure status across incomplete
+database cleanup. `npm run test:report-qa-harness` covers all nine entries;
+`REPORT_QA_HARNESS_FILTER` narrows by regex and rejects empty matches.
+See [review0689](docs/reviews/0689-report-qa-browser-harness.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`

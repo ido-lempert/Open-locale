@@ -2788,3 +2788,8 @@ and valid locale display leave current-password unlink/session protections uncha
 Eleven older browser scripts now preserve failure status across incomplete startup
 cleanup. Three existing timestamp guards remain unchanged; occupied-port coverage
 spans all14 entry points. [Review0688](reviews/0688-read-account-browser-harness.md).
+
+### Fail-closed Reports and QA browser checks
+Nine browser suites now retain explicit startup/assertion failure status across
+incomplete database cleanup, with real occupied-port coverage and discovery-based
+bounded harness. [Review0689](reviews/0689-report-qa-browser-harness.md).

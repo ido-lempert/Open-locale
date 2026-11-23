@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55687, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.REPORT_QA_BROWSER_TEST_PG_PORT ?? 55687), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;const downloadDir=mkdtempSync(join(tmpdir(),'ol-qa-download-'));
+let failures = 0, completed = false, api, web, browser, prisma;const downloadDir=mkdtempSync(join(tmpdir(),'ol-qa-download-'));
 process.exitCode = 1;
+// Preserve startup/assertion failure when incomplete cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-project-list-browser-'));
@@ -45,8 +47,8 @@ try {
   await page.click('[name=refreshBranchReports]');await page.waitForSelector('[name=branchReportLoading]');await page.evaluate(()=>ng.getComponent(document.querySelector('ol-reports')).downloadBranch());check('held branch refresh blocks captured download and retains sibling figures',await page.$eval('[name=downloadBranchReports]',e=>e.disabled)&&!await page.$('[name=branchDownloadNotice]')&&!!await page.$('.usage-table')&&readdirSync(downloadDir).length===0);
   for(let n=0;n<100&&held.length!==2;n++)await new Promise(r=>setTimeout(r,20));for(const req of held.splice(0))await req.continue();await page.waitForSelector('.progress-table');fail=true;await page.click('[name=refreshBranchReports]');await page.waitForSelector('[name=branchReportError]');await page.evaluate(()=>ng.getComponent(document.querySelector('ol-reports')).downloadBranch());check('failed branch read blocks stale report download with fixed guidance',await page.$eval('[name=downloadBranchReports]',e=>e.disabled)&&readdirSync(downloadDir).length===0&&!(await page.content()).includes('PRIVATE'));
   fail=false;await page.select('[name=reportBranch]','main');await page.waitForSelector('[name=branchReportLoading]');for(let n=0;n<100&&held.length!==2;n++)await new Promise(r=>setTimeout(r,20));for(const req of held.splice(0))await req.continue();await page.waitForSelector('.progress-table');await page.click('[name=downloadBranchReports]');for(let n=0;n<100&&!existsSync(file);n++)await new Promise(r=>setTimeout(r,20));const empty=JSON.parse(readFileSync(file,'utf8'));check('successful empty main reports export current branch not previous release',empty.branch==='main'&&empty.progress.branch==='main'&&empty.progress.totalKeys===0&&empty.quality.branch==='main'&&writes===0);
-  check('no branch report download runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  check('no branch report download runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();rmSync(downloadDir,{recursive:true,force:true});
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -61,4 +63,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);
