@@ -139,3 +139,18 @@ describe('identity provider configuration retry', () => {
     expect(api.getOidcInfo).toHaveBeenCalledTimes(1);
   });
 });
+
+
+describe('bounded identity-link handoff feedback',()=>{
+ const message='Could not complete the identity-provider handoff. Your password was cleared. Check linked identities before starting again.';
+ let original:PropertyDescriptor|undefined;
+ beforeEach(()=>{original=Object.getOwnPropertyDescriptor(globalThis,'crypto');Object.defineProperty(globalThis,'crypto',{configurable:true,value:{getRandomValues:(bytes:Uint8Array)=>bytes.fill(7),subtle:{digest:async()=>new Uint8Array(32).buffer}}});});
+ afterEach(()=>{if(original)Object.defineProperty(globalThis,'crypto',original);sessionStorage.clear();});
+ for(const provider of ['oidc','saml']){
+  const key=provider==='saml'?'ol.saml.verifier':'ol.oidc.state';
+  for(const error of [new Error('PRIVATE <img src=x> '+ 'X'.repeat(400)),new TypeError('PRIVATE transport'),null,'PRIVATE'])it(`${provider} bounds ${error instanceof Error?error.name:typeof error} and clears password/state without replay`,async()=>{const start=jest.fn().mockRejectedValue(error),c=make(provider,{startOidcLink:start,startSamlLink:start});c.loading.set(false);c.configured.set(true);c.password='local fixture';sessionStorage.setItem(key,'old');await c.start();expect(c.error()).toBe(message);expect(c.password).toBe('');expect(sessionStorage.getItem(key)).toBeNull();expect(c.busy()).toBe(false);expect(c.configurationError()).toBe(false);expect(c.configured()).toBe(true);expect(start).toHaveBeenCalledTimes(1);});
+  for(const result of [null,{}, {url:'javascript:alert(1)'}, {url:'not a url'}])it(`${provider} bounds malformed handoff ${JSON.stringify(result)}`,async()=>{const start=jest.fn().mockResolvedValue(result),c=make(provider,{startOidcLink:start,startSamlLink:start});c.loading.set(false);c.configured.set(true);c.password='local fixture';await c.start();expect(c.error()).toBe(message);expect(c.password).toBe('');expect(sessionStorage.getItem(key)).toBeNull();expect(c.busy()).toBe(false);});
+  it(`${provider} late rejected start after destruction cannot restore feedback`,async()=>{let reject!:(v:any)=>void;const start=jest.fn().mockReturnValue(new Promise((_,r)=>reject=r)),c=make(provider,{startOidcLink:start,startSamlLink:start});c.loading.set(false);c.configured.set(true);c.password='local fixture';const pending=c.start();await Promise.resolve();await Promise.resolve();c.ngOnDestroy();reject(new Error('PRIVATE'));await pending;expect(c.error()).toBe('');expect(c.password).toBe('');expect(sessionStorage.getItem(key)).toBeNull();});
+ }
+ it('OIDC missing or repeated state gets fixed handoff error and no persisted state',async()=>{for(const url of ['https://issuer.test/authorize','https://issuer.test/authorize?state=a&state=b']){const c=make('oidc',{startOidcLink:async()=>({url})});c.loading.set(false);c.configured.set(true);c.password='local fixture';await c.start();expect(c.error()).toBe(message);expect(sessionStorage.getItem('ol.oidc.state')).toBeNull();}});
+});

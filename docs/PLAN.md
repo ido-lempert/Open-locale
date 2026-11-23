@@ -2807,3 +2807,9 @@ Fixed uncertain-result recovery text replaces arbitrary exception messages.
 Passwords clear before submission; local rows/session stay unchanged on an
 unconfirmed response. No automatic replay, new retry control or auth policy change.
 [Review0691](reviews/0691-identity-unlink-error.md).
+
+
+### Bound identity-link handoff errors
+Both OIDC/SAML start faults show cautious fixed feedback without arbitrary raw
+exception content. Existing password/state clearing, lifecycle and URL checks
+remain unchanged. [Review0692](reviews/0692-identity-link-error.md).

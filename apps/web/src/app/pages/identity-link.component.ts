@@ -200,11 +200,11 @@ export class IdentityLinkComponent implements OnInit, OnDestroy {
         sessionStorage.setItem(stateKey, states[0]);
       }
       window.location.assign(url.toString());
-    } catch (e) {
+    } catch {
       if (this.alive) {
         sessionStorage.removeItem(stateKey);
         this.error.set(
-          e instanceof Error ? e.message : 'Could not start identity linking',
+          'Could not complete the identity-provider handoff. Your password was cleared. Check linked identities before starting again.',
         );
         this.busy.set(false);
       }

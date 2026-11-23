@@ -95,6 +95,11 @@ Unconfirmed identity unlink results show fixed cautious recovery text instead of
 raw API/network errors. Password clearing and verified successful sign-out remain
 unchanged. See [review0691](docs/reviews/0691-identity-unlink-error.md).
 
+### Bounded identity-link handoff feedback
+OIDC/SAML start faults use fixed recovery text instead of raw exception messages.
+Typed passwords and failed same-tab handoff state clear. No automatic replay or
+provider acceptance claim. See [review0692](docs/reviews/0692-identity-link-error.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`
