@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55752, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.GLOSSARY_BROWSER_TEST_PG_PORT ?? 55752), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+// Preserve startup/assertion failure when incomplete cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const downloadDir=mkdtempSync(join(tmpdir(),'ol-new-term-download-'));
@@ -51,8 +53,8 @@ try {
   await page.click('[name=glossaryAttentionSave]');await page.$eval('[name=refreshGlossaryList]',e=>e.click());await page.waitForFunction(()=>!document.querySelector('[name=glossaryListLoading]')&&document.querySelector('[name=glossaryMatches]')?.textContent.includes('0 of 2'));check('explicit current refresh recovers uncertainty while preserving attention filter and truthful empty state',reads===before.reads+1&&writes===before.writes&&await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-glossary'));return c.attention()==='save'&&!c.unknownSaveIds().length&&!c.unknownDeleteIds().length;})&&!!await page.$('[name=glossaryListEmpty]'));
   await page.evaluate(p=>{history.pushState({},'',p);dispatchEvent(new PopStateEvent('popstate'));},`/projects/${next.id}/glossary`);await page.waitForFunction(()=>!ng.getComponent(document.querySelector('ol-glossary')).loading());check('reused project resets attention and distinguishes actual no-terms state',await page.$eval('[name=glossaryAttentionAll]',e=>e.getAttribute('aria-pressed')==='true')&&await page.$eval('[name=glossaryListEmpty]',e=>e.textContent.includes('No glossary terms yet')));
   await page.evaluate(()=>{window.oldGlossary=ng.getComponent(document.querySelector('ol-glossary'));history.pushState({},'','/projects');dispatchEvent(new PopStateEvent('popstate'));});await page.waitForFunction(()=>!document.querySelector('ol-glossary'));await page.evaluate(()=>window.oldGlossary.setAttention('delete'));check('departed attention handler refuses',await page.evaluate(()=>window.oldGlossary.attention()==='all'));
-  check('no glossary attention runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  check('no glossary attention runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();rmSync(downloadDir,{recursive:true,force:true});
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -67,4 +69,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

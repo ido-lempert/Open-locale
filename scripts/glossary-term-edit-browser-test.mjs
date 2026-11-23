@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 56154, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.GLOSSARY_BROWSER_TEST_PG_PORT ?? 56154), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+// Preserve startup/assertion failure when incomplete cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-glossary-term-edit-download-browser-'));
@@ -81,7 +83,7 @@ try {
   check('explicit refresh reads server but does not replay stale edit',writes===5&&await page.$('[name=termEditStale]')&&await page.$eval('[name=editGlossaryTerm]',e=>e.value==='Failed retained term')&&(await call(`${P}/glossary`,null,token)).find(t=>t.id===term.id).term==='Edited term');
   const staleCopy=await downloadEdit();check('refreshed stale edit copy stays local and not current',staleCopy.loadedRowStillCurrent===false&&staleCopy.draft.term==='Failed retained term'&&writes===5);rmSync(downloadDir,{recursive:true,force:true});
   await click('[name=cancelGlossaryTermEdit]');await page.$eval('[name=refreshGlossaryList]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/glossary-term-edit-download-result.png'});await page.$eval('[aria-label="Edit details for Edited term"]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/glossary-term-edit-download-result-row.png'});
-  check('no glossary term edit runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
+  check('no glossary term edit runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
 } catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();
@@ -97,4 +99,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(failures?1:0);
+process.exit(!completed||failures?1:0);

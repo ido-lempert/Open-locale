@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55732, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.GLOSSARY_BROWSER_TEST_PG_PORT ?? 55732), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+// Preserve startup/assertion failure when incomplete cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-glossary-create-browser-'));
@@ -45,8 +47,8 @@ try {
   failRead=true;await page.$eval('[name=refreshGlossaryList]',e=>e.click());await page.waitForSelector('[name=retryGlossaryList]');check('failed read retains uncertain local form guidance without claiming backup available',writes===2&&await page.$eval('[name=glossaryNewTermDraft]',e=>e.textContent.includes('Copy the form before leaving'))&&await page.$eval('[name=downloadGlossaryDraft]',e=>e.disabled)&&!(await page.content()).includes('PRIVATE_READ'));
   failRead=false;await page.$eval('[name=retryGlossaryList]',e=>e.click());await page.waitForFunction(()=>!document.querySelector('[name=glossaryCreateUnknown]')&&!document.querySelector('[name=glossaryListLoading]'));check('explicit current recovery restores normal local-only scope without clearing form',writes===2&&await page.$eval('[name=gTerm]',e=>e.value==='Newer local term')&&await page.$eval('[name=glossaryNewTermDraft]',e=>e.textContent.includes('not automatically saved')));
   drop=false;await page.$eval('[name=gTerm]',e=>{e.value='Confirmed next';e.dispatchEvent(new Event('input',{bubbles:true}));});await page.$eval('.task-form',e=>e.requestSubmit());await page.waitForFunction(()=>!document.querySelector('[name=glossaryCreating]')&&document.querySelector('[name=glossaryCreateNotice]')?.textContent.includes('Confirmed next'));check('confirmed unchanged form clears draft feedback but preserves receipt',writes===3&&!await page.$('[name=glossaryNewTermDraft]')&&await page.$eval('[name=gTerm]',e=>e.value===''));
-  await page.click('[name=gDnt]');await page.waitForSelector('[name=glossaryNewTermDraft]');check('choice-only new-term form counts as local draft',await page.$eval('[name=gTerm]',e=>e.value===''));await page.evaluate(p=>{history.pushState({},'',p);dispatchEvent(new PopStateEvent('popstate'));},`/projects/${next.id}/glossary`);await page.waitForFunction(()=>!ng.getComponent(document.querySelector('ol-glossary')).loading());check('reused project clears old local form feedback without mutation',writes===3&&!await page.$('[name=glossaryNewTermDraft]')&&await page.$eval('[name=gDnt]',e=>!e.checked));check('no new-term feedback runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  await page.click('[name=gDnt]');await page.waitForSelector('[name=glossaryNewTermDraft]');check('choice-only new-term form counts as local draft',await page.$eval('[name=gTerm]',e=>e.value===''));await page.evaluate(p=>{history.pushState({},'',p);dispatchEvent(new PopStateEvent('popstate'));},`/projects/${next.id}/glossary`);await page.waitForFunction(()=>!ng.getComponent(document.querySelector('ol-glossary')).loading());check('reused project clears old local form feedback without mutation',writes===3&&!await page.$('[name=glossaryNewTermDraft]')&&await page.$eval('[name=gDnt]',e=>!e.checked));check('no new-term feedback runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -61,4 +63,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

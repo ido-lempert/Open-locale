@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55683, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.GLOSSARY_BROWSER_TEST_PG_PORT ?? 55683), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+// Preserve startup/assertion failure when incomplete cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-project-list-browser-'));
@@ -51,8 +53,8 @@ try {
   await search('LOCAL DRAFT');await page.waitForSelector(field);check('local draft remains searchable and read-only unknown-save pause survives hiding',await page.$eval(field,e=>e.value==='Local draft'&&e.readOnly)&&!!await page.$('[name=glossarySaveUnknown]')&&await page.$eval('[name=glossaryMatches]',e=>e.textContent.includes('1 of 2')));
   await page.screenshot({path:'/downloads/glossary-search-filtered.png',fullPage:true});
   await page.click('[name=clearGlossarySearch]');await page.waitForFunction(()=>document.querySelector('[name=glossaryMatches]')?.textContent.includes('2 of 2'));check('clear restores all loaded rows and keeps new-term draft without server read',reads===0&&writes===1&&await page.$$eval('.glossary-table tbody tr',rows=>rows.length===2)&&await page.$eval('[name=gTerm]',e=>e.value==='New draft'));
-  await page.screenshot({path:'/downloads/glossary-search.png',fullPage:true});check('no glossary search runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  await page.screenshot({path:'/downloads/glossary-search.png',fullPage:true});check('no glossary search runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -67,4 +69,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

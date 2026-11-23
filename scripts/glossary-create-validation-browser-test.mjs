@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55939, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.GLOSSARY_BROWSER_TEST_PG_PORT ?? 55939), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+// Preserve startup/assertion failure when incomplete cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-glossary-validation-'));
@@ -45,7 +47,7 @@ try {
   await replace('[name=gTerm]',' '+ '😀'.repeat(200)+' ');await replace('[name=gNotes]',' '+ '✈️'.repeat(1000)+' ');await page.waitForFunction(()=>!document.querySelector('.task-form button[type=submit]').disabled);await page.click('.task-form button[type=submit]');await page.waitForSelector('[name=glossaryCreateNotice]');await page.waitForFunction(()=>document.querySelector('[name=gTerm]').value==='');const list=await call(`${P}/glossary`,null,token);check('corrected Unicode200 and presentation1000 really persist once with trim and choice',posts===1&&reads===0&&patches===0&&payloads[0].term==='😀'.repeat(200)&&payloads[0].notes==='✈️'.repeat(1000)&&payloads[0].doNotTranslate&&list.some(t=>t.term==='😀'.repeat(200)&&t.notes==='✈️'.repeat(1000)&&t.doNotTranslate)&&await page.$eval('[aria-label="Existing in he"]',e=>e.value==='Original'));
   await replace('[name=gTerm]','  literal <img>  ');await replace('[name=gNotes]','   ');await page.click('.task-form button[type=submit]');await page.waitForFunction(()=>document.querySelector('[name=gTerm]').value==='');check('whitespace notes omitted and term literal after existing trim',posts===2&&reads===0&&!('notes' in payloads[1])&&payloads[1].term==='literal <img>'&&(await call(`${P}/glossary`,null,token)).some(t=>t.term==='literal <img>'&&t.notes==='')&&await page.$$eval('.glossary-table code',es=>es.some(e=>e.textContent==='literal <img>'&&!e.querySelector('img'))));
   failCreate=true;await replace('[name=gTerm]','valid failure');await replace('[name=gNotes]','keep context');await page.click('.task-form button[type=submit]');await page.waitForSelector('[name=glossaryCreateUnknown]');await page.evaluate(()=>ng.getComponent(document.querySelector('ol-glossary')).create());check('valid failure still keeps form and pauses replay without private text',posts===3&&reads===0&&patches===0&&await page.$eval('[name=gTerm]',e=>e.value==='valid failure')&&await page.$eval('[name=gNotes]',e=>e.value==='keep context')&&await page.$eval('.task-form button[type=submit]',e=>e.disabled)&&!(await page.$eval('main',e=>e.innerText)).includes('PRIVATE_'));
-  check('no new-term validation runtime error',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
+  check('no new-term validation runtime error',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
 } catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??String(e)}`);process.exitCode=1;}
 finally {
   await browser?.close();
@@ -61,4 +63,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(failures?1:0);
+process.exit(!completed||failures?1:0);

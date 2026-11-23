@@ -53,6 +53,11 @@ Snapshots offer optional local oldest/newest capture ordering, with full timesta
 precision, stable ties and unavailable times last. Default loaded order and complete
 inventory downloads are unchanged. See [review0682](docs/reviews/0682-snapshot-capture-order.md).
 
+Glossary browser startup checks now retain failure status on incomplete database
+cleanup. `npm run test:glossary-harness` checks all16 glossary browser entries;
+`GLOSSARY_HARNESS_FILTER` accepts a regex for bounded groups and rejects empty
+matches. See [review0683](docs/reviews/0683-glossary-browser-harness.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`

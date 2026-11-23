@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 56142, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.GLOSSARY_BROWSER_TEST_PG_PORT ?? 56142), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+// Preserve startup/assertion failure when incomplete cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-glossary-delete-browser-'));
@@ -59,7 +61,7 @@ try {
   await page.setViewport({width:1280,height:900});await page.type('[name=gTerm]','Current new-term draft');await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-glossary'));c.setTranslation(c.terms().find(t=>t.term==='Beta'),'he','Other local draft');});await page.click('[aria-label="Alpha in he"]');await page.type('[aria-label="Alpha in he"]',' local before delete');await ask();await page.click('[name=confirmTermDelete]');await page.waitForFunction(()=>!document.querySelector('[aria-label="Delete term Alpha"]')&&!document.querySelector('[name=glossaryDeleting]'));await page.evaluate(async()=>ng.getComponent(document.querySelector('ol-glossary')).confirmRemove());const remaining=await call(`${P}/glossary`,null,token);
   check('explicit confirm deletes exact term once without saving discarded local text',deletes===1&&deletePath===`/api${P}/glossary/${alpha.id}`&&patches===0&&!remaining.some(t=>t.id===alpha.id)&&remaining.find(t=>t.id===beta.id).translations.he==='Other original');
   check('unrelated local translation and new-term form remain without completion reload',reads===2&&await page.$eval('[aria-label="Beta in he"]',e=>e.value==='Other local draft')&&await page.$eval('[name=gTerm]',e=>e.value==='Current new-term draft'));
-  await page.screenshot({path:'/downloads/glossary-delete-confirm-result.png'});check('no glossary confirmation runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
+  await page.screenshot({path:'/downloads/glossary-delete-confirm-result.png'});check('no glossary confirmation runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
 } catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();
@@ -75,4 +77,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(failures?1:0);
+process.exit(!completed||failures?1:0);

@@ -2758,3 +2758,8 @@ protected from scratch. [Review0681](reviews/0681-snapshot-browser-harness.md).
 Optional oldest/newest display order composes with label and kind filters, keeping
 loaded inventory, restore identity and unknown outcomes unchanged. Full timestamp
 precision, stable ties and unavailable-last semantics. [Review0682](reviews/0682-snapshot-capture-order.md).
+
+### Fail-closed glossary browser verification set
+Fifteen glossary browser scripts now share explicit completion/failure guards;
+new-term-reset already matched and stays unchanged. All16 entry points have actual
+occupied-port coverage. [Review0683](reviews/0683-glossary-browser-harness.md).

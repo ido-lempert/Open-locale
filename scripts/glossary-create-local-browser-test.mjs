@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55645, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.GLOSSARY_BROWSER_TEST_PG_PORT ?? 55645), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+// Preserve startup/assertion failure when incomplete cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-glossary-create-browser-'));
@@ -38,8 +40,8 @@ try {
   const term=await call(`${P}/glossary`,{term:'Alpha',translations:{he:'Original'}},token);await page.goto(`${WEB}${P}/glossary`,{waitUntil:'networkidle0'});await page.waitForSelector('[aria-label="Alpha in he"]');
   let heldPost,heldPatch,posts=0,reads=0;await page.setRequestInterception(true);page.on('request',req=>{const path=new URL(req.url()).pathname;if(req.method()==='GET'&&path===`/api${P}/glossary`)reads++;if(req.method()==='POST'&&path===`/api${P}/glossary`){posts++;heldPost=req;return;}if(req.method()==='PATCH'&&path===`/api${P}/glossary/${term.id}`){heldPatch=req;return;}req.continue();});
   await page.$eval('[aria-label="Alpha in he"]',e=>{e.value='Local translation draft';e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('blur'));});for(let n=0;n<100&&!heldPatch;n++)await new Promise(r=>setTimeout(r,20));if(!heldPatch)throw new Error('translation PATCH not held');await page.type('[name=gTerm]','Beta');await page.click('.task-form button[type=submit]');for(let n=0;n<100&&!heldPost;n++)await new Promise(r=>setTimeout(r,20));if(!heldPost)throw new Error('term POST not held');await page.waitForSelector('[name=glossaryCreating]');await page.$eval('[name=gTerm]',e=>{e.value='Newer term draft';e.dispatchEvent(new Event('input',{bubbles:true}));});await page.$eval('.task-form',e=>e.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));const before=reads;await heldPost.continue();await page.waitForSelector('[name=glossaryCreateNotice]');await page.waitForSelector('[aria-label="Beta in he"]');const list=await call(`${P}/glossary`,null,token);check('confirmed creation inserts only returned term without replacing pending local translation',posts===1&&reads===before&&list.filter(t=>t.term==='Beta').length===1&&list.find(t=>t.id===term.id).translations.he==='Original'&&await page.$eval('[aria-label="Alpha in he"]',e=>e.value==='Local translation draft')&&await page.$eval('[name=gTerm]',e=>e.value==='Newer term draft'));check('confirmed receipt exact copy and pending save still visible',await page.$eval('[name=glossaryCreateNotice]',e=>e.textContent==='Term "Beta" was added. Existing local translation values were kept.')&&!!await page.$('[name=glossarySaving]'));await page.screenshot({path:'/downloads/glossary-create-keeps-local.png',fullPage:false});await heldPatch.continue();await page.waitForFunction(()=>!document.querySelector('[name=glossarySaving]'));check('original translation save independently completes with no list reload',reads===before&&(await call(`${P}/glossary`,null,token)).find(t=>t.id===term.id).translations.he==='Local translation draft');
-  check('no glossary create runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  check('no glossary create runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -54,4 +56,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);
