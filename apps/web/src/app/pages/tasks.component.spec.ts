@@ -68,3 +68,8 @@ describe('task explicit refresh mutation guard',()=>{
 describe('task filtered empty guidance',()=>{
  it('distinguishes status and mine filters from unfiltered view',()=>{const c=make({});expect(c.hasFilters()).toBe(false);c.statusFilter.set('DONE');expect(c.hasFilters()).toBe(true);c.statusFilter.set('');c.mineFilter.set('me');expect(c.hasFilters()).toBe(true);c.mineFilter.set('');expect(c.hasFilters()).toBe(false);});
 });
+
+describe('loaded task due-date fallback',()=>{
+ for(const value of [undefined,null,'','   ','not-a-date','<img src=x>',42,{},[]])it(`bounds invalid due date ${String(value)}`,()=>{const c=make({});expect(c.validDueTimestamp(value)).toBe(false);expect(c.dueDateLabel(value)).toBe('Due date unavailable');});
+ it('keeps exact UTC calendar label and full timestamp validity',()=>{const c=make({}),value='2026-12-12T23:59:59.123Z';expect(c.validDueTimestamp(value)).toBe(true);expect(c.dueDateLabel(value)).toBe('due Dec 12, 2026 (UTC)');});
+});

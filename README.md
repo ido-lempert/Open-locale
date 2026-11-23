@@ -41,7 +41,7 @@ dependencies and downloads are unchanged. See [review0679](docs/reviews/0679-tas
 
 All task browser entry points now retain nonzero failure status on incomplete
 database startup cleanup. The occupied-port harness discovers task browser scripts
-from the package scripts and checks17 entry points. Use `TASK_HARNESS_FILTER`
+from the package scripts and checks18 entry points. Use `TASK_HARNESS_FILTER`
 (regex) for bounded groups; an empty match fails. See [review0680](docs/reviews/0680-task-browser-harness.md).
 
 Snapshot browser startup checks now retain failure status on incomplete database
@@ -61,6 +61,10 @@ matches. See [review0683](docs/reviews/0683-glossary-browser-harness.md).
 Activity rows keep rendering if a recorded timestamp is empty or malformed,
 showing a fixed unavailable label without exposing raw metadata. Valid times retain
 the existing locale display. See [review0684](docs/reviews/0684-activity-time-fallback.md).
+
+Task rows show a fixed unavailable label for malformed loaded due dates without
+interrupting the list or emitting an invalid datetime attribute. Valid dates keep
+UTC labels and full timestamps; absent dates stay absent. See [review0685](docs/reviews/0685-task-date-fallback.md).
 
 ## Stack
 

@@ -2768,3 +2768,8 @@ occupied-port coverage. [Review0683](reviews/0683-glossary-browser-harness.md).
 Malformed or empty recorded times show a fixed unavailable label rather than
 interrupting activity rendering. Valid times retain locale formatting; source data
 and download payloads stay unchanged. [Review0684](reviews/0684-activity-time-fallback.md).
+
+### Guard loaded task due-date display
+Malformed dates cannot interrupt task row rendering. Valid UTC labels and full
+datetime values remain unchanged; absent dates remain absent. No task mutation
+or stored-data repair. [Review0685](reviews/0685-task-date-fallback.md).

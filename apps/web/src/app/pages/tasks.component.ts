@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
+import { Component, Inject, LOCALE_ID, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -7,7 +7,7 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
 
 @Component({
   selector: 'ol-tasks',
-  imports: [FormsModule, RouterLink, DatePipe],
+  imports: [FormsModule, RouterLink],
   template: `
     <header class="bar">
       <a [routerLink]="['/projects', projectId]" class="back">&larr; Editor</a>
@@ -145,7 +145,7 @@ import { ApiService, Key, MemberInfo, TaskItem, GroupInfo } from '../api.service
               @for (g of groups(); track g.id) { <option [value]="'g:' + g.id">Group: {{ g.name }}</option> }
             </select>
             @if (rowAssigneeMissing(t) || rowPredecessorMissing(t)) { <p class="muted" name="taskRowRetainedChoices">Selections from this loaded task are outside the loaded options. They are not cleared or verified as currently available or allowed. Refresh tasks or retry option reads to check newer state; this notice does not change the task.</p> }
-            @if (t.dueDate) { <time class="muted" name="taskDueDate" [attr.datetime]="t.dueDate">due {{ t.dueDate | date:'mediumDate':'UTC' }} (UTC)</time> }
+            @if (t.dueDate) { <time class="muted" name="taskDueDate" [attr.datetime]="validDueTimestamp(t.dueDate) ? t.dueDate : null">{{dueDateLabel(t.dueDate)}}</time> }
             @if (updatingIds().includes(t.id)) { <span role="status" name="taskUpdating">Updating task...</span> }
             @if (deletingIds().includes(t.id)) { <span role="status" name="taskDeleting">Deleting task...</span> }
             <button type="button" [disabled]="!canOpenDetails(t)" [attr.aria-label]="'Edit details for ' + t.title" (click)="openDetails(t)">Edit details</button>
@@ -270,7 +270,13 @@ export class TasksComponent implements OnInit, OnDestroy {
   private destroyed = false;
   private projectGeneration = 0;
 
-  constructor(private route: ActivatedRoute, private api: ApiService) {}
+  constructor(private route: ActivatedRoute, private api: ApiService, @Inject(LOCALE_ID) private readonly displayLocale='en-US') {}
+  validDueTimestamp(value:unknown):value is string {return typeof value==='string'&&!!value.trim()&&Number.isFinite(Date.parse(value));}
+  dueDateLabel(value:unknown):string {
+    if(!this.validDueTimestamp(value))return 'Due date unavailable';
+    try{const label=new DatePipe(this.displayLocale).transform(value,'mediumDate','UTC');return label?'due '+label+' (UTC)':'Due date unavailable';}
+    catch{return 'Due date unavailable';}
+  }
 
   ngOnInit() {
     // Subscribe rather than snapshot: the router reuses this component when
