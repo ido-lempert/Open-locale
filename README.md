@@ -84,6 +84,12 @@ database cleanup. `npm run test:report-qa-harness` covers all nine entries;
 `REPORT_QA_HARNESS_FILTER` narrows by regex and rejects empty matches.
 See [review0689](docs/reviews/0689-report-qa-browser-harness.md).
 
+### Loaded activity time ordering
+Activity can show loaded order, newest recorded first or oldest recorded first.
+Local metadata search combines with this view; full instants, stable ties and
+unavailable-last ordering leave server filters, pagination and JSON source order
+unchanged. See [review0690](docs/reviews/0690-activity-time-order.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`

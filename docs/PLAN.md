@@ -2793,3 +2793,10 @@ spans all14 entry points. [Review0688](reviews/0688-read-account-browser-harness
 Nine browser suites now retain explicit startup/assertion failure status across
 incomplete database cleanup, with real occupied-port coverage and discovery-based
 bounded harness. [Review0689](reviews/0689-report-qa-browser-harness.md).
+
+
+### Local activity recorded-time order
+Optional newest/oldest ordering composes with local metadata search, preserves
+full stored timestamps and stable ties, and puts unavailable values last. Loaded
+inventory and download order remain unchanged; project changes reset display order.
+[Review0690](reviews/0690-activity-time-order.md).

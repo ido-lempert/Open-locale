@@ -82,6 +82,8 @@ function roleSnapshot(value: unknown): value is { role: string; allowedLocales: 
       <button type="button" name="downloadActivity" [disabled]="loading() || !!error() || !loaded()" (click)="download()">Download loaded activity metadata (.json)</button>
       <p class="muted" name="activityDownloadScope">Downloads only currently loaded pages under these action, actor and key filters, not complete history or newer server changes. Includes record IDs, action, displayed actor name, key, locale and time. Omits raw detail, translation/comment text, actor emails and private errors. The file can contain private project metadata; downloading does not share it or confirm an action succeeded.</p>
       @if (downloadNotice()) { <p role="status" name="activityDownloadNotice">{{downloadNotice()}}</p> }
+      <label>Order loaded activity <select name="activityOrder" [ngModel]="order()" (ngModelChange)="setOrder($event)"><option value="loaded">Loaded order</option><option value="newest">Newest recorded first</option><option value="oldest">Oldest recorded first</option></select></label>
+      <p class="muted" name="activityOrderScope">Local display order only, using full stored activity timestamps. Unavailable times come last; equal times keep loaded order. Local search combines with this order. Downloads keep loaded order. This does not load earlier or newer entries, change server filters or confirm an action succeeded.</p>
       <label>Find in loaded activity metadata <input type="search" name="activitySearch" maxlength="200" [ngModel]="query()" (ngModelChange)="search($event)" /></label>
       <button type="button" name="clearActivitySearch" [disabled]="!query()" (click)="search('')">Clear local search</button>
       <p class="muted" name="activitySearchScope">Literal, case-insensitive search of loaded actor names, action labels/codes, keys and locales only. Raw detail and translation/comment text are not searched. Server filters and Load more still control which entries are loaded. Download includes all loaded entries regardless of this local search.</p>
@@ -110,7 +112,15 @@ export class ActivityComponent implements OnInit, OnDestroy {
   projectId = '';
   query=signal('');
   search(value:string){if(!this.destroyed)this.query.set(value.slice(0,200));}
-  visibleItems=computed(()=>{const query=this.query().trim().toLocaleLowerCase();return query?this.items().filter(ev=>[ev.actor?.displayName??'Former user',ev.action,this.label(ev.action),ev.keyName??'',ev.localeCode??''].some(value=>value.toLocaleLowerCase().includes(query))):this.items();});
+  order=signal<'loaded'|'newest'|'oldest'>('loaded');
+  setOrder(value:string){if(!this.destroyed&&(value==='loaded'||value==='newest'||value==='oldest'))this.order.set(value);}
+  visibleItems=computed(()=>{
+    const query=this.query().trim().toLocaleLowerCase();
+    const rows=query?this.items().filter(ev=>[ev.actor?.displayName??'Former user',ev.action,this.label(ev.action),ev.keyName??'',ev.localeCode??''].some(value=>value.toLocaleLowerCase().includes(query))):this.items();
+    const order=this.order();if(order==='loaded')return rows;
+    const time=(ev:ActivityEntry)=>{const parsed=typeof ev.createdAt==='string'&&ev.createdAt.trim()?Date.parse(ev.createdAt):NaN;return Number.isFinite(parsed)?parsed:null;};
+    return [...rows].sort((a,b)=>{const left=time(a),right=time(b);if(left===right)return 0;if(left===null)return 1;if(right===null)return -1;return order==='oldest'?left-right:right-left;});
+  });
 
   items = signal<ActivityEntry[]>([]);
   nextCursor = signal<string | null>(null);
@@ -144,7 +154,7 @@ export class ActivityComponent implements OnInit, OnDestroy {
   }
   async loadProject(projectId:string) {
     if(this.destroyed)return;
-    ++this.projectGeneration;this.projectId=projectId;this.query.set('');
+    ++this.projectGeneration;this.projectId=projectId;this.query.set('');this.order.set('loaded');
     if(this.keyTimer)clearTimeout(this.keyTimer);this.keyTimer=null;
     this.actionFilter.set('');this.actorFilter.set('');this.keyFilter.set('');this.members.set([]);
     await Promise.all([this.loadMembers(),this.fetch(true)]);
