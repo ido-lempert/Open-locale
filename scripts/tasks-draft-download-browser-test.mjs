@@ -8,12 +8,14 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55728, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.TASK_BROWSER_TEST_PG_PORT ?? 55728), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 const downloadDir=mkdtempSync(join(tmpdir(),'ol-webhook-download-'));
 process.exitCode = 1;
+// Preserve startup/assertion failure when incomplete cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-webhook-journal-browser-'));
@@ -48,8 +50,8 @@ try {
   failRead=true;await page.$eval('[name=recoverTaskActions]',e=>e.click());await page.waitForSelector('[name=retryTaskList]');await page.$eval('[name=downloadTaskDraft]',e=>e.click());const failed=await readDownload();check('failed recovery retains local form and uncertain flag without server-state claim',failed.createOutcomeUnconfirmed&&!failed.serverStateConfirmed&&failed.draft.title===data.draft.title&&writes===1&&!(await page.content()).includes('PRIVATE_READ'));
   failRead=false;await page.evaluate(p=>{history.pushState({},'',p);dispatchEvent(new PopStateEvent('popstate'));},`/projects/${second.id}/tasks`);await page.waitForFunction(()=>document.querySelector('[name=taskTitle]')?.value===''&&!ng.getComponent(document.querySelector('ol-tasks')).loading());check('reused project clears previous form and backup notice',!await page.$('[name=taskDraftDownloadNotice]'));await page.$eval('[name=downloadTaskDraft]',e=>e.click());const empty=await readDownload();check('new project empty form backup has exact new scope not submission authority',empty.projectId===second.id&&!empty.createOutcomeUnconfirmed&&empty.draft.title===''&&empty.draft.keyIds.length===0&&!empty.canCreate);
   await page.evaluate(()=>{URL.createObjectURL=()=>{throw new Error('PRIVATE_DOWNLOAD');};ng.getComponent(document.querySelector('ol-tasks')).downloadDraft();});await page.waitForFunction(()=>document.querySelector('[name=taskDraftDownloadNotice]')?.textContent.includes('Copy your form text'));check('bounded local failure has no raw error',!(await page.content()).includes('PRIVATE_DOWNLOAD'));
-  await page.evaluate(()=>{window.oldTasks=ng.getComponent(document.querySelector('ol-tasks'));window.afterDestroy=0;URL.createObjectURL=()=>{window.afterDestroy++;return 'blob:local';};history.pushState({},'','/projects');dispatchEvent(new PopStateEvent('popstate'));});await page.waitForFunction(()=>!document.querySelector('ol-tasks'));await page.evaluate(()=>window.oldTasks.downloadDraft());check('departed captured backup cannot export',await page.evaluate(()=>window.afterDestroy===0)&&readdirSync(downloadDir).length===0&&writes===1);check('no form backup runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  await page.evaluate(()=>{window.oldTasks=ng.getComponent(document.querySelector('ol-tasks'));window.afterDestroy=0;URL.createObjectURL=()=>{window.afterDestroy++;return 'blob:local';};history.pushState({},'','/projects');dispatchEvent(new PopStateEvent('popstate'));});await page.waitForFunction(()=>!document.querySelector('ol-tasks'));await page.evaluate(()=>window.oldTasks.downloadDraft());check('departed captured backup cannot export',await page.evaluate(()=>window.afterDestroy===0)&&readdirSync(downloadDir).length===0&&writes===1);check('no form backup runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();rmSync(downloadDir,{recursive:true,force:true});
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -64,4 +66,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

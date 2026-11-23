@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55673, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.TASK_BROWSER_TEST_PG_PORT ?? 55673), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+// Preserve startup/assertion failure when incomplete cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-task-receipt-browser-'));
@@ -39,8 +41,8 @@ try {
   await page.select('[aria-label="Status for Current task"]','DONE');await page.waitForSelector('[name=retryTaskList]');check('confirmed status update receipt survives failed list read with one persisted change',writes===1&&reads===1&&await page.$eval('[name=taskActionNotice]',e=>e.textContent==='Task "Current task" was updated. The list uses current filters. If unavailable, retry the read without repeating this change.')&&(await call(`${P}/tasks`,null,token)).find(t=>t.id===task.id)?.status==='DONE');await page.screenshot({path:'/downloads/task-update-receipt.png',fullPage:false});failRead=false;await page.click('[name=retryTaskList]');await page.waitForSelector('[aria-label="Status for Current task"]');check('read-only retry keeps update receipt and does not replay',writes===1&&reads===2&&!!await page.$('[name=taskActionNotice]'));
   failRead=true;await page.click('[aria-label="Delete task Current task"]');await page.waitForSelector('[name=confirmTaskDelete]');await page.click('[name=confirmTaskDelete]');await page.waitForSelector('[name=retryTaskList]');check('confirmed delete receipt replaces update result despite failed read',writes===2&&reads===3&&await page.$eval('[name=taskActionNotice]',e=>e.textContent==='Task "Current task" was deleted. If the list is unavailable, retry the read without deleting again.')&&!(await call(`${P}/tasks`,null,token)).some(t=>t.id===task.id));await page.screenshot({path:'/downloads/task-delete-receipt.png',fullPage:false});failRead=false;await page.click('[name=retryTaskList]');await page.waitForFunction(()=>!document.querySelector('[name=taskListLoading]')&&!document.querySelector('[name=taskListError]'));check('delete read-only retry keeps receipt without replay',writes===2&&reads===4&&!!await page.$('[name=taskActionNotice]')&&!(await page.$('[aria-label="Delete task Current task"]')));
   await page.select('[aria-label="Filter by status"]','DONE');await page.waitForSelector('[name=taskListEmpty]');check('filtered empty read retains named confirmed result without mutation replay',writes===2&&reads===5&&!!await page.$('[name=taskActionNotice]'));
-  check('no task row runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  check('no task row runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -55,4 +57,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

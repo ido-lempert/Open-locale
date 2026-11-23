@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55750, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.TASK_BROWSER_TEST_PG_PORT ?? 55750), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+// Preserve startup/assertion failure when incomplete cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const downloadDir=mkdtempSync(join(tmpdir(),'ol-retained-options-'));
@@ -50,8 +52,8 @@ try {
   await page.select('[name=taskAssignee]','');await page.select('[name=taskLockKeys]');await page.waitForFunction(()=>!document.querySelector('[name=taskRetainedChoices]'));check('explicit clear removes unavailable selections locally without requests',await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-tasks'));return c.assigneeId()===''&&c.selectedKeyIds().length===0&&c.title()==='Keep form';})&&writes===0);
   missing=false;await reload();await page.select('[name=taskAssignee]',member);await page.select('[name=taskLockKeys]',await page.$eval('[name=taskLockKeys]',e=>[...e.options].find(o=>o.textContent==='real.lock.key').value));missing=true;await reload();await page.waitForSelector('[name=taskRetainedChoices]');await page.$eval('[name=resetTaskDraft]',e=>e.click());await page.waitForSelector('[name=taskDraftResetConfirm]');await page.$eval('[name=confirmTaskDraftReset]',e=>e.click());await page.waitForFunction(()=>!document.querySelector('[name=taskRetainedChoices]'));check('explicit local discard clears retained IDs without server effects',writes===0&&await page.$eval('[name=taskTitle]',e=>e.value===''));
   missing=false;await page.evaluate(p=>{history.pushState({},'',p);dispatchEvent(new PopStateEvent('popstate'));},`/projects/${next.id}/tasks`);await page.waitForFunction(()=>!ng.getComponent(document.querySelector('ol-tasks')).loading());check('reused project does not retain old unavailable-choice warnings',!await page.$('[name=taskRetainedChoices]')&&await page.$eval('[name=taskAssignee]',e=>e.value==='')&&writes===0);
-  check('no retained-option runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  check('no retained-option runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();rmSync(downloadDir,{recursive:true,force:true});
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -66,4 +68,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

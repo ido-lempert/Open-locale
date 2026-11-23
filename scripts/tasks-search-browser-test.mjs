@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55685, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.TASK_BROWSER_TEST_PG_PORT ?? 55685), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+// Preserve startup/assertion failure when incomplete cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-project-list-browser-'));
@@ -49,8 +51,8 @@ try {
   check('loaded-order choice restores server sequence without request',reads===0&&writes===0&&JSON.stringify(await page.$$eval('.task-body strong',es=>es.map(e=>e.textContent)))===JSON.stringify(loadedRows));
   await page.select('[aria-label="Status for Checkout [A]"]','DONE');await page.waitForSelector('[name=taskActionUnknown]');await search('Account');await page.waitForFunction(()=>document.querySelectorAll('.task-row').length===1);check('search does not clear real unknown-action pause or replay mutation',writes===1&&reads===0&&await page.$eval('[aria-label="Status for Account"]',e=>e.disabled)&&!!await page.$('[name=taskActionUnknown]'));
   await page.screenshot({path:'/downloads/tasks-search.png',fullPage:true});await page.click('[name=recoverTaskActions]');await page.waitForFunction(()=>!document.querySelector('[name=taskActionUnknown]')&&document.querySelectorAll('.task-row').length===2);check('explicit recovery clears search and filters using one current read without replay',reads===1&&writes===1&&await page.$eval('[name=taskSearch]',e=>e.value==='')&&await page.$eval('[aria-label="Filter by status"]',e=>e.value==='')&&await page.$eval('[name=taskTitle]',e=>e.value==='New draft'));
-  check('no task search runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  check('no task search runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -65,4 +67,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

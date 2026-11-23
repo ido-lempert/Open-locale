@@ -39,6 +39,11 @@ Tasks offer optional local earliest-deadline ordering, using full stored timesta
 with undated rows last and stable ties. Loaded server order remains the default;
 dependencies and downloads are unchanged. See [review0679](docs/reviews/0679-task-due-order.md).
 
+All task browser entry points now retain nonzero failure status on incomplete
+database startup cleanup. The occupied-port harness discovers task browser scripts
+from the package scripts and checks17 entry points. Use `TASK_HARNESS_FILTER`
+(regex) for bounded groups; an empty match fails. See [review0680](docs/reviews/0680-task-browser-harness.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`

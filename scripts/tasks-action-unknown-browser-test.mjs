@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55676, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.TASK_BROWSER_TEST_PG_PORT ?? 55676), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+// Preserve startup/assertion failure when incomplete cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-task-receipt-browser-'));
@@ -42,8 +44,8 @@ try {
   await page.evaluate(()=>{window.tc=ng.getComponent(document.querySelector('ol-tasks'));window.tr=window.tc.tasks().find(t=>t.title==='Current task');});
   let heldWrite,heldRead,hold=true;page.removeAllListeners('request');page.on('request',req=>{const path=new URL(req.url()).pathname;if(req.method()==='PATCH'&&path===`/api${P}/tasks/${task.id}`){writes++;heldWrite=req;return;}if(req.method()==='GET'&&path===`/api${P}/tasks`){reads++;if(hold){heldRead=req;return;}}req.continue();});
   await page.select('[aria-label="Status for Current task"]','DONE');await page.waitForSelector('[name=taskUpdating]');await page.evaluate(()=>{void window.tc.fetch(true);});await page.waitForSelector('[name=taskListLoading]');for(let n=0;n<100&&(!heldRead||!heldWrite);n++)await new Promise(r=>setTimeout(r,20));await heldWrite.respond({status:503,contentType:'application/json',body:'{}'});await page.waitForSelector('[name=taskActionUnknown]');await page.waitForFunction(()=>!document.querySelector('[name=taskUpdating]'));await heldRead.continue();await page.waitForFunction(()=>!document.querySelector('[name=taskListLoading]'));check('real read begun during pending write cannot clear later unknown result',writes===3&&reads===5&&!!await page.$('[name=taskActionUnknown]'));await page.evaluate(async()=>{await window.tc.update(window.tr,{status:'DONE'});await window.tc.remove(window.tr);});check('captured old handlers cannot bypass unknown replay guard',writes===3);hold=false;await page.click('[name=recoverTaskActions]');await page.waitForFunction(()=>!document.querySelector('[name=taskActionUnknown]'));check('later explicit unfiltered read unlocks pending-read uncertainty without replay',writes===3&&reads===6&&!await page.$eval('[aria-label="Status for Current task"]',e=>e.disabled));
-  check('no task row runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  check('no task row runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -58,4 +60,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

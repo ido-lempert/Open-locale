@@ -2743,3 +2743,8 @@ rerun findings. [Review0678](reviews/0678-qa-retained-scope.md).
 Optional earliest-deadline ordering sorts loaded rows by full stored timestamp,
 keeps stable ties and puts undated rows last. Default server order, dependency
 choices and downloaded metadata remain unchanged. [Review0679](reviews/0679-task-due-order.md).
+
+### Fail-closed task browser verification set
+Remaining15 task browser suites preserve startup/assertion failures across incomplete
+cleanup. Occupied-port coverage now spans17 entry points, with bounded optional
+filtering that rejects empty selections. [Review0680](reviews/0680-task-browser-harness.md).
