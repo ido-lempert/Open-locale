@@ -125,6 +125,11 @@ Diagnostic preview history offers loaded/newest/oldest order combined with searc
 and recorded attention. Source/download order and read-only scope unchanged.
 See [review0697](docs/reviews/0697-sync-history-order.md).
 
+### Fail-closed full identity-link browser checks
+OIDC/SAML link browser suites retain startup failure across incomplete cleanup.
+`npm run test:link-browser-harness` checks actual occupied ports.
+See [review0698](docs/reviews/0698-link-browser-harness.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`

@@ -2843,3 +2843,9 @@ selections. [Review0696](reviews/0696-project-browser-harness.md).
 Optional newest/oldest order uses full instants, stable ties and unavailable-last
 semantics within loaded records. Search/attention combine; downloads preserve
 source order. [Review0697](reviews/0697-sync-history-order.md).
+
+
+### Fail-closed full identity-link browser checks
+Both full OIDC/SAML link browser scripts preserve incomplete startup and failed
+assertion exits. Actual occupied-port harness rejects unmatched selections.
+[Review0698](reviews/0698-link-browser-harness.md).
