@@ -2728,3 +2728,8 @@ download; server filters and pagination remain separate.
 A selected actor missing from loaded member options stays visible as a fallback
 with its exact ID and a membership-scope notice. Refreshing options does not clear
 or reread the activity filter. [Review0676](reviews/0676-activity-retained-actor.md).
+
+### Retain report branch outside options
+Reports preserve the exact selected branch in an explicit fallback when loaded
+branch options omit it. Independent option refresh neither switches report scope
+nor rereads project dashboards. [Review0677](reviews/0677-reports-retained-branch.md).

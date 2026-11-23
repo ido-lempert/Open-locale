@@ -11,12 +11,13 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
     <header class="bar">
       <a [routerLink]="['/projects', projectId]" class="back">&larr; Editor</a>
       <h1>Reports</h1>
-      <select aria-label="Branch" [attr.aria-busy]="branchListLoading()" name="reportBranch" [ngModel]="branch()" (ngModelChange)="branch.set($event); void fetch()">
-        @if (!branches().length) { <option value="main">main</option> }
+      <select aria-label="Branch" [attr.aria-busy]="branchListLoading()" name="reportBranch" style="min-width:0;max-width:100%" [ngModel]="branch()" (ngModelChange)="branch.set($event); void fetch()">
+        @if (branchMissing()) { <option [value]="branch()">Selected branch outside options</option> }
         @for (b of branches(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }
       </select>
     </header>
     <main [attr.aria-busy]="branchLoading() || dashboardsLoading()">
+      @if(branchMissing()){<p class="muted" role="status" name="reportRetainedBranch" style="overflow-wrap:anywhere">Selected branch {{branch()}} is outside the loaded branch options. The report selection is retained, not switched or verified as currently available. Refresh branch options to check the list or choose another branch. Usage and tasks keep their project scope.</p><button type="button" name="refreshReportBranches" [disabled]="branchListLoading()" (click)="void loadBranches()">Refresh branch options</button>}
       @if (branchListLoading()) { <p role="status" name="branchListLoading">Loading branch list. Main reports are available independently.</p> }
       @if (branchListError()) { <p class="error" role="alert" name="branchListError">Branch list unavailable. Retry loading branches or reload this page.</p><button type="button" name="retryBranches" (click)="void loadBranches()">Retry branch list</button> }
       @if (error(); as e) { <p class="error" role="alert" name="branchReportError">{{ e }}</p><button type="button" name="retryBranchReports" (click)="void fetch()">Retry branch reports</button> }
@@ -173,6 +174,8 @@ export class ReportsComponent implements OnInit, OnDestroy {
     this.usage.set(null);this.taskReport.set(null);this.statusColumns.set([]);this.error.set('');this.downloadNotice.set('');this.projectDownloadNotice.set('');this.branchLoading.set(true);this.usageError.set(false);this.taskReportError.set(false);this.dashboardsLoading.set(true);this.usageLoading.set(true);this.tasksLoading.set(true);
     await Promise.all([this.loadBranches(),this.fetch(),this.ngOnInitDashboards()]);
   }
+
+  branchMissing(){return !!this.branch()&&!this.branches().some(branch=>branch.name===this.branch());}
 
   async loadBranches() {
     if(this.destroyed)return;

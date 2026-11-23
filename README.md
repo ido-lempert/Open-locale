@@ -27,6 +27,10 @@ Activity actor filters retain selected IDs outside the loaded member options,
 with an explicit fallback and option refresh, rather than appearing unfiltered.
 See [review0676](docs/reviews/0676-activity-retained-actor.md).
 
+Reports keep the selected branch visible when loaded branch options omit it,
+with a scope notice and independent option refresh. See
+[review0677](docs/reviews/0677-reports-retained-branch.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`
