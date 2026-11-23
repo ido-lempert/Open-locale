@@ -2837,3 +2837,9 @@ bounded selection. [Review0695](reviews/0695-auth-browser-harness.md).
 Nine older project list/create/draft scripts now preserve incomplete startup and
 assertion failure across cleanup; actual occupied-port harness rejects empty
 selections. [Review0696](reviews/0696-project-browser-harness.md).
+
+
+### Local diagnostic recorded-time order
+Optional newest/oldest order uses full instants, stable ties and unavailable-last
+semantics within loaded records. Search/attention combine; downloads preserve
+source order. [Review0697](reviews/0697-sync-history-order.md).

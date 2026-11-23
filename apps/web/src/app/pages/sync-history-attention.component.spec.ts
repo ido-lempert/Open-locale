@@ -7,3 +7,13 @@ describe('loaded diagnostic attention filter',()=>{
  it('retains attention on refresh and resets on project visit',async()=>{const c=make({listSyncPreviewRecords:async()=>({records:rows})});await c.load('p');c.setAttention('manual');await c.load('p');expect(c.attention()).toBe('manual');await c.load('new');expect(c.attention()).toBe('');expect(c.filteredRecords()).toBe(rows);});
  it('invalid and departed handlers cannot change attention',()=>{const c=make();c.setAttention('manual');c.setAttention('forged');expect(c.attention()).toBe('manual');c.ngOnDestroy();c.setAttention('conflict');expect(c.attention()).toBe('manual');});
 });
+
+
+describe('loaded diagnostic time ordering',()=>{
+ const entries:any[]=[{...rows[0],id:'late',createdAt:'2026-11-23T09:00:00.500Z'},{...rows[0],id:'bad',createdAt:'invalid'},{...rows[1],id:'tie-a',createdAt:'2026-11-23T11:00:00+02:00'},{...rows[1],id:'tie-b',createdAt:'2026-11-23T09:00:00.000Z'},{...rows[0],id:'empty',createdAt:''},{...rows[0],id:'old',createdAt:'2020-01-01T00:00:00Z'}];
+ const ids=(c:SyncHistoryComponent)=>c.filteredRecords().map(row=>row.id);
+ it('keeps default source reference and full-instant stable ties with unavailable last both ways',()=>{const c=make();c.records.set(entries);expect(c.filteredRecords()).toBe(entries);c.setOrder('oldest');expect(ids(c)).toEqual(['old','tie-a','tie-b','late','bad','empty']);c.setOrder('newest');expect(ids(c)).toEqual(['late','tie-a','tie-b','old','bad','empty']);expect(c.records()).toBe(entries);expect(entries.map(e=>e.id)).toEqual(['late','bad','tie-a','tie-b','empty','old']);c.setOrder('loaded');expect(c.filteredRecords()).toBe(entries);});
+ it('combines search and attention without reading or clearing scope',()=>{const api={listSyncPreviewRecords:jest.fn()},c=make(api);c.records.set(entries);c.setOrder('oldest');c.setAttention('conflict');c.query.set('RELEASE');expect(ids(c)).toEqual(['old','late','bad','empty']);c.setAttention('manual');expect(ids(c)).toEqual([]);c.query.set('');expect(ids(c)).toEqual(['tie-a','tie-b']);expect(api.listSyncPreviewRecords).not.toHaveBeenCalled();});
+ it('refresh retains order but different project resets it',async()=>{const c=make({listSyncPreviewRecords:async()=>({records:entries})});await c.load('first');c.setOrder('oldest');await c.load('first');expect(c.order()).toBe('oldest');expect(ids(c)[0]).toBe('old');await c.load('second');expect(c.order()).toBe('loaded');expect(c.filteredRecords()).toBe(entries);});
+ it('invalid or departed handlers cannot change order',()=>{const c=make();c.setOrder('oldest');c.setOrder('random');expect(c.order()).toBe('oldest');c.ngOnDestroy();c.setOrder('newest');expect(c.order()).toBe('oldest');});
+});

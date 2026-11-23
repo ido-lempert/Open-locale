@@ -101,6 +101,8 @@ import { ApiService, SyncPreviewRecord } from '../api.service';
           comparison does not create a record. Records currently require an
           explicit API request.
         </p>
+        <label>Order loaded diagnostics <select name="syncHistoryOrder" [ngModel]="order()" (ngModelChange)="setOrder($event)"><option value="loaded">Loaded order</option><option value="newest">Newest recorded first</option><option value="oldest">Oldest recorded first</option></select></label>
+        <p class="muted" name="syncHistoryOrderScope">Local display order only, using full stored recorded timestamps. Unavailable times come last; equal times keep loaded order. Search and recorded attention combine with this order. Downloads keep loaded order. This does not read newer records, verify caller labels or apply changes.</p>
         <label>Recorded attention <select name="syncHistoryAttention" [ngModel]="attention()" (ngModelChange)="setAttention($event)"><option value="">all records</option><option value="conflict">with conflicts</option><option value="manual">with manual-review keys</option></select></label>
         <button type="button" name="clearSyncHistoryAttention" [disabled]="!attention()" (click)="setAttention('')">Clear attention filter</button>
         <p class="muted" name="syncHistoryAttentionScope">Filters recorded caller-file counts only, not current project problems, verified remote state or completed work.</p>
@@ -191,10 +193,14 @@ export class SyncHistoryComponent implements OnInit, OnDestroy {
   attention=signal<''|'conflict'|'manual'>('');
   setAttention(value:string){if(!this.destroyed&&(value===''||value==='conflict'||value==='manual'))this.attention.set(value);}
   emptyLabel(){return this.attention()?'No loaded diagnostic records match this attention filter and search. Clear attention filter or search to show other loaded records.':'No loaded diagnostic records match this search. Clear search to show all loaded records.';}
-  filteredRecords = computed(() => {
+  order=signal<'loaded'|'newest'|'oldest'>('loaded');
+  setOrder(value:string){if(!this.destroyed&&(value==='loaded'||value==='newest'||value==='oldest'))this.order.set(value);}
+  filteredRecords=computed(()=>{
     const query=this.query().trim().toLowerCase(),attention=this.attention();
-    if(!query&&!attention)return this.records();
-    return this.records().filter(r=>(!query||[r.branch,r.locale,r.remoteSha,r.fingerprint].some(value=>value.toLowerCase().includes(query)))&&(!attention||(attention==='conflict'?r.summary.conflict>0:r.summary.manual>0)));
+    const rows=!query&&!attention?this.records():this.records().filter(r=>(!query||[r.branch,r.locale,r.remoteSha,r.fingerprint].some(value=>value.toLowerCase().includes(query)))&&(!attention||(attention==='conflict'?r.summary.conflict>0:r.summary.manual>0)));
+    const order=this.order();if(order==='loaded')return rows;
+    const time=(r:SyncPreviewRecord)=>{const parsed=typeof r.createdAt==='string'&&r.createdAt.trim()?Date.parse(r.createdAt):NaN;return Number.isFinite(parsed)?parsed:null;};
+    return [...rows].sort((a,b)=>{const left=time(a),right=time(b);if(left===right)return 0;if(left===null)return 1;if(right===null)return -1;return order==='oldest'?left-right:right-left;});
   });
   records = signal<SyncPreviewRecord[]>([]);
   loading = signal(true);
@@ -240,7 +246,7 @@ export class SyncHistoryComponent implements OnInit, OnDestroy {
   async load(id: string) {
     if (this.destroyed) return;
     const generation = ++this.generation;
-    if (this.projectId !== id) {this.query.set('');this.attention.set('');}
+    if (this.projectId !== id) {this.query.set('');this.attention.set('');this.order.set('loaded');}
     this.projectId = id;
     this.records.set([]);
     this.loaded.set(false);

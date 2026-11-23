@@ -57,6 +57,7 @@
     "test:sync-browser-stage-config": "node scripts/sync-browser-stage-config-test.mjs",
     "test:sync-history-search-browser": "node scripts/sync-history-search-browser-test.mjs",
     "test:sync-history-browser": "node scripts/sync-history-browser-test.mjs",
+    "test:sync-history-order-browser": "node scripts/sync-history-order-browser-test.mjs",
     "test:sync-history-time-browser": "node scripts/sync-history-time-browser-test.mjs",
     "test:sync-browser": "node scripts/sync-browser-test.mjs",
     "test:visual": "NX_DAEMON=false NX_ISOLATE_PLUGINS=false python3 scripts/run-reaped.py node scripts/e2e-visual.mjs",

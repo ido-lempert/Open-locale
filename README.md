@@ -120,6 +120,11 @@ Nine project list/create/draft browser checks preserve failed startup status
 across incomplete cleanup. `npm run test:project-browser-harness` runs actual
 occupied-port probes. See [review0696](docs/reviews/0696-project-browser-harness.md).
 
+### Loaded diagnostic recorded-time order
+Diagnostic preview history offers loaded/newest/oldest order combined with search
+and recorded attention. Source/download order and read-only scope unchanged.
+See [review0697](docs/reviews/0697-sync-history-order.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`
