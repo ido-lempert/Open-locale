@@ -2496,3 +2496,8 @@ through cleanup. `npm run test:editor-comments-browser-harness` covers five
 actual occupied-port paths, including unchanged timestamp verification.
 Optional `EDITOR_COMMENTS_HARNESS_FILTER` narrows cases; unmatched selections fail.
 [Review0708](docs/reviews/0708-editor-comments-browser-harness.md).
+
+### Timestamp type-safe local ordering
+Task due-date and snapshot capture ordering reject nonstring date coercion,
+matching existing unavailable labels. Valid order/ties and source values stay.
+[Review0709](docs/reviews/0709-metadata-order-types.md).

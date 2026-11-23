@@ -204,7 +204,7 @@ export class TasksComponent implements OnInit, OnDestroy {
   query=signal('');
   order=signal<'loaded'|'due'>('loaded');
   setOrder(value:string){if(!this.destroyed&&(value==='loaded'||value==='due'))this.order.set(value);}
-  visibleTasks=computed(()=>{const query=this.query().toLowerCase(),rows=query?this.tasks().filter(t=>[t.title,t.description??''].some(value=>value.toLowerCase().includes(query))):this.tasks();if(this.order()!=='due')return rows;const deadline=(task:TaskItem)=>{const value=task.dueDate?Date.parse(task.dueDate):NaN;return Number.isFinite(value)?value:Infinity;};return [...rows].sort((a,b)=>{const left=deadline(a),right=deadline(b);return left===right?0:left<right?-1:1;});});
+  visibleTasks=computed(()=>{const query=this.query().toLowerCase(),rows=query?this.tasks().filter(t=>[t.title,t.description??''].some(value=>value.toLowerCase().includes(query))):this.tasks();if(this.order()!=='due')return rows;const deadline=(task:TaskItem)=>{const value=typeof task.dueDate==='string'&&task.dueDate.trim()?Date.parse(task.dueDate):NaN;return Number.isFinite(value)?value:Infinity;};return [...rows].sort((a,b)=>{const left=deadline(a),right=deadline(b);return left===right?0:left<right?-1:1;});});
   search(query:string) {if(!this.destroyed)this.query.set(query.slice(0,200));}
   members = signal<MemberInfo[]>([]);
   groups = signal<GroupInfo[]>([]);

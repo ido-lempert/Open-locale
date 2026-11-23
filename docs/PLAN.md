@@ -2909,3 +2909,9 @@ semantics in loaded records. Filters combine; downloads preserve loaded order.
 Four older comment suites preserve incomplete startup/assertion failure exits.
 Actual occupied-port harness includes timestamp suite and rejects unmatched
 selections. [Review0708](reviews/0708-editor-comments-browser-harness.md).
+
+
+### Align timestamp ordering with unavailable metadata labels
+Task due-date and snapshot capture comparators require nonempty finite string
+instants. Numbers/arrays/objects remain unavailable-last without coercion.
+[Review0709](reviews/0709-metadata-order-types.md).
