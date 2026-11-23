@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55692, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.READ_ACCOUNT_BROWSER_TEST_PG_PORT ?? 55692), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;const downloadDir=mkdtempSync(join(tmpdir(),'ol-qa-download-'));
+let failures = 0, completed = false, api, web, browser, prisma;const downloadDir=mkdtempSync(join(tmpdir(),'ol-qa-download-'));
 process.exitCode = 1;
+// Preserve startup/assertion failure when incomplete cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-project-list-browser-'));
@@ -41,8 +43,8 @@ try {
   mode='hold';await page.click('[name=syncHistoryRefresh]');await page.waitForFunction(()=>document.querySelector('[name=syncHistoryRefresh]')?.disabled);for(let n=0;n<100&&!held;n++)await new Promise(r=>setTimeout(r,20));if(!held)throw new Error('refresh not held');await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-sync-history'));c.refresh();c.refresh();});check('held refresh suppresses captured duplicates and clears stale error/records',reads===2&&!await page.$('[role=alert]')&&!await page.$('article')&&await page.$eval('[name=syncHistoryRefresh]',e=>e.disabled));
   await held.continue();await page.waitForSelector('article');check('explicit retry recovers exact persisted diagnostic without apply or translation text',await page.$eval('article',(e,f)=>e.textContent.includes(f)&&e.textContent.includes('not applied'),saved.record.fingerprint)&&!(await page.content()).includes('PRIVATE translation value')&&await page.$$eval('button',es=>!es.some(e=>/apply|save|push/i.test(e.textContent))));
   mode='hold';held=undefined;await page.click('[name=syncHistoryRefresh]');for(let n=0;n<100&&!held;n++)await new Promise(r=>setTimeout(r,20));if(!held)throw new Error('project-race read not held');await page.evaluate(path=>{history.pushState({},'',path);dispatchEvent(new PopStateEvent('popstate'));},`/projects/${second.id}/sync/history`);await page.waitForFunction(()=>document.body.textContent.includes('No diagnostic preview records'));await held.continue();await new Promise(r=>setTimeout(r,150));check('late real old-project response cannot expose records after route reuse',reads===4&&!await page.$('article')&&!(await page.content()).includes(saved.record.fingerprint)&&!await page.$('[role=alert]'));
-  await page.setViewport({width:390,height:844});await page.screenshot({path:'/downloads/sync-history-read-recovered.png',fullPage:true});const before=reads;await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-sync-history'));c.ngOnDestroy();c.refresh();void c.load('ignored');});await new Promise(r=>setTimeout(r,100));check('destroyed captured handlers cannot issue new history reads',reads===before&&writes===0);check('no history read runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  await page.setViewport({width:390,height:844});await page.screenshot({path:'/downloads/sync-history-read-recovered.png',fullPage:true});const before=reads;await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-sync-history'));c.ngOnDestroy();c.refresh();void c.load('ignored');});await new Promise(r=>setTimeout(r,100));check('destroyed captured handlers cannot issue new history reads',reads===before&&writes===0);check('no history read runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();rmSync(downloadDir,{recursive:true,force:true});
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -57,4 +59,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

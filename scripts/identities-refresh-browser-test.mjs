@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55696, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.READ_ACCOUNT_BROWSER_TEST_PG_PORT ?? 55696), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;const downloadDir=mkdtempSync(join(tmpdir(),'ol-qa-download-'));
+let failures = 0, completed = false, api, web, browser, prisma;const downloadDir=mkdtempSync(join(tmpdir(),'ol-qa-download-'));
 process.exitCode = 1;
+// Preserve startup/assertion failure when incomplete cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-project-list-browser-'));
@@ -43,8 +45,8 @@ try {
   mode='fail';await page.click('[name=refreshIdentities]');await page.waitForSelector('[role=alert]');check('failed refresh clears stale identities and shows bounded recovery',await page.$('.provider-email')===null&&!await page.evaluate(()=>document.body.innerText.includes('PRIVATE'))&&await page.$eval('[name=refreshIdentities]',e=>!e.disabled));
   await prisma.externalIdentity.deleteMany({where:{id:{in:[identity.id,added.id]}}});mode='continue';await page.click('[name=refreshIdentities]');await page.waitForFunction(()=>document.querySelector('main').textContent.includes('No single sign-on identities'));check('same explicit refresh recovers successful empty result',await page.$('[role=alert]')===null&&await page.$eval('[name=refreshIdentities]',e=>!e.disabled)&&deletes===0);
   await prisma.externalIdentity.create({data:{userId:owner.user.id,issuer:'fixture:refresh-from-empty',subject:'last',email:'last@example.test'}});await page.click('[name=refreshIdentities]');await page.waitForSelector('.provider-email');check('empty-state refresh reads new identity and remains read-only',deletes===0&&await page.$eval('.provider-email',e=>e.textContent==='last@example.test'));
-  const latest=reads;await page.evaluate(async()=>{const c=ng.getComponent(document.querySelector('ol-identities'));c.busy.set(true);await c.load();});check('busy unlink state disables refresh and captured refresh cannot read',reads===latest&&await page.$eval('[name=refreshIdentities]',e=>e.disabled));check('no refresh runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  const latest=reads;await page.evaluate(async()=>{const c=ng.getComponent(document.querySelector('ol-identities'));c.busy.set(true);await c.load();});check('busy unlink state disables refresh and captured refresh cannot read',reads===latest&&await page.$eval('[name=refreshIdentities]',e=>e.disabled));check('no refresh runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();rmSync(downloadDir,{recursive:true,force:true});
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -59,4 +61,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

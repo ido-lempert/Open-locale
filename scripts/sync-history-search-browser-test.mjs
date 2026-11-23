@@ -7,11 +7,13 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55700, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.READ_ACCOUNT_BROWSER_TEST_PG_PORT ?? 55700), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;const downloadDir=mkdtempSync(join(tmpdir(),'ol-qa-download-'));
+let failures = 0, completed = false, api, web, browser, prisma;const downloadDir=mkdtempSync(join(tmpdir(),'ol-qa-download-'));
 process.exitCode = 1;
+// Preserve startup/assertion failure when incomplete cleanup leaves no live handles.
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-project-list-browser-'));
@@ -43,8 +45,8 @@ try {
   await page.click('[name=clearSyncHistorySearch]');await page.waitForFunction(()=>document.querySelectorAll('article').length===2);check('Clear restores full loaded diagnostics without requests or translation text',reads===before&&writes===0&&!await page.evaluate(()=>document.body.innerText.includes('PRIVATE translation value')));
   await page.type('[name=syncHistorySearch]',saved.record.fingerprint.slice(0,16));await page.waitForFunction(()=>document.querySelectorAll('article').length===1);check('fingerprint search matches exact retained diagnostic',await page.$eval('article',(e,f)=>e.textContent.includes(f),saved.record.fingerprint));await page.screenshot({path:'/downloads/sync-history-search-desktop.png',fullPage:true});await page.setViewport({width:390,height:844});await page.screenshot({path:'/downloads/sync-history-search-mobile.png',fullPage:true});
   await page.click('[name=syncHistoryRefresh]');for(let n=0;n<100&&reads===before;n++)await new Promise(r=>setTimeout(r,20));await page.waitForFunction(()=>!ng.getComponent(document.querySelector('ol-sync-history')).loading()&&document.querySelectorAll('article').length===1);check('explicit current reread retains local search and full result set',reads===before+1&&await page.evaluate(()=>ng.getComponent(document.querySelector('ol-sync-history')).records().length===2)&&await page.$eval('[name=syncHistorySearch]',(e,f)=>e.value===f,saved.record.fingerprint.slice(0,16)));
-  await page.evaluate(path=>{history.pushState({},'',path);dispatchEvent(new PopStateEvent('popstate'));},`/projects/${second.id}/sync/history`);await page.waitForFunction(()=>document.body.textContent.includes('No diagnostic preview records'));check('reused project visit resets search and shows genuine empty result',await page.$eval('[name=syncHistorySearch]',e=>e.value==='')&&writes===0);check('no history-search runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  await page.evaluate(path=>{history.pushState({},'',path);dispatchEvent(new PopStateEvent('popstate'));},`/projects/${second.id}/sync/history`);await page.waitForFunction(()=>document.body.textContent.includes('No diagnostic preview records'));check('reused project visit resets search and shows genuine empty result',await page.$eval('[name=syncHistorySearch]',e=>e.value==='')&&writes===0);check('no history-search runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();rmSync(downloadDir,{recursive:true,force:true});
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -59,4 +61,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

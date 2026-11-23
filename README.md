@@ -74,6 +74,11 @@ Linked identity rows retain their metadata and unlink protections when a recorde
 link time is malformed or empty, showing a fixed unavailable label. Valid locale
 display is unchanged. See [review0687](docs/reviews/0687-identity-time-fallback.md).
 
+Activity, diagnostic-history and identity browser startup checks retain failure
+status across incomplete database cleanup. `npm run test:read-account-harness`
+covers14 entries; `READ_ACCOUNT_HARNESS_FILTER` narrows by regex and rejects empty
+matches. See [review0688](docs/reviews/0688-read-account-browser-harness.md).
+
 ## Stack
 
 - **Web** - Angular (standalone, zoneless), `apps/web`

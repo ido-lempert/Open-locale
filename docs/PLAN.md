@@ -2783,3 +2783,8 @@ metadata remain unchanged. [Review0686](reviews/0686-sync-history-time-fallback.
 Malformed/empty link times cannot interrupt linked-identity metadata. Fixed fallback
 and valid locale display leave current-password unlink/session protections unchanged.
 [Review0687](reviews/0687-identity-time-fallback.md).
+
+### Fail-closed activity/history/account browser checks
+Eleven older browser scripts now preserve failure status across incomplete startup
+cleanup. Three existing timestamp guards remain unchanged; occupied-port coverage
+spans all14 entry points. [Review0688](reviews/0688-read-account-browser-harness.md).
