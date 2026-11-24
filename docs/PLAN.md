@@ -2945,3 +2945,9 @@ occupied-port harness rejects unmatched selections.
 Integer100-599 status validation aligns display/presence filtering. Invalid
 metadata stays unavailable, with independent success and raw download preserved.
 [Review0714](reviews/0714-webhook-http-metadata.md).
+
+
+### Fail-closed editor core-read browser verification
+Project/key startup failures retained; branch/retry-focus completion guarded too.
+Actual occupied-port harness rejects unmatched selections.
+[Review0715](reviews/0715-editor-core-browser-harness.md).

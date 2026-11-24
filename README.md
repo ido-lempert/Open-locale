@@ -2528,3 +2528,10 @@ unmatched selections fail. [Review0713](docs/reviews/0713-editor-tm-browser-harn
 Display and presence filter require integer100-599; malformed metadata shows
 unavailable without changing recorded success or raw downloaded values.
 [Review0714](docs/reviews/0714-webhook-http-metadata.md).
+
+### Editor core-read browser startup guards
+Project/key browser abort exits are preserved; branch/retry-focus scripts also
+track explicit completion and disable child Nx daemon. Run
+`npm run test:editor-core-browser-harness` for four actual occupied-port paths.
+Optional `EDITOR_CORE_HARNESS_FILTER` narrows cases; unmatched selections fail.
+[Review0715](docs/reviews/0715-editor-core-browser-harness.md).
