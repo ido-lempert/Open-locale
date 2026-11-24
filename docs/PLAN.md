@@ -3053,3 +3053,9 @@ identity review and restore confirmation. Raw download unchanged.
 Comment-thread-download/comment-validation/shot-size/length-guidance suites gain
 completion/exit guards and real startup harness; empty selections reject.
 [Review0732](reviews/0732-editor-context-metadata-browser-harness.md).
+
+
+### Bound loaded snapshot label metadata
+Nonstring/blank labels safely unavailable in rows, accessible restore names and
+confirmation; search skips malformed source values. Raw inventory unchanged.
+[Review0733](reviews/0733-snapshots-label-metadata.md).

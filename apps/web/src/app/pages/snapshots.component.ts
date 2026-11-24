@@ -47,7 +47,7 @@ import { ApiService, SnapshotMeta } from '../api.service';
       @if (!loading() && !listError()) { <ul class="snapshot-list">
         @for (s of visibleItems(); track s.id) {
           <li class="snapshot-row">
-            <span class="snapshot-label">{{ s.label }}</span>
+            <span class="snapshot-label">{{snapshotLabel(s.label)}}</span>
             @if (s.automatic === true) { <span class="auto-badge">auto</span> } @else if (s.automatic !== false) { <span class="muted" name="snapshotUnknownKind">unknown loaded kind</span> }
             <span class="muted">{{countLabel(s.keyCount,'keys','Key count')}}, {{countLabel(s.translationCount,'translations','Translation count')}}</span>
             <time class="muted" name="snapshotCaptureTime">{{captureTimeLabel(s.createdAt)}}</time>
@@ -56,7 +56,7 @@ import { ApiService, SnapshotMeta } from '../api.service';
               <p class="muted">Local metadata only, not snapshot contents, newer server values, current permission or a scan of what restoring would change in the current project. Counts belong to the loaded snapshot, not the current project or a total restore-impact count. This does not capture or restore anything. The Restore confirmation still requires a separate decision.</p>
               <dl><dt>Project ID</dt><dd name="snapshotReviewProjectId">{{projectId}}</dd><dt>Snapshot ID</dt><dd name="snapshotReviewId">{{s.id}}</dd><dt>Raw loaded capture time</dt><dd name="snapshotReviewCreated">{{s.createdAt || '(empty loaded capture time)'}}</dd><dt>Loaded kind</dt><dd name="snapshotReviewKind">{{snapshotKindLabel(s.automatic)}}</dd><dt>Loaded key count</dt><dd>{{countValue(s.keyCount)}}</dd><dt>Loaded translation count</dt><dd>{{countValue(s.translationCount)}}</dd></dl>
             </details>
-            <button class="restore" [attr.aria-label]="'Restore snapshot ' + s.label" (click)="restore(s)" [disabled]="!restoreReady(s)">Restore</button>
+            <button class="restore" [attr.aria-label]="'Restore snapshot ' + snapshotLabel(s.label)" (click)="restore(s)" [disabled]="!restoreReady(s)">Restore</button>
           </li>
         } @empty {
           <li class="muted" name="snapshotListEmpty">{{ emptyLabel() }}</li>
@@ -75,7 +75,7 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
   setKind(value:string) {if(!this.destroyed&&(value===''||value==='manual'||value==='automatic'))this.kind.set(value);}
   order=signal<'loaded'|'newest'|'oldest'>('loaded');
   setOrder(value:string){if(!this.destroyed&&(value==='loaded'||value==='newest'||value==='oldest'))this.order.set(value);}
-  visibleItems=computed(()=>{const query=this.search().trim().toLowerCase(),kind=this.kind(),rows=!query&&!kind?this.items():this.items().filter(item=>(!query||item.label.toLowerCase().includes(query))&&(!kind||(kind==='automatic'?item.automatic===true:item.automatic===false)));if(this.order()==='loaded')return rows;const time=(item:SnapshotMeta)=>{const parsed=typeof item.createdAt==='string'&&item.createdAt.trim()?Date.parse(item.createdAt):NaN;return Number.isFinite(parsed)?parsed:null;};return [...rows].sort((a,b)=>{const left=time(a),right=time(b);if(left===right)return 0;if(left===null)return 1;if(right===null)return -1;return this.order()==='oldest'?left-right:right-left;});});
+  visibleItems=computed(()=>{const query=this.search().trim().toLowerCase(),kind=this.kind(),rows=!query&&!kind?this.items():this.items().filter(item=>(!query||this.validSnapshotLabel(item.label)&&item.label.toLowerCase().includes(query))&&(!kind||(kind==='automatic'?item.automatic===true:item.automatic===false)));if(this.order()==='loaded')return rows;const time=(item:SnapshotMeta)=>{const parsed=typeof item.createdAt==='string'&&item.createdAt.trim()?Date.parse(item.createdAt):NaN;return Number.isFinite(parsed)?parsed:null;};return [...rows].sort((a,b)=>{const left=time(a),right=time(b);if(left===right)return 0;if(left===null)return 1;if(right===null)return -1;return this.order()==='oldest'?left-right:right-left;});});
   hasFilters(){return !!this.search()||!!this.kind();}
   clearFilters(){if(this.destroyed)return;this.search.set('');this.kind.set('');}
   emptyLabel() {if(this.kind())return 'No loaded snapshots match this kind filter and label search. Clear kind filter or search to show other loaded snapshots.';return this.search().trim()?'No loaded snapshots match this label search. Clear search to show all loaded snapshots.':'No snapshots yet';}
@@ -144,6 +144,8 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
     }
   }
 
+  validSnapshotLabel(value:unknown):value is string{return typeof value==='string'&&!!value.trim();}
+  snapshotLabel(value:unknown):string{return this.validSnapshotLabel(value)?value:'Snapshot label unavailable';}
   validCount(value:unknown):value is number{return typeof value==='number'&&Number.isSafeInteger(value)&&value>=0;}
   countValue(value:unknown):string{return this.validCount(value)?String(value):'Count unavailable';}
   countLabel(value:unknown,unit:string,name:string):string{return this.validCount(value)?`${value} ${value===1?unit.slice(0,-1):unit}`:`${name} unavailable`;}
@@ -196,7 +198,7 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
     if (!this.restoreReady(s)) return;
     const scope=this.projectGeneration,projectId=this.projectId,generation=this.readGeneration;
     if (!confirm(
-      `Restore the project to "${s.label}"?\n\n` + this.restoreIdentity(s) +
+      `Restore the project to "${this.snapshotLabel(s.label)}"?\n\n` + this.restoreIdentity(s) +
       `- Keys and translations return to the snapshot state.\n` +
       `- Keys added after this snapshot are permanently removed, with their comments and screenshots.\n` +
       `- Keys deleted after this snapshot come back, but their old comments and screenshot links are not recovered.\n` +

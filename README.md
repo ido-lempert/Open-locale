@@ -2605,3 +2605,7 @@ malformed counts unavailable, raw inventory download unchanged.
 Editor context-metadata browser suites preserve incomplete-run failures:
 `npm run test:editor-context-metadata-browser-harness`.
 [Review0732](docs/reviews/0732-editor-context-metadata-browser-harness.md).
+
+Malformed loaded snapshot labels show bounded unavailable text; search skips
+nonstring labels, raw inventory stays unchanged.
+[Review0733](docs/reviews/0733-snapshots-label-metadata.md).
