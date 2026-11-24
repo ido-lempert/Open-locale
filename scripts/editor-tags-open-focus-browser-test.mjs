@@ -7,11 +7,12 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55793, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.EDITOR_METADATA_TEST_PG_PORT ?? 55793), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-history-browser-'));
@@ -28,7 +29,7 @@ try {
   const token=owner.accessToken;
   const project=await call('/projects',{name:'Sync browser',slug:'sync-browser',locales:['en','he']},token);
   const P=`/projects/${project.id}`;
-  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{stdio:'pipe',detached:true});await waitFor(WEB);
+  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{env:{...process.env,NX_DAEMON:'false'},stdio:'pipe',detached:true});await waitFor(WEB);
   browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH??'/usr/bin/google-chrome',args:['--no-sandbox','--disable-dev-shm-usage']});
   const diagnostics=[];const page=await browser.newPage();page.on('console',m=>diagnostics.push(m.text()));page.on('pageerror',e=>diagnostics.push(e.message));await page.setViewport({width:1280,height:900});
   await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.evaluate(t=>localStorage.setItem('ol_token',t),token);
@@ -45,8 +46,8 @@ try {
   check('captured duplicate opening retains existing tag draft',await page.$eval('.tag-edit',e=>e.value==='Retained local tag draft')&&requests.length===0);
   await page.screenshot({path:'/downloads/editor-tags-open-focus-desktop.png'});await page.setViewport({width:390,height:844});await page.$eval('.tag-edit',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/editor-tags-open-focus-mobile.png'});check('390px tag editor fits with local translation retained',await page.$eval('.tag-edit',e=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.width>280;})&&await page.$eval('.shots-toggle',e=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth;})&&await input.evaluate((e,v)=>e.value===v,local));
   await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-editor'));c.tagEditFor.set(null);c.openTagEdit({id:'absent',tags:['unavailable']});});check('captured absent-key opening refuses local editor replacement',await page.evaluate(()=>ng.getComponent(document.querySelector('ol-editor')).tagEditFor()===null)&&requests.length===0);
-  check('no focused tag opening runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  check('no focused tag opening runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -61,4 +62,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

@@ -7,11 +7,12 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55628, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.EDITOR_METADATA_TEST_PG_PORT ?? 55628), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-shots-write-browser-'));
@@ -28,7 +29,7 @@ try {
   const token=owner.accessToken;
   const project=await call('/projects',{name:'Sync browser',slug:'sync-browser',locales:['en','he']},token);
   const P=`/projects/${project.id}`;
-  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{stdio:'pipe',detached:true});await waitFor(WEB);
+  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{env:{...process.env,NX_DAEMON:'false'},stdio:'pipe',detached:true});await waitFor(WEB);
   browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH??'/usr/bin/google-chrome',args:['--no-sandbox','--disable-dev-shm-usage']});
   const diagnostics=[];const page=await browser.newPage();page.on('console',m=>diagnostics.push(m.text()));page.on('pageerror',e=>diagnostics.push(e.message));await page.setViewport({width:1280,height:900});
   await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.evaluate(t=>localStorage.setItem('ol_token',t),token);
@@ -46,8 +47,8 @@ try {
   await toggle('alpha');await page.waitForSelector('.shots-list img');await pick();await waitHeld();await page.waitForSelector('[name=shotsMutating]');await pick();await page.$eval('[aria-label="Delete screenshot alpha.png"]',e=>e.click());check('held upload disables both mutation controls and duplicate event sends nothing',posts===1&&deletes===0&&await page.$eval('[aria-label="Upload screenshot"]',e=>e.disabled)&&await page.$eval('[aria-label="Delete screenshot alpha.png"]',e=>e.disabled));await page.screenshot({path:'/downloads/editor-shot-write-pending.png',fullPage:false});await toggle('beta');await page.waitForFunction(()=>document.querySelector('.shots-list')?.textContent.includes('beta.png'));const before=reads;await held.continue();held=null;await page.waitForFunction(()=>[...document.querySelectorAll('.grid tbody tr:not(.history-row)')].find(r=>r.textContent.includes('alpha'))?.querySelector('.shots-toggle')?.textContent.includes('2'));const current=await call(`${P}/keys/${a.id}/screenshots`,null,token);check('confirmed upload persists once without reopening other pane',current.length===2&&reads===before&&await page.$eval('.shots-list',e=>e.textContent.includes('beta.png')&&!e.textContent.includes('new.png')));
   await toggle('alpha');await page.waitForFunction(()=>document.querySelector('.shots-list')?.textContent.includes('new.png'));await page.click('[aria-label="Delete screenshot new.png"]');await page.waitForSelector('[name=confirmShotDelete]');await page.click('[name=confirmShotDelete]');await waitHeld();await page.waitForSelector('[name=shotsMutating]');await page.$eval('[aria-label="Delete screenshot new.png"]',e=>e.click());await held.continue();held=null;await page.waitForFunction(()=>!document.querySelector('[name=shotsLoading]')&&!document.querySelector('[name=shotsMutating]')&&!document.querySelector('[aria-label="Delete screenshot new.png"]'));check('confirmed delete once refreshes current screenshots only',deletes===1&&(await call(`${P}/keys/${a.id}/screenshots`,null,token)).length===1&&!!await page.$('[aria-label="Delete screenshot alpha.png"]'));
   fail=true;await pick();await page.waitForSelector('[name=shotsMutationError]');await pick();check('unknown upload fixed guidance blocks blind replay',posts===2&&await page.$eval('[aria-label="Upload screenshot"]',e=>e.disabled)&&!(await page.$eval('main',e=>e.innerText)).includes('PRIVATE_'));await page.screenshot({path:'/downloads/editor-shot-write-unknown.png',fullPage:false});fail=false;await page.click('[name=checkCurrentShots]');await page.waitForFunction(()=>!document.querySelector('[name=shotsLoading]')&&!document.querySelector('[name=shotsMutationError]'));check('explicit full current read unlocks screenshot controls',!await page.$eval('[aria-label="Upload screenshot"]',e=>e.disabled)&&posts===2&&await page.$eval('.shots-list',e=>e.textContent.includes('alpha.png')));
-  check('no screenshot mutation runtime error',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  check('no screenshot mutation runtime error',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -62,4 +63,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

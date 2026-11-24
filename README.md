@@ -2629,3 +2629,7 @@ Editor comment/key recovery browser suites preserve incomplete-run failures:
 QA can clear local search and issue type together without rerunning checks,
 changing branch/locale or replacing loaded findings.
 [Review0738](docs/reviews/0738-qa-clear-filters.md).
+
+Editor locale/screenshot/tag browser suites preserve incomplete-run failures:
+`npm run test:editor-metadata-browser-harness`.
+[Review0739](docs/reviews/0739-editor-metadata-browser-harness.md).

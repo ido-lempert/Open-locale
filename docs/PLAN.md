@@ -3089,3 +3089,9 @@ guards and real startup harness, with unmatched selections rejected.
 Combined clear retains branch/locale, loaded findings and feedback without API
 reads/writes. Individual filters and full findings download unchanged.
 [Review0738](reviews/0738-qa-clear-filters.md).
+
+
+### Fail-closed locale/screenshot/tag browser verification
+Six browser entry points gain explicit completion guards and real startup
+harness; unmatched selection rejects.
+[Review0739](reviews/0739-editor-metadata-browser-harness.md).
