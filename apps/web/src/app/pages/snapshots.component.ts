@@ -49,12 +49,12 @@ import { ApiService, SnapshotMeta } from '../api.service';
           <li class="snapshot-row">
             <span class="snapshot-label">{{ s.label }}</span>
             @if (s.automatic === true) { <span class="auto-badge">auto</span> } @else if (s.automatic !== false) { <span class="muted" name="snapshotUnknownKind">unknown loaded kind</span> }
-            <span class="muted">{{ s.keyCount }} keys, {{ s.translationCount }} translations</span>
+            <span class="muted">{{countLabel(s.keyCount,'keys','Key count')}}, {{countLabel(s.translationCount,'translations','Translation count')}}</span>
             <time class="muted" name="snapshotCaptureTime">{{captureTimeLabel(s.createdAt)}}</time>
             <details name="snapshotLoadedReview" style="width:100%;min-width:0;overflow-wrap:anywhere;word-break:break-word">
               <summary>Review loaded snapshot identity</summary>
               <p class="muted">Local metadata only, not snapshot contents, newer server values, current permission or a scan of what restoring would change in the current project. Counts belong to the loaded snapshot, not the current project or a total restore-impact count. This does not capture or restore anything. The Restore confirmation still requires a separate decision.</p>
-              <dl><dt>Project ID</dt><dd name="snapshotReviewProjectId">{{projectId}}</dd><dt>Snapshot ID</dt><dd name="snapshotReviewId">{{s.id}}</dd><dt>Raw loaded capture time</dt><dd name="snapshotReviewCreated">{{s.createdAt || '(empty loaded capture time)'}}</dd><dt>Loaded kind</dt><dd name="snapshotReviewKind">{{snapshotKindLabel(s.automatic)}}</dd><dt>Loaded key count</dt><dd>{{s.keyCount}}</dd><dt>Loaded translation count</dt><dd>{{s.translationCount}}</dd></dl>
+              <dl><dt>Project ID</dt><dd name="snapshotReviewProjectId">{{projectId}}</dd><dt>Snapshot ID</dt><dd name="snapshotReviewId">{{s.id}}</dd><dt>Raw loaded capture time</dt><dd name="snapshotReviewCreated">{{s.createdAt || '(empty loaded capture time)'}}</dd><dt>Loaded kind</dt><dd name="snapshotReviewKind">{{snapshotKindLabel(s.automatic)}}</dd><dt>Loaded key count</dt><dd>{{countValue(s.keyCount)}}</dd><dt>Loaded translation count</dt><dd>{{countValue(s.translationCount)}}</dd></dl>
             </details>
             <button class="restore" [attr.aria-label]="'Restore snapshot ' + s.label" (click)="restore(s)" [disabled]="!restoreReady(s)">Restore</button>
           </li>
@@ -144,6 +144,9 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
     }
   }
 
+  validCount(value:unknown):value is number{return typeof value==='number'&&Number.isSafeInteger(value)&&value>=0;}
+  countValue(value:unknown):string{return this.validCount(value)?String(value):'Count unavailable';}
+  countLabel(value:unknown,unit:string,name:string):string{return this.validCount(value)?`${value} ${value===1?unit.slice(0,-1):unit}`:`${name} unavailable`;}
   validLabel():boolean {
     const value=this.label.trim();
     // Match installed class-validator/validator isLength, not UTF-16 or grapheme length.
@@ -186,7 +189,7 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
   }
 
   restoreIdentity(s:SnapshotMeta):string {
-    return `Project ID: ${this.projectId}\nSnapshot ID: ${s.id}\nLoaded capture time: ${s.createdAt || '(empty loaded capture time)'}\nLoaded kind: ${this.snapshotKindLabel(s.automatic)}\nLoaded snapshot counts: ${s.keyCount} keys, ${s.translationCount} translations\nLocal metadata only, not contents, current permission or a current-project impact scan.\n\n`;
+    return `Project ID: ${this.projectId}\nSnapshot ID: ${s.id}\nLoaded capture time: ${s.createdAt || '(empty loaded capture time)'}\nLoaded kind: ${this.snapshotKindLabel(s.automatic)}\nLoaded snapshot counts: ${this.countLabel(s.keyCount,'keys','Key count')}, ${this.countLabel(s.translationCount,'translations','Translation count')}\nLocal metadata only, not contents, current permission or a current-project impact scan.\n\n`;
   }
 
   async restore(s: SnapshotMeta) {

@@ -2597,3 +2597,7 @@ project only existing allowlisted count fields, never extra summary properties.
 Editor context-write browser suites preserve incomplete-run failures:
 `npm run test:editor-context-write-browser-harness`.
 [Review0730](docs/reviews/0730-editor-context-write-browser-harness.md).
+
+Snapshot counts require nonnegative safe integers in row/review/confirmation;
+malformed counts unavailable, raw inventory download unchanged.
+[Review0731](docs/reviews/0731-snapshots-counts.md).

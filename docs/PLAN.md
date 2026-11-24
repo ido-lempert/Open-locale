@@ -3041,3 +3041,9 @@ projection. Missing counts omitted in JSON, not inferred zero.
 Tools-toggle/tags/comment-delete-confirm/shot-delete-confirm suites gain explicit
 completion/exit guards and real startup harness; empty selections reject.
 [Review0730](reviews/0730-editor-context-write-browser-harness.md).
+
+
+### Bound loaded snapshot counts
+Key/translation counts use safe nonnegative integers across display, loaded
+identity review and restore confirmation. Raw download unchanged.
+[Review0731](reviews/0731-snapshots-counts.md).
