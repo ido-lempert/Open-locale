@@ -3155,3 +3155,9 @@ without recovery, replay or local draft changes.
 Four completion-guarded entry points and actual startup harness; unmatched
 selections reject.
 [Review0749](reviews/0749-saved-search-link-browser-harness.md).
+
+
+### Type-safe loaded task search metadata
+String-only case folding preserves exact loaded tasks, due order, scope and
+unknown-action state without recovery or replay.
+[Review0750](reviews/0750-tasks-search-metadata.md).
