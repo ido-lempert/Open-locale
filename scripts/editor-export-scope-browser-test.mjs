@@ -7,11 +7,12 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55624, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.EDITOR_FILE_SCOPE_TEST_PG_PORT ?? 55624), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-export-scope-browser-'));
@@ -28,7 +29,7 @@ try {
   const token=owner.accessToken;
   const project=await call('/projects',{name:'Sync browser',slug:'sync-browser',locales:['en','he']},token);
   const P=`/projects/${project.id}`;
-  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{stdio:'pipe',detached:true});await waitFor(WEB);
+  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{env:{...process.env,NX_DAEMON:'false'},stdio:'pipe',detached:true});await waitFor(WEB);
   browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH??'/usr/bin/google-chrome',args:['--no-sandbox','--disable-dev-shm-usage']});
   const diagnostics=[];const page=await browser.newPage();page.on('console',m=>diagnostics.push(m.text()));page.on('pageerror',e=>diagnostics.push(e.message));await page.setViewport({width:1280,height:900});
   await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.evaluate(t=>localStorage.setItem('ol_token',t),token);
@@ -41,7 +42,7 @@ try {
   await page.click('[name=exportFile]');await waitHeld();await page.waitForSelector('[name=exportPending]');check('all export controls disabled during one held request',await page.$eval('[name=exportFile]',e=>e.disabled)&&await page.$eval('[name=exportBundle]',e=>e.disabled)&&await page.$eval('[name=exportTmx]',e=>e.disabled));await page.screenshot({path:'/downloads/editor-export-pending.png',fullPage:false});await page.select('[name=ioLocale]','he');await held.continue();held=null;await page.waitForFunction(()=>!document.querySelector('[name=exportPending]'));check('late EN export after HE selection creates no download or stale feedback',requests===1&&await page.evaluate(()=>window.__downloads.length===0)&&!await page.$('[name=exportNotice]'));
   await page.select('[name=ioLocale]','en');await page.$eval('[aria-label="alpha in en"]',e=>{e.value='Unsaved draft';e.dispatchEvent(new Event('input',{bubbles:true}));});await page.click('[name=exportFile]');await waitHeld();const scope=new URL(held.url());await held.continue();held=null;await page.waitForSelector('[name=exportNotice]');check('explicit current export downloads captured EN filename despite local draft',scope.pathname.endsWith('/export/en')&&scope.searchParams.get('branch')==='main'&&await page.evaluate(()=>window.__downloads.length===1&&window.__downloads[0].filename==='sync-browser.en.json')&&await page.evaluate(async()=>JSON.parse(await window.__downloads[0].blob.text()).alpha==='Saved server')&&await page.$eval('[aria-label="alpha in en"]',e=>e.value==='Unsaved draft')&&await page.$eval('main',e=>e.innerText.includes('saved server values only')));await page.screenshot({path:'/downloads/editor-export-confirmed.png',fullPage:false});
   fail=true;await page.click('[name=exportFile]');await page.waitForSelector('[name=exportError]');check('export failure is fixed and does not start a download',await page.evaluate(()=>window.__downloads.length===1)&&!(await page.$eval('main',e=>e.innerText)).includes('PRIVATE_'));fail=false;await page.click('[name=exportFile]');await waitHeld();await page.waitForSelector('[name=exportPending]');await page.select('[name=ioFormat]','po');await held.continue();held=null;await page.waitForFunction(()=>!document.querySelector('[name=exportPending]'));await page.waitForFunction(()=>!document.querySelector('[name=exportError]')&&!document.querySelector('[name=exportNotice]'));check('format change discards pending old-format download',await page.evaluate(()=>window.__downloads.length===1)&&!await page.$('[name=exportError]')&&!await page.$('[name=exportNotice]'));
-  check('no export continuation runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
+  check('no export continuation runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
 } catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??String(e)}`);process.exitCode=1;}
 finally {
   await browser?.close();
@@ -57,4 +58,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(failures?1:0);
+process.exit(!completed||failures?1:0);

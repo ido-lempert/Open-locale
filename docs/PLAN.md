@@ -2999,3 +2999,9 @@ guards and real occupied-port harness. Empty selections reject.
 Local reset clears label search and recorded kind, retaining order, loaded
 metadata, capture draft and pending/unknown guards without side effects.
 [Review0723](reviews/0723-snapshots-clear-filters.md).
+
+
+### Fail-closed editor file-scope browser verification
+Export/import/backup/bundle scope suites gain explicit completion/exit guards and
+actual occupied-port startup harness, rejecting unmatched selections.
+[Review0724](reviews/0724-editor-file-scope-browser-harness.md).

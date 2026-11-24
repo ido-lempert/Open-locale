@@ -2569,3 +2569,7 @@ Editor validation browser suites preserve incomplete runs as failures:
 Snapshot inventory Clear all filters resets local search/kind while keeping time
 order, capture draft and unknown-outcome safeguards.
 [Review0723](docs/reviews/0723-snapshots-clear-filters.md).
+
+Editor file-scope browser scripts preserve incomplete-run failures:
+`npm run test:editor-file-scope-browser-harness`.
+[Review0724](docs/reviews/0724-editor-file-scope-browser-harness.md).
