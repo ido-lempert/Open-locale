@@ -355,7 +355,8 @@
     "test:editor-tm-browser-harness": "node scripts/editor-tm-browser-harness-test.mjs",
     "test:webhook-http-metadata-browser": "node scripts/webhook-http-metadata-browser-test.mjs",
     "test:editor-core-browser-harness": "node scripts/editor-core-browser-harness-test.mjs",
-    "test:webhook-metrics-browser": "node scripts/webhook-metrics-browser-test.mjs"
+    "test:webhook-metrics-browser": "node scripts/webhook-metrics-browser-test.mjs",
+    "test:webhook-event-metadata-browser": "node scripts/webhook-event-metadata-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

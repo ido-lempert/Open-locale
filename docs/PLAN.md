@@ -2957,3 +2957,9 @@ Actual occupied-port harness rejects unmatched selections.
 Guarded nonnegative safe integer display keeps zero valid and malformed values
 unavailable without modifying raw download data or delivery behavior.
 [Review0716](reviews/0716-webhook-metrics.md).
+
+
+### Bound malformed webhook event-name metadata
+Nonstring/blank event names unavailable; nonempty search skips malformed source
+names without searching fallback label. Source download unchanged.
+[Review0717](reviews/0717-webhook-event-metadata.md).

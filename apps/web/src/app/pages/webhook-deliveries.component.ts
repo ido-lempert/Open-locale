@@ -40,7 +40,7 @@ import { ApiService, WebhookDeliveryInfo } from '../api.service';
         <ul class="delivery-list">
           @for(d of visibleItems();track d.id){
             <li class="delivery-row">
-              <strong>{{d.success?'Succeeded':'Failed'}}</strong><span class="delivery-event">{{d.event}}</span>
+              <strong>{{d.success?'Succeeded':'Failed'}}</strong><span class="delivery-event">{{eventLabel(d.event)}}</span>
               <span>HTTP {{httpStatusLabel(d.httpStatus)}}</span><span>{{attemptsLabel(d.attempts)}}</span>
               <span>{{durationLabel(d.durationMs)}}</span><time name="deliveryTime" [attr.datetime]="validTime(d.createdAt)?d.createdAt:null">{{timeLabel(d.createdAt)}}</time>
             </li>
@@ -58,12 +58,14 @@ export class WebhookDeliveriesComponent implements OnInit,OnDestroy {
   setHttpFilter(value:string){if(!this.destroyed&&(value===''||value==='recorded'||value==='unavailable'))this.httpFilter.set(value);}
   order=signal<'loaded'|'newest'|'oldest'>('loaded');
   setOrder(value:string){if(!this.destroyed&&(value==='loaded'||value==='newest'||value==='oldest'))this.order.set(value);}
-  visibleItems=computed(()=>{const status=this.status(),http=this.httpFilter(),query=this.query().trim().toLowerCase(),rows=status||http||query?this.items().filter(item=>(!http||(http==='unavailable'?!this.validHttpStatus(item.httpStatus):this.validHttpStatus(item.httpStatus)))&&(!status||item.success===(status==='succeeded'))&&(!query||item.event.toLowerCase().includes(query))):this.items();const order=this.order();if(order==='loaded')return rows;const time=(value:unknown)=>{const parsed=typeof value==='string'&&value.trim()?Date.parse(value):NaN;return Number.isFinite(parsed)?parsed:null;};return [...rows].sort((a,b)=>{const left=time(a.createdAt),right=time(b.createdAt);if(left===right)return 0;if(left===null)return 1;if(right===null)return -1;return order==='oldest'?left-right:right-left;});});
+  visibleItems=computed(()=>{const status=this.status(),http=this.httpFilter(),query=this.query().trim().toLowerCase(),rows=status||http||query?this.items().filter(item=>(!http||(http==='unavailable'?!this.validHttpStatus(item.httpStatus):this.validHttpStatus(item.httpStatus)))&&(!status||item.success===(status==='succeeded'))&&(!query||this.validEvent(item.event)&&item.event.toLowerCase().includes(query))):this.items();const order=this.order();if(order==='loaded')return rows;const time=(value:unknown)=>{const parsed=typeof value==='string'&&value.trim()?Date.parse(value):NaN;return Number.isFinite(parsed)?parsed:null;};return [...rows].sort((a,b)=>{const left=time(a.createdAt),right=time(b.createdAt);if(left===right)return 0;if(left===null)return 1;if(right===null)return -1;return order==='oldest'?left-right:right-left;});});
   hasFilters(){return !!this.query()||!!this.status()||!!this.httpFilter();}
   clearFilters(){if(this.destroyed)return;this.query.set('');this.status.set('');this.httpFilter.set('');}
   setStatus(value:string){if(!this.destroyed&&(value===''||value==='succeeded'||value==='failed'))this.status.set(value);}
   private generation=0;private destroyed=false;private routeSub?:Subscription;
   constructor(private readonly route:ActivatedRoute,private readonly api:ApiService,@Inject(LOCALE_ID) private readonly displayLocale='en-US'){}
+  validEvent(value:unknown):value is string{return typeof value==='string'&&!!value.trim();}
+  eventLabel(value:unknown):string{return this.validEvent(value)?value:'Event name unavailable';}
   validMetric(value:unknown):value is number{return typeof value==='number'&&Number.isSafeInteger(value)&&value>=0;}
   attemptsLabel(value:unknown):string{return this.validMetric(value)?`${value} attempt(s)`:'Attempts unavailable';}
   durationLabel(value:unknown):string{return this.validMetric(value)?`${value} ms`:'Duration unavailable';}

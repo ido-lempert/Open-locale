@@ -2540,3 +2540,8 @@ Optional `EDITOR_CORE_HARNESS_FILTER` narrows cases; unmatched selections fail.
 Nonnegative safe integers retain count/ms labels, including zero. Malformed
 metrics show fixed unavailable labels; source download data remains unchanged.
 [Review0716](docs/reviews/0716-webhook-metrics.md).
+
+### Guard loaded journal event names
+Malformed/blank event names use fixed unavailable labels and cannot interrupt
+local search. Valid literal names/source downloads remain unchanged.
+[Review0717](docs/reviews/0717-webhook-event-metadata.md).
