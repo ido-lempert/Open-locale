@@ -2517,3 +2517,9 @@ unmatched selections fail. [Review0711](docs/reviews/0711-editor-shots-browser-h
 One explicit Clear all filters resets event, recorded status and HTTP status
 choices, preserving time order and loaded metadata with no requests.
 [Review0712](docs/reviews/0712-webhook-clear-filters.md).
+
+### Editor translation-memory browser startup guards
+Four older translation-memory browser scripts retain incomplete startup/assertion
+failures through cleanup. `npm run test:editor-tm-browser-harness` covers four
+actual occupied-port paths. Optional `EDITOR_TM_HARNESS_FILTER` narrows cases;
+unmatched selections fail. [Review0713](docs/reviews/0713-editor-tm-browser-harness.md).

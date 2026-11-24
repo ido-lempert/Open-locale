@@ -7,11 +7,12 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55589, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.EDITOR_TM_TEST_PG_PORT ?? 55589), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-tm-browser-'));
@@ -28,7 +29,7 @@ try {
   const token=owner.accessToken;
   const project=await call('/projects',{name:'Sync browser',slug:'sync-browser',locales:['en','he']},token);
   const P=`/projects/${project.id}`;
-  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{stdio:'pipe',detached:true});await waitFor(WEB);
+  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{env:{...process.env,NX_DAEMON:'false'},stdio:'pipe',detached:true});await waitFor(WEB);
   browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH??'/usr/bin/google-chrome',args:['--no-sandbox','--disable-dev-shm-usage']});
   const diagnostics=[];const page=await browser.newPage();page.on('console',m=>diagnostics.push(m.text()));page.on('pageerror',e=>diagnostics.push(e.message));await page.setViewport({width:1280,height:900});
   await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.evaluate(t=>localStorage.setItem('ol_token',t),token);
@@ -47,8 +48,8 @@ try {
   await page.$eval('[aria-label="beta in he"]',e=>{e.value='';e.dispatchEvent(new Event('input',{bubbles:true}));});mode='error';await base();await focus();await page.waitForSelector('[name=tmError]');check('memory failure uses fixed guidance without raw service error',!(await page.$('.tm-pick'))&&!(await page.content()).includes('private-tm-error'));await page.$eval('[name=tmError]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/editor-tm-error.png',fullPage:false});
   mode='live';await page.click('[name=retryTm]');await page.waitForSelector('.tm-pick');check('manual retry gets actual stored translation memory',await page.$eval('.tm-suggest',e=>e.textContent.includes('Stored memory')));await page.screenshot({path:'/downloads/editor-tm-retry.png',fullPage:false});
   await page.focus('.tm-pick');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.querySelector('[aria-label="beta in he"]')?.value==='Stored memory'&&!document.querySelector('.tm-pick'));for(let n=0;n<100;n++){const k=(await call(`${P}/keys`,null,token)).find(k=>k.id===b.id);if(k.translations.find(t=>t.localeCode==='he')?.value==='Stored memory')break;await new Promise(r=>setTimeout(r,20));}const saved=(await call(`${P}/keys`,null,token)).find(k=>k.id===b.id).translations.find(t=>t.localeCode==='he');check('keyboard apply saves explicitly chosen current suggestion unverified',saved?.value==='Stored memory'&&saved?.status==='UNVERIFIED');
-  check('no TM runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  check('no TM runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -63,4 +64,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

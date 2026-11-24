@@ -2933,3 +2933,9 @@ Actual occupied-port harness rejects unmatched selections.
 Explicit local reset of event/status/HTTP choices keeps loaded records and time
 order. No refresh, download, send or retry.
 [Review0712](reviews/0712-webhook-clear-filters.md).
+
+
+### Fail-closed editor translation-memory browser verification
+Four older memory suites preserve incomplete startup/assertion exits. Actual
+occupied-port harness rejects unmatched selections.
+[Review0713](reviews/0713-editor-tm-browser-harness.md).
