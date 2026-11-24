@@ -39,7 +39,7 @@ import { ApiService, OtaBundle } from '../api.service';
 export class OtaBundleComponent implements OnInit,OnDestroy{
  publicationId:string|undefined;projectId='';branch='main';version='';locale='';bundle=signal<OtaBundle|null>(null);rows=signal<[string,string][]>([]);page=signal(0);loading=signal(false);error=signal(false);
  query=signal('');valueFilter=signal<''|'empty'|'nonempty'>('');downloadNotice=signal('');
- filteredRows=computed(()=>{const query=this.query().toLowerCase(),filter=this.valueFilter();if(!query&&!filter)return this.rows();return this.rows().filter(([key,value])=>(!query||key.toLowerCase().includes(query)||value.toLowerCase().includes(query))&&(!filter||(filter==='empty'?value==='':value!=='')));});
+ filteredRows=computed(()=>{const query=this.query().toLowerCase(),filter=this.valueFilter();if(!query&&!filter)return this.rows();return this.rows().filter(([key,value])=>(!query||key.toLowerCase().includes(query)||(typeof value==='string'&&value.toLowerCase().includes(query)))&&(!filter||(filter==='empty'?value==='':value!=='')));});
  setValueFilter(value:string){if(this.destroyed||!['','empty','nonempty'].includes(value))return;this.valueFilter.set(value as ''|'empty'|'nonempty');this.page.set(0);}
  emptyLabel(){if(this.valueFilter())return 'No retained values match this value filter and search. Clear value filter or search to show other retained values.';return this.query()?'No published keys or values match this search.':'No translation values in this published locale.';}
  private generation=0;private destroyed=false;private sub?:Subscription;

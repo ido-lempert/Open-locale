@@ -2690,3 +2690,7 @@ Locale-settings validation, discard, pending-draft and refresh browser checks
 fail closed on incomplete startup cleanup. Run
 `npm run test:settings-locale-browser-harness` for real occupied-port regression.
 See [review0753](docs/reviews/0753-settings-locale-browser-harness.md).
+
+Retained OTA value search skips nonstring value text without coercion, while
+valid key matching, exact empty filtering and raw full-bundle download stay intact.
+See [review0754](docs/reviews/0754-ota-search-metadata.md).
