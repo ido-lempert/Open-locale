@@ -2927,3 +2927,9 @@ time order without reads; full loaded downloads stay unchanged.
 Four older screenshot-read suites preserve incomplete startup/assertion exits.
 Actual occupied-port harness rejects unmatched selections.
 [Review0711](reviews/0711-editor-shots-browser-harness.md).
+
+
+### Clear combined webhook journal filters
+Explicit local reset of event/status/HTTP choices keeps loaded records and time
+order. No refresh, download, send or retry.
+[Review0712](reviews/0712-webhook-clear-filters.md).

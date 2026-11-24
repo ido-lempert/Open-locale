@@ -31,6 +31,8 @@ import { ApiService, WebhookDeliveryInfo } from '../api.service';
       <p class="muted" name="deliveryHttpScope">Local filter for whether the loaded record has an HTTP status, independent of recorded success or failure. An unavailable status does not identify the cause or confirm whether a receiver got or processed the event. Combines with event search, recorded status and time order. Downloads still include all loaded records. This does not send, retry or read newer deliveries.</p>
       <label>Order loaded deliveries <select name="deliveryOrder" [ngModel]="order()" (ngModelChange)="setOrder($event)"><option value="loaded">Loaded order</option><option value="newest">Newest recorded first</option><option value="oldest">Oldest recorded first</option></select></label>
       <p class="muted" name="deliveryOrderScope">Local display order only, using full recorded timestamps. Unavailable times come last; equal times keep loaded order. Event search and status combine with this order. Downloads keep loaded order. This does not read more records, send or retry deliveries, or confirm receiver processing.</p>
+      <button type="button" name="clearAllDeliveryFilters" [disabled]="!hasFilters()" aria-describedby="clearAllDeliveryFiltersScope" (click)="clearFilters()">Clear all filters</button>
+      <p class="muted" id="clearAllDeliveryFiltersScope" name="clearAllDeliveryFiltersScope">Clears local event search, recorded status and HTTP status choices only. Time order and loaded records stay. This does not refresh, download, send or retry deliveries.</p>
       @if(loading()){<p role="status">Loading deliveries...</p>}
       @if(error()){<p role="alert" class="error">Deliveries unavailable. This journal requires project admin access and an existing webhook. No deliveries are shown. Try refreshing.</p>}
       @if(!loading()&&!error()){
@@ -57,6 +59,8 @@ export class WebhookDeliveriesComponent implements OnInit,OnDestroy {
   order=signal<'loaded'|'newest'|'oldest'>('loaded');
   setOrder(value:string){if(!this.destroyed&&(value==='loaded'||value==='newest'||value==='oldest'))this.order.set(value);}
   visibleItems=computed(()=>{const status=this.status(),http=this.httpFilter(),query=this.query().trim().toLowerCase(),rows=status||http||query?this.items().filter(item=>(!http||(http==='unavailable'?item.httpStatus===null:item.httpStatus!==null))&&(!status||item.success===(status==='succeeded'))&&(!query||item.event.toLowerCase().includes(query))):this.items();const order=this.order();if(order==='loaded')return rows;const time=(value:unknown)=>{const parsed=typeof value==='string'&&value.trim()?Date.parse(value):NaN;return Number.isFinite(parsed)?parsed:null;};return [...rows].sort((a,b)=>{const left=time(a.createdAt),right=time(b.createdAt);if(left===right)return 0;if(left===null)return 1;if(right===null)return -1;return order==='oldest'?left-right:right-left;});});
+  hasFilters(){return !!this.query()||!!this.status()||!!this.httpFilter();}
+  clearFilters(){if(this.destroyed)return;this.query.set('');this.status.set('');this.httpFilter.set('');}
   setStatus(value:string){if(!this.destroyed&&(value===''||value==='succeeded'||value==='failed'))this.status.set(value);}
   private generation=0;private destroyed=false;private routeSub?:Subscription;
   constructor(private readonly route:ActivatedRoute,private readonly api:ApiService,@Inject(LOCALE_ID) private readonly displayLocale='en-US'){}

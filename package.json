@@ -350,7 +350,8 @@
     "test:editor-comments-browser-harness": "node scripts/editor-comments-browser-harness-test.mjs",
     "test:metadata-order-types-browser": "node scripts/metadata-order-types-browser-test.mjs",
     "test:webhook-http-browser": "node scripts/webhook-http-browser-test.mjs",
-    "test:editor-shots-browser-harness": "node scripts/editor-shots-browser-harness-test.mjs"
+    "test:editor-shots-browser-harness": "node scripts/editor-shots-browser-harness-test.mjs",
+    "test:webhook-clear-browser": "node scripts/webhook-clear-browser-test.mjs"
   },
   "private": true,
   "dependencies": {

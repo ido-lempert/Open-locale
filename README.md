@@ -2512,3 +2512,8 @@ Four older screenshot-read browser scripts retain incomplete startup/assertion
 failures through cleanup. `npm run test:editor-shots-browser-harness` covers four
 actual occupied-port paths. Optional `EDITOR_SHOTS_HARNESS_FILTER` narrows cases;
 unmatched selections fail. [Review0711](docs/reviews/0711-editor-shots-browser-harness.md).
+
+### Clear loaded webhook filters together
+One explicit Clear all filters resets event, recorded status and HTTP status
+choices, preserving time order and loaded metadata with no requests.
+[Review0712](docs/reviews/0712-webhook-clear-filters.md).
