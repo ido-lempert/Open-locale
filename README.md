@@ -2601,3 +2601,7 @@ Editor context-write browser suites preserve incomplete-run failures:
 Snapshot counts require nonnegative safe integers in row/review/confirmation;
 malformed counts unavailable, raw inventory download unchanged.
 [Review0731](docs/reviews/0731-snapshots-counts.md).
+
+Editor context-metadata browser suites preserve incomplete-run failures:
+`npm run test:editor-context-metadata-browser-harness`.
+[Review0732](docs/reviews/0732-editor-context-metadata-browser-harness.md).

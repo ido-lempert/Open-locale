@@ -3047,3 +3047,9 @@ completion/exit guards and real startup harness; empty selections reject.
 Key/translation counts use safe nonnegative integers across display, loaded
 identity review and restore confirmation. Raw download unchanged.
 [Review0731](reviews/0731-snapshots-counts.md).
+
+
+### Fail-closed editor context-metadata browser verification
+Comment-thread-download/comment-validation/shot-size/length-guidance suites gain
+completion/exit guards and real startup harness; empty selections reject.
+[Review0732](reviews/0732-editor-context-metadata-browser-harness.md).
