@@ -2987,3 +2987,9 @@ failures through cleanup. Real occupied-port harness rejects empty selections.
 Explicit local reset clears search and recorded attention, retaining time order,
 loaded snapshot and feedback without refresh/download/apply.
 [Review0721](reviews/0721-sync-history-clear-filters.md).
+
+
+### Fail-closed editor validation browser verification
+Key name/description, locale-code and tag validation suites gain completion/exit
+guards and real occupied-port harness. Empty selections reject.
+[Review0722](reviews/0722-editor-validation-browser-harness.md).

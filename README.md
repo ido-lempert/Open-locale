@@ -2561,3 +2561,7 @@ startup-abort coverage: `npm run test:editor-key-metadata-browser-harness`.
 Diagnostic preview history has a local Clear all filters reset for search and
 recorded attention, keeping time order and loaded records.
 [Review0721](docs/reviews/0721-sync-history-clear-filters.md).
+
+Editor validation browser suites preserve incomplete runs as failures:
+`npm run test:editor-validation-browser-harness`.
+[Review0722](docs/reviews/0722-editor-validation-browser-harness.md).
