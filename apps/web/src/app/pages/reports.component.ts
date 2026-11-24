@@ -135,8 +135,8 @@ export class ReportsComponent implements OnInit, OnDestroy {
   projectId = '';
   localeQuery=signal('');
   setLocaleQuery(value:string){if(!this.destroyed)this.localeQuery.set(value.slice(0,200));}
-  visibleProgressLocales=computed(()=>{const rows=this.report()?.locales??[],query=this.localeQuery().trim().toLowerCase();return query?rows.filter(row=>row.locale.toLowerCase().includes(query)):rows;});
-  visibleQualityLocales=computed(()=>{const rows=this.quality()?.locales??[],query=this.localeQuery().trim().toLowerCase();return query?rows.filter(row=>row.locale.toLowerCase().includes(query)):rows;});
+  visibleProgressLocales=computed(()=>{const rows=this.report()?.locales??[],query=this.localeQuery().trim().toLowerCase();return query?rows.filter(row=>typeof row.locale==='string'&&row.locale.toLowerCase().includes(query)):rows;});
+  visibleQualityLocales=computed(()=>{const rows=this.quality()?.locales??[],query=this.localeQuery().trim().toLowerCase();return query?rows.filter(row=>typeof row.locale==='string'&&row.locale.toLowerCase().includes(query)):rows;});
   report = signal<ProgressReport | null>(null);
   quality = signal<QualityReport | null>(null);
   usage = signal<UsageReport | null>(null);

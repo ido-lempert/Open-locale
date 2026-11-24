@@ -2641,3 +2641,7 @@ the full raw findings download.
 Saved-search core/clear/cancel/focus browser suites preserve incomplete failures:
 `npm run test:saved-search-core-browser-harness`.
 [Review0741](docs/reviews/0741-saved-search-core-browser-harness.md).
+
+Progress/quality locale search skips nonstring loaded codes without coercion or
+changing full branch reports and downloads.
+[Review0742](docs/reviews/0742-reports-locale-metadata.md).

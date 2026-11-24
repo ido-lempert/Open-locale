@@ -3107,3 +3107,9 @@ Other valid fields and raw full findings download preserved.
 Base/clear/cancel/focus completion guards and actual startup harness with
 unmatched selections rejected.
 [Review0741](reviews/0741-saved-search-core-browser-harness.md).
+
+
+### Type-safe loaded report locale search
+Both projections search strings only; malformed codes cannot break filtering.
+Full loaded totals, sibling dashboards and raw download unchanged.
+[Review0742](reviews/0742-reports-locale-metadata.md).
