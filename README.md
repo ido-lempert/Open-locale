@@ -2549,3 +2549,7 @@ local search. Valid literal names/source downloads remain unchanged.
 Editor create/delete browser verification now has explicit completion and exit
 guards with an occupied-port harness: `npm run test:editor-create-delete-browser-harness`.
 See [review0718](docs/reviews/0718-editor-create-delete-browser-harness.md).
+
+Webhook journal recorded outcome labels accept exact boolean metadata only;
+malformed values show unavailable, not inferred success/failure.
+[Review0719](docs/reviews/0719-webhook-success-metadata.md).

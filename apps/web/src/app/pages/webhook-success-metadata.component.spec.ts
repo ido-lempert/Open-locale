@@ -1,0 +1,6 @@
+import {WebhookDeliveriesComponent} from './webhook-deliveries.component';
+const make=()=>new WebhookDeliveriesComponent({} as any,{} as any);
+describe('bounded loaded recorded success metadata',()=>{
+ for(const value of [undefined,null,'','false','true',0,1,{},[]])it(`does not infer success for ${String(value)}`,()=>{const c=make();expect(c.successLabel(value)).toBe('Recorded status unavailable');c.items.set([{id:'bad',success:value},{id:'yes',success:true},{id:'no',success:false}] as any);expect(c.visibleItems()).toHaveLength(3);c.setStatus('succeeded');expect(c.visibleItems().map(r=>r.id)).toEqual(['yes']);c.setStatus('failed');expect(c.visibleItems().map(r=>r.id)).toEqual(['no']);c.clearFilters();expect(c.visibleItems()).toHaveLength(3);expect(c.items()[0].success).toBe(value);});
+ it('labels exact booleans without inferring from HTTP status',()=>{const c=make();expect(c.successLabel(true)).toBe('Succeeded');expect(c.successLabel(false)).toBe('Failed');c.items.set([{id:'yes',success:true,httpStatus:503},{id:'no',success:false,httpStatus:200}] as any);c.setStatus('succeeded');expect(c.visibleItems().map(r=>r.id)).toEqual(['yes']);c.setStatus('failed');expect(c.visibleItems().map(r=>r.id)).toEqual(['no']);});
+});

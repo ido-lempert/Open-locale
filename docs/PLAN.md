@@ -2969,3 +2969,9 @@ names without searching fallback label. Source download unchanged.
 Key create/delete/delete-confirm and locale-create suites explicitly preserve
 incomplete-run failures through cleanup. Actual occupied-port harness rejects
 unmatched selections. [Review0718](reviews/0718-editor-create-delete-browser-harness.md).
+
+
+### Bound malformed webhook recorded-success metadata
+Exact booleans determine Succeeded/Failed labels; malformed loaded values are
+unavailable without coercion. Existing strict filters and raw download unchanged.
+[Review0719](reviews/0719-webhook-success-metadata.md).

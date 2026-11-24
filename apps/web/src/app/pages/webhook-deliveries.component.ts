@@ -40,7 +40,7 @@ import { ApiService, WebhookDeliveryInfo } from '../api.service';
         <ul class="delivery-list">
           @for(d of visibleItems();track d.id){
             <li class="delivery-row">
-              <strong>{{d.success?'Succeeded':'Failed'}}</strong><span class="delivery-event">{{eventLabel(d.event)}}</span>
+              <strong>{{successLabel(d.success)}}</strong><span class="delivery-event">{{eventLabel(d.event)}}</span>
               <span>HTTP {{httpStatusLabel(d.httpStatus)}}</span><span>{{attemptsLabel(d.attempts)}}</span>
               <span>{{durationLabel(d.durationMs)}}</span><time name="deliveryTime" [attr.datetime]="validTime(d.createdAt)?d.createdAt:null">{{timeLabel(d.createdAt)}}</time>
             </li>
@@ -64,6 +64,7 @@ export class WebhookDeliveriesComponent implements OnInit,OnDestroy {
   setStatus(value:string){if(!this.destroyed&&(value===''||value==='succeeded'||value==='failed'))this.status.set(value);}
   private generation=0;private destroyed=false;private routeSub?:Subscription;
   constructor(private readonly route:ActivatedRoute,private readonly api:ApiService,@Inject(LOCALE_ID) private readonly displayLocale='en-US'){}
+  successLabel(value:unknown):string{return value===true?'Succeeded':value===false?'Failed':'Recorded status unavailable';}
   validEvent(value:unknown):value is string{return typeof value==='string'&&!!value.trim();}
   eventLabel(value:unknown):string{return this.validEvent(value)?value:'Event name unavailable';}
   validMetric(value:unknown):value is number{return typeof value==='number'&&Number.isSafeInteger(value)&&value>=0;}
