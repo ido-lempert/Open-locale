@@ -44,6 +44,8 @@ import { ApiService, BranchInfo, Project, QaIssue } from '../api.service';
       <label>Find in loaded keys, locales or details <input type="search" name="qaSearch" maxlength="200" [ngModel]="query()" (ngModelChange)="setQuery($event)" /></label>
       <button type="button" name="clearQaSearch" [disabled]="!query()" (click)="setQuery('')">Clear search</button>
       <p class="muted" name="qaSearchScope">Search is a literal, case-insensitive substring in loaded findings. It combines with the issue-type filter and does not run checks again.</p>
+      <button type="button" name="clearAllQaFilters" [disabled]="!hasFilters()" aria-describedby="clearAllQaFiltersScope" (click)="clearFilters()">Clear all local filters</button>
+      <p class="muted" id="clearAllQaFiltersScope" name="clearAllQaFiltersScope">Clears loaded-finding search and issue type only. Branch, locale and loaded findings stay. This does not run checks again, refresh options or download findings.</p>
       <button type="button" name="downloadQa" [disabled]="loading() || !!error()" (click)="download()">Download findings (.json)</button>
       <p class="muted" name="qaDownloadScope">Downloads all current loaded findings, regardless of local search or the type filter, and project, branch and locale scope, not newer server changes or live editor drafts. The file can contain private project text. Downloading does not share it.</p>
       @if (downloadNotice()) { <p role="status" name="qaDownloadNotice">{{ downloadNotice() }}</p> }
@@ -76,6 +78,8 @@ export class QaComponent implements OnInit, OnDestroy {
   setQuery(value:string){if(!this.destroyed)this.query.set(value.slice(0,200));}
   visibleIssues=computed(()=>{const type=this.issueType(),query=this.query().trim().toLowerCase();if(!type&&!query)return this.issues();return this.issues().filter(i=>(!type||i.type===type)&&(!query||[i.key,i.locale,i.detail??''].some(value=>value.toLowerCase().includes(query))));});
   setIssueType(type:string) {if(!this.destroyed&&(type===''||this.issueTypes.includes(type as QaIssue['type'])))this.issueType.set(type as QaIssue['type']|'');}
+  hasFilters(){return !!this.query()||!!this.issueType();}
+  clearFilters(){if(this.destroyed)return;this.query.set('');this.issueType.set('');}
   targetLocales = signal<string[]>([]);
   locale = signal('');
   branch=signal('main');branches=signal<BranchInfo[]>([]);branchesLoading=signal(false);branchesError=signal(false);

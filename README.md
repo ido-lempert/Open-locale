@@ -2625,3 +2625,7 @@ without converting metadata problems into an unknown write or replay.
 Editor comment/key recovery browser suites preserve incomplete-run failures:
 `npm run test:editor-recovery-browser-harness`.
 [Review0737](docs/reviews/0737-editor-recovery-browser-harness.md).
+
+QA can clear local search and issue type together without rerunning checks,
+changing branch/locale or replacing loaded findings.
+[Review0738](docs/reviews/0738-qa-clear-filters.md).

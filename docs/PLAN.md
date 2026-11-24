@@ -3083,3 +3083,9 @@ success preserved across follow-up read failure without replay.
 Comment-reply-focus/comments-recovery/key-delete-recovery/key-unknown completion
 guards and real startup harness, with unmatched selections rejected.
 [Review0737](reviews/0737-editor-recovery-browser-harness.md).
+
+
+### Clear all local QA filters
+Combined clear retains branch/locale, loaded findings and feedback without API
+reads/writes. Individual filters and full findings download unchanged.
+[Review0738](reviews/0738-qa-clear-filters.md).
