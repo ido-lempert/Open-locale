@@ -7,11 +7,12 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55835, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.SAVED_SEARCH_CONTEXT_TEST_PG_PORT ?? 55835), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-task-receipt-browser-'));
@@ -30,7 +31,7 @@ try {
   const P=`/projects/${project.id}`;
   await call(`${P}/import/en`,{entries:{title:'Local title',conflict:'Local edit',remote:'Old text',empty:''}},token);
   await call(`${P}/tasks`,{title:'Actual task recovery'},token);
-  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{stdio:'pipe',detached:true});await waitFor(WEB);
+  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{env:{...process.env,NX_DAEMON:'false'},stdio:'pipe',detached:true});await waitFor(WEB);
   browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH??'/usr/bin/google-chrome',args:['--no-sandbox','--disable-dev-shm-usage']});
   const diagnostics=[];const page=await browser.newPage();page.on('console',m=>diagnostics.push(m.text()));page.on('pageerror',e=>diagnostics.push(e.message));await page.setViewport({width:1280,height:900});
   await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.evaluate(t=>localStorage.setItem('ol_token',t),token);
@@ -48,8 +49,8 @@ try {
   await page.$eval('[name=savedSearchTags]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/saved-search-tags-context-desktop.png'});await page.setViewport({width:390,height:844});await page.$$eval('[name=savedSearchResult]',rows=>rows.find(e=>e.querySelector('code').textContent==='tagged.key').scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/saved-search-tags-context-mobile.png'});check('390px tag list fits viewport',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await call(`${P}/keys/${key.id}/tags`,{tags:['NEW_SERVER_TAG']},token,'PATCH');check('loaded tags do not claim newer server changes',!(await tags('tagged.key')).includes('NEW_SERVER_TAG'));await search();check('explicit new search loads actual newer tags',(await tags('tagged.key')).includes('NEW_SERVER_TAG'));
   let started;const ready=new Promise(r=>started=r);held={started};await page.click('[name=runSavedSearch]');await ready;await page.waitForSelector('[name=savedSearchLoading]');check('pending read clears private loaded tags',!await page.$('[name=savedSearchTags]'));const old=held.request;held=null;await page.click('[name=clearSavedSearchFilters]');await old.respond({status:200,contentType:'application/json',body:JSON.stringify([{id:'private-old',name:'old',tags:['PRIVATE_TAG'],translations:[{localeCode:'he',value:'Needle'}]}])});await new Promise(r=>setTimeout(r,100));check('late cleared reply cannot restore private tags',!await page.$('[name=savedSearchTags]'));
-  await page.type('[name=savedSearchText]','Needle');let missingStarted;const missingReady=new Promise(r=>missingStarted=r);held={started:missingStarted};await page.click('[name=runSavedSearch]');await missingReady;const missing=held.request;held=null;await missing.respond({status:200,contentType:'application/json',body:JSON.stringify([{id:'missing',name:'missing.tags',translations:[{localeCode:'he',value:'Needle'}]}])});await page.waitForSelector('[name=savedSearchTags]');check('missing tag response is unavailable not fabricated empty',(await tags('missing.tags')).includes('Tags unavailable in these results.'));check('tag flow never writes',writes.length===0);check('no tag runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  await page.type('[name=savedSearchText]','Needle');let missingStarted;const missingReady=new Promise(r=>missingStarted=r);held={started:missingStarted};await page.click('[name=runSavedSearch]');await missingReady;const missing=held.request;held=null;await missing.respond({status:200,contentType:'application/json',body:JSON.stringify([{id:'missing',name:'missing.tags',translations:[{localeCode:'he',value:'Needle'}]}])});await page.waitForSelector('[name=savedSearchTags]');check('missing tag response is unavailable not fabricated empty',(await tags('missing.tags')).includes('Tags unavailable in these results.'));check('tag flow never writes',writes.length===0);check('no tag runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -64,4 +65,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

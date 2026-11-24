@@ -3137,3 +3137,9 @@ selections reject.
 Search fields require strings before case folding; full loaded rows and local
 new-project/security state retained without extra requests.
 [Review0746](reviews/0746-projects-search-metadata.md).
+
+
+### Fail-closed saved-search loaded context verification
+Four completion-guarded browser suites and actual startup harness; unmatched
+selections reject.
+[Review0747](reviews/0747-saved-search-context-browser-harness.md).

@@ -380,6 +380,7 @@
     "test:editor-metadata-browser-harness": "node scripts/editor-metadata-browser-harness-test.mjs",
     "test:saved-search-export-browser-harness": "node scripts/saved-search-export-browser-harness-test.mjs",
     "test:saved-search-filter-browser-harness": "node scripts/saved-search-filter-browser-harness-test.mjs",
+    "test:saved-search-context-browser-harness": "node scripts/saved-search-context-browser-harness-test.mjs",
     "test:saved-search-core-browser-harness": "node scripts/saved-search-core-browser-harness-test.mjs",
     "test:editor-departure-browser-harness": "node scripts/editor-departure-browser-harness-test.mjs",
     "test:editor-core-browser-harness": "node scripts/editor-core-browser-harness-test.mjs",
