@@ -190,6 +190,14 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
     catch {return 'Capture time unavailable';}
   }
 
+  restoreReceipt(result:unknown):string {
+    const count=(key:string,unit:string,unavailable:string)=>{
+      const value=result!==null&&typeof result==='object'&&!Array.isArray(result)&&Object.prototype.hasOwnProperty.call(result,key)?(result as Record<string,unknown>)[key]:undefined;
+      return this.validCount(value)?`${value} ${unit}`:unavailable;
+    };
+    return `Restored: ${count('valuesChanged','value(s) recovered','Recovered value count unavailable')}, ${count('keysRemoved','key(s) removed','Removed key count unavailable')}`;
+  }
+
   restoreIdentity(s:SnapshotMeta):string {
     return `Project ID: ${this.projectId}\nSnapshot ID: ${s.id}\nLoaded capture time: ${s.createdAt || '(empty loaded capture time)'}\nLoaded kind: ${this.snapshotKindLabel(s.automatic)}\nLoaded snapshot counts: ${this.countLabel(s.keyCount,'keys','Key count')}, ${this.countLabel(s.translationCount,'translations','Translation count')}\nLocal metadata only, not contents, current permission or a current-project impact scan.\n\n`;
   }
@@ -210,7 +218,7 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
     try {
       const r = await this.api.restoreSnapshot(projectId, s.id);
       if(!this.current(scope))return;
-      this.notice.set(`Restored: ${r.valuesChanged} value(s) recovered, ${r.keysRemoved} key(s) removed`);
+      this.notice.set(this.restoreReceipt(r));
       await this.reload();
     } catch {
       if(!this.current(scope))return;

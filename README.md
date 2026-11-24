@@ -2617,3 +2617,7 @@ Editor save/review browser suites fail closed through cleanup:
 Editor departure/filter/branch-recovery browser suites fail closed through cleanup:
 `npm run test:editor-departure-browser-harness`.
 [Review0735](docs/reviews/0735-editor-departure-browser-harness.md).
+
+Confirmed snapshot restores keep their receipt when success counts are unavailable,
+without converting metadata problems into an unknown write or replay.
+[Review0736](docs/reviews/0736-snapshot-restore-receipt.md).

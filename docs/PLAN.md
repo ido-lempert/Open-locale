@@ -3071,3 +3071,9 @@ and real startup harness, with unmatched selections rejected.
 Branch-drafts/filter-drafts/search-departure/branch-unknown completion/exit guards
 and real startup harness, with unmatched selections rejected.
 [Review0735](reviews/0735-editor-departure-browser-harness.md).
+
+
+### Bound confirmed restore receipt counts
+Safe independent count fields, explicit unavailable metadata, and confirmed-null
+success preserved across follow-up read failure without replay.
+[Review0736](reviews/0736-snapshot-restore-receipt.md).
