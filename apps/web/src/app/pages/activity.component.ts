@@ -116,7 +116,7 @@ export class ActivityComponent implements OnInit, OnDestroy {
   setOrder(value:string){if(!this.destroyed&&(value==='loaded'||value==='newest'||value==='oldest'))this.order.set(value);}
   visibleItems=computed(()=>{
     const query=this.query().trim().toLocaleLowerCase();
-    const rows=query?this.items().filter(ev=>[ev.actor?.displayName??'Former user',ev.action,this.label(ev.action),ev.keyName??'',ev.localeCode??''].some(value=>value.toLocaleLowerCase().includes(query))):this.items();
+    const rows=query?this.items().filter(ev=>[ev.actor?.displayName??'Former user',ev.action,typeof ev.action==='string'?this.label(ev.action):'',ev.keyName??'',ev.localeCode??''].some(value=>typeof value==='string'&&value.toLocaleLowerCase().includes(query))):this.items();
     const order=this.order();if(order==='loaded')return rows;
     const time=(ev:ActivityEntry)=>{const parsed=typeof ev.createdAt==='string'&&ev.createdAt.trim()?Date.parse(ev.createdAt):NaN;return Number.isFinite(parsed)?parsed:null;};
     return [...rows].sort((a,b)=>{const left=time(a),right=time(b);if(left===right)return 0;if(left===null)return 1;if(right===null)return -1;return order==='oldest'?left-right:right-left;});

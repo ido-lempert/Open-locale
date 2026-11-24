@@ -2649,3 +2649,7 @@ changing full branch reports and downloads.
 Saved-search copy/download/description/help browser suites retain startup failures:
 `npm run test:saved-search-export-browser-harness`.
 [Review0743](docs/reviews/0743-saved-search-export-browser-harness.md).
+
+Activity local search skips nonstring loaded metadata without coercion; local
+order and full allowlisted metadata download stay unchanged.
+[Review0744](docs/reviews/0744-activity-search-metadata.md).

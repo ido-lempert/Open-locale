@@ -3119,3 +3119,9 @@ Full loaded totals, sibling dashboards and raw download unchanged.
 Four completion-guarded browser entry points and actual startup harness, with
 unmatched selections rejected.
 [Review0743](reviews/0743-saved-search-export-browser-harness.md).
+
+
+### Type-safe loaded activity search metadata
+Actor/action/key/locale search checks strings first. Valid labels, local ordering,
+loaded scope and raw allowlisted download retained.
+[Review0744](reviews/0744-activity-search-metadata.md).
