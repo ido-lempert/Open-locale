@@ -2653,3 +2653,7 @@ Saved-search copy/download/description/help browser suites retain startup failur
 Activity local search skips nonstring loaded metadata without coercion; local
 order and full allowlisted metadata download stay unchanged.
 [Review0744](docs/reviews/0744-activity-search-metadata.md).
+
+Saved-search exact/whitespace/status/tag browser suites retain startup failures:
+`npm run test:saved-search-filter-browser-harness`.
+[Review0745](docs/reviews/0745-saved-search-filter-browser-harness.md).

@@ -3125,3 +3125,9 @@ unmatched selections rejected.
 Actor/action/key/locale search checks strings first. Valid labels, local ordering,
 loaded scope and raw allowlisted download retained.
 [Review0744](reviews/0744-activity-search-metadata.md).
+
+
+### Fail-closed saved-search filter browser verification
+Four completion-guarded browser suites and actual startup harness; unmatched
+selections reject.
+[Review0745](reviews/0745-saved-search-filter-browser-harness.md).
