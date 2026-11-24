@@ -2699,3 +2699,8 @@ Member-settings refresh, discard, email-discard and pending-draft browser checks
 fail closed on incomplete startup cleanup. Run
 `npm run test:settings-member-browser-harness` for real occupied-port regression.
 See [review0755](docs/reviews/0755-settings-member-browser-harness.md).
+
+Group-settings refresh, discard, name-discard and pending-draft browser checks
+fail closed on incomplete startup cleanup. Run
+`npm run test:settings-group-browser-harness` for real occupied-port regression.
+See [review0756](docs/reviews/0756-settings-group-browser-harness.md).
