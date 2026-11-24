@@ -2553,3 +2553,7 @@ See [review0718](docs/reviews/0718-editor-create-delete-browser-harness.md).
 Webhook journal recorded outcome labels accept exact boolean metadata only;
 malformed values show unavailable, not inferred success/failure.
 [Review0719](docs/reviews/0719-webhook-success-metadata.md).
+
+Key-metadata browser suites have explicit completion/exit safeguards and real
+startup-abort coverage: `npm run test:editor-key-metadata-browser-harness`.
+[Review0720](docs/reviews/0720-editor-key-metadata-browser-harness.md).

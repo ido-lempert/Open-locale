@@ -2975,3 +2975,9 @@ unmatched selections. [Review0718](reviews/0718-editor-create-delete-browser-har
 Exact booleans determine Succeeded/Failed labels; malformed loaded values are
 unavailable without coercion. Existing strict filters and raw download unchanged.
 [Review0719](reviews/0719-webhook-success-metadata.md).
+
+
+### Fail-closed editor key-metadata browser verification
+Description read/create and length/plural create suites preserve incomplete-run
+failures through cleanup. Real occupied-port harness rejects empty selections.
+[Review0720](reviews/0720-editor-key-metadata-browser-harness.md).
