@@ -2645,3 +2645,7 @@ Saved-search core/clear/cancel/focus browser suites preserve incomplete failures
 Progress/quality locale search skips nonstring loaded codes without coercion or
 changing full branch reports and downloads.
 [Review0742](docs/reviews/0742-reports-locale-metadata.md).
+
+Saved-search copy/download/description/help browser suites retain startup failures:
+`npm run test:saved-search-export-browser-harness`.
+[Review0743](docs/reviews/0743-saved-search-export-browser-harness.md).

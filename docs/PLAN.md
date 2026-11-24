@@ -3113,3 +3113,9 @@ unmatched selections rejected.
 Both projections search strings only; malformed codes cannot break filtering.
 Full loaded totals, sibling dashboards and raw download unchanged.
 [Review0742](reviews/0742-reports-locale-metadata.md).
+
+
+### Fail-closed saved-search copy/download/context verification
+Four completion-guarded browser entry points and actual startup harness, with
+unmatched selections rejected.
+[Review0743](reviews/0743-saved-search-export-browser-harness.md).
