@@ -2535,3 +2535,8 @@ track explicit completion and disable child Nx daemon. Run
 `npm run test:editor-core-browser-harness` for four actual occupied-port paths.
 Optional `EDITOR_CORE_HARNESS_FILTER` narrows cases; unmatched selections fail.
 [Review0715](docs/reviews/0715-editor-core-browser-harness.md).
+
+### Guard loaded delivery attempt/duration metadata
+Nonnegative safe integers retain count/ms labels, including zero. Malformed
+metrics show fixed unavailable labels; source download data remains unchanged.
+[Review0716](docs/reviews/0716-webhook-metrics.md).

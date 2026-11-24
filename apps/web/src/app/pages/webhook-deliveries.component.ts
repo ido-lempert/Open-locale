@@ -41,8 +41,8 @@ import { ApiService, WebhookDeliveryInfo } from '../api.service';
           @for(d of visibleItems();track d.id){
             <li class="delivery-row">
               <strong>{{d.success?'Succeeded':'Failed'}}</strong><span class="delivery-event">{{d.event}}</span>
-              <span>HTTP {{httpStatusLabel(d.httpStatus)}}</span><span>{{d.attempts}} attempt(s)</span>
-              <span>{{d.durationMs}} ms</span><time name="deliveryTime" [attr.datetime]="validTime(d.createdAt)?d.createdAt:null">{{timeLabel(d.createdAt)}}</time>
+              <span>HTTP {{httpStatusLabel(d.httpStatus)}}</span><span>{{attemptsLabel(d.attempts)}}</span>
+              <span>{{durationLabel(d.durationMs)}}</span><time name="deliveryTime" [attr.datetime]="validTime(d.createdAt)?d.createdAt:null">{{timeLabel(d.createdAt)}}</time>
             </li>
           }@empty{<li name="deliveriesEmpty" class="muted">{{httpFilter() ? 'No loaded records match this HTTP status filter and other choices. Clear HTTP status filter, event search or recorded status to widen the results.' : query().trim() ? 'No loaded records match this event search and status. Clear event search or status filter to widen the results.' : status() ? 'No loaded records match this status. Clear status filter to show all loaded records.' : 'No recorded deliveries for this webhook.'}}</li>}
         </ul>
@@ -64,6 +64,9 @@ export class WebhookDeliveriesComponent implements OnInit,OnDestroy {
   setStatus(value:string){if(!this.destroyed&&(value===''||value==='succeeded'||value==='failed'))this.status.set(value);}
   private generation=0;private destroyed=false;private routeSub?:Subscription;
   constructor(private readonly route:ActivatedRoute,private readonly api:ApiService,@Inject(LOCALE_ID) private readonly displayLocale='en-US'){}
+  validMetric(value:unknown):value is number{return typeof value==='number'&&Number.isSafeInteger(value)&&value>=0;}
+  attemptsLabel(value:unknown):string{return this.validMetric(value)?`${value} attempt(s)`:'Attempts unavailable';}
+  durationLabel(value:unknown):string{return this.validMetric(value)?`${value} ms`:'Duration unavailable';}
   validHttpStatus(value:unknown):value is number{return typeof value==='number'&&Number.isInteger(value)&&value>=100&&value<=599;}
   httpStatusLabel(value:unknown):string{return this.validHttpStatus(value)?String(value):'unavailable';}
   validTime(value:unknown):value is string{return typeof value==='string'&&!!value.trim()&&Number.isFinite(Date.parse(value));}

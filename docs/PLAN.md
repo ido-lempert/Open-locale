@@ -2951,3 +2951,9 @@ metadata stays unavailable, with independent success and raw download preserved.
 Project/key startup failures retained; branch/retry-focus completion guarded too.
 Actual occupied-port harness rejects unmatched selections.
 [Review0715](reviews/0715-editor-core-browser-harness.md).
+
+
+### Bound malformed webhook attempt and duration metadata
+Guarded nonnegative safe integer display keeps zero valid and malformed values
+unavailable without modifying raw download data or delivery behavior.
+[Review0716](reviews/0716-webhook-metrics.md).
