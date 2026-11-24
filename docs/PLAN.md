@@ -3171,3 +3171,8 @@ unmatched selections reject.
 Loaded saved-search key-name filtering skips nonstring metadata without coercion.
 The local filter never changes the loaded set or full report download scope.
 See [review0752](reviews/0752-saved-search-key-metadata.md).
+
+Locale-settings validation, discard, pending-draft and refresh browser checks
+fail closed on incomplete startup cleanup. Run
+`npm run test:settings-locale-browser-harness` for real occupied-port regression.
+See [review0753](reviews/0753-settings-locale-browser-harness.md).
