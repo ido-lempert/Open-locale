@@ -2609,3 +2609,7 @@ Editor context-metadata browser suites preserve incomplete-run failures:
 Malformed loaded snapshot labels show bounded unavailable text; search skips
 nonstring labels, raw inventory stays unchanged.
 [Review0733](docs/reviews/0733-snapshots-label-metadata.md).
+
+Editor save/review browser suites fail closed through cleanup:
+`npm run test:editor-save-browser-harness`.
+[Review0734](docs/reviews/0734-editor-save-browser-harness.md).

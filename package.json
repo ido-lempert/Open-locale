@@ -369,6 +369,7 @@
     "test:editor-branch-write-browser-harness": "node scripts/editor-branch-write-browser-harness-test.mjs",
     "test:editor-context-write-browser-harness": "node scripts/editor-context-write-browser-harness-test.mjs",
     "test:editor-context-metadata-browser-harness": "node scripts/editor-context-metadata-browser-harness-test.mjs",
+    "test:editor-save-browser-harness": "node scripts/editor-save-browser-harness-test.mjs",
     "test:editor-core-browser-harness": "node scripts/editor-core-browser-harness-test.mjs",
     "test:webhook-metrics-browser": "node scripts/webhook-metrics-browser-test.mjs",
     "test:webhook-success-metadata-browser": "node scripts/webhook-success-metadata-browser-test.mjs",
