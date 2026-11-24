@@ -3023,3 +3023,9 @@ completion/exit guards and actual startup harness; empty selections reject.
 Key/conflict/manual-review counts use safe nonnegative integers and bounded
 unavailable labels. Attention skips malformed values; raw download unchanged.
 [Review0727](reviews/0727-sync-history-counts.md).
+
+
+### Fail-closed editor branch-write browser verification
+Merge/merge-identity/branch-name-validation/import-drafts suites gain explicit
+completion/exit guards and actual startup harness; empty selections reject.
+[Review0728](reviews/0728-editor-branch-write-browser-harness.md).

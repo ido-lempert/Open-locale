@@ -2585,3 +2585,7 @@ Editor draft-download/focus browser suites preserve incomplete-run failures:
 Diagnostic counts require nonnegative safe integers; attention matches positive
 recorded counts only, without coercion or changing raw download.
 [Review0727](docs/reviews/0727-sync-history-counts.md).
+
+Editor branch-write browser suites preserve incomplete-run failures:
+`npm run test:editor-branch-write-browser-harness`.
+[Review0728](docs/reviews/0728-editor-branch-write-browser-harness.md).
