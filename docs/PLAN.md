@@ -3167,3 +3167,7 @@ unknown-action state without recovery or replay.
 Four completion-guarded entry points and actual occupied-port startup harness;
 unmatched selections reject.
 [Review0751](reviews/0751-settings-general-browser-harness.md).
+
+Loaded saved-search key-name filtering skips nonstring metadata without coercion.
+The local filter never changes the loaded set or full report download scope.
+See [review0752](reviews/0752-saved-search-key-metadata.md).

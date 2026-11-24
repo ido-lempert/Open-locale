@@ -43,7 +43,7 @@ export class SavedSearchComponent implements OnInit,OnDestroy {
  downloadNotice=signal('');copyNotice=signal('');copyPending=signal(false);
  optionsLoading=signal(false);optionsError=signal(false);loading=signal(false);error=signal(false);searched=signal(false);results=signal<{id:string;key:string;value:string;sourceValue:string|null;status:string|null;description:string|null;tags:string[]|null;commentCount:number|null;screenshotCount:number|null}[]>([]);
  loadedKeyQuery=signal('');
- visibleResults=computed(()=>{const query=this.loadedKeyQuery().toLowerCase();return query?this.results().filter(row=>row.key.toLowerCase().includes(query)):this.results();});
+ visibleResults=computed(()=>{const query=this.loadedKeyQuery().toLowerCase();return query?this.results().filter(row=>typeof row.key==='string'&&row.key.toLowerCase().includes(query)):this.results();});
  setLoadedKeyQuery(value:string){if(!this.canDownload())return;++this.generation;this.loadedKeyQuery.set(value.slice(0,200));this.downloadNotice.set('');this.copyNotice.set('');}
  clearLoadedKeyQuery(){if(!this.canDownload()||!this.loadedKeyQuery())return;this.setLoadedKeyQuery('');this.focusAfterRender('loadedKey',this.generation);}
  @ViewChild('loadedKeyText') private loadedKeyText?:ElementRef<HTMLInputElement>;

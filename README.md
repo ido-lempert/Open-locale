@@ -2681,3 +2681,7 @@ retaining due order, drafts and unconfirmed-action pause.
 General-settings details/discard/refresh/draft browser suites retain startup failures:
 `npm run test:settings-general-browser-harness`.
 [Review0751](docs/reviews/0751-settings-general-browser-harness.md).
+
+Loaded saved-search key-name filtering skips nonstring metadata without coercion.
+The local filter never changes the loaded set or full report download scope.
+See [review0752](docs/reviews/0752-saved-search-key-metadata.md).

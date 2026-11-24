@@ -376,6 +376,7 @@
     "test:projects-search-metadata-browser": "python3 scripts/run-reaped.py node scripts/projects-search-metadata-browser-test.mjs",
     "test:glossary-search-metadata-browser": "python3 scripts/run-reaped.py node scripts/glossary-search-metadata-browser-test.mjs",
     "test:tasks-search-metadata-browser": "python3 scripts/run-reaped.py node scripts/tasks-search-metadata-browser-test.mjs",
+    "test:saved-search-key-metadata-browser": "python3 scripts/run-reaped.py node scripts/saved-search-key-metadata-browser-test.mjs",
     "test:qa-clear-browser": "python3 scripts/run-reaped.py node scripts/qa-clear-browser-test.mjs",
     "test:snapshot-restore-receipt-browser": "python3 scripts/run-reaped.py node scripts/snapshot-restore-receipt-browser-test.mjs",
     "test:editor-recovery-browser-harness": "node scripts/editor-recovery-browser-harness-test.mjs",
