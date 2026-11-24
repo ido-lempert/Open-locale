@@ -2565,3 +2565,7 @@ recorded attention, keeping time order and loaded records.
 Editor validation browser suites preserve incomplete runs as failures:
 `npm run test:editor-validation-browser-harness`.
 [Review0722](docs/reviews/0722-editor-validation-browser-harness.md).
+
+Snapshot inventory Clear all filters resets local search/kind while keeping time
+order, capture draft and unknown-outcome safeguards.
+[Review0723](docs/reviews/0723-snapshots-clear-filters.md).

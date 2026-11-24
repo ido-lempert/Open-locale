@@ -2993,3 +2993,9 @@ loaded snapshot and feedback without refresh/download/apply.
 Key name/description, locale-code and tag validation suites gain completion/exit
 guards and real occupied-port harness. Empty selections reject.
 [Review0722](reviews/0722-editor-validation-browser-harness.md).
+
+
+### Clear combined snapshot inventory filters
+Local reset clears label search and recorded kind, retaining order, loaded
+metadata, capture draft and pending/unknown guards without side effects.
+[Review0723](reviews/0723-snapshots-clear-filters.md).
