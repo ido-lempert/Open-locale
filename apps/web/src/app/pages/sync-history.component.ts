@@ -129,6 +129,8 @@ import { ApiService, SyncPreviewRecord } from '../api.service';
           caller SHA or fingerprint as a literal, case-insensitive substring. It combines with recorded attention and
           does not read newer records or verify caller labels.
         </p>
+        <button type="button" name="clearAllSyncHistoryFilters" [disabled]="!hasFilters()" aria-describedby="clearAllSyncHistoryFiltersScope" (click)="clearFilters()">Clear all filters</button>
+        <p class="muted" id="clearAllSyncHistoryFiltersScope" name="clearAllSyncHistoryFiltersScope">Clears local search and recorded attention only. Time order and loaded records stay. This does not refresh, download, verify caller labels or apply changes.</p>
         <ul class="records">
           @for (r of filteredRecords(); track r.id) {
             <li>
@@ -192,6 +194,8 @@ export class SyncHistoryComponent implements OnInit, OnDestroy {
   downloadNotice = signal('');
   attention=signal<''|'conflict'|'manual'>('');
   setAttention(value:string){if(!this.destroyed&&(value===''||value==='conflict'||value==='manual'))this.attention.set(value);}
+  hasFilters(){return !!this.query()||!!this.attention();}
+  clearFilters(){if(this.destroyed)return;this.query.set('');this.attention.set('');}
   emptyLabel(){return this.attention()?'No loaded diagnostic records match this attention filter and search. Clear attention filter or search to show other loaded records.':'No loaded diagnostic records match this search. Clear search to show all loaded records.';}
   order=signal<'loaded'|'newest'|'oldest'>('loaded');
   setOrder(value:string){if(!this.destroyed&&(value==='loaded'||value==='newest'||value==='oldest'))this.order.set(value);}

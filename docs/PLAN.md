@@ -2981,3 +2981,9 @@ unavailable without coercion. Existing strict filters and raw download unchanged
 Description read/create and length/plural create suites preserve incomplete-run
 failures through cleanup. Real occupied-port harness rejects empty selections.
 [Review0720](reviews/0720-editor-key-metadata-browser-harness.md).
+
+
+### Clear combined diagnostic preview history filters
+Explicit local reset clears search and recorded attention, retaining time order,
+loaded snapshot and feedback without refresh/download/apply.
+[Review0721](reviews/0721-sync-history-clear-filters.md).

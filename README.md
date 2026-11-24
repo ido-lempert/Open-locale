@@ -2557,3 +2557,7 @@ malformed values show unavailable, not inferred success/failure.
 Key-metadata browser suites have explicit completion/exit safeguards and real
 startup-abort coverage: `npm run test:editor-key-metadata-browser-harness`.
 [Review0720](docs/reviews/0720-editor-key-metadata-browser-harness.md).
+
+Diagnostic preview history has a local Clear all filters reset for search and
+recorded attention, keeping time order and loaded records.
+[Review0721](docs/reviews/0721-sync-history-clear-filters.md).
