@@ -2669,3 +2669,7 @@ Saved-search source/status/tags/counts context suites retain startup failures:
 Glossary search skips nonstring term/notes/translation values without coercion,
 retaining local drafts and unconfirmed outcomes.
 [Review0748](docs/reviews/0748-glossary-search-metadata.md).
+
+Saved-search branch/local-result/report context suites retain startup failures:
+`npm run test:saved-search-link-browser-harness`.
+[Review0749](docs/reviews/0749-saved-search-link-browser-harness.md).

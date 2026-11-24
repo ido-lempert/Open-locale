@@ -3149,3 +3149,9 @@ selections reject.
 String-only case folding preserves attention intersection and loaded rows,
 without recovery, replay or local draft changes.
 [Review0748](reviews/0748-glossary-search-metadata.md).
+
+
+### Fail-closed saved-search branch/local-result verification
+Four completion-guarded entry points and actual startup harness; unmatched
+selections reject.
+[Review0749](reviews/0749-saved-search-link-browser-harness.md).
