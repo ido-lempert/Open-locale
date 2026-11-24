@@ -2963,3 +2963,9 @@ unavailable without modifying raw download data or delivery behavior.
 Nonstring/blank event names unavailable; nonempty search skips malformed source
 names without searching fallback label. Source download unchanged.
 [Review0717](reviews/0717-webhook-event-metadata.md).
+
+
+### Fail-closed editor key/locale write browser verification
+Key create/delete/delete-confirm and locale-create suites explicitly preserve
+incomplete-run failures through cleanup. Actual occupied-port harness rejects
+unmatched selections. [Review0718](reviews/0718-editor-create-delete-browser-harness.md).

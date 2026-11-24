@@ -2545,3 +2545,7 @@ metrics show fixed unavailable labels; source download data remains unchanged.
 Malformed/blank event names use fixed unavailable labels and cannot interrupt
 local search. Valid literal names/source downloads remain unchanged.
 [Review0717](docs/reviews/0717-webhook-event-metadata.md).
+
+Editor create/delete browser verification now has explicit completion and exit
+guards with an occupied-port harness: `npm run test:editor-create-delete-browser-harness`.
+See [review0718](docs/reviews/0718-editor-create-delete-browser-harness.md).

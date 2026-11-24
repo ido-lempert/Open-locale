@@ -7,11 +7,12 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55607, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.EDITOR_CREATE_DELETE_TEST_PG_PORT ?? 55607), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-key-create-browser-'));
@@ -28,7 +29,7 @@ try {
   const token=owner.accessToken;
   const project=await call('/projects',{name:'Sync browser',slug:'sync-browser',locales:['en','he']},token);
   const P=`/projects/${project.id}`;
-  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{stdio:'pipe',detached:true});await waitFor(WEB);
+  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{env:{...process.env,NX_DAEMON:'false'},stdio:'pipe',detached:true});await waitFor(WEB);
   browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH??'/usr/bin/google-chrome',args:['--no-sandbox','--disable-dev-shm-usage']});
   const diagnostics=[];const page=await browser.newPage();page.on('console',m=>diagnostics.push(m.text()));page.on('pageerror',e=>diagnostics.push(e.message));await page.setViewport({width:1280,height:900});
   await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.evaluate(t=>localStorage.setItem('ol_token',t),token);
@@ -41,7 +42,7 @@ try {
   await heldKey.continue();await page.waitForSelector('[aria-label="created in en"]');await page.waitForFunction(()=>!document.querySelector('[name=addKey]')?.disabled);const keys=await call(`${P}/keys`,null,token);check('targeted confirmed insertion preserves held translation/newer name without key GET',keyReads===0&&await page.$eval('[aria-label="alpha in en"]',e=>e.value==='Local translation draft')&&await page.$eval('[name=newKey]',e=>e.value==='newer-key-draft')&&keys.some(k=>k.name==='created')&&keys.find(k=>k.name==='alpha').translations.find(t=>t.localeCode==='en').value==='Original'&&await page.$eval('.notice',e=>e.textContent.trim()==='Key "created" was created on branch "main". Existing local translation values were kept.'));await page.screenshot({path:'/downloads/editor-key-create-retained.png',fullPage:false});
   failCreate=true;await page.click('[name=addKey]');await page.waitForSelector('[name=keyCreateError]');check('unknown create has fixed scoped error and retains all local drafts without reload/replay',creates===2&&keyReads===0&&await page.$eval('[name=newKey]',e=>e.value==='newer-key-draft')&&await page.$eval('[aria-label="alpha in en"]',e=>e.value==='Local translation draft')&&!(await page.$eval('main',e=>e.innerText)).includes('PRIVATE_'));await page.screenshot({path:'/downloads/editor-key-create-error.png',fullPage:false});
   await heldTranslation.respond({status:503,contentType:'application/json',body:'{}'});await page.waitForSelector('[name=reloadAfterSave]');await page.reload({waitUntil:'networkidle0'});await page.waitForSelector('[aria-label="alpha in en"]');await page.type('[aria-label="Search keys"]','alpha');await page.waitForFunction(()=>!document.querySelector('[aria-label="created in en"]')&&!!document.querySelector('[aria-label="alpha in en"]'));failCreate=false;heldKey=null;await page.type('[name=newKey]','outside-filter');await page.click('[name=addKey]');for(let n=0;n<100&&!heldKey;n++)await new Promise(r=>setTimeout(r,20));if(!heldKey)throw new Error('filtered POST not held');const readsBefore=keyReads;await heldKey.continue();await page.waitForFunction(()=>document.querySelector('.notice')?.textContent.includes('Key "outside-filter" was created'));check('filtered create stays confirmed without injecting mismatching row or list read',keyReads===readsBefore&&!(await page.$('[aria-label="outside-filter in en"]'))&&await page.$eval('[aria-label="Search keys"]',e=>e.value==='alpha')&&await page.$eval('.notice',e=>e.textContent.includes('current grid was kept'))&&(await call(`${P}/keys`,null,token)).some(k=>k.name==='outside-filter'));await page.screenshot({path:'/downloads/editor-key-create-filtered.png',fullPage:false});
-  check('no key creation runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
+  check('no key creation runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
 } catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??String(e)}`);process.exitCode=1;}
 finally {
   await browser?.close();
@@ -57,4 +58,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(failures?1:0);
+process.exit(!completed||failures?1:0);
