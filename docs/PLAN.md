@@ -3101,3 +3101,9 @@ harness; unmatched selection rejects.
 Search key/locale/detail strings only; malformed fields cannot break filtering.
 Other valid fields and raw full findings download preserved.
 [Review0740](reviews/0740-qa-search-metadata.md).
+
+
+### Fail-closed saved-search core browser verification
+Base/clear/cancel/focus completion guards and actual startup harness with
+unmatched selections rejected.
+[Review0741](reviews/0741-saved-search-core-browser-harness.md).

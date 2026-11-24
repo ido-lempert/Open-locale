@@ -2637,3 +2637,7 @@ Editor locale/screenshot/tag browser suites preserve incomplete-run failures:
 QA local search skips nonstring loaded metadata without coercion or changing
 the full raw findings download.
 [Review0740](docs/reviews/0740-qa-search-metadata.md).
+
+Saved-search core/clear/cancel/focus browser suites preserve incomplete failures:
+`npm run test:saved-search-core-browser-harness`.
+[Review0741](docs/reviews/0741-saved-search-core-browser-harness.md).
