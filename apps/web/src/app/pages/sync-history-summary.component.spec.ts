@@ -1,0 +1,6 @@
+import {SyncHistoryComponent} from './sync-history.component';
+const make=()=>new SyncHistoryComponent({} as any,{} as any);
+describe('bounded diagnostic summary containers',()=>{
+ for(const summary of [undefined,null,'1',1,true,[],[1],{}])it(`handles unavailable summary ${String(summary)}`,()=>{const c=make();for(const field of ['total','conflict','manual'] as const){expect(c.summaryValue(summary,field)).toBeUndefined();expect(c.countLabel(c.summaryValue(summary,field),'keys','Count')).toBe('Count unavailable');}const rows=[{id:'bad',summary},{id:'yes',summary:{total:1,conflict:1,manual:1}}];c.records.set(rows as any);expect(c.filteredRecords()).toBe(rows);for(const kind of ['conflict','manual']){c.setAttention(kind);expect(c.filteredRecords().map(r=>r.id)).toEqual(['yes']);}c.clearFilters();expect(c.records()[0].summary).toBe(summary);});
+ it('preserves own allowlisted values but rejects inherited counts',()=>{const c=make(),summary={total:'raw',conflict:0,manual:{private:'not coerced'}};expect(c.summaryValue(summary,'total')).toBe('raw');expect(c.summaryValue(summary,'conflict')).toBe(0);expect(c.summaryValue(summary,'manual')).toBe(summary.manual);expect(c.summaryValue(Object.create({total:1}),'total')).toBeUndefined();});
+});

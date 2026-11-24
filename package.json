@@ -166,6 +166,7 @@
     "test:snapshots-kind-browser": "node scripts/snapshots-kind-browser-test.mjs",
     "test:ota-time-browser": "node scripts/ota-time-browser-test.mjs",
     "test:ota-value-filter-browser": "node scripts/ota-value-filter-browser-test.mjs",
+    "test:sync-history-summary-browser": "node scripts/sync-history-summary-browser-test.mjs",
     "test:sync-history-counts-browser": "node scripts/sync-history-counts-browser-test.mjs",
     "test:sync-history-metadata-browser": "node scripts/sync-history-metadata-browser-test.mjs",
     "test:sync-history-clear-browser": "node scripts/sync-history-clear-browser-test.mjs",

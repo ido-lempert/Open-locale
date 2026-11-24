@@ -141,9 +141,9 @@ import { ApiService, SyncPreviewRecord } from '../api.service';
                   not applied
                 </p>
                 <p>
-                  {{countLabel(r.summary.total,'keys','Key count')}} ·
-                  {{countLabel(r.summary.conflict,'conflicts','Conflict count')}} ·
-                  {{countLabel(r.summary.manual,'manual-review keys','Manual-review count')}}
+                  {{countLabel(summaryValue(r.summary,'total'),'keys','Key count')}} ·
+                  {{countLabel(summaryValue(r.summary,'conflict'),'conflicts','Conflict count')}} ·
+                  {{countLabel(summaryValue(r.summary,'manual'),'manual-review keys','Manual-review count')}}
                 </p>
                 <dl>
                   <dt>Fingerprint</dt>
@@ -196,7 +196,7 @@ export class SyncHistoryComponent implements OnInit, OnDestroy {
   setOrder(value:string){if(!this.destroyed&&(value==='loaded'||value==='newest'||value==='oldest'))this.order.set(value);}
   filteredRecords=computed(()=>{
     const query=this.query().trim().toLowerCase(),attention=this.attention();
-    const rows=!query&&!attention?this.records():this.records().filter(r=>(!query||[r.branch,r.locale,r.remoteSha,r.fingerprint].some(value=>this.validMetadata(value)&&value.toLowerCase().includes(query)))&&(!attention||(attention==='conflict'?this.positiveCount(r.summary.conflict):this.positiveCount(r.summary.manual))));
+    const rows=!query&&!attention?this.records():this.records().filter(r=>(!query||[r.branch,r.locale,r.remoteSha,r.fingerprint].some(value=>this.validMetadata(value)&&value.toLowerCase().includes(query)))&&(!attention||(attention==='conflict'?this.positiveCount(this.summaryValue(r.summary,'conflict')):this.positiveCount(this.summaryValue(r.summary,'manual')))));
     const order=this.order();if(order==='loaded')return rows;
     const time=(r:SyncPreviewRecord)=>{const parsed=typeof r.createdAt==='string'&&r.createdAt.trim()?Date.parse(r.createdAt):NaN;return Number.isFinite(parsed)?parsed:null;};
     return [...rows].sort((a,b)=>{const left=time(a),right=time(b);if(left===right)return 0;if(left===null)return 1;if(right===null)return -1;return order==='oldest'?left-right:right-left;});
@@ -212,6 +212,7 @@ export class SyncHistoryComponent implements OnInit, OnDestroy {
     private api: ApiService,
     @Inject(LOCALE_ID) private readonly displayLocale='en-US',
   ) {}
+  summaryValue(summary:unknown,field:'total'|'conflict'|'manual'):unknown{return summary&&typeof summary==='object'&&!Array.isArray(summary)&&Object.prototype.hasOwnProperty.call(summary,field)?(summary as Record<string,unknown>)[field]:undefined;}
   validCount(value:unknown):value is number{return typeof value==='number'&&Number.isSafeInteger(value)&&value>=0;}
   positiveCount(value:unknown):boolean{return this.validCount(value)&&value>0;}
   countLabel(value:unknown,unit:string,name:string):string{return this.validCount(value)?`${value} ${value===1?unit.slice(0,-1):unit}`:`${name} unavailable`;}
@@ -239,7 +240,7 @@ export class SyncHistoryComponent implements OnInit, OnDestroy {
     if (this.destroyed || this.loading() || this.error() || !this.loaded()) return;
     let url: string | undefined;
     try {
-      const records = this.records().map(({id,branch,locale,fingerprint,remoteSha,createdAt,summary}) => ({id,branch,locale,fingerprint,remoteSha,createdAt,summary:{total:summary.total,conflict:summary.conflict,manual:summary.manual}}));
+      const records = this.records().map(({id,branch,locale,fingerprint,remoteSha,createdAt,summary}) => ({id,branch,locale,fingerprint,remoteSha,createdAt,summary:{total:this.summaryValue(summary,'total'),conflict:this.summaryValue(summary,'conflict'),manual:this.summaryValue(summary,'manual')}}));
       const content = JSON.stringify({schemaVersion:1,projectId:this.projectId,scope:'all-loaded-diagnostics',canApply:false,baselineVerified:false,remoteVerified:false,records},null,2);
       url = URL.createObjectURL(new Blob([content],{type:'application/json;charset=utf-8'}));
       const anchor = document.createElement('a'); anchor.href=url; anchor.download='sync-diagnostics.json'; anchor.click();

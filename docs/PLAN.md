@@ -3029,3 +3029,9 @@ unavailable labels. Attention skips malformed values; raw download unchanged.
 Merge/merge-identity/branch-name-validation/import-drafts suites gain explicit
 completion/exit guards and actual startup harness; empty selections reject.
 [Review0728](reviews/0728-editor-branch-write-browser-harness.md).
+
+
+### Guard missing diagnostic summary containers
+Safe own-property lookup protects display, attention and allowlisted download
+projection. Missing counts omitted in JSON, not inferred zero.
+[Review0729](reviews/0729-sync-history-summary.md).

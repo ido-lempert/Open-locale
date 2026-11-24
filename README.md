@@ -2589,3 +2589,7 @@ recorded counts only, without coercion or changing raw download.
 Editor branch-write browser suites preserve incomplete-run failures:
 `npm run test:editor-branch-write-browser-harness`.
 [Review0728](docs/reviews/0728-editor-branch-write-browser-harness.md).
+
+Diagnostic missing/nonobject summary containers are safely unavailable; downloads
+project only existing allowlisted count fields, never extra summary properties.
+[Review0729](docs/reviews/0729-sync-history-summary.md).
