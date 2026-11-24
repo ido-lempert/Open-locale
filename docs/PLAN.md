@@ -3005,3 +3005,9 @@ metadata, capture draft and pending/unknown guards without side effects.
 Export/import/backup/bundle scope suites gain explicit completion/exit guards and
 actual occupied-port startup harness, rejecting unmatched selections.
 [Review0724](reviews/0724-editor-file-scope-browser-harness.md).
+
+
+### Bound diagnostic caller-label metadata
+Branch/locale/caller SHA/fingerprint display and search guard nonstring/blank
+values. Valid literal labels and raw download unchanged; no remote verification.
+[Review0725](reviews/0725-sync-history-metadata.md).

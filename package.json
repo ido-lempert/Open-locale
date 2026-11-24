@@ -166,6 +166,7 @@
     "test:snapshots-kind-browser": "node scripts/snapshots-kind-browser-test.mjs",
     "test:ota-time-browser": "node scripts/ota-time-browser-test.mjs",
     "test:ota-value-filter-browser": "node scripts/ota-value-filter-browser-test.mjs",
+    "test:sync-history-metadata-browser": "node scripts/sync-history-metadata-browser-test.mjs",
     "test:sync-history-clear-browser": "node scripts/sync-history-clear-browser-test.mjs",
     "test:sync-history-attention-browser": "node scripts/sync-history-attention-browser-test.mjs",
     "test:tasks-draft-download-browser": "node scripts/tasks-draft-download-browser-test.mjs",

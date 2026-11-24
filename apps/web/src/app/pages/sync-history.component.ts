@@ -135,7 +135,7 @@ import { ApiService, SyncPreviewRecord } from '../api.service';
           @for (r of filteredRecords(); track r.id) {
             <li>
               <article>
-                <h2>{{ r.branch }} / {{ r.locale }}</h2>
+                <h2>{{metadataLabel(r.branch,'Branch')}} / {{metadataLabel(r.locale,'Locale')}}</h2>
                 <p>
                   <span name="syncHistoryTime">{{timeLabel(r.createdAt)}}</span> · Caller-file diagnostic,
                   not applied
@@ -153,11 +153,11 @@ import { ApiService, SyncPreviewRecord } from '../api.service';
                 <dl>
                   <dt>Fingerprint</dt>
                   <dd>
-                    <code>{{ r.fingerprint }}</code>
+                    <code>{{metadataLabel(r.fingerprint,'Fingerprint')}}</code>
                   </dd>
                   <dt>Caller blob SHA</dt>
                   <dd>
-                    <code>{{ r.remoteSha }}</code>
+                    <code>{{metadataLabel(r.remoteSha,'Caller blob SHA')}}</code>
                   </dd>
                 </dl>
               </article>
@@ -201,7 +201,7 @@ export class SyncHistoryComponent implements OnInit, OnDestroy {
   setOrder(value:string){if(!this.destroyed&&(value==='loaded'||value==='newest'||value==='oldest'))this.order.set(value);}
   filteredRecords=computed(()=>{
     const query=this.query().trim().toLowerCase(),attention=this.attention();
-    const rows=!query&&!attention?this.records():this.records().filter(r=>(!query||[r.branch,r.locale,r.remoteSha,r.fingerprint].some(value=>value.toLowerCase().includes(query)))&&(!attention||(attention==='conflict'?r.summary.conflict>0:r.summary.manual>0)));
+    const rows=!query&&!attention?this.records():this.records().filter(r=>(!query||[r.branch,r.locale,r.remoteSha,r.fingerprint].some(value=>this.validMetadata(value)&&value.toLowerCase().includes(query)))&&(!attention||(attention==='conflict'?r.summary.conflict>0:r.summary.manual>0)));
     const order=this.order();if(order==='loaded')return rows;
     const time=(r:SyncPreviewRecord)=>{const parsed=typeof r.createdAt==='string'&&r.createdAt.trim()?Date.parse(r.createdAt):NaN;return Number.isFinite(parsed)?parsed:null;};
     return [...rows].sort((a,b)=>{const left=time(a),right=time(b);if(left===right)return 0;if(left===null)return 1;if(right===null)return -1;return order==='oldest'?left-right:right-left;});
@@ -217,6 +217,8 @@ export class SyncHistoryComponent implements OnInit, OnDestroy {
     private api: ApiService,
     @Inject(LOCALE_ID) private readonly displayLocale='en-US',
   ) {}
+  validMetadata(value:unknown):value is string{return typeof value==='string'&&!!value.trim();}
+  metadataLabel(value:unknown,name:string):string{return this.validMetadata(value)?value:`${name} unavailable`;}
   timeLabel(value:unknown):string {
     if(typeof value!=='string'||!value.trim())return 'Recorded time unavailable';
     try{return new DatePipe(this.displayLocale).transform(value,'medium')||'Recorded time unavailable';}

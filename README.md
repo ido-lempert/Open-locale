@@ -2573,3 +2573,7 @@ order, capture draft and unknown-outcome safeguards.
 Editor file-scope browser scripts preserve incomplete-run failures:
 `npm run test:editor-file-scope-browser-harness`.
 [Review0724](docs/reviews/0724-editor-file-scope-browser-harness.md).
+
+Diagnostic history malformed caller labels are unavailable rather than coerced;
+search skips nonstring fields and inventory download retains raw metadata.
+[Review0725](docs/reviews/0725-sync-history-metadata.md).
