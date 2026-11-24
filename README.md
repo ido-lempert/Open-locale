@@ -2704,3 +2704,8 @@ Group-settings refresh, discard, name-discard and pending-draft browser checks
 fail closed on incomplete startup cleanup. Run
 `npm run test:settings-group-browser-harness` for real occupied-port regression.
 See [review0756](docs/reviews/0756-settings-group-browser-harness.md).
+
+Token-settings refresh, name-discard, pending-draft and hide browser checks
+fail closed on incomplete startup cleanup. Run
+`npm run test:settings-token-browser-harness` for real occupied-port regression.
+See [review0757](docs/reviews/0757-settings-token-browser-harness.md).

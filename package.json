@@ -386,6 +386,7 @@
     "test:saved-search-filter-browser-harness": "node scripts/saved-search-filter-browser-harness-test.mjs",
     "test:saved-search-context-browser-harness": "node scripts/saved-search-context-browser-harness-test.mjs",
     "test:saved-search-link-browser-harness": "node scripts/saved-search-link-browser-harness-test.mjs",
+    "test:settings-token-browser-harness": "node scripts/settings-token-browser-harness-test.mjs",
     "test:settings-group-browser-harness": "node scripts/settings-group-browser-harness-test.mjs",
     "test:settings-member-browser-harness": "node scripts/settings-member-browser-harness-test.mjs",
     "test:settings-locale-browser-harness": "node scripts/settings-locale-browser-harness-test.mjs",
