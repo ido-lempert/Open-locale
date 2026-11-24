@@ -7,11 +7,12 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55970, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.SETTINGS_GENERAL_TEST_PG_PORT ?? 55970), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-general-discard-'));
@@ -28,7 +29,7 @@ try {
   const token=owner.accessToken;
   const project=await call('/projects',{name:'Sync browser',slug:'sync-browser',locales:['en','he']},token);
   const P=`/projects/${project.id}`;
-  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{stdio:'pipe',detached:true});await waitFor(WEB);
+  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{env:{...process.env,NX_DAEMON:'false'},stdio:'pipe',detached:true});await waitFor(WEB);
   browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH??'/usr/bin/google-chrome',args:['--no-sandbox','--disable-dev-shm-usage']});
   const diagnostics=[];const page=await browser.newPage();page.on('console',m=>diagnostics.push(m.text()));page.on('pageerror',e=>diagnostics.push(e.message));await page.setViewport({width:1280,height:900});
   await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.evaluate(t=>localStorage.setItem('ol_token',t),token);
@@ -51,7 +52,7 @@ try {
   failRead=true;held=null;await replace('name',' Accepted before503 ');await replace('description',' Accepted503 details ');await click('saveSettingsGeneral');await poll();await replace('name',' Later raw name ');await replace('description','');await held.continue();await done();const afterReads=reads,afterWrites=writes;await click('discardSettingsGeneral');saved=await call(P,null,token);check('503 discard uses accepted PATCH not stale loaded project and preserves error receipt',saved.name===' Accepted before503 '&&saved.description===' Accepted503 details '&&JSON.stringify(await values())===JSON.stringify([saved.name,saved.description])&&reads===afterReads&&writes===afterWrites&&await page.evaluate(()=>ng.getComponent(document.querySelector('ol-settings')).error()==='Refresh failed')&&await page.$eval('[name=settingsGeneralDraftNotice]',e=>e.textContent.includes('were saved')&&e.textContent.includes('drafts were discarded')&&!e.textContent.includes('kept here')));
   failRead=false;failWrite=true;await replace('name',' Refused name ');await replace('description',' Refused details ');await click('saveSettingsGeneral');await done();const refusedReads=reads,refusedWrites=writes;await click('discardSettingsGeneral');check('refused PATCH cannot replace accepted discard fallback no refresh or extra write',JSON.stringify(await values())===JSON.stringify([' Accepted before503 ',' Accepted503 details '])&&reads===refusedReads&&writes===refusedWrites&&!await page.$('[name=settingsGeneralDraftNotice]')&&await page.evaluate(()=>ng.getComponent(document.querySelector('ol-settings')).error()==='Permission denied'));
   await replace('name','Screenshot unsaved');await page.$eval('[name=discardSettingsGeneral]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/settings-general-discard-desktop.png'});await page.setViewport({width:390,height:844});await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:'/downloads/settings-general-discard-mobile.png'});check('390px general reset and help fit without overflow',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)&&await page.$eval('[name=discardSettingsGeneral]',e=>e.getBoundingClientRect().right<=innerWidth));
-  check('no general discard runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
+  check('no general discard runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
 } catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??String(e)}`);process.exitCode=1;}
 finally {
   await browser?.close();
@@ -67,4 +68,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(failures?1:0);
+process.exit(!completed||failures?1:0);

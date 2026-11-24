@@ -3161,3 +3161,9 @@ selections reject.
 String-only case folding preserves exact loaded tasks, due order, scope and
 unknown-action state without recovery or replay.
 [Review0750](reviews/0750-tasks-search-metadata.md).
+
+
+### Fail-closed general-settings browser verification
+Four completion-guarded entry points and actual occupied-port startup harness;
+unmatched selections reject.
+[Review0751](reviews/0751-settings-general-browser-harness.md).

@@ -2677,3 +2677,7 @@ Saved-search branch/local-result/report context suites retain startup failures:
 Task search skips nonstring loaded titles/descriptions without coercion,
 retaining due order, drafts and unconfirmed-action pause.
 [Review0750](docs/reviews/0750-tasks-search-metadata.md).
+
+General-settings details/discard/refresh/draft browser suites retain startup failures:
+`npm run test:settings-general-browser-harness`.
+[Review0751](docs/reviews/0751-settings-general-browser-harness.md).
