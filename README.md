@@ -2506,3 +2506,9 @@ matching existing unavailable labels. Valid order/ties and source values stay.
 Find records with recorded or unavailable HTTP status independently of success.
 Combines with search/status/order; downloads retain all loaded source records.
 No diagnosis or send/retry action. [Review0710](docs/reviews/0710-webhook-http-filter.md).
+
+### Editor screenshot-read browser startup guards
+Four older screenshot-read browser scripts retain incomplete startup/assertion
+failures through cleanup. `npm run test:editor-shots-browser-harness` covers four
+actual occupied-port paths. Optional `EDITOR_SHOTS_HARNESS_FILTER` narrows cases;
+unmatched selections fail. [Review0711](docs/reviews/0711-editor-shots-browser-harness.md).

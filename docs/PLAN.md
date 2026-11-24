@@ -2921,3 +2921,9 @@ instants. Numbers/arrays/objects remain unavailable-last without coercion.
 Recorded/unavailable HTTP status filters combine with event, recorded success and
 time order without reads; full loaded downloads stay unchanged.
 [Review0710](reviews/0710-webhook-http-filter.md).
+
+
+### Fail-closed editor screenshot-read browser verification
+Four older screenshot-read suites preserve incomplete startup/assertion exits.
+Actual occupied-port harness rejects unmatched selections.
+[Review0711](reviews/0711-editor-shots-browser-harness.md).
