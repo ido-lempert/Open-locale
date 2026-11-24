@@ -2633,3 +2633,7 @@ changing branch/locale or replacing loaded findings.
 Editor locale/screenshot/tag browser suites preserve incomplete-run failures:
 `npm run test:editor-metadata-browser-harness`.
 [Review0739](docs/reviews/0739-editor-metadata-browser-harness.md).
+
+QA local search skips nonstring loaded metadata without coercion or changing
+the full raw findings download.
+[Review0740](docs/reviews/0740-qa-search-metadata.md).

@@ -76,7 +76,7 @@ export class QaComponent implements OnInit, OnDestroy {
   issueType=signal<QaIssue['type']|''>('');
   query=signal('');
   setQuery(value:string){if(!this.destroyed)this.query.set(value.slice(0,200));}
-  visibleIssues=computed(()=>{const type=this.issueType(),query=this.query().trim().toLowerCase();if(!type&&!query)return this.issues();return this.issues().filter(i=>(!type||i.type===type)&&(!query||[i.key,i.locale,i.detail??''].some(value=>value.toLowerCase().includes(query))));});
+  visibleIssues=computed(()=>{const type=this.issueType(),query=this.query().trim().toLowerCase();if(!type&&!query)return this.issues();return this.issues().filter(i=>(!type||i.type===type)&&(!query||[i.key,i.locale,i.detail??''].some(value=>typeof value==='string'&&value.toLowerCase().includes(query))));});
   setIssueType(type:string) {if(!this.destroyed&&(type===''||this.issueTypes.includes(type as QaIssue['type'])))this.issueType.set(type as QaIssue['type']|'');}
   hasFilters(){return !!this.query()||!!this.issueType();}
   clearFilters(){if(this.destroyed)return;this.query.set('');this.issueType.set('');}

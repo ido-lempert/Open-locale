@@ -3095,3 +3095,9 @@ reads/writes. Individual filters and full findings download unchanged.
 Six browser entry points gain explicit completion guards and real startup
 harness; unmatched selection rejects.
 [Review0739](reviews/0739-editor-metadata-browser-harness.md).
+
+
+### Type-safe loaded QA search metadata
+Search key/locale/detail strings only; malformed fields cannot break filtering.
+Other valid fields and raw full findings download preserved.
+[Review0740](reviews/0740-qa-search-metadata.md).
