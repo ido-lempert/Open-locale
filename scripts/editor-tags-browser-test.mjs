@@ -7,11 +7,12 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55601, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.EDITOR_CONTEXT_WRITE_TEST_PG_PORT ?? 55601), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-tags-browser-'));
@@ -28,7 +29,7 @@ try {
   const token=owner.accessToken;
   const project=await call('/projects',{name:'Sync browser',slug:'sync-browser',locales:['en','he']},token);
   const P=`/projects/${project.id}`;
-  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{stdio:'pipe',detached:true});await waitFor(WEB);
+  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{env:{...process.env,NX_DAEMON:'false'},stdio:'pipe',detached:true});await waitFor(WEB);
   browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH??'/usr/bin/google-chrome',args:['--no-sandbox','--disable-dev-shm-usage']});
   const diagnostics=[];const page=await browser.newPage();page.on('console',m=>diagnostics.push(m.text()));page.on('pageerror',e=>diagnostics.push(e.message));await page.setViewport({width:1280,height:900});
   await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.evaluate(t=>localStorage.setItem('ol_token',t),token);
@@ -40,7 +41,7 @@ try {
   await page.click('[aria-label="alpha in en"]');await page.keyboard.down('Control');await page.keyboard.press('KeyA');await page.keyboard.up('Control');await page.keyboard.type('Local uncommitted text');await page.$eval('[aria-label="alpha in en"]',e=>e.blur());await page.click('.tags-toggle');for(let n=0;n<100&&!heldTranslation;n++)await new Promise(r=>setTimeout(r,20));if(!heldTranslation)throw new Error('translation not held');console.log('STEP tag edit');await page.waitForSelector('.tag-edit');await page.type('.tag-edit','context, context');await page.keyboard.press('Enter');for(let n=0;n<100&&!heldTags;n++)await new Promise(r=>setTimeout(r,20));if(!heldTags)throw new Error('tag PATCH not held');await page.waitForSelector('[name=tagsSaving]');check('pending tag mutation disables same-key editor without losing local translation',await page.$eval('.tags-toggle',e=>e.disabled)&&await page.$eval('[aria-label="alpha in en"]',e=>e.value==='Local uncommitted text')&&tagCalls===1);await heldTags.continue();await page.waitForFunction(()=>!document.querySelector('[name=tagsSaving]')&&document.querySelector('.tag-chip')?.textContent==='context');const row=(await call(`${P}/keys`,null,token))[0];check('confirmed normalized tags do not reload keys or persist held translation',keyReads===0&&row.tags.length===1&&row.tags[0]==='context'&&row.translations.find(t=>t.localeCode==='en').value==='Original'&&await page.$eval('[aria-label="alpha in en"]',e=>e.value==='Local uncommitted text'));await page.screenshot({path:'/downloads/editor-tags-retained.png',fullPage:false});
   failTags=true;await page.click('.tags-toggle');console.log('STEP tag edit');await page.waitForSelector('.tag-edit');await page.type('.tag-edit',', failed');await page.keyboard.press('Enter');await page.waitForSelector('[name=tagsError]');check('unknown tag failure is fixed inline and keeps draft/no reload',keyReads===0&&await page.$eval('[aria-label="alpha in en"]',e=>e.value==='Local uncommitted text')&&!(await page.$eval('.grid',e=>e.innerText)).includes('PRIVATE_'));await page.screenshot({path:'/downloads/editor-tags-error.png',fullPage:false});
   await heldTranslation.respond({status:503,contentType:'application/json',body:'{}'});await page.waitForSelector('[name=reloadAfterSave]');check('tag failure never retried automatically',tagCalls===2);
-  check('no tag runtime error',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
+  check('no tag runtime error',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
 } catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??String(e)}`);process.exitCode=1;}
 finally {
   await browser?.close();
@@ -56,4 +57,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(failures?1:0);
+process.exit(!completed||failures?1:0);

@@ -3035,3 +3035,9 @@ completion/exit guards and actual startup harness; empty selections reject.
 Safe own-property lookup protects display, attention and allowlisted download
 projection. Missing counts omitted in JSON, not inferred zero.
 [Review0729](reviews/0729-sync-history-summary.md).
+
+
+### Fail-closed editor context-write browser verification
+Tools-toggle/tags/comment-delete-confirm/shot-delete-confirm suites gain explicit
+completion/exit guards and real startup harness; empty selections reject.
+[Review0730](reviews/0730-editor-context-write-browser-harness.md).

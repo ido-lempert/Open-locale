@@ -2593,3 +2593,7 @@ Editor branch-write browser suites preserve incomplete-run failures:
 Diagnostic missing/nonobject summary containers are safely unavailable; downloads
 project only existing allowlisted count fields, never extra summary properties.
 [Review0729](docs/reviews/0729-sync-history-summary.md).
+
+Editor context-write browser suites preserve incomplete-run failures:
+`npm run test:editor-context-write-browser-harness`.
+[Review0730](docs/reviews/0730-editor-context-write-browser-harness.md).
