@@ -2694,3 +2694,8 @@ See [review0753](docs/reviews/0753-settings-locale-browser-harness.md).
 Retained OTA value search skips nonstring value text without coercion, while
 valid key matching, exact empty filtering and raw full-bundle download stay intact.
 See [review0754](docs/reviews/0754-ota-search-metadata.md).
+
+Member-settings refresh, discard, email-discard and pending-draft browser checks
+fail closed on incomplete startup cleanup. Run
+`npm run test:settings-member-browser-harness` for real occupied-port regression.
+See [review0755](docs/reviews/0755-settings-member-browser-harness.md).
