@@ -2523,3 +2523,8 @@ Four older translation-memory browser scripts retain incomplete startup/assertio
 failures through cleanup. `npm run test:editor-tm-browser-harness` covers four
 actual occupied-port paths. Optional `EDITOR_TM_HARNESS_FILTER` narrows cases;
 unmatched selections fail. [Review0713](docs/reviews/0713-editor-tm-browser-harness.md).
+
+### Guard loaded webhook HTTP status metadata
+Display and presence filter require integer100-599; malformed metadata shows
+unavailable without changing recorded success or raw downloaded values.
+[Review0714](docs/reviews/0714-webhook-http-metadata.md).

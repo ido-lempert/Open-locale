@@ -2939,3 +2939,9 @@ order. No refresh, download, send or retry.
 Four older memory suites preserve incomplete startup/assertion exits. Actual
 occupied-port harness rejects unmatched selections.
 [Review0713](reviews/0713-editor-tm-browser-harness.md).
+
+
+### Guard malformed webhook HTTP status metadata
+Integer100-599 status validation aligns display/presence filtering. Invalid
+metadata stays unavailable, with independent success and raw download preserved.
+[Review0714](reviews/0714-webhook-http-metadata.md).
