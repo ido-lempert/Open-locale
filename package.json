@@ -374,6 +374,7 @@
     "test:reports-locale-metadata-browser": "python3 scripts/run-reaped.py node scripts/reports-locale-metadata-browser-test.mjs",
     "test:activity-search-metadata-browser": "python3 scripts/run-reaped.py node scripts/activity-search-metadata-browser-test.mjs",
     "test:projects-search-metadata-browser": "python3 scripts/run-reaped.py node scripts/projects-search-metadata-browser-test.mjs",
+    "test:glossary-search-metadata-browser": "python3 scripts/run-reaped.py node scripts/glossary-search-metadata-browser-test.mjs",
     "test:qa-clear-browser": "python3 scripts/run-reaped.py node scripts/qa-clear-browser-test.mjs",
     "test:snapshot-restore-receipt-browser": "python3 scripts/run-reaped.py node scripts/snapshot-restore-receipt-browser-test.mjs",
     "test:editor-recovery-browser-harness": "node scripts/editor-recovery-browser-harness-test.mjs",

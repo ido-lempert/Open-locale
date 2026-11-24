@@ -3143,3 +3143,9 @@ new-project/security state retained without extra requests.
 Four completion-guarded browser suites and actual startup harness; unmatched
 selections reject.
 [Review0747](reviews/0747-saved-search-context-browser-harness.md).
+
+
+### Type-safe loaded glossary search metadata
+String-only case folding preserves attention intersection and loaded rows,
+without recovery, replay or local draft changes.
+[Review0748](reviews/0748-glossary-search-metadata.md).

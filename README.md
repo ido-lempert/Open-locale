@@ -2665,3 +2665,7 @@ coercion or changing source rows, local form or security state.
 Saved-search source/status/tags/counts context suites retain startup failures:
 `npm run test:saved-search-context-browser-harness`.
 [Review0747](docs/reviews/0747-saved-search-context-browser-harness.md).
+
+Glossary search skips nonstring term/notes/translation values without coercion,
+retaining local drafts and unconfirmed outcomes.
+[Review0748](docs/reviews/0748-glossary-search-metadata.md).

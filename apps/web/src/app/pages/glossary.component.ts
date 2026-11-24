@@ -171,7 +171,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   query=signal('');
   attention=signal<'all'|'save'|'delete'>('all');
   setAttention(value:string){if(!this.destroyed&&['all','save','delete'].includes(value))this.attention.set(value as 'all'|'save'|'delete');}
-  visibleTerms=computed(()=>{const query=this.query().toLowerCase(),attention=this.attention();if(!query&&attention==='all')return this.terms();return this.terms().filter(t=>(attention==='all'||(attention==='save'?this.unknownSaveIds():this.unknownDeleteIds()).includes(t.id))&&(!query||[t.term,t.notes??'',...Object.values(t.translations)].some(value=>value.toLowerCase().includes(query))));});
+  visibleTerms=computed(()=>{const query=this.query().toLowerCase(),attention=this.attention();if(!query&&attention==='all')return this.terms();return this.terms().filter(t=>(attention==='all'||(attention==='save'?this.unknownSaveIds():this.unknownDeleteIds()).includes(t.id))&&(!query||[t.term,t.notes??'',...Object.values(t.translations)].some(value=>typeof value==='string'&&value.toLowerCase().includes(query))));});
   search(query:string) {if(!this.destroyed)this.query.set(query.slice(0,200));}
   locales = signal<string[]>([]);
   localesError=signal(false);
