@@ -3077,3 +3077,9 @@ and real startup harness, with unmatched selections rejected.
 Safe independent count fields, explicit unavailable metadata, and confirmed-null
 success preserved across follow-up read failure without replay.
 [Review0736](reviews/0736-snapshot-restore-receipt.md).
+
+
+### Fail-closed comment/key recovery browser verification
+Comment-reply-focus/comments-recovery/key-delete-recovery/key-unknown completion
+guards and real startup harness, with unmatched selections rejected.
+[Review0737](reviews/0737-editor-recovery-browser-harness.md).

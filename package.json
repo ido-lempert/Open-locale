@@ -371,6 +371,7 @@
     "test:editor-context-metadata-browser-harness": "node scripts/editor-context-metadata-browser-harness-test.mjs",
     "test:editor-save-browser-harness": "node scripts/editor-save-browser-harness-test.mjs",
     "test:snapshot-restore-receipt-browser": "python3 scripts/run-reaped.py node scripts/snapshot-restore-receipt-browser-test.mjs",
+    "test:editor-recovery-browser-harness": "node scripts/editor-recovery-browser-harness-test.mjs",
     "test:editor-departure-browser-harness": "node scripts/editor-departure-browser-harness-test.mjs",
     "test:editor-core-browser-harness": "node scripts/editor-core-browser-harness-test.mjs",
     "test:webhook-metrics-browser": "node scripts/webhook-metrics-browser-test.mjs",

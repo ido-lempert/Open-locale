@@ -2621,3 +2621,7 @@ Editor departure/filter/branch-recovery browser suites fail closed through clean
 Confirmed snapshot restores keep their receipt when success counts are unavailable,
 without converting metadata problems into an unknown write or replay.
 [Review0736](docs/reviews/0736-snapshot-restore-receipt.md).
+
+Editor comment/key recovery browser suites preserve incomplete-run failures:
+`npm run test:editor-recovery-browser-harness`.
+[Review0737](docs/reviews/0737-editor-recovery-browser-harness.md).
