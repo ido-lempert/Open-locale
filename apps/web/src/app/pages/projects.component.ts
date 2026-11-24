@@ -103,7 +103,7 @@ import { ApiService, Project } from '../api.service';
 export class ProjectsComponent implements OnInit, OnDestroy {
   projects = signal<Project[]>([]);
   query=signal('');
-  visibleProjects=computed(()=>{const query=this.query().toLowerCase();return query?this.projects().filter(p=>[p.name,p.slug,...p.locales.map(l=>l.code)].some(value=>value.toLowerCase().includes(query))):this.projects();});
+  visibleProjects=computed(()=>{const query=this.query().toLowerCase();return query?this.projects().filter(p=>[p.name,p.slug,...p.locales.map(l=>l.code)].some(value=>typeof value==='string'&&value.toLowerCase().includes(query))):this.projects();});
   search(query:string) {if(!this.destroyed)this.query.set(query.slice(0,200));}
   projectsLoading = signal(true); projectsError = signal(false);
   tfaLoading = signal(true); tfaError = signal(false);

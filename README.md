@@ -2657,3 +2657,7 @@ order and full allowlisted metadata download stay unchanged.
 Saved-search exact/whitespace/status/tag browser suites retain startup failures:
 `npm run test:saved-search-filter-browser-harness`.
 [Review0745](docs/reviews/0745-saved-search-filter-browser-harness.md).
+
+Project search skips nonstring loaded names, slugs and locale codes without
+coercion or changing source rows, local form or security state.
+[Review0746](docs/reviews/0746-projects-search-metadata.md).

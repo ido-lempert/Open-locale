@@ -3131,3 +3131,9 @@ loaded scope and raw allowlisted download retained.
 Four completion-guarded browser suites and actual startup harness; unmatched
 selections reject.
 [Review0745](reviews/0745-saved-search-filter-browser-harness.md).
+
+
+### Type-safe loaded project search metadata
+Search fields require strings before case folding; full loaded rows and local
+new-project/security state retained without extra requests.
+[Review0746](reviews/0746-projects-search-metadata.md).
