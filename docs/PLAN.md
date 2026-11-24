@@ -3011,3 +3011,9 @@ actual occupied-port startup harness, rejecting unmatched selections.
 Branch/locale/caller SHA/fingerprint display and search guard nonstring/blank
 values. Valid literal labels and raw download unchanged; no remote verification.
 [Review0725](reviews/0725-sync-history-metadata.md).
+
+
+### Fail-closed editor draft-download browser verification
+Local-backup/retained-download/collapsed-scope/export-focus suites gain explicit
+completion/exit guards and actual startup harness; empty selections reject.
+[Review0726](reviews/0726-editor-draft-download-browser-harness.md).

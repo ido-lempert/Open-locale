@@ -2577,3 +2577,7 @@ Editor file-scope browser scripts preserve incomplete-run failures:
 Diagnostic history malformed caller labels are unavailable rather than coerced;
 search skips nonstring fields and inventory download retains raw metadata.
 [Review0725](docs/reviews/0725-sync-history-metadata.md).
+
+Editor draft-download/focus browser suites preserve incomplete-run failures:
+`npm run test:editor-draft-download-browser-harness`.
+[Review0726](docs/reviews/0726-editor-draft-download-browser-harness.md).

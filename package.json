@@ -361,6 +361,7 @@
     "test:editor-key-metadata-browser-harness": "node scripts/editor-key-metadata-browser-harness-test.mjs",
     "test:editor-validation-browser-harness": "node scripts/editor-validation-browser-harness-test.mjs",
     "test:editor-file-scope-browser-harness": "node scripts/editor-file-scope-browser-harness-test.mjs",
+    "test:editor-draft-download-browser-harness": "node scripts/editor-draft-download-browser-harness-test.mjs",
     "test:editor-core-browser-harness": "node scripts/editor-core-browser-harness-test.mjs",
     "test:webhook-metrics-browser": "node scripts/webhook-metrics-browser-test.mjs",
     "test:webhook-success-metadata-browser": "node scripts/webhook-success-metadata-browser-test.mjs",
