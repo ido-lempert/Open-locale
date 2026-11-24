@@ -141,14 +141,9 @@ import { ApiService, SyncPreviewRecord } from '../api.service';
                   not applied
                 </p>
                 <p>
-                  {{ r.summary.total }} keys ·
-                  {{ r.summary.conflict }} conflict{{
-                    r.summary.conflict === 1 ? '' : 's'
-                  }}
-                  · {{ r.summary.manual }} key{{
-                    r.summary.manual === 1 ? '' : 's'
-                  }}
-                  need manual review
+                  {{countLabel(r.summary.total,'keys','Key count')}} ·
+                  {{countLabel(r.summary.conflict,'conflicts','Conflict count')}} ·
+                  {{countLabel(r.summary.manual,'manual-review keys','Manual-review count')}}
                 </p>
                 <dl>
                   <dt>Fingerprint</dt>
@@ -201,7 +196,7 @@ export class SyncHistoryComponent implements OnInit, OnDestroy {
   setOrder(value:string){if(!this.destroyed&&(value==='loaded'||value==='newest'||value==='oldest'))this.order.set(value);}
   filteredRecords=computed(()=>{
     const query=this.query().trim().toLowerCase(),attention=this.attention();
-    const rows=!query&&!attention?this.records():this.records().filter(r=>(!query||[r.branch,r.locale,r.remoteSha,r.fingerprint].some(value=>this.validMetadata(value)&&value.toLowerCase().includes(query)))&&(!attention||(attention==='conflict'?r.summary.conflict>0:r.summary.manual>0)));
+    const rows=!query&&!attention?this.records():this.records().filter(r=>(!query||[r.branch,r.locale,r.remoteSha,r.fingerprint].some(value=>this.validMetadata(value)&&value.toLowerCase().includes(query)))&&(!attention||(attention==='conflict'?this.positiveCount(r.summary.conflict):this.positiveCount(r.summary.manual))));
     const order=this.order();if(order==='loaded')return rows;
     const time=(r:SyncPreviewRecord)=>{const parsed=typeof r.createdAt==='string'&&r.createdAt.trim()?Date.parse(r.createdAt):NaN;return Number.isFinite(parsed)?parsed:null;};
     return [...rows].sort((a,b)=>{const left=time(a),right=time(b);if(left===right)return 0;if(left===null)return 1;if(right===null)return -1;return order==='oldest'?left-right:right-left;});
@@ -217,6 +212,9 @@ export class SyncHistoryComponent implements OnInit, OnDestroy {
     private api: ApiService,
     @Inject(LOCALE_ID) private readonly displayLocale='en-US',
   ) {}
+  validCount(value:unknown):value is number{return typeof value==='number'&&Number.isSafeInteger(value)&&value>=0;}
+  positiveCount(value:unknown):boolean{return this.validCount(value)&&value>0;}
+  countLabel(value:unknown,unit:string,name:string):string{return this.validCount(value)?`${value} ${value===1?unit.slice(0,-1):unit}`:`${name} unavailable`;}
   validMetadata(value:unknown):value is string{return typeof value==='string'&&!!value.trim();}
   metadataLabel(value:unknown,name:string):string{return this.validMetadata(value)?value:`${name} unavailable`;}
   timeLabel(value:unknown):string {

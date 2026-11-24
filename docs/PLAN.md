@@ -3017,3 +3017,9 @@ values. Valid literal labels and raw download unchanged; no remote verification.
 Local-backup/retained-download/collapsed-scope/export-focus suites gain explicit
 completion/exit guards and actual startup harness; empty selections reject.
 [Review0726](reviews/0726-editor-draft-download-browser-harness.md).
+
+
+### Bound diagnostic recorded counts
+Key/conflict/manual-review counts use safe nonnegative integers and bounded
+unavailable labels. Attention skips malformed values; raw download unchanged.
+[Review0727](reviews/0727-sync-history-counts.md).

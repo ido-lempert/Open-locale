@@ -2581,3 +2581,7 @@ search skips nonstring fields and inventory download retains raw metadata.
 Editor draft-download/focus browser suites preserve incomplete-run failures:
 `npm run test:editor-draft-download-browser-harness`.
 [Review0726](docs/reviews/0726-editor-draft-download-browser-harness.md).
+
+Diagnostic counts require nonnegative safe integers; attention matches positive
+recorded counts only, without coercion or changing raw download.
+[Review0727](docs/reviews/0727-sync-history-counts.md).
