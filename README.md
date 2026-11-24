@@ -2613,3 +2613,7 @@ nonstring labels, raw inventory stays unchanged.
 Editor save/review browser suites fail closed through cleanup:
 `npm run test:editor-save-browser-harness`.
 [Review0734](docs/reviews/0734-editor-save-browser-harness.md).
+
+Editor departure/filter/branch-recovery browser suites fail closed through cleanup:
+`npm run test:editor-departure-browser-harness`.
+[Review0735](docs/reviews/0735-editor-departure-browser-harness.md).

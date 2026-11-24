@@ -7,11 +7,12 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55768, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.EDITOR_DEPARTURE_TEST_PG_PORT ?? 55768), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-branch-unknown-browser-'));
@@ -28,7 +29,7 @@ try {
   const token=owner.accessToken;
   const project=await call('/projects',{name:'Sync browser',slug:'sync-browser',locales:['en','he']},token);
   const P=`/projects/${project.id}`;
-  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{stdio:'pipe',detached:true});await waitFor(WEB);
+  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{env:{...process.env,NX_DAEMON:'false'},stdio:'pipe',detached:true});await waitFor(WEB);
   browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH??'/usr/bin/google-chrome',args:['--no-sandbox','--disable-dev-shm-usage']});
   const diagnostics=[];const page=await browser.newPage();page.on('console',m=>diagnostics.push(m.text()));page.on('pageerror',e=>diagnostics.push(e.message));await page.setViewport({width:1280,height:900});
   await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.evaluate(t=>localStorage.setItem('ol_token',t),token);
@@ -42,8 +43,8 @@ try {
   await page.focus('[aria-label="alpha in en"]');await page.type('[aria-label="alpha in en"]',' local draft');await page.$eval('[name=checkCurrentBranches]',e=>e.scrollIntoView({block:'center'}));console.log('BRANCH_RECOVERY_CLICK_TARGET',await page.$eval('[name=checkCurrentBranches]',e=>{const r=e.getBoundingClientRect();return {top:r.top,bottom:r.bottom,hit:e===document.elementFromPoint(r.left+r.width/2,r.top+r.height/2),disabled:e.disabled};}));await page.screenshot({path:'/downloads/editor-branch-unknown-click-target.png'});await page.click('[name=checkCurrentBranches]');await page.waitForFunction(()=>{const c=ng.getComponent(document.querySelector('ol-editor'));return !c.branchListLoading()&&c.branchListError();});check('focused failed branch-only recovery keeps creation paused and no translation autosave',listReads===1&&keyReads===0&&writes.length===1&&await page.$eval('[aria-label="alpha in en"]',e=>e.value==='Original local draft')&&!!await page.$('[name=branchCreateUnknown]'));
   await page.$eval('[name=checkCurrentBranches]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/editor-branch-unknown-desktop.png',fullPage:false});await page.setViewport({width:390,height:844});await page.$eval('[name=checkCurrentBranches]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/editor-branch-unknown-mobile.png',fullPage:false});check('390px pause and recovery control fit',await page.$eval('[name=checkCurrentBranches]',e=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth;})&&await page.$eval('[name=branchCreateUnknown]',e=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth;}));
   failRead=false;holdRead=true;await page.$eval('[name=checkCurrentBranches]',e=>e.click());for(let n=0;n<100&&!held;n++)await new Promise(r=>setTimeout(r,20));if(!held)throw new Error('list read not held');await page.waitForFunction(()=>document.querySelector('[name=checkCurrentBranches]')?.disabled===true);await page.evaluate(()=>ng.getComponent(document.querySelector('ol-editor')).checkCurrentBranches());check('pending recovery duplicate refuses while creation stays paused',listReads===2&&creates===1&&await page.$eval('[name=addBranch]',e=>e.disabled));holdRead=false;await held.continue();await page.waitForFunction(()=>!document.querySelector('[name=branchCreateUnknown]')&&!document.querySelector('[name=branchListError]')&&!!document.querySelector('[name=newBranchInvalid]')&&document.querySelector('[name=addBranch]')?.disabled===true);check('successful current list shows committed branch and retains invalid raw name without replay or editor reload',creates===1&&listReads===2&&keyReads===0&&writes.length===1&&await page.$eval('[name=branch]',e=>e.value==='main'&&[...e.options].some(o=>o.value==='committed'))&&await page.$eval('[name=newBranch]',e=>e.value==='newer draft')&&await page.$eval('[aria-label="alpha in en"]',e=>e.value==='Original local draft'));
-  check('no branch-uncertainty runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  check('no branch-uncertainty runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -58,4 +59,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);

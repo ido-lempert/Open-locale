@@ -3065,3 +3065,9 @@ confirmation; search skips malformed source values. Raw inventory unchanged.
 Save-version/review-version/draft-save/save-recovery-focus completion/exit guards
 and real startup harness, with unmatched selections rejected.
 [Review0734](reviews/0734-editor-save-browser-harness.md).
+
+
+### Fail-closed editor departure browser verification
+Branch-drafts/filter-drafts/search-departure/branch-unknown completion/exit guards
+and real startup harness, with unmatched selections rejected.
+[Review0735](reviews/0735-editor-departure-browser-harness.md).

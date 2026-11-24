@@ -7,11 +7,12 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55873, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.EDITOR_DEPARTURE_TEST_PG_PORT ?? 55873), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma, debugPage;
+let failures = 0, completed = false, api, web, browser, prisma, debugPage;
 process.exitCode = 1;
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-search-key-filter-'));
@@ -28,7 +29,7 @@ try {
   const token=owner.accessToken;
   const project=await call('/projects',{name:'Sync browser',slug:'sync-browser',locales:['en','he']},token);
   const P=`/projects/${project.id}`;
-  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{stdio:'pipe',detached:true});await waitFor(WEB);
+  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{env:{...process.env,NX_DAEMON:'false'},stdio:'pipe',detached:true});await waitFor(WEB);
   browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH??'/usr/bin/google-chrome',args:['--no-sandbox','--disable-dev-shm-usage']});
   const diagnostics=[];const page=debugPage=await browser.newPage();page.on('console',m=>diagnostics.push(m.text()));page.on('pageerror',e=>diagnostics.push(e.message));await page.setViewport({width:1280,height:900});
   await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.evaluate(t=>localStorage.setItem('ol_token',t),token);
@@ -48,9 +49,9 @@ try {
   fail=true;await edit('Unconfirmed draft');await page.keyboard.press('Tab');await page.waitForSelector('[name=saveCellDraft]');await page.waitForNetworkIdle({idleTime:100});check('unknown save result blocks filters without replay',await blocked()&&writes===3&&keyReads===0&&await page.$eval(input,e=>e.value==='Unconfirmed draft'));
   // Explicit fixture reload discards the retained local value, never filter recovery.
   fail=false;await page.reload({waitUntil:'networkidle0'});await page.select('[name=branch]','release');await page.waitForSelector(input);await page.waitForFunction(()=>!document.querySelector('[name=keysLoading]'));const before=keyReads;await page.$eval(filter,e=>e.focus());await page.keyboard.type('absent');await page.waitForSelector('[name=clearKeyFilters]');check('clean keyboard key-name filter reads same release branch',keyReads>before&&await page.evaluate(()=>ng.getComponent(document.querySelector('ol-editor')).branch()==='release')&&writes===3);await page.click('[name=clearKeyFilters]');await page.waitForSelector(input);await page.waitForFunction(()=>!document.querySelector('[name=keysLoading]'));check('clear key filters restores persisted same-branch grid',await page.$eval(input,e=>e.value==='Newer local draft')&&await page.$eval(filter,e=>e.value==='')&&writes===3);
-  await page.select(status,'REVIEWED');await page.waitForSelector('[name=clearKeyFilters]');check('clean status filter reads current branch without write',writes===3&&await page.$eval(status,e=>e.value==='REVIEWED'));await page.click('[name=clearKeyFilters]');await page.waitForSelector(input);await page.waitForFunction(()=>!document.querySelector('[name=keysLoading]'));await page.$eval(tag,e=>e.focus());await page.keyboard.type('absent');await page.waitForSelector('[name=clearKeyFilters]');check('clean tag filter still works without write',writes===3&&await page.$eval(tag,e=>e.value==='absent'));check('no filter guard runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
+  await page.select(status,'REVIEWED');await page.waitForSelector('[name=clearKeyFilters]');check('clean status filter reads current branch without write',writes===3&&await page.$eval(status,e=>e.value==='REVIEWED'));await page.click('[name=clearKeyFilters]');await page.waitForSelector(input);await page.waitForFunction(()=>!document.querySelector('[name=keysLoading]'));await page.$eval(tag,e=>e.focus());await page.keyboard.type('absent');await page.waitForSelector('[name=clearKeyFilters]');check('clean tag filter still works without write',writes===3&&await page.$eval(tag,e=>e.value==='absent'));check('no filter guard runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
 
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);if(debugPage){console.log('DEBUG_URL',debugPage.url());console.log('DEBUG_BODY',await debugPage.$eval('body',e=>e.innerText).catch(()=>''));await debugPage.screenshot({path:'/downloads/editor-filter-drafts-failure.png'}).catch(()=>{});}process.exitCode=1;}
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);if(debugPage){console.log('DEBUG_URL',debugPage.url());console.log('DEBUG_BODY',await debugPage.$eval('body',e=>e.innerText).catch(()=>''));await debugPage.screenshot({path:'/downloads/editor-filter-drafts-failure.png'}).catch(()=>{});}process.exitCode=1;}
 finally {
   await browser?.close();
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -65,4 +66,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);
