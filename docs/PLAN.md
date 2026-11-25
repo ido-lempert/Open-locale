@@ -3255,3 +3255,8 @@ Webhook toggle, OTA/SAML metadata refresh and token-copy browser checks fail
 closed on incomplete startup cleanup. Run
 `npm run test:settings-metadata-guard-browser-harness` for real occupied-port regression.
 See [review0769](reviews/0769-settings-metadata-guard-browser-harness.md).
+
+Group/rule-payload validation, missing rule locales and webhook-copy browser checks
+fail closed on incomplete startup cleanup. Run
+`npm run test:settings-validation-guard-browser-harness` for real occupied-port regression.
+See [review0770](reviews/0770-settings-validation-guard-browser-harness.md).
