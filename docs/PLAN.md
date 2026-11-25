@@ -3483,3 +3483,10 @@ edit snapshots without losing characters. Refresh/reset replacements still
 fence stale events. Real keyboard and held-save recovery coverage runs with
 `npm run test:glossary-local-text-browser`.
 [Review0800](reviews/0800-glossary-rapid-input-lineage.md).
+
+
+### Glossary keyboard blur-save checkpoint
+Local-text browser types actual keyboard drafts and uses Tab to trigger held
+saves, verifying exact persisted text and later-edit preservation. Term-detail
+focus/save/recovery browser also rerun. No application behavior change.
+[Review0801](reviews/0801-glossary-keyboard-blur.md).
