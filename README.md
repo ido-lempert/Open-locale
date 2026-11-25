@@ -2739,3 +2739,8 @@ Explicit group role, locale-scope, name and member save browser checks fail
 closed on incomplete startup cleanup. Run
 `npm run test:settings-group-save-browser-harness` for real occupied-port regression.
 See [review0763](docs/reviews/0763-settings-group-save-browser-harness.md).
+
+Explicit member role/locale saves and member/group locale-validation browser
+checks fail closed on incomplete startup cleanup. Run
+`npm run test:settings-member-save-browser-harness` for real occupied-port regression.
+See [review0764](docs/reviews/0764-settings-member-save-browser-harness.md).
