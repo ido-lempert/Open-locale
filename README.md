@@ -2913,3 +2913,11 @@ Four QA finding headers declare explicit column scope. Keyboard scroll, empty
 projection and full raw download retain their existing behavior. Browser suite
 `npm run test:qa-table-scroll-browser` includes missing-scope negative coverage.
 [Review0789](docs/reviews/0789-qa-column-scopes.md).
+
+
+### Report table header relationships
+Report leaf headings declare column scope; progress grouped headings declare
+column-group scope with matching column groups, including zero or one workflow
+column. Counts, search and raw downloads stay unchanged. Run
+`npm run test:reports-table-layout-browser`.
+[Review0790](docs/reviews/0790-report-header-scopes.md).

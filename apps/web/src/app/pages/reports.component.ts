@@ -45,16 +45,17 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
         @if (localeQuery().trim() && !visibleProgressLocales().length) { <p class="muted" role="status" name="progressLocaleSearchHint">No loaded progress locales match this search. Clear locale search to show all loaded rows. Report totals are unchanged.</p> }
         <div class="table-scroll" tabindex="0" role="region" aria-label="Progress by locale">
         <table class="qa-table progress-table">
+          <colgroup span="1"></colgroup><colgroup span="1"></colgroup><colgroup span="2"></colgroup>@if(statusColumns().length){<colgroup [attr.span]="statusColumns().length"></colgroup>}
           <thead>
             <tr class="group-row">
-              <th rowspan="2" class="row-head">Locale</th>
-              <th rowspan="2" class="progress-bar-col">Progress</th>
-              <th colspan="2" class="group-label">Filled values</th>
-              @if (statusColumns().length) { <th [attr.colspan]="statusColumns().length" class="group-label status-group">Workflow status</th> }
+              <th scope="col" rowspan="2" class="row-head">Locale</th>
+              <th scope="col" rowspan="2" class="progress-bar-col">Progress</th>
+              <th scope="colgroup" colspan="2" class="group-label">Filled values</th>
+              @if (statusColumns().length) { <th scope="colgroup" [attr.colspan]="statusColumns().length" class="group-label status-group">Workflow status</th> }
             </tr>
             <tr>
-              <th>Translated</th><th>Untranslated</th>
-              @for (s of statusColumns(); track s) { <th [class.status-group]="s === statusColumns()[0]">{{ s.toLowerCase() }}</th> }
+              <th scope="col">Translated</th><th scope="col">Untranslated</th>
+              @for (s of statusColumns(); track s) { <th scope="col" [class.status-group]="s === statusColumns()[0]">{{ s.toLowerCase() }}</th> }
             </tr>
           </thead>
           <tbody>
@@ -85,7 +86,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
           <div class="table-scroll" tabindex="0" role="region" aria-label="Quality findings by locale">
           <table class="qa-table quality-table">
             <thead>
-              <tr><th class="row-head">Locale</th><th>Total</th>@for (t of q.types; track t) { <th>{{ t.split('_').join(' ') }}</th> }</tr>
+              <tr><th scope="col" class="row-head">Locale</th><th scope="col">Total</th>@for (t of q.types; track t) { <th scope="col">{{ t.split('_').join(' ') }}</th> }</tr>
             </thead>
             <tbody>
               @for (l of visibleQualityLocales(); track l.locale) {
@@ -111,11 +112,11 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
         <p class="muted" name="usageWindow" style="overflow-wrap:anywhere">Captured window: <time>{{ u.since }}</time> through <time>{{ u.asOf }}</time>. UTC calendar days. Separate reads are not one database snapshot.</p>
         <div class="table-scroll" tabindex="0" role="region" aria-label="Usage actions and actors">
         <table class="qa-table usage-table">
-          <thead><tr><th class="row-head">Action</th><th>Events</th></tr></thead>
+          <thead><tr><th scope="col" class="row-head">Action</th><th scope="col">Events</th></tr></thead>
           <tbody>@for (a of actionRows(u); track a.action) { <tr><td><code>{{ a.action }}</code></td><td>{{ a.count }}</td></tr> } @empty { <tr name="usageActionsEmpty"><td colspan="2" class="muted">No activity in this window.</td></tr> }</tbody>
         </table>
         <table class="qa-table usage-table">
-          <thead><tr><th class="row-head">Top 5 actors</th><th>Events</th></tr></thead>
+          <thead><tr><th scope="col" class="row-head">Top 5 actors</th><th scope="col">Events</th></tr></thead>
           <tbody>@for (a of u.topActors; track a.actorId) { <tr><td>{{ a.name }}<small class="muted" style="display:block;overflow-wrap:anywhere">{{ a.actorId }}</small></td><td>{{ a.count }}</td></tr> } @empty { <tr name="usageActorsEmpty"><td colspan="2" class="muted">No attributed actors in this window.</td></tr> }</tbody>
         </table>
         </div>
@@ -132,7 +133,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
         @if (t.perAssignee.length > 0) {
           <div class="table-scroll" tabindex="0" role="region" aria-label="Task workload by assignee">
           <table class="qa-table tasks-table">
-            <thead><tr><th class="row-head">Assignee</th><th>Open tasks</th></tr></thead>
+            <thead><tr><th scope="col" class="row-head">Assignee</th><th scope="col">Open tasks</th></tr></thead>
             <tbody>@for (a of t.perAssignee; track a.kind + ':' + (a.assigneeId ?? a.assigneeGroupId ?? '')) { <tr><td>{{ a.name }}<small class="muted" style="display:block;overflow-wrap:anywhere">{{ a.kind === 'group' ? 'Group: ' + a.assigneeGroupId : a.assigneeId ?? 'No assignee' }}</small></td><td>{{ a.count }}</td></tr> }</tbody>
           </table>
           </div>
