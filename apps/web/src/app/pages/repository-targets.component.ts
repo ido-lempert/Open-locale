@@ -979,7 +979,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
       'locale-unavailable':'The project locale is unavailable.', 'value-exists':'A current locale value already exists. It will not be overwritten.',
       'deletion-generation-changed':'This is no longer the current deletion generation.',
     };
-    return reasons[result.reason] ?? 'Current recovery checks do not pass.';
+    return typeof result.reason==='string' && Object.prototype.hasOwnProperty.call(reasons,result.reason) ? reasons[result.reason] : 'Current recovery checks do not pass.';
   }
   valueReviewReason(result: DeletionRecoveryValueReview) {
     if(result.reviewAvailable)return 'Archived flat value for review only.';
@@ -996,7 +996,7 @@ export class RepositoryTargetsComponent implements OnInit, OnDestroy {
       'unsupported-current-key':'The current key type or length limit blocks archived value review.',
       'locale-unavailable':'The project locale is unavailable. This archived value cannot be reviewed for recovery.',
     };
-    return reasons[result.reason]??'Current checks do not allow value review.';
+    return typeof result.reason==='string' && Object.prototype.hasOwnProperty.call(reasons,result.reason) ? reasons[result.reason] : 'Current checks do not allow value review.';
   }
   changeReviewTarget(targetId:string) {
     if(targetId && !this.targets().some(t=>t.id===targetId))return;

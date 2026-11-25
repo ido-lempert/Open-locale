@@ -2800,3 +2800,11 @@ without inherited dictionary lookup; malformed directions show Direction
 unavailable without coercion. This changes display only, not explicit choices,
 validation, draft generation or application. Run `npm run test:sync-direction-browser`.
 [Review0774](docs/reviews/0774-sync-direction-display.md).
+
+
+### Own repository recovery denial reasons
+Eligibility and archived-value denial text now uses only own string dictionary
+keys. Unknown/malformed reasons retain fixed generic denial rather than
+inherited functions/objects or raw server text. Known guidance and recovery
+authority remain unchanged. Run `npm run test:recovery-reason-browser`.
+[Review0775](docs/reviews/0775-recovery-denial-reasons.md).
