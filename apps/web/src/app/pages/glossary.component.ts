@@ -318,12 +318,15 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   translationValue(t:GlossaryTermItem,locale:string) { return Object.prototype.hasOwnProperty.call(t.translations,locale)?t.translations[locale]??'':''; }
 
   private translationEditLineage=new WeakMap<GlossaryTermItem,object>();
+  private currentTranslationRow(t:GlossaryTermItem) {
+    const row=this.terms().find(current=>current.id===t.id),lineage=this.translationEditLineage.get(t);
+    return row&&(row===t||!!lineage&&this.translationEditLineage.get(row)===lineage)?row:undefined;
+  }
   setTranslation(t: GlossaryTermItem, locale: string, value: string) {
     if(this.destroyed||this.unknownSaveIds().includes(t.id))return;
-    const row=this.terms().find(current=>current.id===t.id);
+    const row=this.currentTranslationRow(t);
     if(!row)return;
     const lineage=this.translationEditLineage.get(t);
-    if(row!==t&&(!lineage||this.translationEditLineage.get(row)!==lineage))return;
     this.cancelRemove();this.localReset.set(null);this.draftDownloadNotice.set('');
     const token=lineage??{};
     this.translationEditLineage.set(row,token);
@@ -354,7 +357,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
 
   rowPending(id:string) {return this.deletingIds().includes(id)||this.savingIds().includes(id)||this.unknownDeleteIds().includes(id)||this.unknownSaveIds().includes(id);}
 
-  translationBlur(t:GlossaryTermItem) {if(!this.termEditFocusing&&this.visibleTerms().some(row=>row.id===t.id))void this.saveTranslations(t);}
+  translationBlur(t:GlossaryTermItem) {const row=this.currentTranslationRow(t);if(!this.termEditFocusing&&row&&this.visibleTerms().includes(row))void this.saveTranslations(row);}
 
   async saveTranslations(t: GlossaryTermItem) {
     if(this.destroyed||this.rowPending(t.id))return;

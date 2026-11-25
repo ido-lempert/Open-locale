@@ -3498,3 +3498,10 @@ tests passes. Actual keyboard/Tab save browser15 checks and backend glossary29
 assertions rerun; strict-identity negative fails and restored lineage passes.
 Production web/API builds pass. No full-product/native/sync/provider claim.
 [Review0802](reviews/0802-post-lineage-web-checkpoint.md).
+
+
+### Glossary blur row lineage
+Blur events share the translation edit row resolver: refreshed same-ID snapshots
+cannot submit newer drafts, while current local-edit predecessors can save the
+latest visible row. Search/attention-hidden blur remains blocked.
+[Review0803](reviews/0803-glossary-blur-lineage.md).
