@@ -3245,3 +3245,8 @@ Status/origin removal, project deletion and General-validation browser checks
 fail closed on incomplete startup cleanup. Run
 `npm run test:settings-project-guard-browser-harness` for real occupied-port regression.
 See [review0767](reviews/0767-settings-project-guard-browser-harness.md).
+
+MT/OTA branch-refresh and provider/rule toggle browser checks fail closed on
+incomplete startup cleanup. Run
+`npm run test:settings-automation-guard-browser-harness` for real occupied-port regression.
+See [review0768](reviews/0768-settings-automation-guard-browser-harness.md).

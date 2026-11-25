@@ -386,6 +386,7 @@
     "test:saved-search-filter-browser-harness": "node scripts/saved-search-filter-browser-harness-test.mjs",
     "test:saved-search-context-browser-harness": "node scripts/saved-search-context-browser-harness-test.mjs",
     "test:saved-search-link-browser-harness": "node scripts/saved-search-link-browser-harness-test.mjs",
+    "test:settings-automation-guard-browser-harness": "node scripts/settings-automation-guard-browser-harness-test.mjs",
     "test:settings-project-guard-browser-harness": "node scripts/settings-project-guard-browser-harness-test.mjs",
     "test:settings-resource-remove-browser-harness": "node scripts/settings-resource-remove-browser-harness-test.mjs",
     "test:settings-access-remove-browser-harness": "node scripts/settings-access-remove-browser-harness-test.mjs",
