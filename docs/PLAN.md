@@ -3469,8 +3469,17 @@ behavior stay unchanged. Run `npm run test:glossary-search-metadata-browser`.
 
 
 ### Glossary edit row identity
-Translation edits require the exact current loaded row; late events from a
-replaced same-ID row cannot change newer text or clear local review feedback.
+Translation edits require the current loaded row or its local-edit lineage;
+late events from refreshed/replaced same-ID rows cannot change newer text or
+clear local review feedback.
 Current-row edits and existing blur-save behavior stay unchanged. Run
 `npm run test:glossary-search-metadata-browser`.
 [Review0799](reviews/0799-glossary-edit-row-identity.md).
+
+
+### Rapid glossary input lineage correction
+Corrects733 strict identity: rapid keyboard events can reference earlier local
+edit snapshots without losing characters. Refresh/reset replacements still
+fence stale events. Real keyboard and held-save recovery coverage runs with
+`npm run test:glossary-local-text-browser`.
+[Review0800](reviews/0800-glossary-rapid-input-lineage.md).

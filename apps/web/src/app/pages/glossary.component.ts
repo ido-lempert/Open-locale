@@ -317,11 +317,19 @@ export class GlossaryComponent implements OnInit, OnDestroy {
 
   translationValue(t:GlossaryTermItem,locale:string) { return Object.prototype.hasOwnProperty.call(t.translations,locale)?t.translations[locale]??'':''; }
 
+  private translationEditLineage=new WeakMap<GlossaryTermItem,object>();
   setTranslation(t: GlossaryTermItem, locale: string, value: string) {
-    if(this.destroyed||this.unknownSaveIds().includes(t.id)||!this.terms().some(row=>row===t))return;
+    if(this.destroyed||this.unknownSaveIds().includes(t.id))return;
+    const row=this.terms().find(current=>current.id===t.id);
+    if(!row)return;
+    const lineage=this.translationEditLineage.get(t);
+    if(row!==t&&(!lineage||this.translationEditLineage.get(row)!==lineage))return;
     this.cancelRemove();this.localReset.set(null);this.draftDownloadNotice.set('');
-    this.terms.update((all) => all.map((x) => x.id === t.id
-      ? { ...x, translations: { ...x.translations, [locale]: value } } : x));
+    const token=lineage??{};
+    this.translationEditLineage.set(row,token);
+    const updated={...row,translations:{...row.translations,[locale]:value}};
+    this.translationEditLineage.set(updated,token);
+    this.terms.update(all=>all.map(current=>current===row?updated:current));
   }
 
   localTextChanged(t:GlossaryTermItem) {

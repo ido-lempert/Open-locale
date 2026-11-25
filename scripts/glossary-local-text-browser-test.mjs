@@ -41,6 +41,16 @@ try {
   let writes=0,reads=0,held,drop=false;await page.setRequestInterception(true);page.on('request',req=>{const path=new URL(req.url()).pathname;if(req.method()==='GET'&&path===`/api${P}/glossary`)reads++;if(req.method()==='PATCH'&&path===`/api${P}/glossary/${alpha.id}`){writes++;if(drop)return req.respond({status:503,contentType:'application/json',body:'{}'});held=req;return;}req.continue();});
   const edit=async value=>page.$eval('[aria-label="Alpha in he"]',(e,v)=>{e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}));},value);
   check('loaded confirmed text has no unsaved or unknown row feedback',!await page.$('[name=glossaryLocalDraft]')&&!await page.$('[name=glossarySaveUnknown]'));
+  await page.focus('[aria-label="Alpha in he"]');await page.keyboard.down('Control');await page.keyboard.press('KeyA');await page.keyboard.up('Control');await page.keyboard.type('Rapid keyboard draft 123');
+  await page.waitForSelector('[name=glossaryLocalDraft]');
+  const typed=()=>page.$eval('[aria-label="Alpha in he"]',e=>e.value==='Rapid keyboard draft 123');
+  check('real rapid typing retains every character across immutable row edits',await typed()&&writes===0&&reads===0);
+  await page.$eval('[aria-label="Alpha in he"]',e=>e.value='Rapid keyboard draft 12');check('negative dropped final keystroke probe detected',!await typed());await page.$eval('[aria-label="Alpha in he"]',e=>e.value='Rapid keyboard draft 123');check('complete typed draft restored after isolated probe',await typed());
+  // Explicitly blur an exact saved value so following synthetic-event fixture
+  // legs start unfocused, without accidentally submitting the keyboard draft.
+  await page.$eval('[aria-label="Alpha in he"]',e=>{e.value='Original';e.dispatchEvent(new Event('input',{bubbles:true}));e.blur();});
+  await page.waitForFunction(()=>!document.querySelector('[name=glossaryLocalDraft]'));
+  check('keyboard draft can revert before blur without any request',writes===0&&reads===0);
   await edit('Copy this local draft');await page.waitForSelector('[name=glossaryLocalDraft]');check('editing shows unsaved feedback without reading or saving',writes===0&&reads===0&&await page.$eval('[name=glossaryLocalDraft]',e=>e.textContent.includes('copy/download')));
   await page.screenshot({path:'/downloads/glossary-local-text-desktop.png',fullPage:true});await page.setViewport({width:390,height:844});await page.screenshot({path:'/downloads/glossary-local-text-mobile.png',fullPage:true});check('narrow full local value/feedback fit viewport',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)&&await page.$eval('[aria-label="Alpha in he"]',e=>e.getBoundingClientRect().width>=200));
   await edit('Original');await page.waitForFunction(()=>!document.querySelector('[name=glossaryLocalDraft]'));check('exact revert clears unsaved feedback without API effects',writes===0&&reads===0);
