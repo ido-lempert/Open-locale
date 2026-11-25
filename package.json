@@ -386,6 +386,7 @@
     "test:saved-search-filter-browser-harness": "node scripts/saved-search-filter-browser-harness-test.mjs",
     "test:saved-search-context-browser-harness": "node scripts/saved-search-context-browser-harness-test.mjs",
     "test:saved-search-link-browser-harness": "node scripts/saved-search-link-browser-harness-test.mjs",
+    "test:settings-status-browser-harness": "node scripts/settings-status-browser-harness-test.mjs",
     "test:settings-webhook-browser-harness": "node scripts/settings-webhook-browser-harness-test.mjs",
     "test:settings-token-browser-harness": "node scripts/settings-token-browser-harness-test.mjs",
     "test:settings-group-browser-harness": "node scripts/settings-group-browser-harness-test.mjs",

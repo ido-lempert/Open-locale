@@ -3200,3 +3200,8 @@ Webhook-settings refresh, URL-discard, pending-draft and hide browser checks
 fail closed on incomplete startup cleanup. Run
 `npm run test:settings-webhook-browser-harness` for real occupied-port regression.
 See [review0758](reviews/0758-settings-webhook-browser-harness.md).
+
+Status-settings refresh, discard, pending-draft and validation browser checks
+fail closed on incomplete startup cleanup. Run
+`npm run test:settings-status-browser-harness` for real occupied-port regression.
+See [review0759](reviews/0759-settings-status-browser-harness.md).
