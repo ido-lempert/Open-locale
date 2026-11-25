@@ -2754,3 +2754,8 @@ Webhook/rule/provider/locale removal browser checks fail closed on incomplete
 startup cleanup. Run
 `npm run test:settings-resource-remove-browser-harness` for real occupied-port regression.
 See [review0766](docs/reviews/0766-settings-resource-remove-browser-harness.md).
+
+Status/origin removal, project deletion and General-validation browser checks
+fail closed on incomplete startup cleanup. Run
+`npm run test:settings-project-guard-browser-harness` for real occupied-port regression.
+See [review0767](docs/reviews/0767-settings-project-guard-browser-harness.md).

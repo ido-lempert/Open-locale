@@ -7,11 +7,12 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55989, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.SETTINGS_PROJECT_GUARD_TEST_PG_PORT ?? 55989), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-origin-remove-browser-'));
@@ -28,7 +29,7 @@ try {
   const token=owner.accessToken;
   const project=await call('/projects',{name:'Sync browser',slug:'sync-browser',locales:['en','he']},token);
   const P=`/projects/${project.id}`;
-  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{stdio:'pipe',detached:true});await waitFor(WEB);
+  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{env:{...process.env,NX_DAEMON:'false'},stdio:'pipe',detached:true});await waitFor(WEB);
   browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH??'/usr/bin/google-chrome',args:['--no-sandbox','--disable-dev-shm-usage']});
   const diagnostics=[];const page=await browser.newPage();page.on('console',m=>diagnostics.push(m.text()));page.on('pageerror',e=>diagnostics.push(e.message));await page.setViewport({width:1280,height:900});
   await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.evaluate(t=>localStorage.setItem('ol_token',t),token);
@@ -54,7 +55,7 @@ try {
   held=null;await click('startRemoveOrigin-0');await click('confirmRemoveOrigin-0');for(let n=0;n<150&&!held;n++)await new Promise(r=>setTimeout(r,20));if(!held)throw new Error('Final origin PATCH not held');await held.continue();await page.waitForFunction(()=>!ng.getComponent(document.querySelector('ol-settings')).busy());check('final origin removal saves empty allowlist and accurate local state',(await call(P,null,token)).embedOrigins.length===0&&await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-settings'));return c.project().embedOrigins.length===0&&c.confirmingOrigin()===null&&c.originRemoveNotice().includes('allowlist was saved')&&c.error()==='Refresh failed';}));
   await call(P,{embedOrigins:[first]},token,'PATCH');await page.evaluate(first=>{const c=ng.getComponent(document.querySelector('ol-settings'));c.project.update(p=>({...p,embedOrigins:[first]}));c.name.set('Still unsent');c.newOrigin.set('https://newer.example');},first);await settle();failRead=false;held=null;const previousReads=reads;await click('startRemoveOrigin-0');await click('confirmRemoveOrigin-0');for(let n=0;n<150&&!held;n++)await new Promise(r=>setTimeout(r,20));if(!held)throw new Error('Success-refresh PATCH not held');await held.continue();await page.waitForFunction(()=>!ng.getComponent(document.querySelector('ol-settings')).busy());check('successful project-only refresh preserves independent drafts and receipt',reads===previousReads+1&&await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-settings'));return c.project().embedOrigins.length===0&&c.newOrigin()==='https://newer.example'&&c.name()==='Still unsent'&&c.newRuleTitle()==='Next rule'&&c.originRemoveNotice().includes('allowlist was saved')&&c.error()==='';}));
   check('no tasks translations or webhook deliveries',await prisma.task.count()===0&&await prisma.translation.count()===0&&await prisma.webhookDelivery.count()===0);
-  check('no origin removal runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
+  check('no origin removal runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
 } catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??String(e)}`);process.exitCode=1;}
 finally {
   await browser?.close();
@@ -70,4 +71,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(failures?1:0);
+process.exit(!completed||failures?1:0);
