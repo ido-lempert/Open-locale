@@ -2847,3 +2847,11 @@ Valid time metadata retains the exact source string, invalid times stay
 unavailable. Ordering and raw loaded downloads are unchanged. Run
 `npm run test:activity-zone-browser`.
 [Review0780](docs/reviews/0780-activity-recorded-zone.md).
+
+
+### Settings clock timezone labels
+Settings token last-use and OTA publication clock labels now include displayed
+timezone. Date-only creation labels, malformed fallback, never-used distinction
+and source timestamps remain unchanged. Run
+`npm run test:settings-time-zone-browser`.
+[Review0781](docs/reviews/0781-settings-clock-zone.md).

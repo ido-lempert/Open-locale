@@ -791,7 +791,7 @@ export class SettingsComponent implements OnInit, OnDestroy {
   }
   settingsTimeLabel(value:unknown,format:'mediumDate'|'short'|'medium'):string {
     if(typeof value!=='string'||!value.trim()||!Number.isFinite(Date.parse(value)))return 'Time unavailable';
-    try{return new DatePipe(this.displayLocale).transform(value,format)||'Time unavailable';}catch{return 'Time unavailable';}
+    try{const pipe=new DatePipe(this.displayLocale),label=pipe.transform(value,format);return label ? format==='mediumDate' ? label : `${label} ${pipe.transform(value,'z')}` : 'Time unavailable';}catch{return 'Time unavailable';}
   }
   private tokenCopyDeparted = false;
   ngOnDestroy() {this.invalidateSamlInfoRefresh();this.invalidateGeneralMetadataRefresh();this.invalidateOriginListRefresh();this.invalidateStatusListRefresh();this.invalidateLocaleListRefresh();this.invalidateMtBranchRefresh();this.invalidateOtaBranchRefresh();this.invalidateOtaListRefresh();this.invalidateRuleListRefresh();this.invalidateMtProviderListRefresh();this.invalidateGroupListRefresh();this.invalidateMemberListRefresh();this.invalidateWebhookListRefresh();this.invalidateTokenListRefresh();this.tokenCopyDeparted=true;this.tokenCopyNotice.set('');this.hookCopyNotice.set('');}
