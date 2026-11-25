@@ -2929,3 +2929,10 @@ Actions. Headers declare column scope and Actions has a visible heading.
 Responsive cards and local draft/save behavior stay unchanged. Run
 `npm run test:glossary-search-metadata-browser`.
 [Review0791](docs/reviews/0791-glossary-column-structure.md).
+
+
+### Glossary startup command routing
+`npm run test:glossary-harness` accepts exact bare-node/reaped-node commands and
+explicit per-suite occupied-port variables across17 glossary suites. Unknown
+commands or unmapped additions fail closed rather than skip startup coverage.
+[Review0792](docs/reviews/0792-glossary-startup-routing.md).
