@@ -3452,3 +3452,10 @@ Comparison and local draft-change headings declare explicit column scope.
 Selections, recovery/apply guards, source data and not-applied copy stay unchanged.
 Run `npm run test:recovery-reason-browser` for scoped table and denial coverage.
 [Review0796](reviews/0796-repository-table-scopes.md).
+
+
+### Local file comparison column scopes
+Six local file comparison headers declare column scope. Explicit draft choices,
+unverified baseline/remote status and not-applied behavior stay unchanged.
+Run `npm run test:sync-direction-browser`.
+[Review0797](reviews/0797-file-preview-column-scopes.md).

@@ -227,12 +227,12 @@ import {
             <table>
               <thead>
                 <tr>
-                  <th>Key</th>
-                  <th>Baseline</th>
-                  <th>Local</th>
-                  <th>Remote</th>
-                  <th>Suggested direction</th>
-                  <th>Draft selection</th>
+                  <th scope="col">Key</th>
+                  <th scope="col">Baseline</th>
+                  <th scope="col">Local</th>
+                  <th scope="col">Remote</th>
+                  <th scope="col">Suggested direction</th>
+                  <th scope="col">Draft selection</th>
                 </tr>
               </thead>
               <tbody>
