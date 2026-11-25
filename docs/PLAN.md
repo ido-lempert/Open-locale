@@ -3385,3 +3385,10 @@ Unknown or malformed finding types have fixed Unknown issue text and neutral
 styling. Known labels, exact filters and raw loaded download stay unchanged.
 Run `npm run test:qa-unknown-type-browser`.
 [Review0787](reviews/0787-qa-unknown-types.md).
+
+
+### Report/QA startup command routing
+`npm run test:report-qa-harness` supports exact bare-node and reaped-node
+commands with explicit per-suite occupied-port variables. Sixteen suites cover
+startup failure exits; unknown commands or unmapped additions fail closed.
+[Review0788](reviews/0788-report-qa-startup-harness.md).
