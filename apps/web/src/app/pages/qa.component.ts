@@ -59,7 +59,7 @@ import { ApiService, BranchInfo, Project, QaIssue } from '../api.service';
             <tr>
               <td>@if (branch() === 'main') { <a class="qa-key" [routerLink]="['/projects', projectId]">{{ i.key }}</a> } @else { <code>{{ i.key }}</code> }</td>
               <td><code>{{ i.locale }}</code></td>
-              <td><span [class]="'qa-badge qa-' + i.type">{{ label(i.type) }}</span></td>
+              <td><span [class]="badgeClass(i.type)">{{ label(i.type) }}</span></td>
               <td class="muted">{{ i.detail }}</td>
             </tr>
           } @empty {
@@ -157,7 +157,11 @@ export class QaComponent implements OnInit, OnDestroy {
 
   emptyLabel() { if(this.query().trim())return 'No loaded findings match this search and current issue-type filter. Clear search or type filter to show other loaded findings.';if(this.issueType())return 'No loaded findings of type '+this.label(this.issueType() as QaIssue['type'])+' in the current branch and locale scope. Clear type filter to show all loaded findings.';return (this.locale() ? 'No QA issues found for ' + this.locale() : 'No QA issues found') + ' on branch ' + this.branch(); }
 
-  label(type: QaIssue['type']): string {
+  badgeClass(type: unknown): string {
+    return 'qa-badge qa-' + (typeof type==='string' && this.issueTypes.includes(type as QaIssue['type']) ? type : 'unknown');
+  }
+
+  label(type: unknown): string {
     switch (type) {
       case 'untranslated': return 'Untranslated';
       case 'placeholder_mismatch': return 'Placeholder mismatch';
@@ -165,6 +169,7 @@ export class QaComponent implements OnInit, OnDestroy {
       case 'whitespace': return 'Whitespace';
       case 'number_mismatch': return 'Number mismatch';
       case 'html_mismatch': return 'HTML mismatch';
+      default: return 'Unknown issue';
     }
   }
 }

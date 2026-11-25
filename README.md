@@ -2892,3 +2892,10 @@ Loaded QA findings have a named keyboard-focusable scroll region, visible focus
 and arrow-scroll guidance. Narrow detail columns are reachable without changing
 findings, filters or downloads. Run `npm run test:qa-table-scroll-browser`.
 [Review0786](docs/reviews/0786-qa-keyboard-scroll.md).
+
+
+### Unknown QA issue types
+Unknown or malformed finding types have fixed Unknown issue text and neutral
+styling. Known labels, exact filters and raw loaded download stay unchanged.
+Run `npm run test:qa-unknown-type-browser`.
+[Review0787](docs/reviews/0787-qa-unknown-types.md).
