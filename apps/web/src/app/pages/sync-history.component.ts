@@ -137,7 +137,7 @@ import { ApiService, SyncPreviewRecord } from '../api.service';
               <article>
                 <h2>{{metadataLabel(r.branch,'Branch')}} / {{metadataLabel(r.locale,'Locale')}}</h2>
                 <p>
-                  <span name="syncHistoryTime">{{timeLabel(r.createdAt)}}</span> · Caller-file diagnostic,
+                  <time name="syncHistoryTime" [attr.datetime]="validTime(r.createdAt)?r.createdAt:null">{{timeLabel(r.createdAt)}}</time> · Caller-file diagnostic,
                   not applied
                 </p>
                 <p>
@@ -218,9 +218,10 @@ export class SyncHistoryComponent implements OnInit, OnDestroy {
   countLabel(value:unknown,unit:string,name:string):string{return this.validCount(value)?`${value} ${value===1?unit.slice(0,-1):unit}`:`${name} unavailable`;}
   validMetadata(value:unknown):value is string{return typeof value==='string'&&!!value.trim();}
   metadataLabel(value:unknown,name:string):string{return this.validMetadata(value)?value:`${name} unavailable`;}
+  validTime(value:unknown):value is string{return typeof value==='string'&&!!value.trim()&&Number.isFinite(Date.parse(value));}
   timeLabel(value:unknown):string {
-    if(typeof value!=='string'||!value.trim())return 'Recorded time unavailable';
-    try{return new DatePipe(this.displayLocale).transform(value,'medium')||'Recorded time unavailable';}
+    if(!this.validTime(value))return 'Recorded time unavailable';
+    try{const pipe=new DatePipe(this.displayLocale);return `${pipe.transform(value,'medium')} ${pipe.transform(value,'z')}`;}
     catch{return 'Recorded time unavailable';}
   }
   ngOnInit() {

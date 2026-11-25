@@ -2831,3 +2831,11 @@ Malformed nonstrings stay in all-values and raw download, not empty/non-empty
 classification. Search still intersects selected filter. Run
 `npm run test:ota-value-types-browser`.
 [Review0778](docs/reviews/0778-ota-value-classification.md).
+
+
+### Explicit diagnostic recorded timezone
+Diagnostic history recorded times now show their displayed timezone and valid
+source datetime metadata. Invalid times remain unavailable. Stored instants,
+local order and raw downloads remain unchanged. Run
+`npm run test:sync-history-zone-browser`.
+[Review0779](docs/reviews/0779-sync-history-zone.md).
