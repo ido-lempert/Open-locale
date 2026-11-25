@@ -24,7 +24,7 @@ import { ApiService, OtaBundle } from '../api.service';
      <p class="bundle-scope muted">Project: {{b.project}}; published <time name="bundlePublishedTime" [attr.datetime]="validPublishedTime(b.publishedAt)?b.publishedAt:null">{{timeLabel(b.publishedAt)}}</time>. {{rows().length}} translation values. Showing {{visibleRows().length}} on page {{page()+1}} of {{pageCount()}}.</p>
      <label>Published value <select name="bundleValueFilter" [ngModel]="valueFilter()" (ngModelChange)="setValueFilter($event)"><option value="">all values</option><option value="empty">empty values</option><option value="nonempty">non-empty values</option></select></label>
      <button type="button" name="clearBundleValueFilter" [disabled]="!valueFilter()" (click)="setValueFilter('')">Clear value filter</button>
-     <p class="muted" name="bundleValueScope">Empty means exactly an empty string in this retained locale. Whitespace is non-empty. This filter does not find missing keys, run QA, read live editor values or confirm client delivery.</p>
+     <p class="muted" name="bundleValueScope">Empty means exactly an empty string in this retained locale. Whitespace is non-empty. Nonstring values are not classified as empty or non-empty; all values and the raw download retain them. This filter does not find missing keys, run QA, read live editor values or confirm client delivery.</p>
      <label>Find in published keys or values <input type="search" name="bundleSearch" maxlength="200" [ngModel]="query()" (ngModelChange)="search($event)" /></label>
      <button type="button" name="clearBundleSearch" [disabled]="!query()" (click)="search('')">Clear search</button>
      <p class="muted" role="status" name="bundleMatches">{{filteredRows().length}} of {{rows().length}} values match. Search is a literal, case-insensitive substring in this downloaded locale only and combines with the value filter.</p>
@@ -39,7 +39,7 @@ import { ApiService, OtaBundle } from '../api.service';
 export class OtaBundleComponent implements OnInit,OnDestroy{
  publicationId:string|undefined;projectId='';branch='main';version='';locale='';bundle=signal<OtaBundle|null>(null);rows=signal<[string,string][]>([]);page=signal(0);loading=signal(false);error=signal(false);
  query=signal('');valueFilter=signal<''|'empty'|'nonempty'>('');downloadNotice=signal('');
- filteredRows=computed(()=>{const query=this.query().toLowerCase(),filter=this.valueFilter();if(!query&&!filter)return this.rows();return this.rows().filter(([key,value])=>(!query||key.toLowerCase().includes(query)||(typeof value==='string'&&value.toLowerCase().includes(query)))&&(!filter||(filter==='empty'?value==='':value!=='')));});
+ filteredRows=computed(()=>{const query=this.query().toLowerCase(),filter=this.valueFilter();if(!query&&!filter)return this.rows();return this.rows().filter(([key,value])=>(!query||key.toLowerCase().includes(query)||(typeof value==='string'&&value.toLowerCase().includes(query)))&&(!filter||(filter==='empty'?value==='':typeof value==='string'&&value!=='')));});
  setValueFilter(value:string){if(this.destroyed||!['','empty','nonempty'].includes(value))return;this.valueFilter.set(value as ''|'empty'|'nonempty');this.page.set(0);}
  emptyLabel(){if(this.valueFilter())return 'No retained values match this value filter and search. Clear value filter or search to show other retained values.';return this.query()?'No published keys or values match this search.':'No translation values in this published locale.';}
  private generation=0;private destroyed=false;private sub?:Subscription;

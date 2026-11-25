@@ -2823,3 +2823,11 @@ table scroll groups are named keyboard-focusable regions with a visible focus
 outline. Counts, filters and downloads are unchanged. Run
 `npm run test:reports-table-layout-browser`.
 [Review0777](docs/reviews/0777-reports-table-layout.md).
+
+
+### Typed retained OTA value classification
+Non-empty retained values must be strings; whitespace remains non-empty.
+Malformed nonstrings stay in all-values and raw download, not empty/non-empty
+classification. Search still intersects selected filter. Run
+`npm run test:ota-value-types-browser`.
+[Review0778](docs/reviews/0778-ota-value-classification.md).

@@ -383,6 +383,7 @@
     "test:recovery-reason-browser": "python3 scripts/run-reaped.py node scripts/recovery-reason-browser-test.mjs",
     "test:reports-own-count-browser": "python3 scripts/run-reaped.py node scripts/reports-own-count-browser-test.mjs",
     "test:reports-table-layout-browser": "python3 scripts/run-reaped.py node scripts/reports-table-layout-browser-test.mjs",
+    "test:ota-value-types-browser": "python3 scripts/run-reaped.py node scripts/ota-value-types-browser-test.mjs",
     "test:qa-clear-browser": "python3 scripts/run-reaped.py node scripts/qa-clear-browser-test.mjs",
     "test:snapshot-restore-receipt-browser": "python3 scripts/run-reaped.py node scripts/snapshot-restore-receipt-browser-test.mjs",
     "test:editor-recovery-browser-harness": "node scripts/editor-recovery-browser-harness-test.mjs",

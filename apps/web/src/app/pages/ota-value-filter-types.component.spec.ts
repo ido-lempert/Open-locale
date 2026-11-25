@@ -1,0 +1,6 @@
+import { OtaBundleComponent } from './ota-bundle.component';
+const make=()=>new OtaBundleComponent({} as any,{} as any);
+describe('typed retained value classification',()=>{
+ for(const value of [undefined,null,42,true,{},[]])it(`does not classify ${typeof value} as empty or nonempty`,()=>{const c=make(),rows:any=[['raw',value],['empty',''],['spaces','  '],['text','Release']];c.rows.set(rows);expect(c.filteredRows()).toBe(rows);c.setValueFilter('nonempty');expect(c.filteredRows()).toEqual(rows.slice(2));c.search('RAW');expect(c.filteredRows()).toEqual([]);c.setValueFilter('empty');c.search('');expect(c.filteredRows()).toEqual([rows[1]]);c.setValueFilter('');c.search('RAW');expect(c.filteredRows()).toEqual([rows[0]]);c.search('');expect(c.filteredRows()).toBe(rows);expect(c.rows()[0][1]).toBe(value);});
+ it('reset page intersects literal search with nonempty string classification',()=>{const c=make();c.rows.set(Array.from({length:101},(_,i)=>['key'+i,i===100?'0':null]) as any);c.changePage(2);c.setValueFilter('nonempty');expect(c.page()).toBe(0);expect(c.pageCount()).toBe(1);c.search('KEY100');expect(c.visibleRows()).toEqual([['key100','0']]);c.search('.*');expect(c.filteredRows()).toEqual([]);expect(c.emptyLabel()).toContain('value filter and search');});
+});
