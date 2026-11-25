@@ -96,7 +96,7 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
               <td data-label="Term"><code>{{ t.term }}</code>@if (t.doNotTranslate) { <span class="dnt-badge">do not translate</span> }</td>
               @for (l of locales(); track l) {
                 <td [attr.data-label]="l">
-                  <input [readOnly]="unknownSaveIds().includes(t.id)" [disabled]="rowPending(t.id) && !unknownSaveIds().includes(t.id)" [attr.aria-label]="t.term + ' in ' + l" [ngModel]="t.translations[l] ?? ''"
+                  <input [readOnly]="unknownSaveIds().includes(t.id)" [disabled]="rowPending(t.id) && !unknownSaveIds().includes(t.id)" [attr.aria-label]="t.term + ' in ' + l" [ngModel]="translationValue(t, l)"
                     (ngModelChange)="setTranslation(t, l, $event)" (blur)="translationBlur(t)" />
                 </td>
               }
@@ -314,6 +314,8 @@ export class GlossaryComponent implements OnInit, OnDestroy {
     } catch { if(this.current(scope)){++this.createEpoch;this.createUnknown.set(true);this.error.set('Adding term failed. Check the glossary before trying again.');} }
     finally {if(this.current(scope))this.creating.set(false);}
   }
+
+  translationValue(t:GlossaryTermItem,locale:string) { return Object.prototype.hasOwnProperty.call(t.translations,locale)?t.translations[locale]??'':''; }
 
   setTranslation(t: GlossaryTermItem, locale: string, value: string) {
     if(this.destroyed||this.unknownSaveIds().includes(t.id))return;

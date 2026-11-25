@@ -39,6 +39,13 @@ try {
   await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.evaluate(t=>localStorage.setItem('ol_token',t),token);
 
   await page.goto(`${WEB}${P}/glossary`,{waitUntil:'networkidle0'});await page.waitForFunction(()=>!ng.getComponent(document.querySelector('ol-glossary')).loading());let reads=0,writes=0;await page.setRequestInterception(true);page.on('request',req=>{if(new URL(req.url()).pathname.startsWith('/api/'))req.method()==='GET'?reads++:writes++;req.continue();});
+  await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-glossary'));c.locales.set(['toString','__proto__','constructor']);c.terms.set([{id:'own',term:'Own',notes:'Stored literal values',doNotTranslate:false,translations:JSON.parse('{"toString":"own string","__proto__":"own proto","constructor":"own constructor"}')},{id:'absent',term:'Absent',notes:'No stored values',doNotTranslate:false,translations:{}}]);});
+  await page.evaluate(()=>new Promise(r=>requestAnimationFrame(r)));
+  const ownInputs=()=>page.$$eval('.glossary-table tbody input',es=>JSON.stringify(es.map(e=>e.value))===JSON.stringify(['own string','own proto','own constructor','','','']));
+  check('own prototype-name translations display while absent values stay empty',await ownInputs());
+  await page.$eval('[aria-label="Absent in toString"]',e=>e.value='Inherited function');check('negative inherited-looking input display detected',!await ownInputs());await page.$eval('[aria-label="Absent in toString"]',e=>e.value='');check('own lookup display restored after isolated probe',await ownInputs());
+  await page.screenshot({path:'/downloads/glossary-own-values-desktop.png',fullPage:true});
+  await page.evaluate(()=>ng.getComponent(document.querySelector('ol-glossary')).terms.set([]));
   const tableReady=()=>page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-glossary')),hs=[...document.querySelectorAll('.glossary-table th')],cell=document.querySelector('[name=glossaryListEmpty] td');return hs.length===c.locales().length+3&&hs.every(h=>h.scope==='col')&&hs.at(-1).textContent==='Actions'&&cell?.colSpan===hs.length;});
   for(const locales of [[],['he'],['he','fr','de']]){await page.evaluate(ls=>{const c=ng.getComponent(document.querySelector('ol-glossary'));c.locales.set(ls);},locales);await page.evaluate(()=>new Promise(r=>requestAnimationFrame(r)));check('empty glossary spans exact dynamic columns '+locales.length,await tableReady());}
   await page.$eval('[name=glossaryListEmpty] td',e=>e.colSpan=9);

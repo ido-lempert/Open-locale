@@ -3459,3 +3459,10 @@ Six local file comparison headers declare column scope. Explicit draft choices,
 unverified baseline/remote status and not-applied behavior stay unchanged.
 Run `npm run test:sync-direction-browser`.
 [Review0797](reviews/0797-file-preview-column-scopes.md).
+
+
+### Own glossary input values
+Translation inputs display only own map entries; absent prototype-named keys
+stay empty rather than inherited values. Raw maps, search, drafts and save
+behavior stay unchanged. Run `npm run test:glossary-search-metadata-browser`.
+[Review0798](reviews/0798-glossary-own-values.md).
