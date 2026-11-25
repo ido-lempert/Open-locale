@@ -7,6 +7,16 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
 @Component({
   selector: 'ol-reports',
   imports: [FormsModule, RouterLink],
+  styles: [`
+    .qa-table:not(.progress-table) { border-collapse: collapse; margin: .75rem 0; }
+    .qa-table:not(.progress-table) th, .qa-table:not(.progress-table) td {
+      padding: .5rem .9rem; text-align: left; vertical-align: top;
+      border-bottom: 1px solid var(--line, #e5e7eb);
+    }
+    .qa-table:not(.progress-table) th { white-space: nowrap; }
+    .qa-table:not(.progress-table) td { min-width: 4rem; max-width: 28rem; overflow-wrap: anywhere; }
+    .table-scroll:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+  `],
   template: `
     <header class="bar">
       <a [routerLink]="['/projects', projectId]" class="back">&larr; Editor</a>
@@ -33,7 +43,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
         <p class="muted">{{ r.totalKeys }} keys on {{ r.branch }}. A key counts as translated when its value is not empty; status counts cover non-empty values only.</p>
         <p class="muted" role="status" name="progressLocaleMatches">{{ visibleProgressLocales().length }} of {{ r.locales.length }} loaded progress locales shown.</p>
         @if (localeQuery().trim() && !visibleProgressLocales().length) { <p class="muted" role="status" name="progressLocaleSearchHint">No loaded progress locales match this search. Clear locale search to show all loaded rows. Report totals are unchanged.</p> }
-        <div class="table-scroll">
+        <div class="table-scroll" tabindex="0" role="region" aria-label="Progress by locale">
         <table class="qa-table progress-table">
           <thead>
             <tr class="group-row">
@@ -72,7 +82,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
         <p class="muted">{{ q.totalIssues }} open findings across {{ q.keysWithIssues }} keys on {{ q.branch }}.</p>
         <p class="muted" role="status" name="qualityLocaleMatches">{{ visibleQualityLocales().length }} of {{ q.locales.length }} loaded quality locales shown.</p>
         @if (q.totalIssues > 0) {
-          <div class="table-scroll">
+          <div class="table-scroll" tabindex="0" role="region" aria-label="Quality findings by locale">
           <table class="qa-table quality-table">
             <thead>
               <tr><th class="row-head">Locale</th><th>Total</th>@for (t of q.types; track t) { <th>{{ t.split('_').join(' ') }}</th> }</tr>
@@ -99,7 +109,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
       @if (usage(); as u) {
         <p class="muted">{{ u.totalEvents }} events touching {{ u.activeKeys }} keys.</p>
         <p class="muted" name="usageWindow" style="overflow-wrap:anywhere">Captured window: <time>{{ u.since }}</time> through <time>{{ u.asOf }}</time>. UTC calendar days. Separate reads are not one database snapshot.</p>
-        <div class="table-scroll">
+        <div class="table-scroll" tabindex="0" role="region" aria-label="Usage actions and actors">
         <table class="qa-table usage-table">
           <thead><tr><th class="row-head">Action</th><th>Events</th></tr></thead>
           <tbody>@for (a of actionRows(u); track a.action) { <tr><td><code>{{ a.action }}</code></td><td>{{ a.count }}</td></tr> } @empty { <tr name="usageActionsEmpty"><td colspan="2" class="muted">No activity in this window.</td></tr> }</tbody>
@@ -120,7 +130,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
           <span [class.error]="t.overdue > 0">{{ t.overdue }} overdue</span>, {{ t.dueSoon }} due within 7 days.</p>
         <p class="muted" name="taskWindow" style="overflow-wrap:anywhere">Deadline cutoff: <time>{{ t.asOf }}</time>. Due soon includes this cutoff through <time>{{ t.dueSoonThrough }}</time>. Workload is read separately, not one database snapshot.</p>
         @if (t.perAssignee.length > 0) {
-          <div class="table-scroll">
+          <div class="table-scroll" tabindex="0" role="region" aria-label="Task workload by assignee">
           <table class="qa-table tasks-table">
             <thead><tr><th class="row-head">Assignee</th><th>Open tasks</th></tr></thead>
             <tbody>@for (a of t.perAssignee; track a.kind + ':' + (a.assigneeId ?? a.assigneeGroupId ?? '')) { <tr><td>{{ a.name }}<small class="muted" style="display:block;overflow-wrap:anywhere">{{ a.kind === 'group' ? 'Group: ' + a.assigneeGroupId : a.assigneeId ?? 'No assignee' }}</small></td><td>{{ a.count }}</td></tr> }</tbody>

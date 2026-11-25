@@ -3301,3 +3301,11 @@ Progress status, QA type and task status cells only use own map entries. Missing
 counts stay zero rather than inherited object values; own counts and raw full
 report downloads remain unchanged. Run `npm run test:reports-own-count-browser`.
 [Review0776](reviews/0776-reports-own-counts.md).
+
+
+### Report table spacing and keyboard scroll
+QA, usage and task table cells now have spacing and row borders. All report
+table scroll groups are named keyboard-focusable regions with a visible focus
+outline. Counts, filters and downloads are unchanged. Run
+`npm run test:reports-table-layout-browser`.
+[Review0777](reviews/0777-reports-table-layout.md).
