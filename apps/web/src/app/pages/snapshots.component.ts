@@ -50,7 +50,7 @@ import { ApiService, SnapshotMeta } from '../api.service';
             <span class="snapshot-label">{{snapshotLabel(s.label)}}</span>
             @if (s.automatic === true) { <span class="auto-badge">auto</span> } @else if (s.automatic !== false) { <span class="muted" name="snapshotUnknownKind">unknown loaded kind</span> }
             <span class="muted">{{countLabel(s.keyCount,'keys','Key count')}}, {{countLabel(s.translationCount,'translations','Translation count')}}</span>
-            <time class="muted" name="snapshotCaptureTime">{{captureTimeLabel(s.createdAt)}}</time>
+            <time class="muted" name="snapshotCaptureTime" [attr.datetime]="validCaptureTime(s.createdAt)?s.createdAt:null">{{captureTimeLabel(s.createdAt)}}</time>
             <details name="snapshotLoadedReview" style="width:100%;min-width:0;overflow-wrap:anywhere;word-break:break-word">
               <summary>Review loaded snapshot identity</summary>
               <p class="muted">Local metadata only, not snapshot contents, newer server values, current permission or a scan of what restoring would change in the current project. Counts belong to the loaded snapshot, not the current project or a total restore-impact count. This does not capture or restore anything. The Restore confirmation still requires a separate decision.</p>
@@ -184,9 +184,10 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
   snapshotKindLabel(value:unknown):string {
     return value===true ? 'automatic' : value===false ? 'manual' : 'unknown loaded kind';
   }
+  validCaptureTime(value:unknown):value is string{return typeof value==='string'&&!!value.trim()&&Number.isFinite(Date.parse(value));}
   captureTimeLabel(value:unknown):string {
-    if(typeof value!=='string' || !value.trim())return 'Capture time unavailable';
-    try {return new DatePipe(this.displayLocale).transform(value,'short') || 'Capture time unavailable';}
+    if(!this.validCaptureTime(value))return 'Capture time unavailable';
+    try {const pipe=new DatePipe(this.displayLocale);return `${pipe.transform(value,'medium')} ${pipe.transform(value,'z')}`;}
     catch {return 'Capture time unavailable';}
   }
 

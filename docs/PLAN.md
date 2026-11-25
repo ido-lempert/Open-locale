@@ -3341,3 +3341,11 @@ timezone. Date-only creation labels, malformed fallback, never-used distinction
 and source timestamps remain unchanged. Run
 `npm run test:settings-time-zone-browser`.
 [Review0781](reviews/0781-settings-clock-zone.md).
+
+
+### Explicit snapshot capture clock identity
+Snapshot capture labels show medium time with seconds and displayed timezone,
+with exact valid source datetime. Raw loaded identity/restore confirmation,
+invalid fallback, ordering and inventory timestamps remain unchanged. Run
+`npm run test:snapshot-time-zone-browser`.
+[Review0782](reviews/0782-snapshot-capture-zone.md).
