@@ -2749,3 +2749,8 @@ Member/group/group-member removal and token-revocation browser checks fail close
 on incomplete startup cleanup. Run
 `npm run test:settings-access-remove-browser-harness` for real occupied-port regression.
 See [review0765](docs/reviews/0765-settings-access-remove-browser-harness.md).
+
+Webhook/rule/provider/locale removal browser checks fail closed on incomplete
+startup cleanup. Run
+`npm run test:settings-resource-remove-browser-harness` for real occupied-port regression.
+See [review0766](docs/reviews/0766-settings-resource-remove-browser-harness.md).
