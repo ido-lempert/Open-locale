@@ -3364,3 +3364,10 @@ timezone with exact valid datetime metadata. Invalid fallback, stored text
 and refresh draft preservation are unchanged. Run
 `npm run test:editor-time-zone-browser`.
 [Review0784](reviews/0784-editor-metadata-zone.md).
+
+
+### Timezone browser startup checkpoint
+Run `npm run test:time-zone-browser-harness` for six real occupied-port startup
+regressions. Aborted suites must exit nonzero without application PASS claims.
+Full web311 suites/3783 tests and production route recovery22 checks rerun.
+[Review0785](reviews/0785-time-zone-browser-harness.md).
