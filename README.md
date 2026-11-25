@@ -2709,3 +2709,8 @@ Token-settings refresh, name-discard, pending-draft and hide browser checks
 fail closed on incomplete startup cleanup. Run
 `npm run test:settings-token-browser-harness` for real occupied-port regression.
 See [review0757](docs/reviews/0757-settings-token-browser-harness.md).
+
+Webhook-settings refresh, URL-discard, pending-draft and hide browser checks
+fail closed on incomplete startup cleanup. Run
+`npm run test:settings-webhook-browser-harness` for real occupied-port regression.
+See [review0758](docs/reviews/0758-settings-webhook-browser-harness.md).
