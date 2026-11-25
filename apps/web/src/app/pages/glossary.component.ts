@@ -89,7 +89,7 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
         </section>
       }
       @if (!listError()) { <table class="glossary-table">
-        <thead><tr><th>Term</th>@for (l of locales(); track l) { <th>{{ l }}</th> }<th>Notes</th><th></th></tr></thead>
+        <thead><tr><th scope="col">Term</th>@for (l of locales(); track l) { <th scope="col">{{ l }}</th> }<th scope="col">Notes</th><th scope="col">Actions</th></tr></thead>
         <tbody>
           @for (t of visibleTerms(); track t.id) {
             <tr [attr.aria-busy]="rowPending(t.id)">
@@ -104,7 +104,7 @@ import { ApiService, GlossaryTermItem, Project } from '../api.service';
               <td data-label="Actions">@if (localTextChanged(t)) { <span role="status" name="glossaryLocalDraft">Unsaved local text. Leave the translation field to save, or copy/download the local draft before refreshing.</span><button type="button" name="resetGlossaryLocalText" (pointerdown)="$event.preventDefault()" (click)="resetLocalText(t)">Reset local translation text</button> }@if (unknownSaveIds().includes(t.id)) { <span class="error" role="alert" name="glossarySaveUnknown">Save unconfirmed. Copy text before Refresh.</span> }@if (unknownDeleteIds().includes(t.id)) { <span class="error" role="alert" name="glossaryDeleteUnknown">Delete unconfirmed. Refresh required.</span> }@if (savingIds().includes(t.id)) { <span role="status" name="glossarySaving">Saving translation...</span> }@if (deletingIds().includes(t.id)) { <span role="status" name="glossaryDeleting">Deleting term...</span> }<button type="button" [disabled]="!canOpenTermEdit(t)" [attr.aria-label]="'Edit details for ' + t.term" (pointerdown)="$event.preventDefault()" (click)="openTermEdit(t)">Edit details</button><button [disabled]="rowPending(t.id)" class="danger" [attr.aria-label]="'Delete term ' + t.term" (pointerdown)="$event.preventDefault()" (click)="requestRemove(t)">&times;</button></td>
             </tr>
           } @empty {
-            @if (!loading() && !listError()) { <tr name="glossaryListEmpty"><td colspan="9" class="muted">{{ query() || attention()!=='all' ? 'No loaded terms match these filters. Clear search and choose All loaded terms to show all loaded terms.' : 'No glossary terms yet' }}</td></tr> }
+            @if (!loading() && !listError()) { <tr name="glossaryListEmpty"><td [attr.colspan]="locales().length + 3" class="muted">{{ query() || attention()!=='all' ? 'No loaded terms match these filters. Clear search and choose All loaded terms to show all loaded terms.' : 'No glossary terms yet' }}</td></tr> }
           }
         </tbody>
       </table> }
