@@ -2936,3 +2936,10 @@ Responsive cards and local draft/save behavior stay unchanged. Run
 explicit per-suite occupied-port variables across17 glossary suites. Unknown
 commands or unmapped additions fail closed rather than skip startup coverage.
 [Review0792](docs/reviews/0792-glossary-startup-routing.md).
+
+
+### Editor grid column headings
+Editor Key, locale and Actions headers declare column scope. Expanded metadata
+spans retain their existing locale-aware width, and translation saves/drafts
+are unchanged. Run `npm run test:editor-time-zone-browser`.
+[Review0793](docs/reviews/0793-editor-column-scopes.md).

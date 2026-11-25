@@ -188,7 +188,7 @@ interface CellState {
           @if (keyDeleteErrorFor().includes(k.id)) { <p class="error" role="alert" name="keyDeleteError">Deletion of key "{{ k.name }}" could not be confirmed. Deletion stays paused. Copy retained translation values before reading current keys; this does not retry deletion.</p><button type="button" name="reloadAfterKeyDelete" (mousedown)="$event.preventDefault()" [disabled]="!keyDeleteRecoveryReady(k)" (click)="prepareKeyDeleteReload(k)">Review retained values before reload</button> }
         }
         <table class="grid" [attr.inert]="keysLoading() || keysError() ? '' : null" [attr.aria-busy]="keysLoading()">
-          <thead><tr><th>Key</th>@for (l of p.locales; track l.code) { <th>{{ l.code }}</th> }<th></th></tr></thead>
+          <thead><tr><th scope="col">Key</th>@for (l of p.locales; track l.code) { <th scope="col">{{ l.code }}</th> }<th scope="col">Actions</th></tr></thead>
           <tbody>
             @for (k of keys(); track k.id) {
               <tr [attr.inert]="keyDeleting().includes(k.id) ? '' : null">
