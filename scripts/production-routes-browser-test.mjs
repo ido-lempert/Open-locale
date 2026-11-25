@@ -7,11 +7,12 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55546, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.FORM_ROUTE_GUARD_TEST_PG_PORT ?? 55546), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-production-routes-browser-'));
@@ -28,7 +29,7 @@ try {
   const token=owner.accessToken;
   const project=await call('/projects',{name:'Sync browser',slug:'sync-browser',locales:['en','he']},token);
   const P=`/projects/${project.id}`;
-  web=spawn(process.execPath,['scripts/production-web-server.mjs'],{stdio:'pipe',detached:true});await waitFor(WEB);
+  web=spawn(process.execPath,['scripts/production-web-server.mjs'],{env:{...process.env,NX_DAEMON:'false'},stdio:'pipe',detached:true});await waitFor(WEB);
   browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH??'/usr/bin/google-chrome',args:['--no-sandbox','--disable-dev-shm-usage']});
   const chunks=[];
   const diagnostics=[];const page=await browser.newPage();page.on('request',r=>{if(/chunk-.*\.js/.test(r.url()))chunks.push(r.url());});page.on('console',m=>diagnostics.push(m.text()));page.on('pageerror',e=>diagnostics.push(e.message));await page.setViewport({width:1280,height:900});
@@ -50,8 +51,8 @@ try {
   check('blocked production chunk shows fixed recovery guidance and retains unsaved draft',await failurePage.$eval('[name=navigationFailed]',e=>e.textContent.includes('Keep any unsaved work')&&!e.textContent.includes('chunk-'))&&await failurePage.$eval('input[name=name]',(e,d)=>e.value===d,draft)&&!(await failurePage.$('[name=navigationPending]')));check('failed navigation guidance is visible at current scroll',await failurePage.$eval('[name=navigationFailed]',e=>{const r=e.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight&&r.width<=innerWidth;}));await failurePage.screenshot({path:'/downloads/production-navigation-failed.png',fullPage:false});
   check('chunk failure never automatically reloads document',new URL(failurePage.url()).pathname===`${P}/settings`&&await failurePage.$eval('input[name=name]',(e,d)=>e.value===d,draft));failurePage.off('request',failChunk);await failurePage.setRequestInterception(false);await failurePage.click('.back');await failurePage.waitForSelector('.grid');check('next ordinary navigation clears failure feedback',!(await failurePage.$('[name=navigationFailed]'))&&!(await failurePage.$('[name=navigationPending]')));await failurePage.close();
   check('production routes have no runtime or chunk errors',!diagnostics.some(d=>/ChunkLoadError|Failed to fetch dynamically imported module|TypeError|NG0955/.test(d)));
-  console.log(failures?'PRODUCTION ROUTE CHECKS FAILED':'ALL PRODUCTION ROUTE CHECKS PASSED');process.exitCode=failures?1:0;
-} catch(e){console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
+  console.log(failures?'PRODUCTION ROUTE CHECKS FAILED':'ALL PRODUCTION ROUTE CHECKS PASSED');completed=true;process.exitCode=failures?1:0;
+} catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??e}`);process.exitCode=1;}
 finally {
   await browser?.close();
   // Nx serve launches a child server. Reap its process group, not only Nx,
@@ -66,4 +67,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(process.exitCode??1);
+process.exit(!completed||failures?1:0);
