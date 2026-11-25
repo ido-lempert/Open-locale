@@ -2906,3 +2906,10 @@ Run `npm run test:qa-unknown-type-browser`.
 commands with explicit per-suite occupied-port variables. Sixteen suites cover
 startup failure exits; unknown commands or unmapped additions fail closed.
 [Review0788](docs/reviews/0788-report-qa-startup-harness.md).
+
+
+### QA column relationships
+Four QA finding headers declare explicit column scope. Keyboard scroll, empty
+projection and full raw download retain their existing behavior. Browser suite
+`npm run test:qa-table-scroll-browser` includes missing-scope negative coverage.
+[Review0789](docs/reviews/0789-qa-column-scopes.md).

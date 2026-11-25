@@ -53,7 +53,7 @@ import { ApiService, BranchInfo, Project, QaIssue } from '../api.service';
       @if (!loading() && !error()) {
       <p class="muted" id="qaTableScrollHelp">On narrow screens, focus the findings table and use Left or Right arrow keys to scroll across columns.</p>
       <div class="table-scroll" tabindex="0" role="region" aria-label="Loaded QA findings" aria-describedby="qaTableScrollHelp"><table class="qa-table" [class.qa-empty]="!visibleIssues().length">
-        <thead><tr><th>Key</th><th>Locale</th><th>Issue</th><th>Detail</th></tr></thead>
+        <thead><tr><th scope="col">Key</th><th scope="col">Locale</th><th scope="col">Issue</th><th scope="col">Detail</th></tr></thead>
         <tbody>
           @for (i of visibleIssues(); track $index) {
             <tr>
