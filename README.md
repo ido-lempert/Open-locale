@@ -2943,3 +2943,11 @@ Editor Key, locale and Actions headers declare column scope. Expanded metadata
 spans retain their existing locale-aware width, and translation saves/drafts
 are unchanged. Run `npm run test:editor-time-zone-browser`.
 [Review0793](docs/reviews/0793-editor-column-scopes.md).
+
+
+### Full web checkpoint after table semantics
+Current whole-web inventory312 suites/3796 tests passes. Production route
+browser22 checks and six real occupied-port timezone startup suites18 checks
+rerun, with forced-zero child negative and restored green verification. No
+whole-product/native/sync/provider acceptance claim.
+[Review0794](docs/reviews/0794-web-regression-checkpoint.md).
