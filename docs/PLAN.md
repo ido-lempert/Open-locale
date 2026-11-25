@@ -3278,3 +3278,11 @@ stay literal, including inherited object names; malformed actions show Action
 unavailable without coercion. Local search remains source-only and downloaded
 actions remain raw. Run `npm run test:activity-action-label-browser`.
 [Review0773](reviews/0773-activity-action-label.md).
+
+
+### Bounded file-sync direction display
+Four known sync directions retain readable labels. Unknown strings stay literal
+without inherited dictionary lookup; malformed directions show Direction
+unavailable without coercion. This changes display only, not explicit choices,
+validation, draft generation or application. Run `npm run test:sync-direction-browser`.
+[Review0774](reviews/0774-sync-direction-display.md).

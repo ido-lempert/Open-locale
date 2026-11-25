@@ -521,17 +521,14 @@ export class SyncPreviewComponent implements OnInit, OnDestroy {
         ? '[empty string]'
         : value;
   }
-  direction(value: string) {
-    return (
-      (
-        {
-          none: 'No change',
-          push: 'Local to remote',
-          pull: 'Remote to local',
-          manual: 'Manual review',
-        } as Record<string, string>
-      )[value] ?? value
-    );
+  direction(value: unknown): string {
+    switch (value) {
+      case 'none': return 'No change';
+      case 'push': return 'Local to remote';
+      case 'pull': return 'Remote to local';
+      case 'manual': return 'Manual review';
+      default: return typeof value === 'string' ? value : 'Direction unavailable';
+    }
   }
   async preview() {
     const generation = ++this.generation;
