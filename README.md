@@ -2808,3 +2808,10 @@ keys. Unknown/malformed reasons retain fixed generic denial rather than
 inherited functions/objects or raw server text. Known guidance and recovery
 authority remain unchanged. Run `npm run test:recovery-reason-browser`.
 [Review0775](docs/reviews/0775-recovery-denial-reasons.md).
+
+
+### Own report count entries
+Progress status, QA type and task status cells only use own map entries. Missing
+counts stay zero rather than inherited object values; own counts and raw full
+report downloads remain unchanged. Run `npm run test:reports-own-count-browser`.
+[Review0776](docs/reviews/0776-reports-own-counts.md).

@@ -381,6 +381,7 @@
     "test:activity-action-label-browser": "python3 scripts/run-reaped.py node scripts/activity-action-label-browser-test.mjs",
     "test:sync-direction-browser": "python3 scripts/run-reaped.py node scripts/sync-direction-browser-test.mjs",
     "test:recovery-reason-browser": "python3 scripts/run-reaped.py node scripts/recovery-reason-browser-test.mjs",
+    "test:reports-own-count-browser": "python3 scripts/run-reaped.py node scripts/reports-own-count-browser-test.mjs",
     "test:qa-clear-browser": "python3 scripts/run-reaped.py node scripts/qa-clear-browser-test.mjs",
     "test:snapshot-restore-receipt-browser": "python3 scripts/run-reaped.py node scripts/snapshot-restore-receipt-browser-test.mjs",
     "test:editor-recovery-browser-harness": "node scripts/editor-recovery-browser-harness-test.mjs",

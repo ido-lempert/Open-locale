@@ -59,7 +59,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
                 </td>
                 <td>{{ l.translated }} / {{ l.total }}</td>
                 <td>{{ l.untranslated }}</td>
-                @for (s of statusColumns(); track s) { <td [class.status-group]="s === statusColumns()[0]">{{ l.byStatus[s] ?? 0 }}</td> }
+                @for (s of statusColumns(); track s) { <td [class.status-group]="s === statusColumns()[0]">{{ ownCount(l.byStatus,s) }}</td> }
               </tr>
             } @empty { <tr name="progressLocaleEmpty"><td [attr.colspan]="4 + statusColumns().length" class="muted">{{ localeQuery().trim() ? 'No loaded progress locales match this search. Clear locale search to show all loaded rows.' : 'No loaded progress locale rows.' }}</td></tr> }
           </tbody>
@@ -79,7 +79,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
             </thead>
             <tbody>
               @for (l of visibleQualityLocales(); track l.locale) {
-                <tr><td><code>{{ l.locale }}</code></td><td>{{ l.total }}</td>@for (t of q.types; track t) { <td>{{ l.byType[t] ?? 0 }}</td> }</tr>
+                <tr><td><code>{{ l.locale }}</code></td><td>{{ l.total }}</td>@for (t of q.types; track t) { <td>{{ ownCount(l.byType,t) }}</td> }</tr>
               } @empty { <tr name="qualityLocaleEmpty"><td [attr.colspan]="2 + q.types.length" class="muted">{{ localeQuery().trim() ? 'No loaded quality locales match this search. Clear locale search to show all loaded rows. Report totals are unchanged.' : 'No loaded quality locale rows. Report totals are unchanged.' }}</td></tr> }
             </tbody>
           </table>
@@ -116,7 +116,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
       @if (tasksLoading()) { <p role="status" name="tasksLoading">Loading task report...</p> }
       @if (taskReportError()) { <p class="error" role="alert" name="taskReportError">Task report unavailable. No task figures are shown. Retry tasks or reload this page.</p><button type="button" name="retryTasks" (click)="void loadTasks()">Retry tasks</button> }
       @if (taskReport(); as t) {
-        <p class="muted">{{ t.total }} tasks: {{ t.byStatus['OPEN'] ?? 0 }} open, {{ t.byStatus['IN_PROGRESS'] ?? 0 }} in progress, {{ t.byStatus['DONE'] ?? 0 }} done.
+        <p class="muted">{{ t.total }} tasks: {{ ownCount(t.byStatus,'OPEN') }} open, {{ ownCount(t.byStatus,'IN_PROGRESS') }} in progress, {{ ownCount(t.byStatus,'DONE') }} done.
           <span [class.error]="t.overdue > 0">{{ t.overdue }} overdue</span>, {{ t.dueSoon }} due within 7 days.</p>
         <p class="muted" name="taskWindow" style="overflow-wrap:anywhere">Deadline cutoff: <time>{{ t.asOf }}</time>. Due soon includes this cutoff through <time>{{ t.dueSoonThrough }}</time>. Workload is read separately, not one database snapshot.</p>
         @if (t.perAssignee.length > 0) {
@@ -132,6 +132,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
   `,
 })
 export class ReportsComponent implements OnInit, OnDestroy {
+  ownCount(counts: Record<string,number> | null | undefined,key:string):number { return counts && Object.prototype.hasOwnProperty.call(counts,key) ? counts[key] ?? 0 : 0; }
   projectId = '';
   localeQuery=signal('');
   setLocaleQuery(value:string){if(!this.destroyed)this.localeQuery.set(value.slice(0,200));}
