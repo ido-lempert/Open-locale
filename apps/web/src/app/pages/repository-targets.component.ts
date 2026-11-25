@@ -427,12 +427,12 @@ const empty = (): RepositoryTargetInput => ({
                   <table>
                     <thead>
                       <tr>
-                        <th>Key</th>
-                        <th>Accepted baseline</th>
-                        <th>Local</th>
-                        <th>Repository</th>
-                        <th>Difference</th>
-                        <th>Draft selection</th>
+                        <th scope="col">Key</th>
+                        <th scope="col">Accepted baseline</th>
+                        <th scope="col">Local</th>
+                        <th scope="col">Repository</th>
+                        <th scope="col">Difference</th>
+                        <th scope="col">Draft selection</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -553,10 +553,10 @@ const empty = (): RepositoryTargetInput => ({
                         <table>
                           <thead>
                             <tr>
-                              <th>Key</th>
-                              <th>Draft operation</th>
-                              <th>Current local value</th>
-                              <th>Draft local value</th>
+                              <th scope="col">Key</th>
+                              <th scope="col">Draft operation</th>
+                              <th scope="col">Current local value</th>
+                              <th scope="col">Draft local value</th>
                             </tr>
                           </thead>
                           <tbody>

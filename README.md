@@ -2959,3 +2959,10 @@ instead of calling string methods. Valid string transforms, raw source reports
 and full downloads stay unchanged. Run
 `npm run test:reports-locale-metadata-browser`.
 [Review0795](docs/reviews/0795-report-heading-types.md).
+
+
+### Repository review table column scopes
+Comparison and local draft-change headings declare explicit column scope.
+Selections, recovery/apply guards, source data and not-applied copy stay unchanged.
+Run `npm run test:recovery-reason-browser` for scoped table and denial coverage.
+[Review0796](docs/reviews/0796-repository-table-scopes.md).
