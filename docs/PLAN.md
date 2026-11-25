@@ -3230,3 +3230,8 @@ Explicit member role/locale saves and member/group locale-validation browser
 checks fail closed on incomplete startup cleanup. Run
 `npm run test:settings-member-save-browser-harness` for real occupied-port regression.
 See [review0764](reviews/0764-settings-member-save-browser-harness.md).
+
+Member/group/group-member removal and token-revocation browser checks fail closed
+on incomplete startup cleanup. Run
+`npm run test:settings-access-remove-browser-harness` for real occupied-port regression.
+See [review0765](reviews/0765-settings-access-remove-browser-harness.md).
