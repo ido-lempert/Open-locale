@@ -188,7 +188,7 @@ export class ActivityComponent implements OnInit, OnDestroy {
 
   hasFilters() { return !!(this.actionFilter()||this.actorFilter()||this.keyFilter().trim()); }
 
-  label(action: string) { return ACTION_LABELS[action] ?? action; }
+  label(action: unknown):string { return typeof action==='string'?(Object.prototype.hasOwnProperty.call(ACTION_LABELS,action)?ACTION_LABELS[action]:action):'Action unavailable'; }
 
   hasAutomationEntries() { return this.items().some(ev => ev.action === 'automation.run'); }
 

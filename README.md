@@ -2784,3 +2784,11 @@ Form backup/reset edit-revert and production-route browser checks fail closed
 on incomplete startup cleanup. Run
 `npm run test:form-route-guard-browser-harness` for real occupied-port regression.
 See [review0772](docs/reviews/0772-form-route-guard-browser-harness.md).
+
+
+### Activity own action labels
+Known action labels now require own dictionary membership. Unknown string codes
+stay literal, including inherited object names; malformed actions show Action
+unavailable without coercion. Local search remains source-only and downloaded
+actions remain raw. Run `npm run test:activity-action-label-browser`.
+[Review0773](docs/reviews/0773-activity-action-label.md).
