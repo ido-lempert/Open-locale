@@ -7,11 +7,12 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55995, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.SETTINGS_METADATA_GUARD_TEST_PG_PORT ?? 55995), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-webhook-toggle-browser-'));
@@ -28,7 +29,7 @@ try {
   const token=owner.accessToken;
   const project=await call('/projects',{name:'Sync browser',slug:'sync-browser',locales:['en','he']},token);
   const P=`/projects/${project.id}`;
-  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{stdio:'pipe',detached:true});await waitFor(WEB);
+  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{env:{...process.env,NX_DAEMON:'false'},stdio:'pipe',detached:true});await waitFor(WEB);
   browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH??'/usr/bin/google-chrome',args:['--no-sandbox','--disable-dev-shm-usage']});
   const diagnostics=[];const page=await browser.newPage();page.on('console',m=>diagnostics.push(m.text()));page.on('pageerror',e=>diagnostics.push(e.message));await page.setViewport({width:1280,height:900});
   await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.evaluate(t=>localStorage.setItem('ol_token',t),token);
@@ -55,7 +56,7 @@ try {
   await page.setViewport({width:1280,height:900});await page.$eval('[name=settingsHookToggleNotice]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/settings-webhook-toggle-enabled-desktop.png'});await page.setViewport({width:390,height:844});await page.$eval('[name=settingsHookToggleNotice]',e=>scrollTo(0,scrollY+e.getBoundingClientRect().top-110));await page.screenshot({path:'/downloads/settings-webhook-toggle-enabled-mobile.png'});
   check('disable and enable preserve URL events signing secret and exact history bytes',savedHooks===JSON.stringify(await prisma.webhook.findMany({orderBy:{id:'asc'},select:{id:true,url:true,events:true,secret:true,createdAt:true}}))&&savedHistory===JSON.stringify(await prisma.webhookDelivery.findMany({orderBy:{id:'asc'}})));
   check('no tasks translations or emitted deliveries beyond seeded history',await prisma.task.count()===0&&await prisma.translation.count()===0&&await prisma.webhookDelivery.count()===2);
-  check('no webhook active state runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
+  check('no webhook active state runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
 } catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??String(e)}`);process.exitCode=1;}
 finally {
   await browser?.close();
@@ -71,4 +72,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(failures?1:0);
+process.exit(!completed||failures?1:0);
