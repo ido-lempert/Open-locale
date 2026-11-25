@@ -7,11 +7,12 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 56023, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.SETTINGS_GROUP_SAVE_TEST_PG_PORT ?? 56023), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-group-member-explicit-'));
@@ -28,7 +29,7 @@ try {
   const token=owner.accessToken;
   const project=await call('/projects',{name:'Sync browser',slug:'sync-browser',locales:['en','he']},token);
   const P=`/projects/${project.id}`;
-  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{stdio:'pipe',detached:true});await waitFor(WEB);
+  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{env:{...process.env,NX_DAEMON:'false'},stdio:'pipe',detached:true});await waitFor(WEB);
   browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH??'/usr/bin/google-chrome',args:['--no-sandbox','--disable-dev-shm-usage']});
   const diagnostics=[];const page=await browser.newPage();page.on('console',m=>diagnostics.push(m.text()));page.on('pageerror',e=>diagnostics.push(e.message));await page.setViewport({width:1280,height:900});
   await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.evaluate(t=>localStorage.setItem('ol_token',t),token);
@@ -60,7 +61,7 @@ try {
   const before=reads;failPut=true;await select(group,people[2].id);await add(group);await done(group);await page.waitForFunction(()=>ng.getComponent(document.querySelector('ol-settings')).error()==='Permission denied');check('refused PUT retains choice no success claim or refresh or membership',reads===before&&!await page.$(`[name=gadd-notice-${group.id}]`)&&await page.$eval(`[name=gadd-${group.id}]`,(e,id)=>e.value===id,people[2].id)&&!(await ids(group)).includes(people[2].id));
   failPut=false;failRead=true;held=null;await select(group,people[3].id);await add(group);await poll();await select(group,people[4].id);await held.continue();await done(group);check('refresh failure keeps actual saved membership accurate receipt and newer unsent choice',(await ids(group)).includes(people[3].id)&&!(await ids(group)).includes(people[4].id)&&await page.$eval(`[name=gadd-${group.id}]`,(e,id)=>e.value===id,people[4].id)&&await page.$eval(`[name=gadd-notice-${group.id}]`,e=>e.textContent.includes('submitted member was added'))&&await page.evaluate(()=>ng.getComponent(document.querySelector('ol-settings')).error()==='Refresh failed'));
   check('accepted member refreshes read groups only and keep drafts on503',reads===3&&readPaths.every(p=>p===`/api${P}/groups`)&&await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-settings'));return c.name()==='Other name draft'&&c.description()==='Other description draft'&&c.groupName()==='Other new-group draft'&&c.newRuleName()==='Other rule draft';}));
-  check('other group untouched and no runtime errors',(await ids(group2)).length===0&&!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
+  check('other group untouched and no runtime errors',(await ids(group2)).length===0&&!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
 } catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??String(e)}`);process.exitCode=1;}
 finally {
   await browser?.close();
@@ -76,4 +77,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(failures?1:0);
+process.exit(!completed||failures?1:0);

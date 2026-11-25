@@ -3220,3 +3220,8 @@ Rule-settings refresh, name-discard, pending-draft and name-validation browser c
 fail closed on incomplete startup cleanup. Run
 `npm run test:settings-rule-browser-harness` for real occupied-port regression.
 See [review0762](reviews/0762-settings-rule-browser-harness.md).
+
+Explicit group role, locale-scope, name and member save browser checks fail
+closed on incomplete startup cleanup. Run
+`npm run test:settings-group-save-browser-harness` for real occupied-port regression.
+See [review0763](reviews/0763-settings-group-save-browser-harness.md).
