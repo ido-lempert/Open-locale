@@ -2729,3 +2729,8 @@ MT-settings refresh, name-discard, pending-draft and name-validation browser che
 fail closed on incomplete startup cleanup. Run
 `npm run test:settings-mt-browser-harness` for real occupied-port regression.
 See [review0761](docs/reviews/0761-settings-mt-browser-harness.md).
+
+Rule-settings refresh, name-discard, pending-draft and name-validation browser checks
+fail closed on incomplete startup cleanup. Run
+`npm run test:settings-rule-browser-harness` for real occupied-port regression.
+See [review0762](docs/reviews/0762-settings-rule-browser-harness.md).
