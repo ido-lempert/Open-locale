@@ -2839,3 +2839,11 @@ source datetime metadata. Invalid times remain unavailable. Stored instants,
 local order and raw downloads remain unchanged. Run
 `npm run test:sync-history-zone-browser`.
 [Review0779](docs/reviews/0779-sync-history-zone.md).
+
+
+### Explicit activity recorded time
+Activity now shows medium recorded time with seconds and displayed timezone.
+Valid time metadata retains the exact source string, invalid times stay
+unavailable. Ordering and raw loaded downloads are unchanged. Run
+`npm run test:activity-zone-browser`.
+[Review0780](docs/reviews/0780-activity-recorded-zone.md).

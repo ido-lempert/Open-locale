@@ -69,7 +69,7 @@ describe('automation activity safe identity and cautious outcome',()=>{
 
 describe('activity time fallback',()=>{
  for(const value of [undefined,null,'','   ','not-a-date','<img src=x>',42,{},[]])it(`bounds invalid time ${String(value)}`,()=>{expect(make({}).timeLabel(value)).toBe('Activity time unavailable');});
- it('preserves valid date-pipe locale formatting',()=>{const {DatePipe}=require('@angular/common'),value='2026-12-12T23:59:59.123Z',c=new ActivityComponent({} as any,{} as any,'en-US');expect(c.timeLabel(value)).toBe(new DatePipe('en-US').transform(value,'short'));});
+ it('preserves valid medium formatting with displayed timezone',()=>{const {DatePipe}=require('@angular/common'),value='2026-12-12T23:59:59.123Z',c=new ActivityComponent({} as any,{} as any,'en-US');expect(c.timeLabel(value)).toBe(new DatePipe('en-US').transform(value,'medium')+' '+new DatePipe('en-US').transform(value,'z'));});
 });
 
 

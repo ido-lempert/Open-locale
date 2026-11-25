@@ -96,7 +96,7 @@ function roleSnapshot(value: unknown): value is { role: string; allowedLocales: 
             @if (ev.keyName) { <code class="activity-key">{{ ev.keyName }}</code> }
             @if (ev.localeCode) { <span class="locale-badge">{{ ev.localeCode }}</span> }
             @if (detailText(ev)) { <span class="muted activity-detail">{{ detailText(ev) }}</span> }
-            <time class="muted" name="activityTime">{{timeLabel(ev.createdAt)}}</time>
+            <time class="muted" name="activityTime" [attr.datetime]="validTime(ev.createdAt)?ev.createdAt:null">{{timeLabel(ev.createdAt)}}</time>
           </li>
         } @empty {
           @if (!loading() && !error()) { <li class="muted" name="activityEmpty">{{ query().trim() ? 'No loaded activity metadata matches this search. Clear local search or load earlier entries.' : hasFilters() ? 'No activity matches these filters' : 'No activity yet' }}</li> }
@@ -138,9 +138,10 @@ export class ActivityComponent implements OnInit, OnDestroy {
   private keyTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private route: ActivatedRoute, private api: ApiService, @Inject(LOCALE_ID) private readonly displayLocale='en-US') {}
+  validTime(value:unknown):value is string{return typeof value==='string'&&!!value.trim()&&Number.isFinite(Date.parse(value));}
   timeLabel(value:unknown):string {
-    if(typeof value!=='string'||!value.trim())return 'Activity time unavailable';
-    try{return new DatePipe(this.displayLocale).transform(value,'short')||'Activity time unavailable';}
+    if(!this.validTime(value))return 'Activity time unavailable';
+    try{const pipe=new DatePipe(this.displayLocale);return `${pipe.transform(value,'medium')} ${pipe.transform(value,'z')}`;}
     catch{return 'Activity time unavailable';}
   }
 
