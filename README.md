@@ -2774,3 +2774,8 @@ Group/rule-payload validation, missing rule locales and webhook-copy browser che
 fail closed on incomplete startup cleanup. Run
 `npm run test:settings-validation-guard-browser-harness` for real occupied-port regression.
 See [review0770](docs/reviews/0770-settings-validation-guard-browser-harness.md).
+
+Missing MT locale/provider selection browser checks fail closed on incomplete
+startup cleanup. Run
+`npm run test:settings-missing-guard-browser-harness` for real occupied-port regression.
+See [review0771](docs/reviews/0771-settings-missing-guard-browser-harness.md).
