@@ -2980,3 +2980,11 @@ Translation inputs display only own map entries; absent prototype-named keys
 stay empty rather than inherited values. Raw maps, search, drafts and save
 behavior stay unchanged. Run `npm run test:glossary-search-metadata-browser`.
 [Review0798](docs/reviews/0798-glossary-own-values.md).
+
+
+### Glossary edit row identity
+Translation edits require the exact current loaded row; late events from a
+replaced same-ID row cannot change newer text or clear local review feedback.
+Current-row edits and existing blur-save behavior stay unchanged. Run
+`npm run test:glossary-search-metadata-browser`.
+[Review0799](docs/reviews/0799-glossary-edit-row-identity.md).

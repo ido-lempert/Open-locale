@@ -318,7 +318,7 @@ export class GlossaryComponent implements OnInit, OnDestroy {
   translationValue(t:GlossaryTermItem,locale:string) { return Object.prototype.hasOwnProperty.call(t.translations,locale)?t.translations[locale]??'':''; }
 
   setTranslation(t: GlossaryTermItem, locale: string, value: string) {
-    if(this.destroyed||this.unknownSaveIds().includes(t.id))return;
+    if(this.destroyed||this.unknownSaveIds().includes(t.id)||!this.terms().some(row=>row===t))return;
     this.cancelRemove();this.localReset.set(null);this.draftDownloadNotice.set('');
     this.terms.update((all) => all.map((x) => x.id === t.id
       ? { ...x, translations: { ...x.translations, [locale]: value } } : x));

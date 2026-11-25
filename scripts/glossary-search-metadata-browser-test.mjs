@@ -46,6 +46,11 @@ try {
   await page.$eval('[aria-label="Absent in toString"]',e=>e.value='Inherited function');check('negative inherited-looking input display detected',!await ownInputs());await page.$eval('[aria-label="Absent in toString"]',e=>e.value='');check('own lookup display restored after isolated probe',await ownInputs());
   await page.screenshot({path:'/downloads/glossary-own-values-desktop.png',fullPage:true});
   await page.evaluate(()=>ng.getComponent(document.querySelector('ol-glossary')).terms.set([]));
+  const stable=await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-glossary')),stale={id:'stale-check',term:'Identity',notes:'',translations:{he:'Old'},doNotTranslate:false},current={...stale,translations:{he:'Current'}};c.terms.set([current]);c.draftDownloadNotice.set('Keep draft notice');c.setTranslation(stale,'he','Late event');return c.terms()[0]===current&&c.terms()[0].translations.he==='Current'&&c.draftDownloadNotice()==='Keep draft notice';});
+  check('late same-id translation event preserves current row and feedback',stable&&reads===0&&writes===0);
+  await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-glossary'));c.setTranslation(c.terms()[0],'he','Current local edit');});
+  check('current row translation edit remains local and editable',await page.evaluate(()=>ng.getComponent(document.querySelector('ol-glossary')).terms()[0].translations.he==='Current local edit')&&reads===0&&writes===0);
+  await page.evaluate(()=>ng.getComponent(document.querySelector('ol-glossary')).terms.set([]));
   const tableReady=()=>page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-glossary')),hs=[...document.querySelectorAll('.glossary-table th')],cell=document.querySelector('[name=glossaryListEmpty] td');return hs.length===c.locales().length+3&&hs.every(h=>h.scope==='col')&&hs.at(-1).textContent==='Actions'&&cell?.colSpan===hs.length;});
   for(const locales of [[],['he'],['he','fr','de']]){await page.evaluate(ls=>{const c=ng.getComponent(document.querySelector('ol-glossary'));c.locales.set(ls);},locales);await page.evaluate(()=>new Promise(r=>requestAnimationFrame(r)));check('empty glossary spans exact dynamic columns '+locales.length,await tableReady());}
   await page.$eval('[name=glossaryListEmpty] td',e=>e.colSpan=9);
