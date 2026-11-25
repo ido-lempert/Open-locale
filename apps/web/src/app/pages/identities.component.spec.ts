@@ -170,7 +170,7 @@ describe('explicit linked identity refresh', () => {
 
 describe('linked identity recorded-time fallback',()=>{
  for(const value of [undefined,null,'','   ','not-a-date','<img src=x>',42,{},[]])it(`bounds invalid link time ${String(value)}`,()=>{expect(make({}).timeLabel(value)).toBe('Link time unavailable');});
- it('preserves exact valid locale display',()=>{const {DatePipe}=require('@angular/common'),value='2026-12-12T23:59:59.123Z',c=new IdentitiesComponent({} as any,{} as any,'en-US');expect(c.timeLabel(value)).toBe(new DatePipe('en-US').transform(value,'medium'));});
+ it('preserves valid locale display with displayed zone',()=>{const {DatePipe}=require('@angular/common'),value='2026-12-12T23:59:59.123Z',c=new IdentitiesComponent({} as any,{} as any,'en-US');expect(c.timeLabel(value)).toBe(new DatePipe('en-US').transform(value,'medium')+' '+new DatePipe('en-US').transform(value,'z'));});
 });
 
 

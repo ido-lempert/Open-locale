@@ -97,7 +97,7 @@ import { ApiService } from '../api.service';
                 <dt>Provider email (unverified metadata)</dt>
                 <dd class="provider-email">{{ identity.email }}</dd>
                 <dt>Linked</dt>
-                <dd name="identityLinkedTime">{{timeLabel(identity.createdAt)}}</dd>
+                <dd><time name="identityLinkedTime" [attr.datetime]="validTime(identity.createdAt)?identity.createdAt:null">{{timeLabel(identity.createdAt)}}</time></dd>
               </dl>
               @if (selected() === identity.id) {
                 <section
@@ -241,9 +241,10 @@ export class IdentitiesComponent implements OnInit, OnDestroy {
     private router: Router,
     @Inject(LOCALE_ID) private readonly displayLocale='en-US',
   ) {}
+  validTime(value:unknown):value is string{return typeof value==='string'&&!!value.trim()&&Number.isFinite(Date.parse(value));}
   timeLabel(value:unknown):string {
-    if(typeof value!=='string'||!value.trim())return 'Link time unavailable';
-    try{return new DatePipe(this.displayLocale).transform(value,'medium')||'Link time unavailable';}
+    if(!this.validTime(value))return 'Link time unavailable';
+    try{const pipe=new DatePipe(this.displayLocale);return `${pipe.transform(value,'medium')} ${pipe.transform(value,'z')}`;}
     catch{return 'Link time unavailable';}
   }
   ngOnInit() {

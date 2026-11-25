@@ -3349,3 +3349,10 @@ with exact valid source datetime. Raw loaded identity/restore confirmation,
 invalid fallback, ordering and inventory timestamps remain unchanged. Run
 `npm run test:snapshot-time-zone-browser`.
 [Review0782](reviews/0782-snapshot-capture-zone.md).
+
+
+### Linked identity displayed timezone
+Linked identity times include displayed timezone and exact valid source datetime.
+Malformed fallback and unlink safeguards stay unchanged. Run
+`npm run test:identities-time-zone-browser`.
+[Review0783](reviews/0783-identity-linked-zone.md).

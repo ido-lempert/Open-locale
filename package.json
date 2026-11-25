@@ -388,6 +388,7 @@
     "test:activity-zone-browser": "python3 scripts/run-reaped.py node scripts/activity-zone-browser-test.mjs",
     "test:settings-time-zone-browser": "python3 scripts/run-reaped.py node scripts/settings-time-zone-browser-test.mjs",
     "test:snapshot-time-zone-browser": "python3 scripts/run-reaped.py node scripts/snapshot-time-zone-browser-test.mjs",
+    "test:identities-time-zone-browser": "python3 scripts/run-reaped.py node scripts/identities-time-zone-browser-test.mjs",
     "test:qa-clear-browser": "python3 scripts/run-reaped.py node scripts/qa-clear-browser-test.mjs",
     "test:snapshot-restore-receipt-browser": "python3 scripts/run-reaped.py node scripts/snapshot-restore-receipt-browser-test.mjs",
     "test:editor-recovery-browser-harness": "node scripts/editor-recovery-browser-harness-test.mjs",
