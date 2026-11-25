@@ -2885,3 +2885,10 @@ Run `npm run test:time-zone-browser-harness` for six real occupied-port startup
 regressions. Aborted suites must exit nonzero without application PASS claims.
 Full web311 suites/3783 tests and production route recovery22 checks rerun.
 [Review0785](docs/reviews/0785-time-zone-browser-harness.md).
+
+
+### Keyboard access to QA findings columns
+Loaded QA findings have a named keyboard-focusable scroll region, visible focus
+and arrow-scroll guidance. Narrow detail columns are reachable without changing
+findings, filters or downloads. Run `npm run test:qa-table-scroll-browser`.
+[Review0786](docs/reviews/0786-qa-keyboard-scroll.md).
