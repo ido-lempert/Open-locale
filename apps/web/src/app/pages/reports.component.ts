@@ -55,7 +55,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
             </tr>
             <tr>
               <th scope="col">Translated</th><th scope="col">Untranslated</th>
-              @for (s of statusColumns(); track s) { <th scope="col" [class.status-group]="s === statusColumns()[0]">{{ s.toLowerCase() }}</th> }
+              @for (s of statusColumns(); track s) { <th scope="col" [class.status-group]="s === statusColumns()[0]">{{ workflowLabel(s) }}</th> }
             </tr>
           </thead>
           <tbody>
@@ -86,7 +86,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
           <div class="table-scroll" tabindex="0" role="region" aria-label="Quality findings by locale">
           <table class="qa-table quality-table">
             <thead>
-              <tr><th scope="col" class="row-head">Locale</th><th scope="col">Total</th>@for (t of q.types; track t) { <th scope="col">{{ t.split('_').join(' ') }}</th> }</tr>
+              <tr><th scope="col" class="row-head">Locale</th><th scope="col">Total</th>@for (t of q.types; track t) { <th scope="col">{{ qualityTypeLabel(t) }}</th> }</tr>
             </thead>
             <tbody>
               @for (l of visibleQualityLocales(); track l.locale) {
@@ -143,6 +143,8 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
   `,
 })
 export class ReportsComponent implements OnInit, OnDestroy {
+  workflowLabel(value:unknown):string { return typeof value==='string'?value.toLowerCase():'Status unavailable'; }
+  qualityTypeLabel(value:unknown):string { return typeof value==='string'?value.split('_').join(' '):'Issue type unavailable'; }
   ownCount(counts: Record<string,number> | null | undefined,key:string):number { return counts && Object.prototype.hasOwnProperty.call(counts,key) ? counts[key] ?? 0 : 0; }
   projectId = '';
   localeQuery=signal('');

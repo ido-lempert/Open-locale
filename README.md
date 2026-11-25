@@ -2951,3 +2951,11 @@ browser22 checks and six real occupied-port timezone startup suites18 checks
 rerun, with forced-zero child negative and restored green verification. No
 whole-product/native/sync/provider acceptance claim.
 [Review0794](docs/reviews/0794-web-regression-checkpoint.md).
+
+
+### Typed report headings
+Workflow and quality column headings show fixed unavailable text for nonstrings
+instead of calling string methods. Valid string transforms, raw source reports
+and full downloads stay unchanged. Run
+`npm run test:reports-locale-metadata-browser`.
+[Review0795](docs/reviews/0795-report-heading-types.md).
