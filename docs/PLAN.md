@@ -3356,3 +3356,11 @@ Linked identity times include displayed timezone and exact valid source datetime
 Malformed fallback and unlink safeguards stay unchanged. Run
 `npm run test:identities-time-zone-browser`.
 [Review0783](reviews/0783-identity-linked-zone.md).
+
+
+### Editor metadata clock timezone
+Comments, replies and saved history now show medium seconds and displayed
+timezone with exact valid datetime metadata. Invalid fallback, stored text
+and refresh draft preservation are unchanged. Run
+`npm run test:editor-time-zone-browser`.
+[Review0784](reviews/0784-editor-metadata-zone.md).

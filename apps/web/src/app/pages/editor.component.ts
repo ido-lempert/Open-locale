@@ -344,7 +344,7 @@ interface CellState {
                           <span>@for (seg of bodySegments(cm.body); track $index) {<!--
                             -->@if (seg.mention) { <span class="mention">{{ seg.text }}</span> } @else { <span>{{ seg.text }}</span> }<!--
                           --> }</span>
-                          <span class="muted">{{ cm.author?.displayName ?? 'unknown' }} · <span name="commentTime">{{editorTimeLabel(cm.createdAt)}}</span></span>
+                          <span class="muted">{{ cm.author?.displayName ?? 'unknown' }} · <time name="commentTime" [attr.datetime]="validEditorTime(cm.createdAt)?cm.createdAt:null">{{editorTimeLabel(cm.createdAt)}}</time></span>
                           <button [attr.aria-label]="'Reply to comment'" (mousedown)="$event.preventDefault()" [disabled]="!commentReplyReady(k,cm.id)" (click)="selectCommentReply(k,cm.id)">reply</button>
                           <button class="danger" [attr.aria-label]="'Delete comment'" [disabled]="commentsSaving() || commentsMutationError().includes(k.id)" (pointerdown)="$event.preventDefault()" (click)="requestCommentRemove(k, cm)">&times;</button>
                           @if (repliesOf(cm.id).length > 0) {
@@ -355,7 +355,7 @@ interface CellState {
                                   <span>@for (seg of bodySegments(rp.body); track $index) {<!--
                                     -->@if (seg.mention) { <span class="mention">{{ seg.text }}</span> } @else { <span>{{ seg.text }}</span> }<!--
                                   --> }</span>
-                                  <span class="muted">{{ rp.author?.displayName ?? 'unknown' }} · <span name="replyTime">{{editorTimeLabel(rp.createdAt)}}</span></span>
+                                  <span class="muted">{{ rp.author?.displayName ?? 'unknown' }} · <time name="replyTime" [attr.datetime]="validEditorTime(rp.createdAt)?rp.createdAt:null">{{editorTimeLabel(rp.createdAt)}}</time></span>
                                   <button class="danger" [attr.aria-label]="'Delete comment'" [disabled]="commentsSaving() || commentsMutationError().includes(k.id)" (pointerdown)="$event.preventDefault()" (click)="requestCommentRemove(k, rp)">&times;</button>
                                 </li>
                               }
@@ -395,7 +395,7 @@ interface CellState {
                           <code>{{ h.locale }}</code>
                           <span class="review review-{{ h.status.toLowerCase() }}">{{ h.status.toLowerCase() }}</span>
                           <span class="h-value" [attr.dir]="isRtl(h.locale) ? 'rtl' : 'ltr'">{{ h.value || '(empty)' }}</span>
-                          <span class="muted">{{ h.changedBy?.displayName ?? 'unknown' }} · <span name="historyTime">{{editorTimeLabel(h.createdAt)}}</span></span>
+                          <span class="muted">{{ h.changedBy?.displayName ?? 'unknown' }} · <time name="historyTime" [attr.datetime]="validEditorTime(h.createdAt)?h.createdAt:null">{{editorTimeLabel(h.createdAt)}}</time></span>
                         </li>
                       }
                     </ul>
@@ -534,9 +534,10 @@ export class EditorComponent implements OnInit, OnDestroy {
   projectError = signal(false);
   private projectGeneration = 0;
 
+  validEditorTime(value:unknown):value is string{return typeof value==='string'&&!!value.trim()&&Number.isFinite(Date.parse(value));}
   editorTimeLabel(value:unknown):string {
-    if(typeof value!=='string'||!value.trim()||!Number.isFinite(Date.parse(value)))return 'Time unavailable';
-    try{return new DatePipe(this.displayLocale).transform(value,'short')||'Time unavailable';}catch{return 'Time unavailable';}
+    if(!this.validEditorTime(value))return 'Time unavailable';
+    try{const pipe=new DatePipe(this.displayLocale);return `${pipe.transform(value,'medium')} ${pipe.transform(value,'z')}`;}catch{return 'Time unavailable';}
   }
   constructor(private api: ApiService, route: ActivatedRoute, @Optional() private router: Router|null=null, @Inject(LOCALE_ID) private readonly displayLocale='en-US') {
     this.projectId = route.snapshot.paramMap.get('id') ?? '';
