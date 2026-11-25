@@ -3490,3 +3490,11 @@ Local-text browser types actual keyboard drafts and uses Tab to trigger held
 saves, verifying exact persisted text and later-edit preservation. Term-detail
 focus/save/recovery browser also rerun. No application behavior change.
 [Review0801](reviews/0801-glossary-keyboard-blur.md).
+
+
+### Post-correction whole web checkpoint
+After glossary rapid-input correction, exact whole-web inventory312 suites/3820
+tests passes. Actual keyboard/Tab save browser15 checks and backend glossary29
+assertions rerun; strict-identity negative fails and restored lineage passes.
+Production web/API builds pass. No full-product/native/sync/provider claim.
+[Review0802](reviews/0802-post-lineage-web-checkpoint.md).
