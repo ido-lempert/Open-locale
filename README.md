@@ -2719,3 +2719,8 @@ Status-settings refresh, discard, pending-draft and validation browser checks
 fail closed on incomplete startup cleanup. Run
 `npm run test:settings-status-browser-harness` for real occupied-port regression.
 See [review0759](docs/reviews/0759-settings-status-browser-harness.md).
+
+Origin-settings refresh, discard, pending-draft and validation browser checks
+fail closed on incomplete startup cleanup. Run
+`npm run test:settings-origin-browser-harness` for real occupied-port regression.
+See [review0760](docs/reviews/0760-settings-origin-browser-harness.md).

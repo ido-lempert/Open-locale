@@ -7,11 +7,12 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55948, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.SETTINGS_ORIGIN_TEST_PG_PORT ?? 55948), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-locale-create-browser-'));
@@ -28,7 +29,7 @@ try {
   const token=owner.accessToken;
   const project=await call('/projects',{name:'Sync browser',slug:'sync-browser',locales:['en','he']},token);
   const P=`/projects/${project.id}`;
-  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{stdio:'pipe',detached:true});await waitFor(WEB);
+  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{env:{...process.env,NX_DAEMON:'false'},stdio:'pipe',detached:true});await waitFor(WEB);
   browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH??'/usr/bin/google-chrome',args:['--no-sandbox','--disable-dev-shm-usage']});
   const diagnostics=[];const page=await browser.newPage();page.on('console',m=>diagnostics.push(m.text()));page.on('pageerror',e=>diagnostics.push(e.message));await page.setViewport({width:1280,height:900});
   await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.evaluate(t=>localStorage.setItem('ol_token',t),token);
@@ -46,7 +47,7 @@ try {
   await replace('');await page.focus('[name=newOrigin]');await page.keyboard.sendCharacter('https://example.com/path');await page.waitForSelector('[name=settingsOriginInvalid]');check('actual keyboard full non-origin retained',await page.$eval('[name=newOrigin]',e=>e.value==='https://example.com/path')&&await page.$eval('[name=addSettingsOrigin]',e=>e.disabled));
   await page.$eval('[name=newOrigin]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/settings-origin-validation-desktop.png'});await page.setViewport({width:390,height:844});await page.$eval('[name=newOrigin]',e=>scrollTo(0,scrollY+e.getBoundingClientRect().top-90));await page.screenshot({path:'/downloads/settings-origin-validation-mobile.png'});check('390px origin rules/form fit without document overflow',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)&&await page.$eval('[name=settingsOriginRules]',e=>e.getBoundingClientRect().right<=innerWidth));
   const candidate=' https://app.example.com:8443 ';await replace(candidate);await page.$eval('[name=addSettingsOrigin]',e=>e.form.requestSubmit());await poll();await page.evaluate(()=>ng.getComponent(document.querySelector('ol-settings')).addOrigin());check('corrected candidate uses existing trim/loaded wholearray once',updates===1&&JSON.stringify(payloads[0])===JSON.stringify({embedOrigins:['https://existing.example',candidate.trim()]})&&await page.$eval('[name=addSettingsOrigin]',e=>e.disabled));await held.continue();await page.waitForFunction(()=>!ng.getComponent(document.querySelector('ol-settings')).busy());await page.waitForNetworkIdle({idleTime:200});check('actual origin persists beside existing and refreshes Settings',JSON.stringify((await call(P,null,token)).embedOrigins)===JSON.stringify(['https://existing.example',candidate.trim()])&&reads>0&&await page.$eval('[name=newOrigin]',e=>e.value===''));
-  const before=reads;failUpdate=true;await replace(' http://localhost:4200 ');await page.$eval('[name=addSettingsOrigin]',e=>e.form.requestSubmit());await page.waitForFunction(()=>ng.getComponent(document.querySelector('ol-settings')).error()==='Permission denied');check('valid local origin server refusal keeps rawdraft/error without refresh',updates===2&&reads===before&&await page.$eval('[name=newOrigin]',e=>e.value===' http://localhost:4200 ')&&await page.$eval('[name=addSettingsOrigin]',e=>!e.disabled));check('no origin validation runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
+  const before=reads;failUpdate=true;await replace(' http://localhost:4200 ');await page.$eval('[name=addSettingsOrigin]',e=>e.form.requestSubmit());await page.waitForFunction(()=>ng.getComponent(document.querySelector('ol-settings')).error()==='Permission denied');check('valid local origin server refusal keeps rawdraft/error without refresh',updates===2&&reads===before&&await page.$eval('[name=newOrigin]',e=>e.value===' http://localhost:4200 ')&&await page.$eval('[name=addSettingsOrigin]',e=>!e.disabled));check('no origin validation runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
 } catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??String(e)}`);process.exitCode=1;}
 finally {
   await browser?.close();
@@ -62,4 +63,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(failures?1:0);
+process.exit(!completed||failures?1:0);
