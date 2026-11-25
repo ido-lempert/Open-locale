@@ -3210,3 +3210,8 @@ Origin-settings refresh, discard, pending-draft and validation browser checks
 fail closed on incomplete startup cleanup. Run
 `npm run test:settings-origin-browser-harness` for real occupied-port regression.
 See [review0760](reviews/0760-settings-origin-browser-harness.md).
+
+MT-settings refresh, name-discard, pending-draft and name-validation browser checks
+fail closed on incomplete startup cleanup. Run
+`npm run test:settings-mt-browser-harness` for real occupied-port regression.
+See [review0761](reviews/0761-settings-mt-browser-harness.md).

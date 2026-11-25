@@ -7,11 +7,12 @@ import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 import { PrismaClient } from '@prisma/client';
 import puppeteer from 'puppeteer-core';
-const PG_PORT = 55952, WEB_PORT = 4200, API_PORT = 3000;
+const PG_PORT = Number(process.env.SETTINGS_MT_TEST_PG_PORT ?? 55952), WEB_PORT = 4200, API_PORT = 3000;
 const WEB = `http://127.0.0.1:${WEB_PORT}`;
 const API = `http://127.0.0.1:${API_PORT}/api`;
-let failures = 0, api, web, browser, prisma;
+let failures = 0, completed = false, api, web, browser, prisma;
 process.exitCode = 1;
+process.on('exit',()=>{if(!completed||failures)process.exitCode=1;});
 const check = (name, ok) => console.log(`${ok ? 'PASS' : (failures++, 'FAIL')} ${name}`);
 const waitFor = async (url) => { for (let n=0;n<120;n++) { if (await fetch(url).then(r=>r.status<500).catch(()=>false)) return; await new Promise(r=>setTimeout(r,500)); } throw new Error(`Not ready: ${url}`); };
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-locale-create-browser-'));
@@ -28,7 +29,7 @@ try {
   const token=owner.accessToken;
   const project=await call('/projects',{name:'Sync browser',slug:'sync-browser',locales:['en','he']},token);
   const P=`/projects/${project.id}`;
-  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{stdio:'pipe',detached:true});await waitFor(WEB);
+  web=spawn('node_modules/.bin/nx',['serve','web','--port',String(WEB_PORT)],{env:{...process.env,NX_DAEMON:'false'},stdio:'pipe',detached:true});await waitFor(WEB);
   browser=await puppeteer.launch({executablePath:process.env.PUPPETEER_EXECUTABLE_PATH??'/usr/bin/google-chrome',args:['--no-sandbox','--disable-dev-shm-usage']});
   const diagnostics=[];const page=await browser.newPage();page.on('console',m=>diagnostics.push(m.text()));page.on('pageerror',e=>diagnostics.push(e.message));await page.setViewport({width:1280,height:900});
   await page.goto(`${WEB}/login`,{waitUntil:'networkidle0'});await page.evaluate(t=>localStorage.setItem('ol_token',t),token);
@@ -45,7 +46,7 @@ try {
   held=null;const selected=providers[0].id;await page.$eval('[name=addSettingsMtProvider]',e=>e.form.requestSubmit());await poll();check('newer provider sent only on second explicit Add and receipt clears',creates===2&&payloads[1].name==='<b>Newer provider</b>'&&!await page.$('[name=settingsMtDraftNotice]'));await held.continue();await page.waitForFunction(()=>!ng.getComponent(document.querySelector('ol-settings')).busy());check('unchanged second success clears name and preserves earlier provider selection',await page.$eval('[name=newMtName]',e=>e.value==='')&&await page.$eval('[name=mtProviderId]',e=>e.value)===selected&&!await page.$('[name=settingsMtDraftNotice]'));
   const before=reads;failCreate=true;await replace('newMtName','Refused');await page.$eval('[name=addSettingsMtProvider]',e=>e.form.requestSubmit());await page.waitForFunction(()=>ng.getComponent(document.querySelector('ol-settings')).error()==='Permission denied');check('POST refusal retains name/type without added claim or refresh',await page.$eval('[name=newMtName]',e=>e.value==='Refused')&&await page.$eval('[name=newMtType]',e=>e.value==='pseudo')&&!await page.$('[name=settingsMtDraftNotice]')&&reads===before);
   failCreate=false;failRead=true;held=null;await replace('newMtName','Added before read failure');await page.$eval('[name=addSettingsMtProvider]',e=>e.form.requestSubmit());await poll();await replace('newMtName','Retained next provider');await held.continue();await page.waitForFunction(()=>ng.getComponent(document.querySelector('ol-settings')).error()==='Refresh failed'&&!ng.getComponent(document.querySelector('ol-settings')).busy());check('read failure after added POST keeps newer draft and accurate receipt',await page.$eval('[name=newMtName]',e=>e.value==='Retained next provider')&&await page.$eval('[name=settingsMtDraftNotice]',e=>e.textContent.includes('submitted provider was added')&&e.textContent.includes('has not been added')));providers=await call(P+'/mt/providers',null,token);check('read failure does not undo successful earlier submitted provider',providers.length===3&&providers.some(p=>p.name==='Added before read failure'));
-  check('adding local pseudo fixtures never requests pretranslation',runs===0);check('no pending provider draft runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));process.exitCode=failures?1:0;
+  check('adding local pseudo fixtures never requests pretranslation',runs===0);check('no pending provider draft runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));completed=true;process.exitCode=failures?1:0;
 } catch(e){failures++;console.log(`FAIL suite aborted: ${e?.stack??String(e)}`);process.exitCode=1;}
 finally {
   await browser?.close();
@@ -61,4 +62,4 @@ finally {
   await prisma?.$disconnect();await pg.stop().catch(()=>{});rmSync(dataDir,{recursive:true,force:true});
 }
 // Some child shutdown callbacks can reset exitCode. Exit with the verified result.
-process.exit(failures?1:0);
+process.exit(!completed||failures?1:0);
