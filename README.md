@@ -3070,3 +3070,10 @@ Late action/actor callbacks cannot change captured filter state after leaving
 Activity. Current filter reads, metadata downloads and pagination unchanged.
 Run `npm run test:activity-search-metadata-browser`.
 [Review0810](docs/reviews/0810-activity-departed-filters.md).
+
+
+### Activity local view reset
+Reset local view clears loaded-metadata search and restores loaded order only.
+Server action/actor/key filters, loaded pages and download feedback stay; no
+read or write. Run `npm run test:activity-search-metadata-browser`.
+[Review0811](docs/reviews/0811-activity-local-view-reset.md).

@@ -86,6 +86,8 @@ function roleSnapshot(value: unknown): value is { role: string; allowedLocales: 
       <p class="muted" name="activityOrderScope">Local display order only, using full stored activity timestamps. Unavailable times come last; equal times keep loaded order. Local search combines with this order. Downloads keep loaded order. This does not load earlier or newer entries, change server filters or confirm an action succeeded.</p>
       <label>Find in loaded activity metadata <input type="search" name="activitySearch" maxlength="200" [ngModel]="query()" (ngModelChange)="search($event)" /></label>
       <button type="button" name="clearActivitySearch" [disabled]="!query()" (click)="search('')">Clear local search</button>
+      <button type="button" name="resetActivityView" [disabled]="!hasLocalView()" aria-describedby="activityLocalViewScope" (click)="resetLocalView()">Reset local view</button>
+      <p class="muted" id="activityLocalViewScope" name="activityLocalViewScope">Clears loaded-metadata search and restores loaded order only. Action, actor and key filters, loaded pages and downloads stay unchanged. This does not read activity or refresh actor options.</p>
       <p class="muted" name="activitySearchScope">Literal, case-insensitive search of loaded actor names, action labels/codes, keys and locales only. Raw detail and translation/comment text are not searched. Server filters and Load more still control which entries are loaded. Download includes all loaded entries regardless of this local search.</p>
       @if(loaded() && !loading() && !error()){<p role="status" name="activityMatches">{{visibleItems().length}} of {{items().length}} loaded entries match.</p>}
       <ul class="activity-list">
@@ -121,6 +123,9 @@ export class ActivityComponent implements OnInit, OnDestroy {
     const time=(ev:ActivityEntry)=>{const parsed=typeof ev.createdAt==='string'&&ev.createdAt.trim()?Date.parse(ev.createdAt):NaN;return Number.isFinite(parsed)?parsed:null;};
     return [...rows].sort((a,b)=>{const left=time(a),right=time(b);if(left===right)return 0;if(left===null)return 1;if(right===null)return -1;return order==='oldest'?left-right:right-left;});
   });
+
+  hasLocalView(){return !!this.query()||this.order()!=='loaded';}
+  resetLocalView(){if(this.destroyed)return;this.query.set('');this.order.set('loaded');}
 
   items = signal<ActivityEntry[]>([]);
   nextCursor = signal<string | null>(null);
