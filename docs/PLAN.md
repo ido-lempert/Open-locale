@@ -3718,3 +3718,9 @@ Clears search/value filter and returns first loaded page without refreshing,
 changing retained publication or trimming full download. Available for hidden
 local filters while report loading/unavailable; departed callback fenced.
 [Review0834](reviews/0834-ota-local-view-reset.md).
+
+
+### OTA reset during held refresh regression
+Reset clears hidden local filters while retained refresh stays pending.
+Response does not resurrect filters; full raw retained download unchanged.
+[Review0835](reviews/0835-ota-reset-held-refresh.md).
