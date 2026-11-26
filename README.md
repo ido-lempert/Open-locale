@@ -3140,3 +3140,10 @@ Pending newest usage window blocks export. After out-of-order reads settle,
 serialized project dashboard uses newest loaded usage and independent task
 cutoff without sibling reads. Test-only, no app change or saved-file claim.
 [Review0820](docs/reviews/0820-report-window-export-race.md).
+
+
+### Reports integration checkpoint
+Seven affected suites94 tests, seven real-browser flows91 assertions, backend
+reports118 checks and reports-only startup harness21 checks pass. Cached builds
+verified. Scope/export guards covered; no full-product acceptance claim.
+[Review0821](docs/reviews/0821-reports-integration-checkpoint.md).
