@@ -172,6 +172,7 @@ export class ActivityComponent implements OnInit, OnDestroy {
   ngOnDestroy() {this.destroyed=true;++this.generation;++this.projectGeneration;this.subscription?.unsubscribe();if(this.keyTimer)clearTimeout(this.keyTimer);}
 
   setActor(actorId: string) {
+    if(this.destroyed)return;
     this.actorFilter.set(actorId);
     void this.fetch(true);
   }
@@ -285,6 +286,7 @@ export class ActivityComponent implements OnInit, OnDestroy {
   }
 
   setFilter(action: string) {
+    if(this.destroyed)return;
     this.actionFilter.set(action);
     void this.fetch(true);
   }

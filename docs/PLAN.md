@@ -3549,3 +3549,10 @@ Exact whole-web312 suites3825 tests and9 QA browsers104 assertions pass.
 BackendQA23, QA startup harness27 and cached production builds pass. No source
 change or broader external acceptance claim.
 [Review0809](reviews/0809-qa-web-acceptance-checkpoint.md).
+
+
+### Departed activity filter guard
+Late action/actor callbacks cannot change captured filter state after leaving
+Activity. Current filter reads, metadata downloads and pagination unchanged.
+Run `npm run test:activity-search-metadata-browser`.
+[Review0810](reviews/0810-activity-departed-filters.md).
