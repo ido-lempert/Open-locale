@@ -25,3 +25,8 @@ describe('retained OTA publication-time fallback',()=>{
  for(const value of [undefined,null,'','  ','invalid','<img src=x>',42,{},[]])it(`bounds malformed publication time ${String(value)}`,()=>{const c=makeTime();expect(c.timeLabel(value)).toBe('Publication time unavailable');expect(c.validPublishedTime(value)).toBe(false);});
  it('preserves exact valid locale and timezone formatting',()=>{const c=makeTime(),{DatePipe}=require('@angular/common'),pipe=new DatePipe('en-US');for(const value of ['2026-12-12T23:59:59.123Z','2026-12-13T01:59:59.123+02:00']){expect(c.validPublishedTime(value)).toBe(true);expect(c.timeLabel(value)).toBe(`${pipe.transform(value,'medium')} ${pipe.transform(value,'z')}`);}});
 });
+
+
+describe('departed retained-bundle pagination',()=>{
+ for(const delta of [-1,1,99,-99])it(`departed delta ${delta} preserves captured page and loaded bytes without reads`,()=>{const api={getOtaBundle:jest.fn()},c=make(api),rows:[string,string][]=Array.from({length:101},(_,n)=>['key'+n,'value'+n]);c.rows.set(rows);c.changePage(1);c.query.set('keep');c.downloadNotice.set('Keep notice');c.ngOnDestroy();c.changePage(delta);expect(c.page()).toBe(1);expect(c.rows()).toBe(rows);expect(c.query()).toBe('keep');expect(c.downloadNotice()).toBe('Keep notice');expect(api.getOtaBundle).not.toHaveBeenCalled();});
+});

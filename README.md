@@ -3205,3 +3205,9 @@ stay unchanged; no reads or branch-option refresh.
 Cleared local searches stay cleared after held usage response completes;
 sibling figures, request count and full downloaded actions stay unchanged.
 [Review0830](docs/reviews/0830-reports-reset-held-usage.md).
+
+
+### Departed OTA pagination guard
+Captured previous/next callbacks cannot change retained bundle page after
+departure. Active navigation and full raw download unchanged.
+[Review0831](docs/reviews/0831-ota-departed-pagination.md).

@@ -51,7 +51,7 @@ export class OtaBundleComponent implements OnInit,OnDestroy{
  search(query:string){if(this.destroyed)return;this.query.set(query.slice(0,200));this.page.set(0);}
  visibleRows(){return this.filteredRows().slice(this.page()*50,(this.page()+1)*50);}
  pageCount(){return Math.max(1,Math.ceil(this.filteredRows().length/50));}
- changePage(delta:number){this.page.set(Math.max(0,Math.min(this.pageCount()-1,this.page()+delta)));}
+ changePage(delta:number){if(this.destroyed)return;this.page.set(Math.max(0,Math.min(this.pageCount()-1,this.page()+delta)));}
  refresh(){if(!this.loading())void this.reload();}
  async reload(){
    if(this.destroyed)return;
