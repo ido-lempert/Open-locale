@@ -63,6 +63,16 @@ try {
   const acts = (await call(`/projects/${pid}/activity?action=ota.published`, { jwt })).json;
   check('publish recorded in activity', acts.items?.length >= 1);
 
+  // Bound version before Prisma Int lookup. Missing signed-int32 versions
+  // remain ordinary 404s, including zero and negative values.
+  for (const version of ['2147483648', '-2147483649', '9007199254740993', '9999999999999999999999999999999999999999']) {
+    const r = await call(`/projects/${pid}/ota/${version}/he`, { jwt });
+    check(`out-of-storage-range OTA version ${version} rejects400 not storage500`, r.status === 400, `got ${r.status}`);
+  }
+  for (const version of ['0', '-1', '2147483647', '-2147483648']) {
+    check(`in-range absent OTA version ${version} retains404`, (await call(`/projects/${pid}/ota/${version}/he`, { jwt })).status === 404);
+  }
+
   // Pull latest + ETag/304.
   const l1 = await call(`/projects/${pid}/ota/latest?locale=he`, { jwt });
   check('latest he bundle has branch values', l1.json.translations['app.title'] === 'כותרת' && l1.json.version === 1 && l1.json.branch === 'main');

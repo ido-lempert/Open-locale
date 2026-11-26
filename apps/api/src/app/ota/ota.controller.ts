@@ -1,4 +1,4 @@
-import { Body, Controller, Get, NotFoundException, Param, ParseIntPipe, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, ParseIntPipe, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
 import type { Response } from 'express';
 import { OtaService } from './ota.service';
@@ -52,6 +52,10 @@ export class OtaController {
     @Query('publicationId') publicationId: string | undefined,
     @Req() req: { headers: Record<string, string | undefined> }, @Res({ passthrough: true }) res: Response,
   ) {
+    // Prisma Int is a signed 32-bit value, not every JavaScript integer.
+    if (!Number.isSafeInteger(version) || version < -2147483648 || version > 2147483647) {
+      throw new BadRequestException('OTA version is outside the supported integer range');
+    }
     return this.respond(this.ota, user, projectId, { locale, branch, version, publicationId }, req, res);
   }
 

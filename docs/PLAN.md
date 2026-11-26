@@ -3758,3 +3758,10 @@ All six OTA browsers83 assertions, six affected suites55 tests, backend OTA46
 and fast exact inventory preflight pass after local reset/lifecycle checks.
 Cached builds verified; no native/client-delivery acceptance claim.
 [Review0840](reviews/0840-ota-local-reset-integration.md).
+
+
+### OTA version storage-range guard
+Out-of-range version input returns400 before Prisma lookup instead of500.
+Actual HTTP/PostgreSQL regression:54 checks; signed-int32 absent values
+retain404. No UI change or broader acceptance claim.
+[Review0841](reviews/0841-ota-version-storage-range.md).
