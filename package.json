@@ -39,6 +39,7 @@
     "test:reports": "node scripts/reports-test.mjs",
     "test:project-browser-harness": "node scripts/project-browser-harness-test.mjs",
     "test:link-browser-harness": "node scripts/link-browser-harness-test.mjs",
+    "test:ota-browser-preflight": "node scripts/ota-browser-preflight-test.mjs",
     "test:ota-browser-harness": "node scripts/ota-browser-harness-test.mjs",
     "test:auth-browser-harness": "node scripts/auth-browser-harness-test.mjs",
     "test:report-qa-harness": "node scripts/report-qa-harness-test.mjs",

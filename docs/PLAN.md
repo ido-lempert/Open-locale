@@ -3697,3 +3697,10 @@ sibling figures, request count and full downloaded actions stay unchanged.
 Captured previous/next callbacks cannot change retained bundle page after
 departure. Active navigation and full raw download unchanged.
 [Review0831](reviews/0831-ota-departed-pagination.md).
+
+
+### OTA browser harness inventory
+All six OTA browser commands now discovered and exact script/port validated.
+Run `npm run test:ota-browser-preflight` for fast inventory checks; actual
+occupied-port startup checks remain separate from product browser acceptance.
+[Review0832](reviews/0832-ota-harness-inventory.md).
