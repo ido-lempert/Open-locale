@@ -3026,3 +3026,11 @@ Keyboard/save browser retains a prior row across an actual API refresh and
 asserts old input/blur callbacks cannot change current text/feedback or send a
 save. No application change. Run `npm run test:glossary-local-text-browser`.
 [Review0804](docs/reviews/0804-glossary-refresh-event-browser.md).
+
+
+### Confirmed glossary reset callback check
+Reset browser captures a pre-confirmation local-edit row, confirms reset, then
+verifies old input/blur callbacks cannot overwrite or save a newer local draft
+or clear feedback. No application change. Run
+`npm run test:glossary-reset-local-browser`.
+[Review0805](docs/reviews/0805-glossary-reset-event-browser.md).
