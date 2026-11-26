@@ -3724,3 +3724,10 @@ local filters while report loading/unavailable; departed callback fenced.
 Reset clears hidden local filters while retained refresh stays pending.
 Response does not resurrect filters; full raw retained download unchanged.
 [Review0835](reviews/0835-ota-reset-held-refresh.md).
+
+
+### Nonempty departed OTA local-view proof
+Actual browser leaves with nonempty filters before captured reset/search/page/
+refresh calls. Exact state and read count preserved; guard-removal negative
+now fails the targeted assertion. Test-only strengthening.
+[Review0836](reviews/0836-ota-departed-reset-proof.md).
