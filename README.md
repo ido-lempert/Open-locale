@@ -3153,3 +3153,9 @@ verified. Scope/export guards covered; no full-product acceptance claim.
 Old project usage/task success or failure cannot replace current dashboards,
 feedback or actual downloaded payload after route reuse. Test-only coverage.
 [Review0822](docs/reviews/0822-reports-project-reuse-export.md).
+
+
+### Branch paired-read export check
+Current progress alone cannot enable export without current quality. Older
+branch success/failure cannot change latest payload or feedback. Test-only.
+[Review0823](docs/reviews/0823-report-branch-pair-export.md).
