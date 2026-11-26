@@ -3711,3 +3711,10 @@ Five affected web suites49 tests, six actual OTA browser flows74 assertions,
 backend OTA46 checks and fast preflights pass. Cached builds verified. This
 is retained-bundle coverage, not native/client delivery acceptance.
 [Review0833](reviews/0833-ota-integration-checkpoint.md).
+
+
+### Reset OTA bundle local view
+Clears search/value filter and returns first loaded page without refreshing,
+changing retained publication or trimming full download. Available for hidden
+local filters while report loading/unavailable; departed callback fenced.
+[Review0834](reviews/0834-ota-local-view-reset.md).

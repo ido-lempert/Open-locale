@@ -17,6 +17,8 @@ import { ApiService, OtaBundle } from '../api.service';
    <button type="button" name="refreshBundle" (click)="refresh()" [disabled]="loading()" [attr.aria-busy]="loading()">Refresh bundle</button>
    <button type="button" name="downloadBundle" [disabled]="loading() || error() || !bundle()" (click)="download()">Download loaded locale bundle (.json)</button>
    <p class="muted" name="bundleDownloadScope">Downloads all loaded retained translation values in this locale, regardless of search, value filter or page. Includes private translation content and publication context, not live editor changes. An unpinned link remains unpinned in the file. Downloading does not share, publish or confirm client delivery.</p>
+   <button type="button" name="resetBundleView" [disabled]="!hasLocalView()" aria-describedby="bundleLocalViewScope" (click)="resetLocalView()">Reset local view</button>
+   <p class="muted" id="bundleLocalViewScope" name="bundleLocalViewScope">Clears local search and value filter, then returns to the first loaded page. Retained publication, loaded values and full download stay unchanged. This does not refresh, publish or confirm client delivery.</p>
    @if(downloadNotice()){<p role="status" name="bundleDownloadNotice">{{downloadNotice()}}</p>}
    @if(loading()){<p role="status" name="bundleLoading">Loading published bundle...</p>}
    @if(error()){<p role="alert" class="error">Bundle unavailable. Project membership and a retained publication are required. No translation values are shown. Try refreshing.</p>}
@@ -38,6 +40,8 @@ import { ApiService, OtaBundle } from '../api.service';
 })
 export class OtaBundleComponent implements OnInit,OnDestroy{
  publicationId:string|undefined;projectId='';branch='main';version='';locale='';bundle=signal<OtaBundle|null>(null);rows=signal<[string,string][]>([]);page=signal(0);loading=signal(false);error=signal(false);
+ hasLocalView(){return !!this.query()||!!this.valueFilter()||this.page()!==0;}
+ resetLocalView(){if(this.destroyed)return;this.query.set('');this.valueFilter.set('');this.page.set(0);}
  query=signal('');valueFilter=signal<''|'empty'|'nonempty'>('');downloadNotice=signal('');
  filteredRows=computed(()=>{const query=this.query().toLowerCase(),filter=this.valueFilter();if(!query&&!filter)return this.rows();return this.rows().filter(([key,value])=>(!query||key.toLowerCase().includes(query)||(typeof value==='string'&&value.toLowerCase().includes(query)))&&(!filter||(filter==='empty'?value==='':typeof value==='string'&&value!=='')));});
  setValueFilter(value:string){if(this.destroyed||!['','empty','nonempty'].includes(value))return;this.valueFilter.set(value as ''|'empty'|'nonempty');this.page.set(0);}
