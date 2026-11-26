@@ -3133,3 +3133,10 @@ Actual held seven-day response cannot overwrite later selected ninety-day
 usage figures; branch/task reads stay independent. Numeric native options now
 resolved correctly by browser fixture. Test-only, no app change.
 [Review0819](docs/reviews/0819-report-usage-window-race.md).
+
+
+### Project export usage-window race check
+Pending newest usage window blocks export. After out-of-order reads settle,
+serialized project dashboard uses newest loaded usage and independent task
+cutoff without sibling reads. Test-only, no app change or saved-file claim.
+[Review0820](docs/reviews/0820-report-window-export-race.md).
