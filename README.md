@@ -3126,3 +3126,10 @@ Late branch/usage-window callbacks cannot change captured report scope after
 leaving. Current exact scope reads and independent dashboards unchanged.
 Run `npm run test:reports-locale-search-browser`.
 [Review0818](docs/reviews/0818-reports-departed-scope.md).
+
+
+### Usage-window newest read check
+Actual held seven-day response cannot overwrite later selected ninety-day
+usage figures; branch/task reads stay independent. Numeric native options now
+resolved correctly by browser fixture. Test-only, no app change.
+[Review0819](docs/reviews/0819-report-usage-window-race.md).
