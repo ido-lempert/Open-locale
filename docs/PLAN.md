@@ -3652,3 +3652,9 @@ Run `npm run test:report-browser-preflight` for fast command-shape and exact
 PostgreSQL-override checks across16 registry entries. Preflight is not browser
 acceptance; occupied-port startup checks remain separate.
 [Review0824](reviews/0824-report-qa-port-preflight.md).
+
+
+### Report/QA harness named script binding
+Fast preflight binds each package label to its exact convention-named script,
+rejects same-port aliases and verifies all16 expected registry labels.
+[Review0825](reviews/0825-report-qa-script-identity.md).
