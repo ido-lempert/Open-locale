@@ -3105,3 +3105,10 @@ Unknown-kind plus no-match label filters still download all loaded metadata,
 including raw unknown kinds. Capture draft/receipt and filter choices stay.
 Test-only, no application change.
 [Review0815](docs/reviews/0815-snapshot-unknown-inventory.md).
+
+
+### Exact snapshot startup harness routing
+Snapshot startup harness validates both supported command forms and every
+script's own PG port variable. All15 scripts45 occupied-port checks pass.
+Run `npm run test:snapshots-harness` (filterable for bounded batches).
+[Review0816](docs/reviews/0816-snapshot-harness-routing.md).
