@@ -3658,3 +3658,10 @@ acceptance; occupied-port startup checks remain separate.
 Fast preflight binds each package label to its exact convention-named script,
 rejects same-port aliases and verifies all16 expected registry labels.
 [Review0825](reviews/0825-report-qa-script-identity.md).
+
+
+### Loaded usage action search
+Literal case-insensitive local action-code search, loaded-row count and clear
+control. Event/actor/task totals and full raw export remain unchanged, no new
+reads. Query survives usage refresh/window changes and resets per project.
+[Review0826](reviews/0826-reports-usage-action-search.md).

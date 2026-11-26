@@ -1,0 +1,9 @@
+import {ReportsComponent} from './reports.component';
+const make=(api:any={})=>new ReportsComponent({} as any,api);
+describe('loaded usage action search',()=>{
+ const usage:any={totalEvents:10,topActors:[{name:'Private actor'}],byAction:{'key.created':3,'task.created':2,'future.*':5}};
+ it('trims case-insensitive literal codes without searching actors or counts or mutating source',()=>{const c=make(),before=JSON.stringify(usage);c.setUsageActionQuery(' KEY. ');expect(c.visibleActionRows(usage)).toEqual([{action:'key.created',count:3}]);c.setUsageActionQuery('.*');expect(c.visibleActionRows(usage)).toEqual([{action:'future.*',count:5}]);for(const q of ['Private actor','10']){c.setUsageActionQuery(q);expect(c.visibleActionRows(usage)).toEqual([]);}expect(JSON.stringify(usage)).toBe(before);});
+ it('empty query retains sorted own action rows and limits local input',()=>{const c=make();c.setUsageActionQuery('  ');expect(c.visibleActionRows(usage)).toEqual(c.actionRows(usage));c.setUsageActionQuery('x'.repeat(250));expect(c.usageActionQuery()).toHaveLength(200);});
+ it('refresh and window changes retain query while project reuse resets it',async()=>{const api={getUsage:jest.fn().mockResolvedValue(usage),getTaskReport:async()=>({}),getProgress:async()=>({locales:[]}),getQuality:async()=>({}),listBranches:async()=>[]},c=make(api);c.setUsageActionQuery('task');await c.loadUsage();expect(c.usageActionQuery()).toBe('task');c.setUsageDays(7);for(let i=0;i<5;i++)await Promise.resolve();expect(c.usageActionQuery()).toBe('task');await c.loadProject('next');expect(c.usageActionQuery()).toBe('');});
+ it('search and departed callbacks cause no reads or changed captured query',()=>{const api={getUsage:jest.fn()},c=make(api);c.setUsageActionQuery('keep');c.ngOnDestroy();c.setUsageActionQuery('late');expect(c.usageActionQuery()).toBe('keep');expect(api.getUsage).not.toHaveBeenCalled();});
+});

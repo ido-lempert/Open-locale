@@ -110,10 +110,14 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
       @if (usage(); as u) {
         <p class="muted">{{ u.totalEvents }} events touching {{ u.activeKeys }} keys.</p>
         <p class="muted" name="usageWindow" style="overflow-wrap:anywhere">Captured window: <time>{{ u.since }}</time> through <time>{{ u.asOf }}</time>. UTC calendar days. Separate reads are not one database snapshot.</p>
+        <label>Find in loaded usage action codes <input type="search" name="usageActionSearch" maxlength="200" [ngModel]="usageActionQuery()" (ngModelChange)="setUsageActionQuery($event)" /></label>
+        <button type="button" name="clearUsageActionSearch" style="margin-top:.5rem" [disabled]="!usageActionQuery()" (click)="setUsageActionQuery('')">Clear usage action search</button>
+        <p class="muted" name="usageActionSearchScope">Literal, case-insensitive search of loaded action codes only. Event totals, top actors, task figures and downloaded usage stay unchanged. This does not read newer activity.</p>
+        <p role="status" class="muted" name="usageActionMatches">{{ visibleActionRows(u).length }} of {{ actionRows(u).length }} loaded action codes shown.</p>
         <div class="table-scroll" tabindex="0" role="region" aria-label="Usage actions and actors">
         <table class="qa-table usage-table">
           <thead><tr><th scope="col" class="row-head">Action</th><th scope="col">Events</th></tr></thead>
-          <tbody>@for (a of actionRows(u); track a.action) { <tr><td><code>{{ a.action }}</code></td><td>{{ a.count }}</td></tr> } @empty { <tr name="usageActionsEmpty"><td colspan="2" class="muted">No activity in this window.</td></tr> }</tbody>
+          <tbody>@for (a of visibleActionRows(u); track a.action) { <tr><td><code>{{ a.action }}</code></td><td>{{ a.count }}</td></tr> } @empty { <tr name="usageActionsEmpty"><td colspan="2" class="muted">{{ usageActionQuery().trim() ? 'No loaded action codes match this search. Clear usage action search to show all loaded codes. Report totals are unchanged.' : 'No activity in this window.' }}</td></tr> }</tbody>
         </table>
         <table class="qa-table usage-table">
           <thead><tr><th scope="col" class="row-head">Top 5 actors</th><th scope="col">Events</th></tr></thead>
@@ -146,6 +150,9 @@ export class ReportsComponent implements OnInit, OnDestroy {
   workflowLabel(value:unknown):string { return typeof value==='string'?value.toLowerCase():'Status unavailable'; }
   qualityTypeLabel(value:unknown):string { return typeof value==='string'?value.split('_').join(' '):'Issue type unavailable'; }
   ownCount(counts: Record<string,number> | null | undefined,key:string):number { return counts && Object.prototype.hasOwnProperty.call(counts,key) ? counts[key] ?? 0 : 0; }
+  usageActionQuery=signal('');
+  setUsageActionQuery(value:string){if(!this.destroyed)this.usageActionQuery.set(value.slice(0,200));}
+  visibleActionRows(u:UsageReport){const rows=this.actionRows(u),query=this.usageActionQuery().trim().toLowerCase();return query?rows.filter(row=>row.action.toLowerCase().includes(query)):rows;}
   projectId = '';
   localeQuery=signal('');
   setLocaleQuery(value:string){if(!this.destroyed)this.localeQuery.set(value.slice(0,200));}
@@ -183,7 +190,7 @@ export class ReportsComponent implements OnInit, OnDestroy {
   }
   async loadProject(projectId:string) {
     if(this.destroyed)return;
-    ++this.projectGeneration;++this.generation;this.projectId=projectId;
+    ++this.projectGeneration;++this.generation;this.projectId=projectId;this.usageActionQuery.set('');
     this.usageDays.set(30);++this.usageGeneration;++this.taskGeneration;this.localeQuery.set('');this.branch.set('main');this.branches.set([]);this.branchListError.set(false);this.branchListLoading.set(true);this.report.set(null);this.quality.set(null);
     this.usage.set(null);this.taskReport.set(null);this.statusColumns.set([]);this.error.set('');this.downloadNotice.set('');this.projectDownloadNotice.set('');this.branchLoading.set(true);this.usageError.set(false);this.taskReportError.set(false);this.dashboardsLoading.set(true);this.usageLoading.set(true);this.tasksLoading.set(true);
     await Promise.all([this.loadBranches(),this.fetch(),this.ngOnInitDashboards()]);
