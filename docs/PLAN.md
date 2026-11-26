@@ -3704,3 +3704,10 @@ All six OTA browser commands now discovered and exact script/port validated.
 Run `npm run test:ota-browser-preflight` for fast inventory checks; actual
 occupied-port startup checks remain separate from product browser acceptance.
 [Review0832](reviews/0832-ota-harness-inventory.md).
+
+
+### OTA integration checkpoint
+Five affected web suites49 tests, six actual OTA browser flows74 assertions,
+backend OTA46 checks and fast preflights pass. Cached builds verified. This
+is retained-bundle coverage, not native/client delivery acceptance.
+[Review0833](reviews/0833-ota-integration-checkpoint.md).
