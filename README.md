@@ -3034,3 +3034,11 @@ verifies old input/blur callbacks cannot overwrite or save a newer local draft
 or clear feedback. No application change. Run
 `npm run test:glossary-reset-local-browser`.
 [Review0805](docs/reviews/0805-glossary-reset-event-browser.md).
+
+
+### Post-lineage glossary acceptance checkpoint
+Exact17 glossary browsers224 assertions pass after typing/blur/refresh/reset
+lineage changes. Glossary17 unit suites257 tests, backend29, startup harness51
+plus reset3 checks and cached production builds pass. Staged retries and
+interruption details recorded, not whole-product acceptance.
+[Review0806](docs/reviews/0806-glossary-acceptance-checkpoint.md).
