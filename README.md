@@ -3300,3 +3300,10 @@ All six OTA browser flows85 assertions, six affected unit suites55 tests,
 backend62 and exact inventory preflight3 checks pass after version/storage
 corrections. No native/client-delivery acceptance claim.
 [Review0844](docs/reviews/0844-ota-storage-integration.md).
+
+
+### OTA payload rollback proof
+Forced real PostgreSQL payload-write failure leaves no placeholder release,
+audit or readable empty bundle. Retry starts at1 with exact retained keys.
+Backend68 checks pass; transaction-boundary mutation fails as expected.
+[Review0845](docs/reviews/0845-ota-payload-rollback.md).

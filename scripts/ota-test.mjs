@@ -197,7 +197,26 @@ try {
     if (name === '__proto__') prototypeKeyId = created.json.id;
   }
   check('prototype-named valid keys and values are accepted', specialWrites.every(Boolean));
+  // Force the second write to fail in real PostgreSQL, not an API mock.
+  // The placeholder insert must roll back with the payload update.
+  const { PrismaClient } = await import('@prisma/client');
+  const faultDb = new PrismaClient({ datasources: { db: { url } } });
+  try {
+    await faultDb.$executeRawUnsafe("CREATE FUNCTION ota_test_reject_payload() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'OTA_TEST_PAYLOAD_WRITE'; END $$");
+    await faultDb.$executeRawUnsafe('CREATE TRIGGER ota_test_payload_fault BEFORE UPDATE OF payload ON ota_publications FOR EACH ROW EXECUTE FUNCTION ota_test_reject_payload()');
+    const failedPublish = await call(`/projects/${specialPid}/ota/publish`, { jwt, method: 'POST', body: {} });
+    check('forced payload storage error refuses publication without SQL details', failedPublish.status === 500 && !JSON.stringify(failedPublish.json).includes('OTA_TEST_PAYLOAD_WRITE'));
+    check('failed payload storage leaves no committed placeholder row', await faultDb.otaPublication.count({ where: { projectId: specialPid } }) === 0);
+    check('failed payload storage leaves no publication list or release audit', (await call(`/projects/${specialPid}/ota`, { jwt })).json.length === 0 && (await call(`/projects/${specialPid}/activity?action=ota.published`, { jwt })).json.items.length === 0);
+    check('failed first publication cannot become latest empty bundle', (await call(`/projects/${specialPid}/ota/latest?locale=en`, { jwt })).status === 404);
+  } finally {
+    await faultDb.$executeRawUnsafe('DROP TRIGGER IF EXISTS ota_test_payload_fault ON ota_publications');
+    await faultDb.$executeRawUnsafe('DROP FUNCTION IF EXISTS ota_test_reject_payload()');
+    await faultDb.$disconnect();
+  }
   const specialPub = await call(`/projects/${specialPid}/ota/publish`, { jwt, method: 'POST', body: {} });
+  check('retry after payload rollback starts at version1', specialPub.status === 201 && specialPub.json.version === 1);
+  check('successful payload retry creates one publication audit', (await call(`/projects/${specialPid}/activity?action=ota.published`, { jwt })).json.items.length === 1);
   check('prototype-named publication counts every stored translation', specialPub.status === 201 && specialPub.json.translations === specialEntries.length && specialPub.json.locales.join(',') === 'en');
   for (const path of ['latest?locale=en', `1/en?publicationId=${specialPub.json.id}`]) {
     const raw = await fetch(`${API}/projects/${specialPid}/ota/${path}`, { headers: { Authorization: `Bearer ${jwt}` } });
