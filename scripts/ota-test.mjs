@@ -185,6 +185,34 @@ try {
   }));
   check('every concurrently published bundle is self-consistent', payloadChecks.every(Boolean), JSON.stringify(payloadChecks));
 
+  // Valid flat key names must not become JavaScript object behavior in OTA.
+  const specialPid = (await call('/projects', { jwt, method: 'POST', body: { name: 'Special OTA keys', slug: `ota-special-${Date.now()}`, baseLocale: 'en', locales: ['en'] } })).json.id;
+  const specialEntries = [['__proto__', 'prototype text'], ['constructor', 'constructor text'], ['toString', 'string text'], ['hasOwnProperty', 'own text'], ['constructor.prototype.label', 'literal dotted text']];
+  const specialWrites = [];
+  let prototypeKeyId;
+  for (const [name, value] of specialEntries) {
+    const created = await call(`/projects/${specialPid}/keys`, { jwt, method: 'POST', body: { name } });
+    const written = await call(`/projects/${specialPid}/keys/${created.json.id}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value } });
+    specialWrites.push(created.status === 201 && written.status === 200);
+    if (name === '__proto__') prototypeKeyId = created.json.id;
+  }
+  check('prototype-named valid keys and values are accepted', specialWrites.every(Boolean));
+  const specialPub = await call(`/projects/${specialPid}/ota/publish`, { jwt, method: 'POST', body: {} });
+  check('prototype-named publication counts every stored translation', specialPub.status === 201 && specialPub.json.translations === specialEntries.length && specialPub.json.locales.join(',') === 'en');
+  for (const path of ['latest?locale=en', `1/en?publicationId=${specialPub.json.id}`]) {
+    const raw = await fetch(`${API}/projects/${specialPid}/ota/${path}`, { headers: { Authorization: `Bearer ${jwt}` } });
+    const text = await raw.text();
+    const data = JSON.parse(text);
+    check(`prototype-named keys survive exact flat bundle (${path.startsWith('latest') ? 'latest' : 'pinned version'})`, raw.status === 200 && Object.keys(data.translations).length === specialEntries.length && specialEntries.every(([name, value]) => Object.hasOwn(data.translations, name) && data.translations[name] === value));
+    check(`special-key bundle retains exact integrity (${path.startsWith('latest') ? 'latest' : 'pinned version'})`, raw.headers.get('x-openlocale-bundle-sha256') === createHash('sha256').update(text).digest('hex'));
+  }
+
+  const specialList = (await call(`/projects/${specialPid}/ota`, { jwt })).json;
+  check('stored prototype-named publication metadata retains all keys', specialList.length === 1 && specialList[0].translations === specialEntries.length);
+  await call(`/projects/${specialPid}/keys/${prototypeKeyId}/translations`, { jwt, method: 'PUT', body: { locale: 'en', value: 'edited source' } });
+  const specialRetained = await call(`/projects/${specialPid}/ota/1/en?publicationId=${specialPub.json.id}`, { jwt });
+  check('prototype-named retained value stays immutable after source edit', Object.hasOwn(specialRetained.json.translations, '__proto__') && specialRetained.json.translations.__proto__ === 'prototype text');
+
   // Pruning: 26 publishes on feat keep only the latest 25.
   for (let i = 0; i < 25; i++) {
     await call(`/projects/${pid}/ota/publish`, { jwt, method: 'POST', body: { branch: 'feat' } });

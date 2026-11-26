@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
 import { ActivityService } from '../activity/activity.service';
@@ -46,19 +45,25 @@ export class OtaService {
       });
       const version = (latest?.version ?? 0) + 1;
       const keys = await tx.key.findMany({ where: { branchId: branch.id }, include: { translations: true } });
-      const payload: Record<string, Record<string, string>> = {};
+      // Flat key names are data, including __proto__ and constructor.
+      const payload: Record<string, Record<string, string>> = Object.create(null);
       for (const k of keys) {
         for (const t of k.translations) {
-          (payload[t.localeCode] ??= {})[k.name] = t.value;
+          (payload[t.localeCode] ??= Object.create(null))[k.name] = t.value;
         }
       }
       const row = await tx.otaPublication.create({
         data: {
           projectId, branchId: branch.id, version,
-          payload: payload as unknown as Prisma.InputJsonValue, createdById: userId,
+          payload: {}, createdById: userId,
         },
         include: { branch: { select: { name: true } } },
       });
+      // Prisma's JSON argument serializer drops __proto__ even on null-prototype
+      // objects. Serialize once and bind as text to jsonb, within this same
+      // transaction, so every valid flat key survives storage unchanged.
+      await tx.$executeRaw`UPDATE ota_publications SET payload = ${JSON.stringify(payload)}::jsonb WHERE id = ${row.id}::uuid`;
+      row.payload = payload;
       await this.activity.record(tx, {
         projectId, actorId: userId, action: 'ota.published',
         detail: { branch: branch.name, version, locales: Object.keys(payload).length },

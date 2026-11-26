@@ -3765,3 +3765,10 @@ Out-of-range version input returns400 before Prisma lookup instead of500.
 Actual HTTP/PostgreSQL regression:54 checks; signed-int32 absent values
 retain404. No UI change or broader acceptance claim.
 [Review0841](reviews/0841-ota-version-storage-range.md).
+
+
+### OTA exact prototype-named keys
+Valid __proto__ and other prototype-named flat keys survive publish/storage,
+latest and pinned downloads with exact digests. Backend62 checks pass.
+Republish to include keys omitted by older publications; history stays immutable.
+[Review0842](reviews/0842-ota-prototype-key-preservation.md).
