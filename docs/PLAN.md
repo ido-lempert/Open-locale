@@ -3779,3 +3779,10 @@ Real stored __proto__ key is searchable literally and actual downloaded JSON
 keeps all51 retained values and prototype-named own keys. Browser12/backend62
 checks pass; pre776 implementation fails the two new checks.
 [Review0843](reviews/0843-ota-prototype-browser-download.md).
+
+
+### OTA storage integration checkpoint
+All six OTA browser flows85 assertions, six affected unit suites55 tests,
+backend62 and exact inventory preflight3 checks pass after version/storage
+corrections. No native/client-delivery acceptance claim.
+[Review0844](reviews/0844-ota-storage-integration.md).
