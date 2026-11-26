@@ -3738,3 +3738,10 @@ Actual browser leaves with both queries nonempty before captured reset/query/
 download/refresh calls. Exact state and reads preserved; guard-removal negative
 fails the targeted assertion. Test-only strengthening.
 [Review0837](reviews/0837-reports-departed-reset-proof.md).
+
+
+### Whole-web reset/lifecycle checkpoint
+Current315 web suites3863 tests pass in exact disjoint partitions. Selected
+Reports/OTA browsers56 assertions, backend reports118/OTA46 and preflights
+pass. Cached builds verified; not full-product or external acceptance.
+[Review0838](reviews/0838-web-reset-lifecycle-checkpoint.md).
