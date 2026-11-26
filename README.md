@@ -3259,3 +3259,9 @@ Current315 web suites3863 tests pass in exact disjoint partitions. Selected
 Reports/OTA browsers56 assertions, backend reports118/OTA46 and preflights
 pass. Cached builds verified; not full-product or external acceptance.
 [Review0838](docs/reviews/0838-web-reset-lifecycle-checkpoint.md).
+
+
+### OTA failed-read local reset regression
+Reset hidden filters without clearing failure or enabling stale export.
+Successful retry keeps cleared first page and full original retained download.
+[Review0839](docs/reviews/0839-ota-reset-failure-retry.md).
