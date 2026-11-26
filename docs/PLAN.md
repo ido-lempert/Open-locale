@@ -3672,3 +3672,9 @@ Current313 web suites3847 tests pass in exact disjoint partitions. All seven
 reports browser flows106 assertions, backend reports118 and preflight10 checks
 pass. Cached builds verified; not full-product or external acceptance.
 [Review0827](reviews/0827-web-reports-regression-checkpoint.md).
+
+
+### Usage search read-lifecycle regression
+Latest local query survives held reads and failed/successful retries without
+extra reads or filtering raw downloads. Test-only lifecycle coverage.
+[Review0828](reviews/0828-usage-search-refresh-lifecycle.md).
