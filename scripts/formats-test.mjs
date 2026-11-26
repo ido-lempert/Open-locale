@@ -62,6 +62,19 @@ try {
   const protoArb = await call(`${literalPath}/export/en/arb`, { token: at });
   check('ARB exact __proto__ key survives real single export', protoArb.status === 200 && Object.hasOwn(protoArb.json, '__proto__') && protoArb.json.__proto__ === 'literal');
 
+  const mixedProtoProject = (await call('/projects', { token: at, method: 'POST', body: { name: 'Mixed ARB data', slug: 'mixed-arb-data', locales: ['en'] } })).json;
+  const mixedProtoPath = `/projects/${mixedProtoProject.id}`;
+  const mixedProtoEntries = Object.fromEntries([['__proto__', 'literal prototype'], ['constructor', 'literal constructor'], ['toString', 'literal string'], ['hasOwnProperty', 'literal own'], ['apples', '{count, plural, one {one apple} other {many apples}}']]);
+  const mixedProtoImport = await call(`${mixedProtoPath}/import/en`, { token: at, method: 'POST', body: { arb: JSON.stringify(mixedProtoEntries) } });
+  check('ARB mixed plain prototype names and ordinary plural all import', mixedProtoImport.status === 201 && mixedProtoImport.json.translationsUpserted === 5 && mixedProtoImport.json.failed === 0, JSON.stringify(mixedProtoImport.json));
+  const mixedProtoExport = await call(`${mixedProtoPath}/export/en/arb`, { token: at });
+  check('ARB mixed import preserves every own plain entry and ICU plural', Object.entries(mixedProtoEntries).every(([name, value]) => Object.hasOwn(mixedProtoExport.json, name) && mixedProtoExport.json[name] === value));
+  const mixedProtoKeys = (await call(`${mixedProtoPath}/keys`, { token: at })).json;
+  check('ARB plain prototype names do not inherit plural metadata', mixedProtoKeys.length === 5 && mixedProtoKeys.every(k => k.name === 'apples' ? k.isPlural && k.translations[0].pluralForms?.other === 'many apples' : !k.isPlural && k.translations[0].pluralForms === null));
+  const explicitProtoPlural = await call(`${mixedProtoPath}/import/en`, { token: at, method: 'POST', body: { arb: JSON.stringify(Object.fromEntries([['__proto__', '{count, plural, one {one prototype} other {many prototypes}}']])) } });
+  const explicitProtoKeys = (await call(`${mixedProtoPath}/keys`, { token: at })).json;
+  check('ARB explicitly owned prototype plural still imports and upgrades', explicitProtoPlural.status === 201 && explicitProtoPlural.json.translationsUpserted === 1 && explicitProtoPlural.json.failed === 0 && explicitProtoKeys.some(k => k.name === '__proto__' && k.isPlural && k.translations[0].pluralForms?.other === 'many prototypes'));
+
   // Seed via CSV import (with header row and quoted specials)
   const csvIn = 'key,value\napp.title,"My App"\nmsg.quote,"He said ""hi"", loudly"\nmsg.multi,"line1\nline2"\n';
   const imp = await call(`${P}/import/en`, { token: at, method: 'POST', body: { csv: csvIn } });

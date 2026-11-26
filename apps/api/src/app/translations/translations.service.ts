@@ -898,7 +898,7 @@ export class TranslationsService {
           // Locked keys fail their own per-key transaction (the run row
           // records the failure); the rest of the import continues.
           await this.tasks.assertKeysEditable(tx, userId, projectId, [key.id]);
-          const forms = plurals?.[name];
+          const forms = plurals && Object.prototype.hasOwnProperty.call(plurals, name) ? plurals[name] : undefined;
           if (forms) {
             // Same validation as the single-translation write path.
             let allowed: string[];

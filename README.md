@@ -3328,3 +3328,10 @@ ARB exports preserve valid __proto__ plain/plural entries as literal own data.
 Single endpoint and bundle regression pass; unit10 and formats218 checks green.
 Metadata/ICU subset rules unchanged.
 [Review0848](docs/reviews/0848-arb-prototype-key-preservation.md).
+
+
+### Import explicit plural metadata only
+Valid prototype-named plain entries no longer inherit missing plural forms.
+Mixed ARB import preserves all entries; explicit special-name plural upgrade
+still works. Actual formats222 checks pass.
+[Review0849](docs/reviews/0849-import-own-plural-metadata.md).
