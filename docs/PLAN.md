@@ -3678,3 +3678,10 @@ pass. Cached builds verified; not full-product or external acceptance.
 Latest local query survives held reads and failed/successful retries without
 extra reads or filtering raw downloads. Test-only lifecycle coverage.
 [Review0828](reviews/0828-usage-search-refresh-lifecycle.md).
+
+
+### Reset report local searches
+One local control clears branch-locale and usage-action searches, including
+hidden unavailable usage query. Branch/window/data/downloads and feedback
+stay unchanged; no reads or branch-option refresh.
+[Review0829](reviews/0829-reports-local-search-reset.md).

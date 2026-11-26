@@ -36,6 +36,8 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
       <p class="muted" name="branchDownloadScope">Downloads loaded progress and quality for this branch, not usage, task reports, newer server changes or live drafts. These are separate reads, not one database snapshot. The file can contain private project data; downloading does not share it.</p>
       @if (downloadNotice()) { <p role="status" name="branchDownloadNotice">{{ downloadNotice() }}</p> }
       @if (branchLoading()) { <p role="status" name="branchReportLoading">Loading progress and quality reports for {{ branch() }}...</p> }
+      <button type="button" name="resetReportSearches" [disabled]="!hasLocalSearches()" aria-describedby="reportLocalSearchScope" (click)="resetLocalSearches()">Reset local searches</button>
+      <p class="muted" id="reportLocalSearchScope" name="reportLocalSearchScope">Clears branch-locale and usage-action searches only, including a hidden usage search while its report is unavailable. Branch, usage window, loaded figures and downloads stay unchanged. This does not read reports or refresh branch options.</p>
       <label>Find locale in loaded branch reports <input type="search" name="reportLocaleSearch" maxlength="200" [ngModel]="localeQuery()" (ngModelChange)="setLocaleQuery($event)" /></label>
       <button type="button" name="clearReportLocaleSearch" [disabled]="!localeQuery()" (click)="setLocaleQuery('')">Clear locale search</button>
       <p class="muted" name="reportLocaleScope">Literal, case-insensitive locale-code search in loaded progress and quality rows only. Totals, workflow columns, usage, tasks and downloaded reports keep their full loaded scope. Search does not read or recompute reports.</p>
@@ -150,6 +152,8 @@ export class ReportsComponent implements OnInit, OnDestroy {
   workflowLabel(value:unknown):string { return typeof value==='string'?value.toLowerCase():'Status unavailable'; }
   qualityTypeLabel(value:unknown):string { return typeof value==='string'?value.split('_').join(' '):'Issue type unavailable'; }
   ownCount(counts: Record<string,number> | null | undefined,key:string):number { return counts && Object.prototype.hasOwnProperty.call(counts,key) ? counts[key] ?? 0 : 0; }
+  hasLocalSearches(){return !!this.localeQuery()||!!this.usageActionQuery();}
+  resetLocalSearches(){if(this.destroyed)return;this.localeQuery.set('');this.usageActionQuery.set('');}
   usageActionQuery=signal('');
   setUsageActionQuery(value:string){if(!this.destroyed)this.usageActionQuery.set(value.slice(0,200));}
   visibleActionRows(u:UsageReport){const rows=this.actionRows(u),query=this.usageActionQuery().trim().toLowerCase();return query?rows.filter(row=>row.action.toLowerCase().includes(query)):rows;}
