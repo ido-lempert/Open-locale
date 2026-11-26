@@ -3199,3 +3199,9 @@ One local control clears branch-locale and usage-action searches, including
 hidden unavailable usage query. Branch/window/data/downloads and feedback
 stay unchanged; no reads or branch-option refresh.
 [Review0829](docs/reviews/0829-reports-local-search-reset.md).
+
+
+### Reset during held usage regression
+Cleared local searches stay cleared after held usage response completes;
+sibling figures, request count and full downloaded actions stay unchanged.
+[Review0830](docs/reviews/0830-reports-reset-held-usage.md).
