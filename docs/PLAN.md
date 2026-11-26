@@ -3751,3 +3751,10 @@ pass. Cached builds verified; not full-product or external acceptance.
 Reset hidden filters without clearing failure or enabling stale export.
 Successful retry keeps cleared first page and full original retained download.
 [Review0839](reviews/0839-ota-reset-failure-retry.md).
+
+
+### OTA local-reset integration checkpoint
+All six OTA browsers83 assertions, six affected suites55 tests, backend OTA46
+and fast exact inventory preflight pass after local reset/lifecycle checks.
+Cached builds verified; no native/client-delivery acceptance claim.
+[Review0840](reviews/0840-ota-local-reset-integration.md).
