@@ -3084,3 +3084,10 @@ Reset local view preserves complete loaded page concatenation and requested
 metadata-download feedback, without reading. Held-page unit coverage verifies
 later append still lands. Test-only, no app change.
 [Review0812](docs/reviews/0812-activity-paginated-local-reset.md).
+
+
+### Post-local-reset activity/web checkpoint
+Exact whole-web312 suites3832 tests and8 activity browsers112 assertions pass.
+Backendactivity32 and cached production web/API builds pass. Docs-only checkpoint,
+no new source change or broader external acceptance claim.
+[Review0813](docs/reviews/0813-activity-web-acceptance-checkpoint.md).
