@@ -3665,3 +3665,10 @@ Literal case-insensitive local action-code search, loaded-row count and clear
 control. Event/actor/task totals and full raw export remain unchanged, no new
 reads. Query survives usage refresh/window changes and resets per project.
 [Review0826](reviews/0826-reports-usage-action-search.md).
+
+
+### Whole-web and reports regression checkpoint
+Current313 web suites3847 tests pass in exact disjoint partitions. All seven
+reports browser flows106 assertions, backend reports118 and preflight10 checks
+pass. Cached builds verified; not full-product or external acceptance.
+[Review0827](reviews/0827-web-reports-regression-checkpoint.md).
