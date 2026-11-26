@@ -3159,3 +3159,10 @@ feedback or actual downloaded payload after route reuse. Test-only coverage.
 Current progress alone cannot enable export without current quality. Older
 branch success/failure cannot change latest payload or feedback. Test-only.
 [Review0823](docs/reviews/0823-report-branch-pair-export.md).
+
+
+### Report/QA harness port preflight
+Run `npm run test:report-browser-preflight` for fast command-shape and exact
+PostgreSQL-override checks across16 registry entries. Preflight is not browser
+acceptance; occupied-port startup checks remain separate.
+[Review0824](docs/reviews/0824-report-qa-port-preflight.md).
