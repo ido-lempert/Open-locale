@@ -3633,3 +3633,9 @@ Seven affected suites94 tests, seven real-browser flows91 assertions, backend
 reports118 checks and reports-only startup harness21 checks pass. Cached builds
 verified. Scope/export guards covered; no full-product acceptance claim.
 [Review0821](reviews/0821-reports-integration-checkpoint.md).
+
+
+### Reports project-reuse export check
+Old project usage/task success or failure cannot replace current dashboards,
+feedback or actual downloaded payload after route reuse. Test-only coverage.
+[Review0822](reviews/0822-reports-project-reuse-export.md).
