@@ -3286,3 +3286,10 @@ Valid __proto__ and other prototype-named flat keys survive publish/storage,
 latest and pinned downloads with exact digests. Backend62 checks pass.
 Republish to include keys omitted by older publications; history stays immutable.
 [Review0842](docs/reviews/0842-ota-prototype-key-preservation.md).
+
+
+### OTA prototype-key browser proof
+Real stored __proto__ key is searchable literally and actual downloaded JSON
+keeps all51 retained values and prototype-named own keys. Browser12/backend62
+checks pass; pre776 implementation fails the two new checks.
+[Review0843](docs/reviews/0843-ota-prototype-browser-download.md).
