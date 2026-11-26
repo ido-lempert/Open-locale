@@ -3245,3 +3245,10 @@ Actual browser leaves with nonempty filters before captured reset/search/page/
 refresh calls. Exact state and read count preserved; guard-removal negative
 now fails the targeted assertion. Test-only strengthening.
 [Review0836](docs/reviews/0836-ota-departed-reset-proof.md).
+
+
+### Nonempty departed Reports reset proof
+Actual browser leaves with both queries nonempty before captured reset/query/
+download/refresh calls. Exact state and reads preserved; guard-removal negative
+fails the targeted assertion. Test-only strengthening.
+[Review0837](docs/reviews/0837-reports-departed-reset-proof.md).
