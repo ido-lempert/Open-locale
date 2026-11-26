@@ -3584,3 +3584,10 @@ Local kind filter now isolates nonboolean/unknown loaded metadata, combines
 label search and preserves raw rows and capture/restore behavior.
 Run `npm run test:snapshot-metadata-fallback-browser`.
 [Review0814](reviews/0814-snapshot-unknown-kind-filter.md).
+
+
+### Unknown snapshot kind inventory check
+Unknown-kind plus no-match label filters still download all loaded metadata,
+including raw unknown kinds. Capture draft/receipt and filter choices stay.
+Test-only, no application change.
+[Review0815](reviews/0815-snapshot-unknown-inventory.md).
