@@ -58,6 +58,13 @@ try {
   await page.click('.load-more');await page.waitForFunction(()=>document.querySelectorAll('.activity-key').length===6);
   check('load more merges earlier rows into current local order without mutating first loaded rows',await keys()==='late,tie-a,tie-b,old,bad,empty'&&reads===2);
   await select('oldest');check('new older page moves first under oldest order',await keys()==='old,tie-a,tie-b,late,bad,empty');
+  await page.evaluate(()=>{window.__activityDownload=null;});await page.$eval('[name=downloadActivity]',e=>e.click());await page.waitForFunction(()=>!!window.__activityDownload);check('paginated download preserves complete loaded order before local reset',await page.evaluate(()=>window.__activityDownload.entries.map(e=>e.keyName).join(',')==='late,bad,tie-a,tie-b,empty,old'&&!window.__activityDownload.hasMore));
+  await search('no loaded match');await page.waitForSelector('[name=activityEmpty]');await page.$eval('[name=resetActivityView]',e=>e.click());await page.waitForFunction(()=>document.querySelectorAll('.activity-key').length===6);
+  const resetPages=()=>page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-activity'));return c.query()===''&&c.order()==='loaded'&&c.items().map(e=>e.keyName).join(',')==='late,bad,tie-a,tie-b,empty,old'&&c.nextCursor()===null&&c.downloadNotice().includes('Download requested')&&document.querySelector('[name=resetActivityView]').disabled;});
+  check('local view reset retains every loaded page and download feedback without read',await resetPages()&&await keys()==='late,bad,tie-a,tie-b,empty,old'&&reads===2&&writes===0);
+  await page.evaluate(()=>ng.getComponent(document.querySelector('ol-activity')).query.set('retained'));check('negative retained query after page reset detected',!await resetPages());await page.$eval('[name=resetActivityView]',e=>e.click());check('all loaded pages restored after isolated local reset probe',await resetPages()&&reads===2&&writes===0);
+  await select('oldest');check('local order remains usable after paginated local reset',await keys()==='old,tie-a,tie-b,late,bad,empty'&&reads===2);
+
   await page.setViewport({width:1280,height:900});await page.screenshot({path:'/downloads/activity-order-desktop.png'});await page.setViewport({width:390,height:844});await page.$eval('[name=activityOrder]',e=>e.scrollIntoView({block:'center'}));await page.screenshot({path:'/downloads/activity-order-mobile.png'});
   check('390px local order controls and guidance have no horizontal overflow',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await select('loaded');check('loaded restores original page concatenation after sort',await keys()==='late,bad,tie-a,tie-b,empty,old');await select('oldest');

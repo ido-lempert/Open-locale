@@ -3563,3 +3563,10 @@ Reset local view clears loaded-metadata search and restores loaded order only.
 Server action/actor/key filters, loaded pages and download feedback stay; no
 read or write. Run `npm run test:activity-search-metadata-browser`.
 [Review0811](reviews/0811-activity-local-view-reset.md).
+
+
+### Paginated activity local reset check
+Reset local view preserves complete loaded page concatenation and requested
+metadata-download feedback, without reading. Held-page unit coverage verifies
+later append still lands. Test-only, no app change.
+[Review0812](reviews/0812-activity-paginated-local-reset.md).
