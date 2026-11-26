@@ -20,7 +20,9 @@ const CLDR_ORDER = ['zero', 'one', 'two', 'few', 'many', 'other'];
 const escIcu = (v: string) => v.replace(/'/g, "''").replace(/\{/g, "'{").replace(/\}/g, "'}");
 
 export function toArb(rows: [string, string][], plurals: [string, Record<string, string>][], locale: string): string {
-  const out: Record<string, string> = { '@@locale': locale } as Record<string, string>;
+  // Valid flat names such as __proto__ are data, not object behavior.
+  const out: Record<string, string> = Object.create(null);
+  out['@@locale'] = locale;
   for (const [k, v] of rows) out[k] = v;
   for (const [k, forms] of plurals) {
     const cats = CLDR_ORDER.filter((c) => c in forms)

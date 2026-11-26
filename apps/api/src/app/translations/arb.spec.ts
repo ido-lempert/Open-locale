@@ -1,6 +1,22 @@
 import { parseArb, toArb } from './arb';
 
 describe('Flutter ARB interchange', () => {
+  it('preserves prototype-named plain entries as own literal data', () => {
+    const rows: [string, string][] = [['__proto__', 'literal'], ['constructor', 'ctor'], ['toString', 'string']];
+    const out = toArb(rows, [], 'en');
+    const parsed = JSON.parse(out);
+    expect(Object.prototype.hasOwnProperty.call(parsed, '__proto__')).toBe(true);
+    expect(parsed.__proto__).toBe('literal');
+    expect(parseArb(out)).toEqual({ rows, plurals: [], rejected: 0 });
+  });
+
+  it('preserves prototype-named plural entries through ICU roundtrip', () => {
+    const plurals: [string, Record<string, string>][] = [['__proto__', { one: 'one', other: 'many' }]];
+    const out = toArb([], plurals, 'en');
+    expect(Object.prototype.hasOwnProperty.call(JSON.parse(out), '__proto__')).toBe(true);
+    expect(parseArb(out)).toEqual({ rows: [['__proto__', 'many']], plurals, rejected: 0 });
+  });
+
   it('exports a JSON object with @@locale', () => {
     const out = toArb([['app.title', 'My App']], [], 'he');
     const parsed = JSON.parse(out);

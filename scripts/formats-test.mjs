@@ -59,6 +59,9 @@ try {
   const literalExport = await call(`${literalPath}/export/en?flat=true`, { token: at });
   check('JSON exact __proto__ key survives database and flat export', literalOk.status === 201 && literalExport.status === 200 && Object.hasOwn(literalExport.json, '__proto__') && literalExport.json.__proto__ === 'literal', JSON.stringify({literalOk,literalExport}));
 
+  const protoArb = await call(`${literalPath}/export/en/arb`, { token: at });
+  check('ARB exact __proto__ key survives real single export', protoArb.status === 200 && Object.hasOwn(protoArb.json, '__proto__') && protoArb.json.__proto__ === 'literal');
+
   // Seed via CSV import (with header row and quoted specials)
   const csvIn = 'key,value\napp.title,"My App"\nmsg.quote,"He said ""hi"", loudly"\nmsg.multi,"line1\nline2"\n';
   const imp = await call(`${P}/import/en`, { token: at, method: 'POST', body: { csv: csvIn } });
@@ -687,6 +690,9 @@ try {
   // mode=raw is passed explicitly, matching the single-locale endpoint.
   const csvSafeSingle = await (await fetch(`${API}${P}/export/he/csv`, { headers: { Authorization: `Bearer ${at}` } })).text();
   const csvRawSingle = await (await fetch(`${API}${P}/export/he/csv?mode=raw`, { headers: { Authorization: `Bearer ${at}` } })).text();
+  const protoArbBundle = readZip(Buffer.from(await (await fetch(`${API}${literalPath}/export-bundle/arb`, { headers: { Authorization: `Bearer ${at}` } })).arrayBuffer()));
+  const protoArbEntry = JSON.parse(protoArbBundle.get('en.arb').toString('utf8'));
+  check('ARB exact __proto__ key survives real bundle entry', Object.hasOwn(protoArbEntry, '__proto__') && protoArbEntry.__proto__ === 'literal');
   const csvSafeBundle = readZip(Buffer.from(await (await fetch(`${API}${P}/export-bundle/csv`, { headers: { Authorization: `Bearer ${at}` } })).arrayBuffer()));
   const csvRawBundle = readZip(Buffer.from(await (await fetch(`${API}${P}/export-bundle/csv?mode=raw`, { headers: { Authorization: `Bearer ${at}` } })).arrayBuffer()));
   check('csv bundle defaults to spreadsheet-safe, mode=raw opts into lossless', csvSafeBundle.get('he.csv')?.toString('utf8') === csvSafeSingle && csvRawBundle.get('he.csv')?.toString('utf8') === csvRawSingle && csvSafeBundle.get('en.csv')?.toString('utf8').includes("'=HYPERLINK") && csvRawBundle.get('en.csv')?.toString('utf8').includes('evil.formula,"=HYPERLINK'));

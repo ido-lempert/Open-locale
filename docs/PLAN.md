@@ -3807,3 +3807,10 @@ Inherited object names are unsupported formats: import/export now return400
 instead of500 or misleading201. All216 real format integration checks pass,
 including8 new negative cases; all12 supported formats preserved.
 [Review0847](reviews/0847-bundle-format-own-dispatch.md).
+
+
+### Flutter ARB exact prototype-named keys
+ARB exports preserve valid __proto__ plain/plural entries as literal own data.
+Single endpoint and bundle regression pass; unit10 and formats218 checks green.
+Metadata/ICU subset rules unchanged.
+[Review0848](reviews/0848-arb-prototype-key-preservation.md).
