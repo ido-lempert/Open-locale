@@ -37,7 +37,7 @@ import { ApiService, BranchInfo, Project, QaIssue } from '../api.service';
         @if (!loading() && !error()) { <span class="muted" name="qaCount">{{ issues().length }} issue{{ issues().length === 1 ? '' : 's' }}</span> }
       </div>
       <div class="toolbar">
-        <label>Issue type <select name="qaType" [ngModel]="issueType()" (ngModelChange)="setIssueType($event)"><option value="">all issue types</option>@for(type of issueTypes;track type){<option [value]="type">{{ label(type) }}</option>}</select></label>
+        <label>Issue type <select name="qaType" [ngModel]="issueType()" (ngModelChange)="setIssueType($event)"><option value="">all issue types</option><option value="unknown">Unknown issue</option>@for(type of issueTypes;track type){<option [value]="type">{{ label(type) }}</option>}</select></label>
         <button type="button" name="clearQaType" [disabled]="!issueType()" (click)="setIssueType('')">Clear type filter</button>
         @if (!loading() && !error()) { <span class="muted" role="status" name="qaTypeCount">{{ visibleIssues().length }} of {{ issues().length }} loaded findings shown. Local search and type filtering do not run checks again.</span> }
       </div>
@@ -74,11 +74,11 @@ export class QaComponent implements OnInit, OnDestroy {
   projectId = '';
   issues = signal<QaIssue[]>([]);
   readonly issueTypes:QaIssue['type'][]=['untranslated','placeholder_mismatch','max_length','whitespace','number_mismatch','html_mismatch'];
-  issueType=signal<QaIssue['type']|''>('');
+  issueType=signal<QaIssue['type']|'unknown'|''>('');
   query=signal('');
   setQuery(value:string){if(!this.destroyed)this.query.set(value.slice(0,200));}
-  visibleIssues=computed(()=>{const type=this.issueType(),query=this.query().trim().toLowerCase();if(!type&&!query)return this.issues();return this.issues().filter(i=>(!type||i.type===type)&&(!query||[i.key,i.locale,i.detail??''].some(value=>typeof value==='string'&&value.toLowerCase().includes(query))));});
-  setIssueType(type:string) {if(!this.destroyed&&(type===''||this.issueTypes.includes(type as QaIssue['type'])))this.issueType.set(type as QaIssue['type']|'');}
+  visibleIssues=computed(()=>{const type=this.issueType(),query=this.query().trim().toLowerCase();if(!type&&!query)return this.issues();return this.issues().filter(i=>(!type||(type==='unknown'?!this.knownIssueType(i.type):i.type===type))&&(!query||[i.key,i.locale,i.detail??''].some(value=>typeof value==='string'&&value.toLowerCase().includes(query))));});
+  setIssueType(type:string) {if(!this.destroyed&&(type===''||type==='unknown'||this.knownIssueType(type)))this.issueType.set(type as QaIssue['type']|'unknown'|'');}
   hasFilters(){return !!this.query()||!!this.issueType();}
   clearFilters(){if(this.destroyed)return;this.query.set('');this.issueType.set('');}
   targetLocales = signal<string[]>([]);
@@ -157,8 +157,10 @@ export class QaComponent implements OnInit, OnDestroy {
 
   emptyLabel() { if(this.query().trim())return 'No loaded findings match this search and current issue-type filter. Clear search or type filter to show other loaded findings.';if(this.issueType())return 'No loaded findings of type '+this.label(this.issueType() as QaIssue['type'])+' in the current branch and locale scope. Clear type filter to show all loaded findings.';return (this.locale() ? 'No QA issues found for ' + this.locale() : 'No QA issues found') + ' on branch ' + this.branch(); }
 
+  knownIssueType(type:unknown):type is QaIssue['type'] { return typeof type==='string'&&this.issueTypes.includes(type as QaIssue['type']); }
+
   badgeClass(type: unknown): string {
-    return 'qa-badge qa-' + (typeof type==='string' && this.issueTypes.includes(type as QaIssue['type']) ? type : 'unknown');
+    return 'qa-badge qa-' + (this.knownIssueType(type) ? type : 'unknown');
   }
 
   label(type: unknown): string {

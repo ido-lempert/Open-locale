@@ -3528,3 +3528,10 @@ lineage changes. Glossary17 unit suites257 tests, backend29, startup harness51
 plus reset3 checks and cached production builds pass. Staged retries and
 interruption details recorded, not whole-product acceptance.
 [Review0806](reviews/0806-glossary-acceptance-checkpoint.md).
+
+
+### Unknown QA issue local filter
+Choose Unknown issue to isolate loaded future/malformed issue types, combined
+with literal search. Known types and complete raw downloads stay unchanged;
+no checks rerun. Run `npm run test:qa-unknown-type-browser`.
+[Review0807](reviews/0807-qa-unknown-filter.md).
