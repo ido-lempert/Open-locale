@@ -3307,3 +3307,10 @@ Forced real PostgreSQL payload-write failure leaves no placeholder release,
 audit or readable empty bundle. Retry starts at1 with exact retained keys.
 Backend68 checks pass; transaction-boundary mutation fails as expected.
 [Review0845](docs/reviews/0845-ota-payload-rollback.md).
+
+
+### OTA retained-release rollback proof
+Failed next payload write preserves previous body/ETag/304, list identity and
+audit; retry uses version2 without changing pinned version1. Backend76 checks
+pass; targeted version2 transaction mutation fails6 new checks.
+[Review0846](docs/reviews/0846-ota-retained-payload-rollback.md).

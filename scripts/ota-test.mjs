@@ -232,6 +232,30 @@ try {
   const specialRetained = await call(`/projects/${specialPid}/ota/1/en?publicationId=${specialPub.json.id}`, { jwt });
   check('prototype-named retained value stays immutable after source edit', Object.hasOwn(specialRetained.json.translations, '__proto__') && specialRetained.json.translations.__proto__ === 'prototype text');
 
+  const priorBundle = await call(`/projects/${specialPid}/ota/latest?locale=en`, { jwt });
+  const retryDb = new PrismaClient({ datasources: { db: { url } } });
+  try {
+    await retryDb.$executeRawUnsafe("CREATE FUNCTION ota_test_reject_payload() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'OTA_TEST_PAYLOAD_WRITE'; END $$");
+    await retryDb.$executeRawUnsafe('CREATE TRIGGER ota_test_payload_fault BEFORE UPDATE OF payload ON ota_publications FOR EACH ROW EXECUTE FUNCTION ota_test_reject_payload()');
+    check('forced next payload failure refuses release', (await call(`/projects/${specialPid}/ota/publish`, { jwt, method: 'POST', body: {} })).status === 500);
+    const afterFailedList = (await call(`/projects/${specialPid}/ota`, { jwt })).json;
+    check('failed next payload preserves sole retained publication identity', afterFailedList.length === 1 && afterFailedList[0].id === specialPub.json.id && afterFailedList[0].version === 1 && afterFailedList[0].translations === specialEntries.length);
+    const afterFailedLatest = await call(`/projects/${specialPid}/ota/latest?locale=en`, { jwt });
+    check('failed next payload preserves complete previous latest body and ETag', afterFailedLatest.status === 200 && afterFailedLatest.etag === priorBundle.etag && JSON.stringify(afterFailedLatest.json) === JSON.stringify(priorBundle.json));
+    check('failed next payload preserves previous conditional304', (await call(`/projects/${specialPid}/ota/latest?locale=en`, { jwt, headers: { 'If-None-Match': priorBundle.etag } })).status === 304);
+    check('failed next payload cannot create readable version2 or release audit', (await call(`/projects/${specialPid}/ota/2/en`, { jwt })).status === 404 && (await call(`/projects/${specialPid}/activity?action=ota.published`, { jwt })).json.items.length === 1);
+  } finally {
+    await retryDb.$executeRawUnsafe('DROP TRIGGER IF EXISTS ota_test_payload_fault ON ota_publications');
+    await retryDb.$executeRawUnsafe('DROP FUNCTION IF EXISTS ota_test_reject_payload()');
+    await retryDb.$disconnect();
+  }
+  const successfulNext = await call(`/projects/${specialPid}/ota/publish`, { jwt, method: 'POST', body: {} });
+  check('next retry reuses version2 with exactly two successful release audits', successfulNext.status === 201 && successfulNext.json.version === 2 && (await call(`/projects/${specialPid}/activity?action=ota.published`, { jwt })).json.items.length === 2);
+  const nextLatest = await call(`/projects/${specialPid}/ota/latest?locale=en`, { jwt, headers: { 'If-None-Match': priorBundle.etag } });
+  check('successful next retry returns complete edited latest not false304', nextLatest.status === 200 && nextLatest.json.version === 2 && nextLatest.json.translations.__proto__ === 'edited source' && Object.keys(nextLatest.json.translations).length === specialEntries.length && nextLatest.etag !== priorBundle.etag);
+  const oldPinned = await call(`/projects/${specialPid}/ota/1/en?publicationId=${specialPub.json.id}`, { jwt });
+  check('successful next retry leaves previous pinned body and validator immutable', oldPinned.status === 200 && oldPinned.etag === priorBundle.etag && JSON.stringify(oldPinned.json) === JSON.stringify(priorBundle.json));
+
   // Pruning: 26 publishes on feat keep only the latest 25.
   for (let i = 0; i < 25; i++) {
     await call(`/projects/${pid}/ota/publish`, { jwt, method: 'POST', body: { branch: 'feat' } });
