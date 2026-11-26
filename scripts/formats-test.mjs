@@ -702,6 +702,12 @@ try {
   const proj2 = (await call('/projects', { token: at, method: 'POST', body: { name: 'FMT2', slug: 'fmt2', locales: ['en', 'he'] } })).json;
   const P2 = `/projects/${proj2.id}`;
   const expZip = Buffer.from(await (await fetch(`${API}${P}/export-bundle/json`, { headers: { Authorization: `Bearer ${at}` } })).arrayBuffer());
+  for (const format of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+    const badExport = await call(`${P}/export-bundle/${format}`, { token: at });
+    check(`inherited-name bundle export ${format} rejects400`, badExport.status === 400, `got ${badExport.status}`);
+    const badImport = await fetch(`${API}${P2}/import-bundle/${format}`, { method: 'POST', headers: { 'Content-Type': 'application/zip', Authorization: `Bearer ${at}` }, body: expZip });
+    check(`inherited-name bundle import ${format} rejects400`, badImport.status === 400, `got ${badImport.status}`);
+  }
   const impBundle = await fetch(`${API}${P2}/import-bundle/json`, { method: 'POST', headers: { 'Content-Type': 'application/zip', Authorization: `Bearer ${at}` }, body: expZip });
   const impBundleJson = await impBundle.json();
   const heIn2 = await (await fetch(`${API}${P2}/export/he?flat=true`, { headers: { Authorization: `Bearer ${at}` } })).json();

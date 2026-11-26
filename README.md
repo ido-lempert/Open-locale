@@ -3314,3 +3314,10 @@ Failed next payload write preserves previous body/ETag/304, list identity and
 audit; retry uses version2 without changing pinned version1. Backend76 checks
 pass; targeted version2 transaction mutation fails6 new checks.
 [Review0846](docs/reviews/0846-ota-retained-payload-rollback.md).
+
+
+### Bundle format own-entry validation
+Inherited object names are unsupported formats: import/export now return400
+instead of500 or misleading201. All216 real format integration checks pass,
+including8 new negative cases; all12 supported formats preserved.
+[Review0847](docs/reviews/0847-bundle-format-own-dispatch.md).

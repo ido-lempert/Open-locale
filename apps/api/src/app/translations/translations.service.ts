@@ -506,7 +506,7 @@ export class TranslationsService {
       arb: { ext: '.arb', run: (l) => this.exportArb(userId, projectId, l, branch) },
       yaml: { ext: '.yaml', run: (l) => this.exportYaml(userId, projectId, l, branch) },
     };
-    const exporter = exporters[format];
+    const exporter = Object.prototype.hasOwnProperty.call(exporters, format) ? exporters[format] : undefined;
     if (!exporter) throw new BadRequestException(`Unknown bundle format ${format}; expected one of ${Object.keys(exporters).join(', ')}`);
     const project = await this.projects.getFor(userId, projectId);
     const locales = project.locales.map((l) => l.code).sort((a, b) => a.localeCompare(b));
@@ -548,7 +548,7 @@ export class TranslationsService {
       arb: { ext: '.arb', run: (l, t) => this.importArb(userId, projectId, l, t, branch) },
       yaml: { ext: '.yaml', run: (l, t) => this.importYaml(userId, projectId, l, t, branch) },
     };
-    const importer = importers[format];
+    const importer = Object.prototype.hasOwnProperty.call(importers, format) ? importers[format] : undefined;
     if (!importer) throw new BadRequestException(`Unknown bundle format ${format}; expected one of ${Object.keys(importers).join(', ')}`);
     const project = await this.projects.getFor(userId, projectId);
     let entries;
