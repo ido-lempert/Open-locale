@@ -3598,3 +3598,10 @@ Snapshot startup harness validates both supported command forms and every
 script's own PG port variable. All15 scripts45 occupied-port checks pass.
 Run `npm run test:snapshots-harness` (filterable for bounded batches).
 [Review0816](reviews/0816-snapshot-harness-routing.md).
+
+
+### Post-unknown-kind snapshot/web checkpoint
+Exact whole-web312 suites3835 tests and15 snapshot browsers176 assertions pass.
+Backend snapshots61 and cached production web/API builds pass. Docs-only
+checkpoint, no new source change or broader external acceptance claim.
+[Review0817](reviews/0817-snapshot-web-acceptance-checkpoint.md).
