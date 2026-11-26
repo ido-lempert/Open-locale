@@ -3542,3 +3542,10 @@ Actual reread keeps Unknown issue/search, clear-search retains the type, empty
 scope names the local filter, and departed/new visit handlers are verified.
 Test-only, no application change. Run `npm run test:qa-unknown-type-browser`.
 [Review0808](reviews/0808-qa-unknown-lifecycle.md).
+
+
+### Post-unknown-filter QA/web checkpoint
+Exact whole-web312 suites3825 tests and9 QA browsers104 assertions pass.
+BackendQA23, QA startup harness27 and cached production builds pass. No source
+change or broader external acceptance claim.
+[Review0809](reviews/0809-qa-web-acceptance-checkpoint.md).
