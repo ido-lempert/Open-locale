@@ -33,7 +33,7 @@ import { ApiService, SnapshotMeta } from '../api.service';
       <p class="muted" name="snapshotDownloadScope">Metadata for all loaded snapshots, regardless of label search or kind filter. Includes private labels and IDs, not keys or translation values. This is not a restorable backup, complete history, newer server state or confirmation of a capture or restore. Downloading does not share or change the project.</p>
       @if(downloadNotice()){<p role="status" name="snapshotDownloadNotice">{{downloadNotice()}}</p>}
       <div class="toolbar" style="margin-top:1rem">
-        <label>Snapshot kind <select name="snapshotKind" [ngModel]="kind()" (ngModelChange)="setKind($event)"><option value="">all kinds</option><option value="manual">manual captures</option><option value="automatic">automatic snapshots</option></select></label>
+        <label>Snapshot kind <select name="snapshotKind" [ngModel]="kind()" (ngModelChange)="setKind($event)"><option value="">all kinds</option><option value="manual">manual captures</option><option value="automatic">automatic snapshots</option><option value="unknown">unknown loaded kind</option></select></label>
         <button type="button" name="clearSnapshotKind" [disabled]="!kind()" (click)="setKind('')">Clear kind filter</button>
         <label>Search loaded snapshots <input name="snapshotSearch" maxlength="200" placeholder="Label contains" [ngModel]="search()" (ngModelChange)="setSearch($event)" /></label>
         <button type="button" name="clearSnapshotSearch" [disabled]="!search()" (click)="setSearch('')">Clear search</button>
@@ -71,11 +71,11 @@ export class SnapshotsComponent implements OnInit, OnDestroy {
   downloadNotice=signal('');
   items = signal<SnapshotMeta[]>([]);
   search=signal('');
-  kind=signal<''|'manual'|'automatic'>('');
-  setKind(value:string) {if(!this.destroyed&&(value===''||value==='manual'||value==='automatic'))this.kind.set(value);}
+  kind=signal<''|'manual'|'automatic'|'unknown'>('');
+  setKind(value:string) {if(!this.destroyed&&(value===''||value==='manual'||value==='automatic'||value==='unknown'))this.kind.set(value);}
   order=signal<'loaded'|'newest'|'oldest'>('loaded');
   setOrder(value:string){if(!this.destroyed&&(value==='loaded'||value==='newest'||value==='oldest'))this.order.set(value);}
-  visibleItems=computed(()=>{const query=this.search().trim().toLowerCase(),kind=this.kind(),rows=!query&&!kind?this.items():this.items().filter(item=>(!query||this.validSnapshotLabel(item.label)&&item.label.toLowerCase().includes(query))&&(!kind||(kind==='automatic'?item.automatic===true:item.automatic===false)));if(this.order()==='loaded')return rows;const time=(item:SnapshotMeta)=>{const parsed=typeof item.createdAt==='string'&&item.createdAt.trim()?Date.parse(item.createdAt):NaN;return Number.isFinite(parsed)?parsed:null;};return [...rows].sort((a,b)=>{const left=time(a),right=time(b);if(left===right)return 0;if(left===null)return 1;if(right===null)return -1;return this.order()==='oldest'?left-right:right-left;});});
+  visibleItems=computed(()=>{const query=this.search().trim().toLowerCase(),kind=this.kind(),rows=!query&&!kind?this.items():this.items().filter(item=>(!query||this.validSnapshotLabel(item.label)&&item.label.toLowerCase().includes(query))&&(!kind||(kind==='unknown'?item.automatic!==true&&item.automatic!==false:kind==='automatic'?item.automatic===true:item.automatic===false)));if(this.order()==='loaded')return rows;const time=(item:SnapshotMeta)=>{const parsed=typeof item.createdAt==='string'&&item.createdAt.trim()?Date.parse(item.createdAt):NaN;return Number.isFinite(parsed)?parsed:null;};return [...rows].sort((a,b)=>{const left=time(a),right=time(b);if(left===right)return 0;if(left===null)return 1;if(right===null)return -1;return this.order()==='oldest'?left-right:right-left;});});
   hasFilters(){return !!this.search()||!!this.kind();}
   clearFilters(){if(this.destroyed)return;this.search.set('');this.kind.set('');}
   emptyLabel() {if(this.kind())return 'No loaded snapshots match this kind filter and label search. Clear kind filter or search to show other loaded snapshots.';return this.search().trim()?'No loaded snapshots match this label search. Clear search to show all loaded snapshots.':'No snapshots yet';}

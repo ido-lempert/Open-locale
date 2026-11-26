@@ -3577,3 +3577,10 @@ Exact whole-web312 suites3832 tests and8 activity browsers112 assertions pass.
 Backendactivity32 and cached production web/API builds pass. Docs-only checkpoint,
 no new source change or broader external acceptance claim.
 [Review0813](reviews/0813-activity-web-acceptance-checkpoint.md).
+
+
+### Unknown loaded snapshot kind filter
+Local kind filter now isolates nonboolean/unknown loaded metadata, combines
+label search and preserves raw rows and capture/restore behavior.
+Run `npm run test:snapshot-metadata-fallback-browser`.
+[Review0814](reviews/0814-snapshot-unknown-kind-filter.md).
