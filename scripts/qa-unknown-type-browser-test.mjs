@@ -65,7 +65,7 @@ try {
   check('raw-key local search can retain an unknown issue row',JSON.stringify(await labels())===JSON.stringify(['Unknown issue']));
   await page.setViewport({width:390,height:844});await page.focus('[aria-label="Loaded QA findings"]');
   await page.screenshot({path:'/downloads/qa-unknown-filter-mobile.png'});
-  await page.evaluate(()=>{URL.createObjectURL=b=>{b.text().then(t=>window.__report=JSON.parse(t));return 'blob:fixture';};URL.revokeObjectURL=()=>{};HTMLAnchorElement.prototype.click=function(){};});
+  await page.evaluate(()=>{URL.createObjectURL=b=>{b.text().then(t=>window.__report=JSON.parse(t));return 'blob:fixture';};URL.revokeObjectURL=()=>{};window.__originalAnchorClick=HTMLAnchorElement.prototype.click;HTMLAnchorElement.prototype.click=function(){};});
   await page.$eval('[name=downloadQa]',e=>e.click());await page.waitForFunction(()=>!!window.__report);
   check('filtered view download preserves every raw type and row',await page.evaluate(expected=>JSON.stringify(window.__report.issues)===expected,JSON.stringify(rows)));
   await page.$eval('[name=qaSearch]',e=>{e.value='key.0';e.dispatchEvent(new Event('input',{bubbles:true}));});await page.waitForSelector('[name=qaEmpty]');
@@ -73,6 +73,16 @@ try {
   await page.$eval('[name=clearAllQaFilters]',e=>e.click());
   check('clear restores complete findings after unknown filtering',await matches());
   check('labels and local filters do not rerun or mutate checks',reads===1&&writes===0);
+  await page.select('[name=qaType]','unknown');await page.$eval('[name=qaSearch]',e=>{e.value='key.6';e.dispatchEvent(new Event('input',{bubbles:true}));});
+  await page.$eval('[name=refreshQa]',e=>e.click());await page.waitForFunction(()=>!document.querySelector('[name=qaLoading]')&&document.querySelector('[name=qaTypeCount]')?.textContent.includes('1 of 13'));
+  check('explicit reread keeps unknown filter and query with one current read',reads===2&&writes===0&&await page.$eval('[name=qaType]',e=>e.value==='unknown')&&await page.$eval('[name=qaSearch]',e=>e.value==='key.6')&&JSON.stringify(await labels())===JSON.stringify(['Unknown issue']));
+  await page.$eval('[name=clearQaSearch]',e=>e.click());check('clear search keeps unknown-only filter',await unknownMatches()&&reads===2&&writes===0);
+  await page.evaluate(()=>{const c=ng.getComponent(document.querySelector('ol-qa'));window.__qaBeforeLeave=c;c.issues.set(c.issues().filter(i=>c.knownIssueType(i.type)));});await page.waitForSelector('[name=qaEmpty]');
+  check('unknown-only empty result names filter not clean QA scope',await page.$eval('[name=qaEmpty]',e=>e.textContent.includes('No loaded findings of type Unknown issue'))&&reads===2&&writes===0);
+  await page.evaluate(()=>{HTMLAnchorElement.prototype.click=window.__originalAnchorClick;delete window.__originalAnchorClick;});await page.$eval('a.back',e=>e.click());await page.waitForFunction(()=>!document.querySelector('ol-qa'));await page.evaluate(()=>{window.__qaBeforeLeave.setIssueType('whitespace');window.__qaBeforeLeave.setQuery('late');window.__qaBeforeLeave.clearFilters();});
+  check('departed captured filter handlers retain old choices without effects',await page.evaluate(()=>window.__qaBeforeLeave.issueType()==='unknown'&&window.__qaBeforeLeave.query()==='')&&reads===2&&writes===0);
+  await page.goto(`${WEB}${P}/qa`,{waitUntil:'networkidle0'});await page.waitForSelector('.qa-badge');
+  check('new QA visit resets unknown filter and query to complete findings',reads===3&&writes===0&&await page.$eval('[name=qaType]',e=>e.value==='')&&await page.$eval('[name=qaSearch]',e=>e.value==='')&&await matches());await page.evaluate(()=>{delete window.__qaBeforeLeave;});
   check('no QA unknown-type runtime errors',!diagnostics.some(d=>/TypeError|Cannot read properties|NG0955/.test(d)));
   completed=true;process.exitCode=failures?1:0;
 

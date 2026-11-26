@@ -3535,3 +3535,10 @@ Choose Unknown issue to isolate loaded future/malformed issue types, combined
 with literal search. Known types and complete raw downloads stay unchanged;
 no checks rerun. Run `npm run test:qa-unknown-type-browser`.
 [Review0807](reviews/0807-qa-unknown-filter.md).
+
+
+### Unknown QA filter lifecycle checks
+Actual reread keeps Unknown issue/search, clear-search retains the type, empty
+scope names the local filter, and departed/new visit handlers are verified.
+Test-only, no application change. Run `npm run test:qa-unknown-type-browser`.
+[Review0808](reviews/0808-qa-unknown-lifecycle.md).

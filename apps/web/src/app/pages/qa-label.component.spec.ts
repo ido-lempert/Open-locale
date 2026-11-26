@@ -9,3 +9,8 @@ describe('QA issue labels',()=>{
 describe('QA unknown issue filter',()=>{
  it('isolates every unknown type without coercion or raw changes',()=>{const c=new QaComponent({} as any,{} as any),bad:any[]=['future','unknown',{toString:()=>{throw Error('no coercion');}},'constructor','__proto__','',null,undefined,0,{},['whitespace']],rows:any[]=bad.map((type,n)=>({key:String(n),locale:'he',type}));rows.push({key:'known',locale:'he',type:'whitespace'});c.issues.set(rows);c.setIssueType('unknown');expect(c.visibleIssues()).toEqual(rows.slice(0,-1));expect(c.issues()).toBe(rows);c.setQuery('known');expect(c.visibleIssues()).toEqual([]);c.setQuery('');c.issues.set([rows.at(-1)]);expect(c.emptyLabel()).toContain('No loaded findings of type Unknown issue');});
 });
+
+describe('QA unknown filter lifecycle',()=>{
+ it('reread keeps unknown filter and query while new project clears both',async()=>{const rows:any[]=[{key:'future.key',locale:'he',type:'future'}],api={runQa:jest.fn().mockResolvedValue({issues:rows}),getProject:async()=>({locales:[]}),listBranches:async()=>[]},c=new QaComponent({} as any,api as any);c.setIssueType('unknown');c.setQuery('future');await c.fetch();expect([c.issueType(),c.query()]).toEqual(['unknown','future']);expect(c.visibleIssues()).toEqual(rows);await c.loadProject('new');expect([c.issueType(),c.query()]).toEqual(['','']);expect(c.issues()).toBe(rows);expect(api.runQa).toHaveBeenCalledTimes(2);});
+ it('departed callbacks cannot change unknown filter or clear search',()=>{const c=new QaComponent({} as any,{} as any);c.setIssueType('unknown');c.setQuery('keep');c.ngOnDestroy();c.setIssueType('whitespace');c.setQuery('late');c.clearFilters();expect([c.issueType(),c.query()]).toEqual(['unknown','keep']);});
+});
