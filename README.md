@@ -3119,3 +3119,10 @@ Exact whole-web312 suites3835 tests and15 snapshot browsers176 assertions pass.
 Backend snapshots61 and cached production web/API builds pass. Docs-only
 checkpoint, no new source change or broader external acceptance claim.
 [Review0817](docs/reviews/0817-snapshot-web-acceptance-checkpoint.md).
+
+
+### Departed report scope guard
+Late branch/usage-window callbacks cannot change captured report scope after
+leaving. Current exact scope reads and independent dashboards unchanged.
+Run `npm run test:reports-locale-search-browser`.
+[Review0818](docs/reviews/0818-reports-departed-scope.md).

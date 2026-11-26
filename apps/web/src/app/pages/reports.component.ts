@@ -21,7 +21,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
     <header class="bar">
       <a [routerLink]="['/projects', projectId]" class="back">&larr; Editor</a>
       <h1>Reports</h1>
-      <select aria-label="Branch" [attr.aria-busy]="branchListLoading()" name="reportBranch" style="min-width:0;max-width:100%" [ngModel]="branch()" (ngModelChange)="branch.set($event); void fetch()">
+      <select aria-label="Branch" [attr.aria-busy]="branchListLoading()" name="reportBranch" style="min-width:0;max-width:100%" [ngModel]="branch()" (ngModelChange)="setBranch($event)">
         @if (branchMissing()) { <option [value]="branch()">Selected branch outside options</option> }
         @for (b of branches(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }
       </select>
@@ -103,7 +103,7 @@ import { ApiService, BranchInfo, ProgressReport, QualityReport, TaskReport, Usag
       <p class="muted" name="projectDownloadScope">Downloads loaded usage and task dashboard figures for the whole project, regardless of the branch selector. Includes private actor/assignee names and IDs, not translation values, task descriptions or branch reports. Keeps each captured window and cutoff. Separate reads are not one database snapshot or newer server state. Downloading does not share or change the project.</p>
       @if(projectDownloadNotice()){<p role="status" name="projectDownloadNotice">{{projectDownloadNotice()}}</p>}
       <h2>Usage <span class="muted">last {{ usage()?.days ?? usageDays() }} days</span></h2>
-      <label>Usage window <select name="usageDays" aria-label="Usage window" [ngModel]="usageDays()" (ngModelChange)="usageDays.set(+$event); void loadUsage()"><option [ngValue]="7">7 days</option><option [ngValue]="30">30 days</option><option [ngValue]="90">90 days</option></select></label>
+      <label>Usage window <select name="usageDays" aria-label="Usage window" [ngModel]="usageDays()" (ngModelChange)="setUsageDays(+$event)"><option [ngValue]="7">7 days</option><option [ngValue]="30">30 days</option><option [ngValue]="90">90 days</option></select></label>
       @if (!usageError()) { <button type="button" name="refreshUsageReport" [disabled]="usageLoading()" (click)="refreshUsage()">Refresh usage</button> }
       @if (usageLoading()) { <p role="status" name="usageLoading">Loading usage report...</p> }
       @if (usageError()) { <p class="error" role="alert" name="usageReportError">Usage report unavailable. No usage figures are shown. Retry the selected window or reload this page.</p><button type="button" name="retryUsage" (click)="void loadUsage()">Retry usage</button> }
@@ -188,6 +188,9 @@ export class ReportsComponent implements OnInit, OnDestroy {
     this.usage.set(null);this.taskReport.set(null);this.statusColumns.set([]);this.error.set('');this.downloadNotice.set('');this.projectDownloadNotice.set('');this.branchLoading.set(true);this.usageError.set(false);this.taskReportError.set(false);this.dashboardsLoading.set(true);this.usageLoading.set(true);this.tasksLoading.set(true);
     await Promise.all([this.loadBranches(),this.fetch(),this.ngOnInitDashboards()]);
   }
+
+  setBranch(value:string){if(this.destroyed)return;this.branch.set(value);void this.fetch();}
+  setUsageDays(value:number){if(this.destroyed)return;this.usageDays.set(value);void this.loadUsage();}
 
   branchMissing(){return !!this.branch()&&!this.branches().some(branch=>branch.name===this.branch());}
 
