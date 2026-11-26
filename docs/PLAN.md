@@ -3505,3 +3505,10 @@ Blur events share the translation edit row resolver: refreshed same-ID snapshots
 cannot submit newer drafts, while current local-edit predecessors can save the
 latest visible row. Search/attention-hidden blur remains blocked.
 [Review0803](reviews/0803-glossary-blur-lineage.md).
+
+
+### Actual refreshed glossary callback check
+Keyboard/save browser retains a prior row across an actual API refresh and
+asserts old input/blur callbacks cannot change current text/feedback or send a
+save. No application change. Run `npm run test:glossary-local-text-browser`.
+[Review0804](reviews/0804-glossary-refresh-event-browser.md).
