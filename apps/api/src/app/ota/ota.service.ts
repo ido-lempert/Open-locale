@@ -122,7 +122,7 @@ export class OtaService {
     // (which only needs to distinguish versions, not prove integrity).
     const sha256 = createHash('sha256').update(JSON.stringify(body)).digest('hex');
     return {
-      etag: `W/"ota-${projectId}-${branch.id}-v${row.version}-${opts.locale}-${hash}`,
+      etag: `W/"ota-${projectId}-${branch.id}-v${row.version}-${opts.locale}-${hash}"`,
       sha256,
       body,
     };

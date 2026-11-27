@@ -77,6 +77,7 @@ try {
   const l1 = await call(`/projects/${pid}/ota/latest?locale=he`, { jwt });
   check('latest he bundle has branch values', l1.json.translations['app.title'] === 'כותרת' && l1.json.version === 1 && l1.json.branch === 'main');
   check('latest carries weak ETag and private cache-control', !!l1.etag);
+  check('latest OTA validator has complete quoted weak ETag syntax', typeof l1.etag === 'string' && /^W\/"[^"\s]+"$/.test(l1.etag), String(l1.etag));
   const l1b = await call(`/projects/${pid}/ota/latest?locale=he`, { jwt, headers: { 'If-None-Match': l1.etag } });
   check('If-None-Match yields 304', l1b.status === 304, `got ${l1b.status}`);
 

@@ -3919,3 +3919,10 @@ Fresh exact inventory315 web suites3864 tests passes in disjoint158/157-path
 partitions. Real formats269/OTA81 checks pass; builds/docs green. No whole-
 product, all-browser or external-provider acceptance claim.
 [Review0863](reviews/0863-web-storage-preview-checkpoint.md).
+
+
+### OTA quoted validator syntax
+OTA weak ETag now includes closing quote while keeping exact scope identity.
+Old malformed cache validators get one200 refresh; payload unchanged. Actual
+OTA82 checks pass, including grammar regression.
+[Review0864](reviews/0864-ota-quoted-etag.md).
