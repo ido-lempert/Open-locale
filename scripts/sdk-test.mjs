@@ -138,6 +138,20 @@ try {
   const pullV1 = await ol.ota.version(proj.id, 1, 'he');
   check('ota.version(1) immutable after v2, digests differ', pullV1.bundle.version === 1 && pullV1.bundle.translations['sdk.greeting'] === 'שלום מה-SDK' && pullV2.bundle.version === 2 && pullV1.sha256 !== pullV2.sha256, '');
 
+  const staleLatest = await ol.ota.latest(proj.id, 'he', { publicationId: firstPublication.id, etag: '*' }).then(() => null).catch(e => e);
+  check('SDK latest old pin rejects after newer publication', staleLatest instanceof OpenLocaleError && staleLatest.status === 404);
+  const retained = await ol.ota.version(proj.id, 1, 'he', { publicationId: firstPublication.id });
+  check('SDK version old pin retains exact bytes and cache identity after newer publication', retained.bundle.version === 1 && retained.bundle.translations['sdk.greeting'] === 'שלום מה-SDK' && retained.sha256 === pull1.sha256 && retained.etag === pull1.etag);
+  const retained304 = await ol.ota.version(proj.id, 1, 'he', { publicationId: firstPublication.id, etag: `"other", ${pull1.etag}` });
+  check('SDK retained old pin still revalidates after newer publication', retained304.notModified === true && retained304.etag === pull1.etag && retained304.sha256 === pull1.sha256 && retained304.bundle === undefined);
+  let capturedUrl;
+  const captured = createClient({ url: `http://127.0.0.1:${API_PORT}`, token: tok.token, fetchImpl: (url, opts) => { capturedUrl = new URL(url); return fetch(url, opts); } });
+  const queryLikePin = `${firstPublication.id}&branch=sdk-branch&locale=en#fragment`;
+  const encodedError = await captured.ota.latest(proj.id, 'he', { publicationId: queryLikePin, etag: '*' }).then(() => null).catch(e => e);
+  check('SDK query-like pin stays one value without changing locale branch or fragment', encodedError instanceof OpenLocaleError && encodedError.status === 404 && capturedUrl.searchParams.get('publicationId') === queryLikePin && capturedUrl.searchParams.getAll('publicationId').length === 1 && capturedUrl.searchParams.get('locale') === 'he' && !capturedUrl.searchParams.has('branch') && capturedUrl.hash === '');
+  const unchangedLatest = await ol.ota.latest(proj.id, 'he');
+  check('SDK failed pinned reads leave latest unchanged', unchangedLatest.etag === pullV2.etag && unchangedLatest.sha256 === pullV2.sha256 && unchangedLatest.bundle.translations['sdk.greeting'] === 'שלום חדש');
+
   // Recreated branch can reuse version1 but must not reuse publication pin.
   const branch = (await call(`/projects/${proj.id}/branches`, { token: a.accessToken })).json.find(b => b.name === 'sdk-branch');
   const branchPublication = (await call(`/projects/${proj.id}/ota/publish`, { token: a.accessToken, method: 'POST', body: { branch: 'sdk-branch' } })).json;

@@ -3467,3 +3467,10 @@ SDK latest/version accepts publicationId alongside branch/etag. Invalid pins
 reject rather than falling back; old pins cannot select recreated branchv1.
 Real SDK33 and OTA108 checks pass. No registry publication.
 [Review0868](docs/reviews/0868-sdk-publication-pin.md).
+
+
+### SDK retained publication pin proof
+Old pin rejects on latest after newer publish, but retained version keeps exact
+bytes/validator and conditional304. Query-like pins stay one encoded value.
+Real SDK38 and OTA108 checks pass, no application change.
+[Review0869](docs/reviews/0869-sdk-retained-pin-query-proof.md).
