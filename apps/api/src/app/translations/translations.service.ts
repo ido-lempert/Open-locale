@@ -828,7 +828,9 @@ export class TranslationsService {
       const existing = await this.prisma.translation.findUnique({
         where: { keyId_localeCode: { keyId: key.id, localeCode: locale } },
       });
-      if (existing && existing.value === value) unchangedSkipped++;
+      const forms = 'plurals' in parsed && parsed.plurals && Object.prototype.hasOwnProperty.call(parsed.plurals, name)
+        ? parsed.plurals[name] : undefined;
+      if (existing && existing.value === value && (!forms || canonPlural(existing.pluralForms) === canonPlural(forms))) unchangedSkipped++;
       else translationsUpserted++;
     }
     const status = failed > 0

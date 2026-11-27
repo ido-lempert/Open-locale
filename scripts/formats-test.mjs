@@ -87,6 +87,17 @@ try {
   const protoPoAgain = await call(`${protoPoPath}/import/en`, { token: at, method: 'POST', body: { po: protoPoText } });
   check('PO exact prototype reimport counts both unchanged without losing forms', protoPoAgain.status === 201 && protoPoAgain.json.unchangedSkipped === 2 && protoPoAgain.json.translationsUpserted === 0 && protoPoAgain.json.failed === 0);
 
+  const changedProtoPo = protoPoText.replace('one prototype', 'one changed prototype');
+  const beforePluralPreview = (await call(`${protoPoPath}/keys`, { token: at })).json;
+  const beforePluralRuns = (await call(`${protoPoPath}/imports`, { token: at })).json.length;
+  const pluralPreview = await call(`${protoPoPath}/import/en?dryRun=true`, { token: at, method: 'POST', body: { po: changedProtoPo } });
+  check('PO dry-run detects plural-only change with unchanged other value', pluralPreview.status === 201 && pluralPreview.json.dryRun === true && pluralPreview.json.keysCreated === 0 && pluralPreview.json.translationsUpserted === 1 && pluralPreview.json.unchangedSkipped === 1 && pluralPreview.json.failed === 0);
+  check('PO plural-only preview does not mutate keys forms or import runs', JSON.stringify((await call(`${protoPoPath}/keys`, { token: at })).json) === JSON.stringify(beforePluralPreview) && (await call(`${protoPoPath}/imports`, { token: at })).json.length === beforePluralRuns);
+  const changedProtoActual = await call(`${protoPoPath}/import/en`, { token: at, method: 'POST', body: { po: changedProtoPo } });
+  check('PO plural-only actual result matches preview write counters', changedProtoActual.status === 201 && changedProtoActual.json.translationsUpserted === pluralPreview.json.translationsUpserted && changedProtoActual.json.unchangedSkipped === pluralPreview.json.unchangedSkipped);
+  const repeatedPluralPreview = await call(`${protoPoPath}/import/en?dryRun=true`, { token: at, method: 'POST', body: { po: changedProtoPo } });
+  check('PO dry-run unchanged after explicit plural import', repeatedPluralPreview.json.translationsUpserted === 0 && repeatedPluralPreview.json.unchangedSkipped === 2 && repeatedPluralPreview.json.failed === 0);
+
   // Seed via CSV import (with header row and quoted specials)
   const csvIn = 'key,value\napp.title,"My App"\nmsg.quote,"He said ""hi"", loudly"\nmsg.multi,"line1\nline2"\n';
   const imp = await call(`${P}/import/en`, { token: at, method: 'POST', body: { csv: csvIn } });

@@ -3835,3 +3835,10 @@ All11 format unit suites108 tests, real formats226 checks and focused editor
 bundle-import/export browsers13 assertions pass after prototype-key fixes.
 No extra format support or whole-product acceptance claim.
 [Review0851](reviews/0851-format-prototype-integration.md).
+
+
+### Import preview plural-only edits
+Dry-run counts explicit plural-form changes even when plain other value stays
+the same. Preview stays read-only and matches actual write counters in the
+regression; real formats230 checks pass.
+[Review0852](reviews/0852-preview-plural-only-change.md).
