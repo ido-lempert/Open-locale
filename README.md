@@ -3616,3 +3616,9 @@ redirect100/startup3/OTA117 pass. No SDK implementation change.
 Request/export/OTA retain HTTP error status/scope before integrity or parser
 errors. Error44/SDK73/URL81/redirect100/startup3/OTA117 pass, no SDK change.
 [Review0892](docs/reviews/0892-sdk-http-error-precedence.md).
+
+
+### SDK validation integration checkpoint
+Fresh API34/318, formats269, SDK73/OTA117, error44/URL81/redirect100/startup3
+pass. Scoped local integration, not browser/native/provider acceptance.
+[Review0893](docs/reviews/0893-sdk-validation-checkpoint.md).
