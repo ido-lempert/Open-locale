@@ -3412,3 +3412,10 @@ Android XML file preview shows one valid write and one missing-other failure
 without creating keys or import runs. Import-scope browser11 assertions and
 formats269 checks pass; removing validation fails visible browser check.
 [Review0860](docs/reviews/0860-editor-preview-invalid-plural-browser.md).
+
+
+### Backend storage/preview checkpoint
+Full API units33suites290tests, editor import units2/26, real formats269 and
+OTA76 checks pass after storage/preview corrections. No full-product or
+external-provider acceptance claim.
+[Review0861](docs/reviews/0861-api-storage-preview-checkpoint.md).
