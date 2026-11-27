@@ -3556,3 +3556,9 @@ SDK67/URL74/harness3/OTA117 pass. Custom fetchImpl must honor redirect options.
 Local redirect matrix100 checks covers five statuses, same/cross origins and
 reads/writes. SDK67/URL74/harness3/OTA117 pass; no SDK implementation change.
 [Review0882](docs/reviews/0882-sdk-redirect-status-method-matrix.md).
+
+
+### SDK scope/transport integration checkpoint
+Fresh API34 suites318 tests, formats269, SDK67/OTA117, URL74/redirect100/
+startup3 pass. Scoped local integration, not provider/native/browser acceptance.
+[Review0883](docs/reviews/0883-sdk-scope-transport-checkpoint.md).
