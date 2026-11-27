@@ -3513,3 +3513,9 @@ Remaining named-helper project/key components now encoded. Query/path-like
 identifiers cannot substitute endpoints or redirect writes. SDK60/OTA117 pass;
 non-OTA server malformed-ID500 behavior is not claimed fixed.
 [Review0875](docs/reviews/0875-sdk-helper-identifier-path.md).
+
+
+### SDK named-helper dot-segment guard
+Dot-only path components reject locally before fetch instead of URL scope
+normalization. SDK66/OTA117 checks pass. Generic request(path) unchanged.
+[Review0876](docs/reviews/0876-sdk-dot-segment-guard.md).

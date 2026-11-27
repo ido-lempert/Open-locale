@@ -80,12 +80,27 @@ try {
     ['import project', () => ol.io.importEntries(`${proj.id}/import/he#`, 'he', { 'sdk.unexpected-import': 'unexpected' })],
     ['export project', () => ol.io.exportText(`${proj.id}/export/he/po#`, 'he', 'po')],
   ]) {
-    const error = await run().then(() => null).catch(e => e);
+    const error = await Promise.resolve().then(run).then(() => null).catch(e => e);
     check(`SDK literal identifier ${label} cannot select another endpoint`, error instanceof OpenLocaleError && error.status >= 400);
   }
   const afterIdentifiers = await ol.translations.get(proj.id, 'he');
   const keysAfterIdentifiers = await ol.keys.list(proj.id);
   check('SDK rejected identifier writes leave translations and key list unchanged', afterIdentifiers['sdk.greeting'] === 'שלום מה-SDK' && afterIdentifiers['sdk.unexpected-import'] === undefined && !keysAfterIdentifiers.some(k => k.name === 'sdk.unexpected-scope'));
+
+  let dotRequests = 0;
+  const dotClient = createClient({ url: `http://127.0.0.1:${API_PORT}`, token: tok.token, fetchImpl: (u, o) => { dotRequests++; return fetch(u, o); } });
+  for (const [label, run] of [
+    ['project parent', () => dotClient.projects.get('..')],
+    ['key project self', () => dotClient.keys.list('.')],
+    ['translation locale parent', () => dotClient.translations.get(proj.id, '..')],
+    ['translation key parent', () => dotClient.translations.put(proj.id, '..', 'he', 'unexpected')],
+    ['OTA locale parent', () => dotClient.ota.version(proj.id, 1, '..')],
+    ['export format parent', () => dotClient.io.exportText(proj.id, 'he', '..')],
+  ]) {
+    const before = dotRequests;
+    const error = await Promise.resolve().then(run).then(() => null).catch(e => e);
+    check(`SDK dot segment ${label} rejects locally before fetch`, error instanceof OpenLocaleError && error.status === 0 && dotRequests === before);
+  }
 
   // Branch scoping through the same client.
   await call(`/projects/${proj.id}/branches`, { token: a.accessToken, method: 'POST', body: { name: 'sdk-branch' } });
@@ -99,7 +114,7 @@ try {
     ['import write', () => ol.io.importEntries(proj.id, injectedLocale, { 'sdk.scope-probe': 'unexpected' })],
     ['export format', () => ol.io.exportText(proj.id, 'he', 'po?branch=sdk-branch#')],
   ]) {
-    const error = await run().then(() => null).catch(e => e);
+    const error = await Promise.resolve().then(run).then(() => null).catch(e => e);
     check(`SDK literal ${label} cannot redirect branch scope`, error instanceof OpenLocaleError && [400, 404].includes(error.status));
   }
   const literalTranslation = await ol.translations.get(proj.id, injectedLocale);

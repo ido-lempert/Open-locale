@@ -33,6 +33,16 @@ async function sha256Hex(text) {
   return createHash('sha256').update(data).digest('hex');
 }
 
+// Encoding alone leaves dot-only path components intact. URL parsers resolve
+// those before sending, so named helpers reject them instead of changing scope.
+function pathComponent(value) {
+  const text = String(value);
+  if (text === '.' || text === '..') {
+    throw new OpenLocaleError(0, 'Path component cannot be a dot segment', '');
+  }
+  return encodeURIComponent(text);
+}
+
 export function createClient({ url, token, fetchImpl } = {}) {
   if (!url) throw new OpenLocaleError(0, 'createClient: url is required', '');
   if (!token) throw new OpenLocaleError(0, 'createClient: token is required', '');
@@ -102,37 +112,37 @@ export function createClient({ url, token, fetchImpl } = {}) {
     request,
     projects: {
       list: () => request('/projects'),
-      get: (projectId) => request(`/projects/${encodeURIComponent(projectId)}`),
+      get: (projectId) => request(`/projects/${pathComponent(projectId)}`),
     },
     keys: {
       list: (projectId, { search, branch } = {}) =>
-        request(`/projects/${encodeURIComponent(projectId)}/keys${branchQuery(branch, { search })}`),
+        request(`/projects/${pathComponent(projectId)}/keys${branchQuery(branch, { search })}`),
       create: (projectId, name, { description, branch } = {}) =>
-        request(`/projects/${encodeURIComponent(projectId)}/keys${branchQuery(branch)}`, { method: 'POST', body: { name, description } }),
+        request(`/projects/${pathComponent(projectId)}/keys${branchQuery(branch)}`, { method: 'POST', body: { name, description } }),
     },
     translations: {
       /** Flat map of key -> value for a locale. */
       get: (projectId, locale, { branch } = {}) =>
-        request(`/projects/${encodeURIComponent(projectId)}/export/${encodeURIComponent(locale)}${branchQuery(branch, { flat: 'true' })}`),
+        request(`/projects/${pathComponent(projectId)}/export/${pathComponent(locale)}${branchQuery(branch, { flat: 'true' })}`),
       put: (projectId, keyId, locale, value, { branch } = {}) =>
-        request(`/projects/${encodeURIComponent(projectId)}/keys/${encodeURIComponent(keyId)}/translations${branchQuery(branch)}`, { method: 'PUT', body: { locale, value } }),
+        request(`/projects/${pathComponent(projectId)}/keys/${pathComponent(keyId)}/translations${branchQuery(branch)}`, { method: 'PUT', body: { locale, value } }),
     },
     ota: {
       /** Latest published bundle for a locale: { notModified, etag, sha256, bundle }. */
       latest: (projectId, locale, { branch, etag, publicationId } = {}) =>
-        otaPull(`/projects/${encodeURIComponent(projectId)}/ota/latest${branchQuery(branch, { locale, publicationId })}`, etag),
+        otaPull(`/projects/${pathComponent(projectId)}/ota/latest${branchQuery(branch, { locale, publicationId })}`, etag),
       /** A specific immutable version: { notModified, etag, sha256, bundle }. */
       version: (projectId, version, locale, { branch, etag, publicationId } = {}) =>
-        otaPull(`/projects/${encodeURIComponent(projectId)}/ota/${encodeURIComponent(version)}/${encodeURIComponent(locale)}${branchQuery(branch, { publicationId })}`, etag),
+        otaPull(`/projects/${pathComponent(projectId)}/ota/${pathComponent(version)}/${pathComponent(locale)}${branchQuery(branch, { publicationId })}`, etag),
     },
     io: {
       /** Import a flat entries map into a locale. Set dryRun to preview without writing. */
       importEntries: (projectId, locale, entries, { branch, dryRun } = {}) =>
-        request(`/projects/${encodeURIComponent(projectId)}/import/${encodeURIComponent(locale)}${branchQuery(branch, { dryRun: dryRun ? 'true' : null })}`, { method: 'POST', body: { entries } }),
+        request(`/projects/${pathComponent(projectId)}/import/${pathComponent(locale)}${branchQuery(branch, { dryRun: dryRun ? 'true' : null })}`, { method: 'POST', body: { entries } }),
       /** Export a locale in any interchange format (json|csv|android|ios|po|pot|xliff|properties|arb|yaml|resx). */
       exportText: (projectId, locale, format, { branch } = {}) =>
-        request(`/projects/${encodeURIComponent(projectId)}/export/${encodeURIComponent(locale)}/${encodeURIComponent(format)}${branchQuery(branch)}`, { raw: true }).then(async (res) => {
-          if (!res.ok) throw new OpenLocaleError(res.status, (await res.json().catch(() => ({})))?.message ?? `HTTP ${res.status}`, `/export/${encodeURIComponent(locale)}/${encodeURIComponent(format)}`);
+        request(`/projects/${pathComponent(projectId)}/export/${pathComponent(locale)}/${pathComponent(format)}${branchQuery(branch)}`, { raw: true }).then(async (res) => {
+          if (!res.ok) throw new OpenLocaleError(res.status, (await res.json().catch(() => ({})))?.message ?? `HTTP ${res.status}`, `/export/${pathComponent(locale)}/${pathComponent(format)}`);
           return res.text();
         }),
     },
