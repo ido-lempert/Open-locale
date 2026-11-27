@@ -80,6 +80,34 @@ try {
   check('latest OTA validator has complete quoted weak ETag syntax', typeof l1.etag === 'string' && /^W\/"[^"\s]+"$/.test(l1.etag), String(l1.etag));
   const l1b = await call(`/projects/${pid}/ota/latest?locale=he`, { jwt, headers: { 'If-None-Match': l1.etag } });
   check('If-None-Match yields 304', l1b.status === 304, `got ${l1b.status}`);
+  // Real HTTP stack must support weak comparison, lists and wildcard while
+  // keeping authorization and scope selection ahead of conditional handling.
+  for (const [label, validator] of [
+    ['strong equivalent', l1.etag.replace(/^W\//, '')],
+    ['list matching last', `"unrelated", ${l1.etag}`],
+    ['list matching first', `${l1.etag}, "unrelated"`],
+    ['wildcard', '*'],
+  ]) {
+    const conditional = await call(`/projects/${pid}/ota/latest?locale=he`, { jwt, headers: { 'If-None-Match': validator } });
+    check(`conditional ${label} reuses existing representation`, conditional.status === 304 && conditional.json === null, `got ${conditional.status}`);
+  }
+  for (const [label, validator] of [
+    ['unknown list', '"other", W/"different"'],
+    ['substring only', `"prefix${l1.etag.slice(3, -1)}suffix"`],
+    ['unclosed quote', l1.etag.slice(0, -1)],
+    ['mixed wildcard', `*, ${l1.etag}`],
+    ['trailing garbage', `${l1.etag} garbage`],
+    ['quoted comma', `"unrelated,${l1.etag.slice(3, -1)}"`],
+  ]) {
+    check(`conditional ${label} cannot false304`, (await call(`/projects/${pid}/ota/latest?locale=he`, { jwt, headers: { 'If-None-Match': validator } })).status === 200);
+  }
+  const cache200 = await fetch(`${API}/projects/${pid}/ota/latest?locale=he`, { headers: { Authorization: `Bearer ${jwt}` } });
+  const cache304 = await fetch(`${API}/projects/${pid}/ota/latest?locale=he`, { headers: { Authorization: `Bearer ${jwt}`, 'If-None-Match': l1.etag } });
+  check('200 and304 retain private revalidation policy', cache200.status === 200 && cache304.status === 304 && [cache200, cache304].every(r => r.headers.get('cache-control') === 'private, no-cache'));
+  check('304 preserves complete current validator', cache304.headers.get('etag') === l1.etag);
+  check('wildcard does not bypass unauthenticated access', (await fetch(`${API}/projects/${pid}/ota/latest?locale=he`, { headers: { 'If-None-Match': '*' } })).status === 401);
+  check('wildcard does not hide missing locale', (await call(`/projects/${pid}/ota/latest?locale=fr`, { jwt, headers: { 'If-None-Match': '*' } })).status === 404);
+
 
   for (const [label, path] of [
     ['latest branch', 'latest?locale=he&branch=main&branch=main'],

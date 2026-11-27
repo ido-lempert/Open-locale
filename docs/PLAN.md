@@ -3926,3 +3926,10 @@ OTA weak ETag now includes closing quote while keeping exact scope identity.
 Old malformed cache validators get one200 refresh; payload unchanged. Actual
 OTA82 checks pass, including grammar regression.
 [Review0864](reviews/0864-ota-quoted-etag.md).
+
+
+### OTA conditional validator lists
+OTA conditional GET now compares weak/strong-equivalent validators in quoted
+lists and handles standalone wildcard after authorization/scope selection.
+Malformed fields do not yield cache hits. Actual OTA96 checks and whole API
+34 suites318 tests pass. [Review0865](reviews/0865-ota-conditional-validator-lists.md).

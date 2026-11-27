@@ -2,6 +2,7 @@ import { BadRequestException, Body, Controller, Get, NotFoundException, Param, P
 import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
 import type { Response } from 'express';
 import { OtaService } from './ota.service';
+import { matchesIfNoneMatch } from './ota-etag';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SessionOnlyGuard } from '../auth/session-only.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -69,7 +70,7 @@ export class OtaController {
     res.setHeader('ETag', etag);
     res.setHeader('X-OpenLocale-Bundle-SHA256', sha256);
     res.setHeader('Cache-Control', 'private, no-cache');
-    if (req.headers['if-none-match'] === etag) {
+    if (matchesIfNoneMatch(req.headers['if-none-match'], etag)) {
       // The digest header rides the 304 too: a client holding the body can
       // re-verify integrity without re-downloading it.
       res.status(304);
