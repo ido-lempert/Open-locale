@@ -4121,3 +4121,9 @@ alias replaces old interface, no runtime change.
 NodeNext package import resolves SDK declarations and OTA narrowing, not implicit
 any. Isolated package strict-types/runtime2 checks pass with existing contracts.
 Private package remains unpublished. [Review0895](reviews/0895-sdk-package-type-export.md).
+
+
+### Whole-web and SDK type checkpoint
+Fresh whole-web315 suites3864 tests pass in disjoint158/157 groups with exact
+inventory union. SDK package/types/contracts/real HTTP checks green. No browser
+acceptance claim. [Review0896](reviews/0896-web-sdk-type-checkpoint.md).
