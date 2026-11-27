@@ -3474,3 +3474,9 @@ Old pin rejects on latest after newer publish, but retained version keeps exact
 bytes/validator and conditional304. Query-like pins stay one encoded value.
 Real SDK38 and OTA108 checks pass, no application change.
 [Review0869](docs/reviews/0869-sdk-retained-pin-query-proof.md).
+
+
+### OTA conditional and SDK checkpoint
+Fresh six OTA browser flows85 assertions pass, plus whole API34/318,
+SDK38/OTA108, builds and preflight3. Scoped integration, not external delivery
+or whole-web acceptance. [Review0870](docs/reviews/0870-ota-conditional-sdk-checkpoint.md).
