@@ -41,11 +41,11 @@ for (const [name, run, path] of cases) {
   assert.equal(request.url.searchParams.get('branch'), null);
   assert.equal(request.options.headers['X-Api-Key'], 'test-only');
   console.log(`PASS encoded ${name}`); passed++;
-  for (const dot of ['.', '..']) {
+  for (const dot of ['', '.', '..']) {
     const prior = count;
     await assert.rejects(async () => run(dot), error => error instanceof OpenLocaleError && error.status === 0);
     assert.equal(count, prior);
-    console.log(`PASS dot ${name} ${dot}`); passed++;
+    console.log(`PASS invalid component ${name} ${dot || '(empty)'}`); passed++;
   }
 }
 const queryValue = 'branch&dryRun=false#fragment+percent%';

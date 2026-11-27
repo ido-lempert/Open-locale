@@ -4023,3 +4023,9 @@ dryRun. Real SDK66/OTA117 pass; no SDK implementation change.
 Real SDK occupied-port startup abort now exits nonzero, not false green.
 Harness3/SDK66/URL58/OTA117 pass. No SDK library change.
 [Review0879](reviews/0879-sdk-startup-fail-closed.md).
+
+
+### SDK empty named-helper path guard
+Empty components reject locally before fetch, including project get rather
+than collection lookup. URL74/SDK67/harness3/OTA117 pass.
+[Review0880](reviews/0880-sdk-empty-path-components.md).

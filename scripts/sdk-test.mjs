@@ -105,6 +105,10 @@ try {
     check(`SDK dot segment ${label} rejects locally before fetch`, error instanceof OpenLocaleError && error.status === 0 && dotRequests === before);
   }
 
+  const emptyBefore = dotRequests;
+  const emptyProject = await Promise.resolve().then(() => dotClient.projects.get('')).then(() => null).catch(e => e);
+  check('SDK empty project rejects locally instead of reading collection', emptyProject instanceof OpenLocaleError && emptyProject.status === 0 && dotRequests === emptyBefore);
+
   // Branch scoping through the same client.
   await call(`/projects/${proj.id}/branches`, { token: a.accessToken, method: 'POST', body: { name: 'sdk-branch' } });
   await ol.io.importEntries(proj.id, 'he', { 'sdk.branchonly': 'ענף' }, { branch: 'sdk-branch' });

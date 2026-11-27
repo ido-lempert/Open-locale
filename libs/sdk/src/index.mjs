@@ -37,8 +37,8 @@ async function sha256Hex(text) {
 // those before sending, so named helpers reject them instead of changing scope.
 function pathComponent(value) {
   const text = String(value);
-  if (text === '.' || text === '..') {
-    throw new OpenLocaleError(0, 'Path component cannot be a dot segment', '');
+  if (text === '' || text === '.' || text === '..') {
+    throw new OpenLocaleError(0, 'Path component cannot be empty or a dot segment', '');
   }
   return encodeURIComponent(text);
 }
