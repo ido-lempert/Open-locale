@@ -48,6 +48,13 @@ try {
     check(`${format} actual file preview leaves server keys forms and runs unchanged`,JSON.stringify(await call(`${P}/keys`,null,token))===before&&(await call(`${P}/imports`,null,token)).length===runs);
   }
   await page.screenshot({path:'/downloads/editor-plural-preview-desktop.png',fullPage:true});
+  await page.select('[name=ioFormat]','android');
+  const beforeInvalid=JSON.stringify(await call(`${P}/keys`,null,token)),invalidRuns=(await call(`${P}/imports`,null,token)).length;
+  await page.evaluate(()=>{const input=document.querySelector('[name=previewFile]'),data=new DataTransfer();data.items.add(new File(['<resources><plurals name="invalid.preview"><item quantity="one">one only</item></plurals><string name="fresh.valid">valid</string></resources>'],'invalid.xml',{type:'text/xml'}));input.files=data.files;input.dispatchEvent(new Event('change',{bubbles:true}));});
+  await page.waitForFunction(()=>!document.querySelector('[name=importPending]')&&document.querySelector('.notice')?.textContent.includes('Preview only'));
+  check('actual invalid XML preview shows partial counters and required-other guidance',await page.$eval('.notice',e=>e.textContent.includes('would create 1 keys, update 1 translations, 0 unchanged, 1 would fail:')&&e.textContent.includes('invalid.preview')&&e.textContent.includes('requires an "other" item')));
+  check('actual invalid XML preview creates no valid or invalid key or import run',JSON.stringify(await call(`${P}/keys`,null,token))===beforeInvalid&&(await call(`${P}/imports`,null,token)).length===invalidRuns);
+
   await page.select('[name=ioFormat]','json');
   let held,imports=0,reads=0;await page.setRequestInterception(true);page.on('request',req=>{const path=new URL(req.url()).pathname;if(req.method()==='POST'&&path.includes(`/api${P}/import/`)){imports++;held=req;return;}if(req.method()==='GET'&&path===`/api${P}/keys`)reads++;req.continue();});
   const pick=async(delayed)=>page.evaluate(delayed=>{const input=document.querySelector('[name=importFile]');const data=new DataTransfer();const file=new File(['{"scoped":"value"}'],'scope.json',{type:'application/json'});if(delayed)file.text=()=>new Promise(resolve=>{window.releaseImportRead=()=>resolve('{"scoped":"value"}');});data.items.add(file);input.files=data.files;input.dispatchEvent(new Event('change',{bubbles:true}));},delayed);

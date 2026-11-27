@@ -3891,3 +3891,10 @@ Real POT/ARB file previews show corrected preserve-blank/plural-only counters
 and leave keys/forms/import runs unchanged. Import-scope browser9 assertions
 and formats269 checks pass; old POT comparison fails targeted browser check.
 [Review0859](reviews/0859-editor-preview-plural-pot-browser.md).
+
+
+### Actual invalid plural file preview proof
+Android XML file preview shows one valid write and one missing-other failure
+without creating keys or import runs. Import-scope browser11 assertions and
+formats269 checks pass; removing validation fails visible browser check.
+[Review0860](reviews/0860-editor-preview-invalid-plural-browser.md).
