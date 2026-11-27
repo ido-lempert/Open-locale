@@ -3877,3 +3877,10 @@ Invalid plural input on a locked key reports task lock before forms validation,
 matching actual member import and preserving prior data. Formats269 checks
 pass; skipping plural preview lock fails targeted guidance check.
 [Review0857](reviews/0857-preview-lock-plural-precedence.md).
+
+
+### Import preview integration checkpoint
+Format units11suites108tests, real formats269 checks and focused editor
+import-scope/drafts browsers10 assertions pass after preview corrections.
+No whole-product or full preview-parity claim.
+[Review0858](reviews/0858-import-preview-integration.md).
