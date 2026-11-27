@@ -3363,3 +3363,10 @@ Template preview counts existing nonempty translations as unchanged instead
 of replacements, matching actual preserve-blank import. Fresh blanks remain
 writes; real formats234 checks pass.
 [Review0853](docs/reviews/0853-preview-pot-preserve-blank.md).
+
+
+### Plural-only preview across formats
+ARB, Android XML and stringsdict real regressions prove read-only preview
+matches plural-only actual edits and unchanged repeats. Formats249 checks
+pass; removing forms comparison fails targeted checks.
+[Review0854](docs/reviews/0854-plural-preview-cross-format.md).

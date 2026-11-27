@@ -109,6 +109,26 @@ try {
   const potPreviewAfter = await call(`${protoPoPath}/import/en?dryRun=true`, { token: at, method: 'POST', body: { pot: potPreviewText } });
   check('POT repeat preview counts existing blank and nonblank values unchanged', potPreviewAfter.json.translationsUpserted === 0 && potPreviewAfter.json.unchangedSkipped === 2 && potPreviewAfter.json.keysCreated === 0);
 
+  const pluralPreviewCases = [
+    ['arb', one => JSON.stringify({ 'preview.arb': `{count, plural, one {${one}} other {many stable}}` })],
+    ['xml', one => `<resources><plurals name="preview.android"><item quantity="one">${one}</item><item quantity="other">many stable</item></plurals></resources>`],
+    ['stringsdict', one => `<plist version="1.0"><dict><key>preview.ios</key><dict><key>NSStringFormatSpecTypeKey</key><string>NSStringPluralRuleType</string><key>one</key><string>${one}</string><key>other</key><string>many stable</string></dict></dict></plist>`],
+  ];
+  for (const [format, content] of pluralPreviewCases) {
+    const initial = await call(`${protoPoPath}/import/en`, { token: at, method: 'POST', body: { [format]: content('one original') } });
+    check(`${format} preview fixture saves original plural`, initial.status === 201 && initial.json.translationsUpserted === 1 && initial.json.failed === 0);
+    const beforeKeys = (await call(`${protoPoPath}/keys`, { token: at })).json;
+    const beforeRuns = (await call(`${protoPoPath}/imports`, { token: at })).json.length;
+    const body = { [format]: content('one edited') };
+    const preview = await call(`${protoPoPath}/import/en?dryRun=true`, { token: at, method: 'POST', body });
+    check(`${format} dry-run detects plural-only edit`, preview.status === 201 && preview.json.dryRun === true && preview.json.translationsUpserted === 1 && preview.json.unchangedSkipped === 0 && preview.json.failed === 0);
+    check(`${format} plural-only preview is read-only`, JSON.stringify((await call(`${protoPoPath}/keys`, { token: at })).json) === JSON.stringify(beforeKeys) && (await call(`${protoPoPath}/imports`, { token: at })).json.length === beforeRuns);
+    const actual = await call(`${protoPoPath}/import/en`, { token: at, method: 'POST', body });
+    check(`${format} actual plural-only import matches preview`, actual.status === 201 && actual.json.translationsUpserted === preview.json.translationsUpserted && actual.json.unchangedSkipped === preview.json.unchangedSkipped && actual.json.failed === 0);
+    const repeated = await call(`${protoPoPath}/import/en?dryRun=true`, { token: at, method: 'POST', body });
+    check(`${format} repeated plural preview is unchanged`, repeated.json.translationsUpserted === 0 && repeated.json.unchangedSkipped === 1 && repeated.json.failed === 0);
+  }
+
   // Seed via CSV import (with header row and quoted specials)
   const csvIn = 'key,value\napp.title,"My App"\nmsg.quote,"He said ""hi"", loudly"\nmsg.multi,"line1\nline2"\n';
   const imp = await call(`${P}/import/en`, { token: at, method: 'POST', body: { csv: csvIn } });
