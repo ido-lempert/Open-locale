@@ -3550,3 +3550,9 @@ SDK requests reject HTTP redirects so API tokens are not forwarded to redirect
 targets. Configure final API URL directly. Local fake-token redirect6 checks,
 SDK67/URL74/harness3/OTA117 pass. Custom fetchImpl must honor redirect options.
 [Review0881](docs/reviews/0881-sdk-no-automatic-redirects.md).
+
+
+### SDK redirect status/method proof
+Local redirect matrix100 checks covers five statuses, same/cross origins and
+reads/writes. SDK67/URL74/harness3/OTA117 pass; no SDK implementation change.
+[Review0882](docs/reviews/0882-sdk-redirect-status-method-matrix.md).
