@@ -4005,3 +4005,9 @@ non-OTA server malformed-ID500 behavior is not claimed fixed.
 Dot-only path components reject locally before fetch instead of URL scope
 normalization. SDK66/OTA117 checks pass. Generic request(path) unchanged.
 [Review0876](reviews/0876-sdk-dot-segment-guard.md).
+
+
+### SDK named-helper URL contract
+npm run test:sdk-path checks16 component slots and both dot forms,49 fast
+checks. Real SDK66/OTA117 remain green. No SDK implementation change.
+[Review0877](reviews/0877-sdk-path-contract.md).
