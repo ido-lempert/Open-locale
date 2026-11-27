@@ -27,6 +27,7 @@
     "test:cli": "node scripts/cli-test.mjs",
     "test:sdk": "node scripts/sdk-test.mjs",
     "test:sdk-path": "node scripts/sdk-path-test.mjs",
+    "test:sdk-redirect": "node scripts/sdk-redirect-test.mjs",
     "test:sdk-harness": "python3 scripts/run-reaped.py node scripts/sdk-harness-test.mjs",
     "test:snapshots": "node scripts/snapshots-test.mjs",
     "test:snapshots-harness": "node scripts/snapshots-harness-test.mjs",

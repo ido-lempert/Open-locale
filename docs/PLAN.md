@@ -4029,3 +4029,10 @@ Harness3/SDK66/URL58/OTA117 pass. No SDK library change.
 Empty components reject locally before fetch, including project get rather
 than collection lookup. URL74/SDK67/harness3/OTA117 pass.
 [Review0880](reviews/0880-sdk-empty-path-components.md).
+
+
+### SDK automatic redirects disabled
+SDK requests reject HTTP redirects so API tokens are not forwarded to redirect
+targets. Configure final API URL directly. Local fake-token redirect6 checks,
+SDK67/URL74/harness3/OTA117 pass. Custom fetchImpl must honor redirect options.
+[Review0881](reviews/0881-sdk-no-automatic-redirects.md).

@@ -52,6 +52,7 @@ export function createClient({ url, token, fetchImpl } = {}) {
   async function request(path, { method = 'GET', body, raw = false } = {}) {
     const res = await doFetch(`${base}${path}`, {
       method,
+      redirect: 'error',
       headers: { 'Content-Type': 'application/json', 'X-Api-Key': token },
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -80,6 +81,7 @@ export function createClient({ url, token, fetchImpl } = {}) {
   // the read-scope token, not from this digest.
   async function otaPull(path, etag) {
     const res = await doFetch(`${base}${path}`, {
+      redirect: 'error',
       headers: { 'X-Api-Key': token, ...(etag ? { 'If-None-Match': etag } : {}) },
     });
     const sha256 = res.headers.get('x-openlocale-bundle-sha256');
