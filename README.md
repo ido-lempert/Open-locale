@@ -3506,3 +3506,10 @@ Literal locale/format path values cannot redirect branch reads or imports.
 Rejected locale import leaves branch unchanged. Unknown read locale may still
 return empty data. SDK51/OTA117 pass.
 [Review0874](docs/reviews/0874-sdk-import-export-locale-path.md).
+
+
+### SDK named helper identifier path encoding
+Remaining named-helper project/key components now encoded. Query/path-like
+identifiers cannot substitute endpoints or redirect writes. SDK60/OTA117 pass;
+non-OTA server malformed-ID500 behavior is not claimed fixed.
+[Review0875](docs/reviews/0875-sdk-helper-identifier-path.md).

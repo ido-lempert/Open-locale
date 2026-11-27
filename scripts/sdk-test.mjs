@@ -70,6 +70,23 @@ try {
   const po = await ol.io.exportText(proj.id, 'he', 'po');
   check('io.exportText returns the format body', po.includes('msgid "sdk.greeting"') && po.includes('msgstr "שלום מה-SDK"'), po.split('\n').find((l) => l.includes('sdk.greeting')) ?? '');
 
+  for (const [label, run] of [
+    ['project get', () => ol.projects.get(`${proj.id}/keys#`)],
+    ['key list', () => ol.keys.list(`${proj.id}/keys#`)],
+    ['key create', () => ol.keys.create(`${proj.id}/keys#`, 'sdk.unexpected-scope')],
+    ['translation read project', () => ol.translations.get(`${proj.id}/export/he?flat=true#`, 'he')],
+    ['translation write project', () => ol.translations.put(`${proj.id}/keys/${key.id}/translations#`, key.id, 'he', 'WRONG_SCOPE')],
+    ['translation write key', () => ol.translations.put(proj.id, `${key.id}/translations#`, 'he', 'WRONG_SCOPE')],
+    ['import project', () => ol.io.importEntries(`${proj.id}/import/he#`, 'he', { 'sdk.unexpected-import': 'unexpected' })],
+    ['export project', () => ol.io.exportText(`${proj.id}/export/he/po#`, 'he', 'po')],
+  ]) {
+    const error = await run().then(() => null).catch(e => e);
+    check(`SDK literal identifier ${label} cannot select another endpoint`, error instanceof OpenLocaleError && error.status >= 400);
+  }
+  const afterIdentifiers = await ol.translations.get(proj.id, 'he');
+  const keysAfterIdentifiers = await ol.keys.list(proj.id);
+  check('SDK rejected identifier writes leave translations and key list unchanged', afterIdentifiers['sdk.greeting'] === 'שלום מה-SDK' && afterIdentifiers['sdk.unexpected-import'] === undefined && !keysAfterIdentifiers.some(k => k.name === 'sdk.unexpected-scope'));
+
   // Branch scoping through the same client.
   await call(`/projects/${proj.id}/branches`, { token: a.accessToken, method: 'POST', body: { name: 'sdk-branch' } });
   await ol.io.importEntries(proj.id, 'he', { 'sdk.branchonly': 'ענף' }, { branch: 'sdk-branch' });

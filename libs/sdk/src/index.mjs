@@ -102,20 +102,20 @@ export function createClient({ url, token, fetchImpl } = {}) {
     request,
     projects: {
       list: () => request('/projects'),
-      get: (projectId) => request(`/projects/${projectId}`),
+      get: (projectId) => request(`/projects/${encodeURIComponent(projectId)}`),
     },
     keys: {
       list: (projectId, { search, branch } = {}) =>
-        request(`/projects/${projectId}/keys${branchQuery(branch, { search })}`),
+        request(`/projects/${encodeURIComponent(projectId)}/keys${branchQuery(branch, { search })}`),
       create: (projectId, name, { description, branch } = {}) =>
-        request(`/projects/${projectId}/keys${branchQuery(branch)}`, { method: 'POST', body: { name, description } }),
+        request(`/projects/${encodeURIComponent(projectId)}/keys${branchQuery(branch)}`, { method: 'POST', body: { name, description } }),
     },
     translations: {
       /** Flat map of key -> value for a locale. */
       get: (projectId, locale, { branch } = {}) =>
-        request(`/projects/${projectId}/export/${encodeURIComponent(locale)}${branchQuery(branch, { flat: 'true' })}`),
+        request(`/projects/${encodeURIComponent(projectId)}/export/${encodeURIComponent(locale)}${branchQuery(branch, { flat: 'true' })}`),
       put: (projectId, keyId, locale, value, { branch } = {}) =>
-        request(`/projects/${projectId}/keys/${keyId}/translations${branchQuery(branch)}`, { method: 'PUT', body: { locale, value } }),
+        request(`/projects/${encodeURIComponent(projectId)}/keys/${encodeURIComponent(keyId)}/translations${branchQuery(branch)}`, { method: 'PUT', body: { locale, value } }),
     },
     ota: {
       /** Latest published bundle for a locale: { notModified, etag, sha256, bundle }. */
@@ -128,10 +128,10 @@ export function createClient({ url, token, fetchImpl } = {}) {
     io: {
       /** Import a flat entries map into a locale. Set dryRun to preview without writing. */
       importEntries: (projectId, locale, entries, { branch, dryRun } = {}) =>
-        request(`/projects/${projectId}/import/${encodeURIComponent(locale)}${branchQuery(branch, { dryRun: dryRun ? 'true' : null })}`, { method: 'POST', body: { entries } }),
+        request(`/projects/${encodeURIComponent(projectId)}/import/${encodeURIComponent(locale)}${branchQuery(branch, { dryRun: dryRun ? 'true' : null })}`, { method: 'POST', body: { entries } }),
       /** Export a locale in any interchange format (json|csv|android|ios|po|pot|xliff|properties|arb|yaml|resx). */
       exportText: (projectId, locale, format, { branch } = {}) =>
-        request(`/projects/${projectId}/export/${encodeURIComponent(locale)}/${encodeURIComponent(format)}${branchQuery(branch)}`, { raw: true }).then(async (res) => {
+        request(`/projects/${encodeURIComponent(projectId)}/export/${encodeURIComponent(locale)}/${encodeURIComponent(format)}${branchQuery(branch)}`, { raw: true }).then(async (res) => {
           if (!res.ok) throw new OpenLocaleError(res.status, (await res.json().catch(() => ({})))?.message ?? `HTTP ${res.status}`, `/export/${encodeURIComponent(locale)}/${encodeURIComponent(format)}`);
           return res.text();
         }),
