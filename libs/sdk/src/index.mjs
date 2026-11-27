@@ -142,11 +142,16 @@ export function createClient({ url, token, fetchImpl } = {}) {
       importEntries: (projectId, locale, entries, { branch, dryRun } = {}) =>
         request(`/projects/${pathComponent(projectId)}/import/${pathComponent(locale)}${branchQuery(branch, { dryRun: dryRun ? 'true' : null })}`, { method: 'POST', body: { entries } }),
       /** Export a locale in any interchange format (json|csv|android|ios|po|pot|xliff|properties|arb|yaml|resx). */
-      exportText: (projectId, locale, format, { branch } = {}) =>
-        request(`/projects/${pathComponent(projectId)}/export/${pathComponent(locale)}/${pathComponent(format)}${branchQuery(branch)}`, { raw: true }).then(async (res) => {
-          if (!res.ok) throw new OpenLocaleError(res.status, (await res.json().catch(() => ({})))?.message ?? `HTTP ${res.status}`, `/export/${pathComponent(locale)}/${pathComponent(format)}`);
-          return res.text();
-        }),
+      exportText: async (projectId, locale, format, { branch } = {}) => {
+        const path = `/projects/${pathComponent(projectId)}/export/${pathComponent(locale)}/${pathComponent(format)}${branchQuery(branch)}`;
+        const res = await request(path, { raw: true });
+        if (!res.ok) {
+          const json = await res.json().catch(() => null);
+          const message = json?.message ?? `HTTP ${res.status}`;
+          throw new OpenLocaleError(res.status, Array.isArray(message) ? message.join('; ') : String(message), path);
+        }
+        return res.text();
+      },
     },
   };
 }

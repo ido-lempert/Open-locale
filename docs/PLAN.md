@@ -4060,3 +4060,9 @@ cached success. SDK73/URL74/redirect100/harness3/OTA117 pass, no SDK change.
 Generic request preserves false/0/null/empty-string JSON bodies; only undefined
 omits payload. Endpoint schema acceptance unchanged. Contract81/SDK73/
 redirect100/startup3/OTA117 pass. [Review0885](reviews/0885-sdk-json-body-preservation.md).
+
+
+### SDK export error scope context
+Export errors retain full requested project/locale/format/branch path and
+consistent validation-list messages. Error3/URL81/SDK73/redirect100/startup3/
+OTA117 pass. [Review0886](reviews/0886-sdk-export-error-context.md).
