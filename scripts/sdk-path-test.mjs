@@ -30,7 +30,11 @@ let passed = 0;
 for (const [name, run, path] of cases) {
   const before = count;
   // OTA mock200 intentionally lacks digest. URL construction is still observable.
-  try { await run(value); } catch (error) { assert(error instanceof OpenLocaleError && /integrity digest/.test(error.message)); }
+  if (name.startsWith('OTA ')) {
+    await assert.rejects(async () => run(value), error => error instanceof OpenLocaleError && /integrity digest/.test(error.message));
+  } else {
+    await run(value);
+  }
   assert.equal(count, before + 1);
   assert.equal(request.url.pathname, path);
   assert.equal(request.url.hash, '');
@@ -43,6 +47,24 @@ for (const [name, run, path] of cases) {
     assert.equal(count, prior);
     console.log(`PASS dot ${name} ${dot}`); passed++;
   }
+}
+const queryValue = 'branch&dryRun=false#fragment+percent%';
+for (const [name, run, expected] of [
+  ['key search and branch', () => client.keys.list('project', { branch: queryValue, search: queryValue }), { branch: queryValue, search: queryValue }],
+  ['key create branch', () => client.keys.create('project', 'literal', { branch: queryValue }), { branch: queryValue }],
+  ['translation read branch', () => client.translations.get('project', 'en', { branch: queryValue }), { branch: queryValue, flat: 'true' }],
+  ['translation write branch', () => client.translations.put('project', 'key', 'en', 'literal', { branch: queryValue }), { branch: queryValue }],
+  ['OTA latest query', () => client.ota.latest('project', queryValue, { branch: queryValue, publicationId: queryValue }), { branch: queryValue, locale: queryValue, publicationId: queryValue }],
+  ['OTA version query', () => client.ota.version('project', 1, 'en', { branch: queryValue, publicationId: queryValue }), { branch: queryValue, publicationId: queryValue }],
+  ['OTA empty pin', () => client.ota.latest('project', 'en', { publicationId: '' }), { locale: 'en', publicationId: '' }],
+  ['import dryRun branch', () => client.io.importEntries('project', 'en', {}, { branch: queryValue, dryRun: true }), { branch: queryValue, dryRun: 'true' }],
+  ['export branch', () => client.io.exportText('project', 'en', 'po', { branch: queryValue }), { branch: queryValue }],
+]) {
+  if (name.startsWith('OTA ')) await assert.rejects(run, error => error instanceof OpenLocaleError && /integrity digest/.test(error.message));
+  else await run();
+  assert.deepEqual([...request.url.searchParams], Object.entries(expected));
+  assert.equal(request.url.hash, '');
+  console.log(`PASS literal query ${name}`); passed++;
 }
 await client.request('/caller-controlled?literal=yes');
 assert.equal(request.url.pathname, '/api/caller-controlled');

@@ -4011,3 +4011,9 @@ normalization. SDK66/OTA117 checks pass. Generic request(path) unchanged.
 npm run test:sdk-path checks16 component slots and both dot forms,49 fast
 checks. Real SDK66/OTA117 remain green. No SDK implementation change.
 [Review0877](reviews/0877-sdk-path-contract.md).
+
+
+### SDK query option contract
+Fast SDK URL contract58 checks now covers literal query options, empty pin and
+dryRun. Real SDK66/OTA117 pass; no SDK implementation change.
+[Review0878](reviews/0878-sdk-query-contract.md).
