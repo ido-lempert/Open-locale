@@ -95,6 +95,15 @@ try {
       check(`SDK ${label} ${pinLabel} pin rejects before wildcard304`, error instanceof OpenLocaleError && error.status === 404 && error.path.includes('publicationId='));
     }
   }
+  for (const [label, pull] of [
+    ['latest project path', () => ol.ota.latest(`${proj.id}/ota/latest?locale=he#`, 'he')],
+    ['version project path', () => ol.ota.version(`${proj.id}/ota/latest?locale=he#`, 1, 'he')],
+    ['version fragment', () => ol.ota.version(proj.id, '1/he#', 'he')],
+    ['version query', () => ol.ota.version(proj.id, '1/he?branch=main#', 'he')],
+  ]) {
+    const error = await pull().then(() => null).catch(e => e);
+    check(`SDK OTA literal ${label} cannot select existing endpoint`, error instanceof OpenLocaleError && error.status >= 400, `status ${error?.status}`);
+  }
   const pull304 = await ol.ota.latest(proj.id, 'he', { etag: pull1.etag });
   check('etag revalidation yields notModified and still carries the digest', pull304.notModified === true && pull304.sha256 === pull1.sha256 && pull304.bundle === undefined);
   for (const [label, etag] of [

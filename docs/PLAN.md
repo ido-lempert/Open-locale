@@ -3972,3 +3972,10 @@ or whole-web acceptance. [Review0870](reviews/0870-ota-conditional-sdk-checkpoin
 Version locale is one encoded path component, so query/fragment-like text cannot
 silently select another scope. Real SDK42/OTA108 checks pass.
 [Review0871](reviews/0871-sdk-version-locale-path.md).
+
+
+### SDK OTA project/version path components
+OTA helpers encode project/version path components; runtime query-like inputs
+cannot select existing endpoints. SDK46/OTA108 pass. Malformed project UUID
+server responses remain generic500, not claimed fixed.
+[Review0872](reviews/0872-sdk-ota-path-components.md).
