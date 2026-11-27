@@ -3870,3 +3870,10 @@ Invalid updates to retained plural keys predict failure with unchanged neighbor
 and zero writes, matching actual import while preserving exact prior forms.
 Formats265 checks pass; absent-key-only validation mutation fails4 new checks.
 [Review0856](reviews/0856-existing-plural-preview-validation.md).
+
+
+### Preview task-lock precedence proof
+Invalid plural input on a locked key reports task lock before forms validation,
+matching actual member import and preserving prior data. Formats269 checks
+pass; skipping plural preview lock fails targeted guidance check.
+[Review0857](reviews/0857-preview-lock-plural-precedence.md).

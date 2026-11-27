@@ -736,6 +736,15 @@ try {
   check('dry-run preview writes nothing: keys byte-identical, no import run recorded', JSON.stringify(pvBefore) === JSON.stringify(pvAfter) && pvAfter['pv.new'] === undefined && runsBefore === runsAfter, `runs ${runsBefore}->${runsAfter}`);
   const pvReal = await call(`${P}/import/he`, { token: ct, method: 'POST', body: pvPayload });
   check('real import of the previewed payload matches the preview counters exactly', pvReal.status === 201 && pvReal.json.keysCreated === pv.json.keysCreated && pvReal.json.translationsUpserted === pv.json.translationsUpserted && pvReal.json.unchangedSkipped === pv.json.unchangedSkipped && pvReal.json.failed === pv.json.failed, JSON.stringify(pvReal.json));
+  const lockedPluralBody = { xml: '<resources><plurals name="pv.lock"><item quantity="one">invalid without other</item></plurals><string name="pv.same">same</string></resources>' };
+  const lockedPluralBefore = JSON.stringify((await call(`${P}/keys`, { token: at })).json);
+  const lockedPluralRuns = (await call(`${P}/imports`, { token: at })).json.length;
+  const lockedPluralPreview = await call(`${P}/import/he?dryRun=true`, { token: ct, method: 'POST', body: lockedPluralBody });
+  check('locked invalid plural preview reports task lock before forms error', lockedPluralPreview.status === 201 && lockedPluralPreview.json.failed === 1 && lockedPluralPreview.json.unchangedSkipped === 1 && lockedPluralPreview.json.translationsUpserted === 0 && lockedPluralPreview.json.keysCreated === 0 && lockedPluralPreview.json.error.includes('Lock pv.lock') && !lockedPluralPreview.json.error.includes('requires an'));
+  check('locked invalid plural preview leaves data and run count unchanged', JSON.stringify((await call(`${P}/keys`, { token: at })).json) === lockedPluralBefore && (await call(`${P}/imports`, { token: at })).json.length === lockedPluralRuns);
+  const lockedPluralActual = await call(`${P}/import/he`, { token: ct, method: 'POST', body: lockedPluralBody });
+  check('locked invalid plural actual reports same task error and counters', lockedPluralActual.status === 201 && lockedPluralActual.json.error.includes('Lock pv.lock') && lockedPluralActual.json.failed === lockedPluralPreview.json.failed && lockedPluralActual.json.unchangedSkipped === lockedPluralPreview.json.unchangedSkipped && lockedPluralActual.json.translationsUpserted === 0 && lockedPluralActual.json.keysCreated === 0);
+  check('locked invalid plural actual preserves exact existing key and form data', JSON.stringify((await call(`${P}/keys`, { token: at })).json) === lockedPluralBefore);
   const pvBad = await call(`${P}/import/he?dryRun=true`, { token: ct, method: 'POST', body: { entries: { 'pv.bad': 42 } } });
   check('dry-run preview counts non-string JSON values as failed like the write path', pvBad.status === 201 && pvBad.json.failed === 1 && pvBad.json.keysCreated === 0 && (pvBad.json.error || '').includes('Non-string'), JSON.stringify(pvBad.json));
   const pvDenied = await call(`${P}/import/en?dryRun=true`, { token: ct, method: 'POST', body: pvPayload });
