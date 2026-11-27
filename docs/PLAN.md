@@ -3842,3 +3842,10 @@ Dry-run counts explicit plural-form changes even when plain other value stays
 the same. Preview stays read-only and matches actual write counters in the
 regression; real formats230 checks pass.
 [Review0852](reviews/0852-preview-plural-only-change.md).
+
+
+### POT dry-run blank preservation
+Template preview counts existing nonempty translations as unchanged instead
+of replacements, matching actual preserve-blank import. Fresh blanks remain
+writes; real formats234 checks pass.
+[Review0853](reviews/0853-preview-pot-preserve-blank.md).

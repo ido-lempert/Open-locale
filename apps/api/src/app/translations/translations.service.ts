@@ -830,7 +830,8 @@ export class TranslationsService {
       });
       const forms = 'plurals' in parsed && parsed.plurals && Object.prototype.hasOwnProperty.call(parsed.plurals, name)
         ? parsed.plurals[name] : undefined;
-      if (existing && existing.value === value && (!forms || canonPlural(existing.pluralForms) === canonPlural(forms))) unchangedSkipped++;
+      const preservedTemplateValue = dto.pot != null && value === '' && existing && existing.value !== '';
+      if (preservedTemplateValue || (existing && existing.value === value && (!forms || canonPlural(existing.pluralForms) === canonPlural(forms)))) unchangedSkipped++;
       else translationsUpserted++;
     }
     const status = failed > 0

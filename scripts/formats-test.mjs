@@ -98,6 +98,17 @@ try {
   const repeatedPluralPreview = await call(`${protoPoPath}/import/en?dryRun=true`, { token: at, method: 'POST', body: { po: changedProtoPo } });
   check('PO dry-run unchanged after explicit plural import', repeatedPluralPreview.json.translationsUpserted === 0 && repeatedPluralPreview.json.unchangedSkipped === 2 && repeatedPluralPreview.json.failed === 0);
 
+  const potPreviewText = 'msgid "__proto__"\nmsgstr ""\n\nmsgid "fresh.template"\nmsgstr ""\n';
+  const potPreviewKeysBefore = (await call(`${protoPoPath}/keys`, { token: at })).json;
+  const potPreviewRunsBefore = (await call(`${protoPoPath}/imports`, { token: at })).json.length;
+  const potPreview = await call(`${protoPoPath}/import/en?dryRun=true`, { token: at, method: 'POST', body: { pot: potPreviewText } });
+  check('POT dry-run preserves existing nonempty value and predicts only fresh blank write', potPreview.status === 201 && potPreview.json.dryRun === true && potPreview.json.keysCreated === 1 && potPreview.json.translationsUpserted === 1 && potPreview.json.unchangedSkipped === 1 && potPreview.json.failed === 0);
+  check('POT preserve-blank preview leaves keys forms and import runs untouched', JSON.stringify((await call(`${protoPoPath}/keys`, { token: at })).json) === JSON.stringify(potPreviewKeysBefore) && (await call(`${protoPoPath}/imports`, { token: at })).json.length === potPreviewRunsBefore);
+  const potPreviewActual = await call(`${protoPoPath}/import/en`, { token: at, method: 'POST', body: { pot: potPreviewText } });
+  check('POT actual preserve-blank counters match dry-run', potPreviewActual.status === 201 && potPreviewActual.json.keysCreated === potPreview.json.keysCreated && potPreviewActual.json.translationsUpserted === potPreview.json.translationsUpserted && potPreviewActual.json.unchangedSkipped === potPreview.json.unchangedSkipped);
+  const potPreviewAfter = await call(`${protoPoPath}/import/en?dryRun=true`, { token: at, method: 'POST', body: { pot: potPreviewText } });
+  check('POT repeat preview counts existing blank and nonblank values unchanged', potPreviewAfter.json.translationsUpserted === 0 && potPreviewAfter.json.unchangedSkipped === 2 && potPreviewAfter.json.keysCreated === 0);
+
   // Seed via CSV import (with header row and quoted specials)
   const csvIn = 'key,value\napp.title,"My App"\nmsg.quote,"He said ""hi"", loudly"\nmsg.multi,"line1\nline2"\n';
   const imp = await call(`${P}/import/en`, { token: at, method: 'POST', body: { csv: csvIn } });
