@@ -3863,3 +3863,10 @@ Dry-run shares actual import CLDR/required-other checks before counting writes.
 Mixed invalid/valid forms predict partial results without writes; actual
 formats257 checks pass.
 [Review0855](reviews/0855-preview-plural-validation.md).
+
+
+### Existing plural preview validation proof
+Invalid updates to retained plural keys predict failure with unchanged neighbor
+and zero writes, matching actual import while preserving exact prior forms.
+Formats265 checks pass; absent-key-only validation mutation fails4 new checks.
+[Review0856](reviews/0856-existing-plural-preview-validation.md).

@@ -141,6 +141,18 @@ try {
     check(`${label} failed plural key is never committed`, !(await call(`${protoPoPath}/keys`, { token: at })).json.some(k => k.name === name));
   }
 
+  for (const [label, items] of [['existing-unsupported-category', '<item quantity="few">few replacement</item><item quantity="other">changed other</item>'], ['existing-missing-other', '<item quantity="one">changed one</item>']]) {
+    const body = { xml: `<resources><plurals name="__proto__">${items}</plurals><string name="constructor">plain constructor</string></resources>` };
+    const before = JSON.stringify((await call(`${protoPoPath}/keys`, { token: at })).json);
+    const beforeRuns = (await call(`${protoPoPath}/imports`, { token: at })).json.length;
+    const preview = await call(`${protoPoPath}/import/en?dryRun=true`, { token: at, method: 'POST', body });
+    check(`${label} preview fails plural update and retains unchanged neighbor`, preview.status === 201 && preview.json.status === 'PARTIAL' && preview.json.failed === 1 && preview.json.keysCreated === 0 && preview.json.translationsUpserted === 0 && preview.json.unchangedSkipped === 1);
+    check(`${label} preview preserves all existing keys forms and run count`, JSON.stringify((await call(`${protoPoPath}/keys`, { token: at })).json) === before && (await call(`${protoPoPath}/imports`, { token: at })).json.length === beforeRuns);
+    const actual = await call(`${protoPoPath}/import/en`, { token: at, method: 'POST', body });
+    check(`${label} actual result agrees with preview`, actual.status === 201 && actual.json.failed === preview.json.failed && actual.json.translationsUpserted === preview.json.translationsUpserted && actual.json.unchangedSkipped === preview.json.unchangedSkipped && actual.json.keysCreated === 0);
+    check(`${label} failed actual update preserves exact prior keys and forms`, JSON.stringify((await call(`${protoPoPath}/keys`, { token: at })).json) === before);
+  }
+
   // Seed via CSV import (with header row and quoted specials)
   const csvIn = 'key,value\napp.title,"My App"\nmsg.quote,"He said ""hi"", loudly"\nmsg.multi,"line1\nline2"\n';
   const imp = await call(`${P}/import/en`, { token: at, method: 'POST', body: { csv: csvIn } });
