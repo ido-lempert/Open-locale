@@ -77,6 +77,21 @@ try {
   const brHe = await ol.translations.get(proj.id, 'he', { branch: 'sdk-branch' });
   check('branch option scopes import and export', mainHe['sdk.branchonly'] === undefined && brHe['sdk.branchonly'] === 'ענף', '');
 
+  const injectedLocale = 'he?branch=sdk-branch#';
+  for (const [label, run] of [
+    ['import write', () => ol.io.importEntries(proj.id, injectedLocale, { 'sdk.scope-probe': 'unexpected' })],
+    ['export format', () => ol.io.exportText(proj.id, 'he', 'po?branch=sdk-branch#')],
+  ]) {
+    const error = await run().then(() => null).catch(e => e);
+    check(`SDK literal ${label} cannot redirect branch scope`, error instanceof OpenLocaleError && [400, 404].includes(error.status));
+  }
+  const literalTranslation = await ol.translations.get(proj.id, injectedLocale);
+  check('SDK literal translation locale does not read branch values', Object.keys(literalTranslation).length === 0);
+  const literalExport = await ol.io.exportText(proj.id, injectedLocale, 'po');
+  check('SDK literal export locale does not read branch values', !literalExport.includes('sdk.branchonly') && !literalExport.includes('ענף'));
+  const branchAfterProbe = await ol.translations.get(proj.id, 'he', { branch: 'sdk-branch' });
+  check('SDK rejected locale imports leave branch unchanged', branchAfterProbe['sdk.scope-probe'] === undefined && branchAfterProbe['sdk.branchonly'] === 'ענף');
+
   // OTA pulls with integrity verification: the slice-18 digest exists FOR
   // this consumer - the SDK must verify it and never hand over bad bytes.
   const firstPublication = (await call(`/projects/${proj.id}/ota/publish`, { token: a.accessToken, method: 'POST', body: {} })).json;

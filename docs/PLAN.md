@@ -3985,3 +3985,10 @@ server responses remain generic500, not claimed fixed.
 All four OTA routes reject malformed project IDs400 after authentication,
 closing806 generic500 gap. OTA117/SDK46 and API34 suites318 tests pass.
 [Review0873](reviews/0873-ota-project-uuid-validation.md).
+
+
+### SDK import/export locale path encoding
+Literal locale/format path values cannot redirect branch reads or imports.
+Rejected locale import leaves branch unchanged. Unknown read locale may still
+return empty data. SDK51/OTA117 pass.
+[Review0874](reviews/0874-sdk-import-export-locale-path.md).

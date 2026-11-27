@@ -113,7 +113,7 @@ export function createClient({ url, token, fetchImpl } = {}) {
     translations: {
       /** Flat map of key -> value for a locale. */
       get: (projectId, locale, { branch } = {}) =>
-        request(`/projects/${projectId}/export/${locale}${branchQuery(branch, { flat: 'true' })}`),
+        request(`/projects/${projectId}/export/${encodeURIComponent(locale)}${branchQuery(branch, { flat: 'true' })}`),
       put: (projectId, keyId, locale, value, { branch } = {}) =>
         request(`/projects/${projectId}/keys/${keyId}/translations${branchQuery(branch)}`, { method: 'PUT', body: { locale, value } }),
     },
@@ -128,11 +128,11 @@ export function createClient({ url, token, fetchImpl } = {}) {
     io: {
       /** Import a flat entries map into a locale. Set dryRun to preview without writing. */
       importEntries: (projectId, locale, entries, { branch, dryRun } = {}) =>
-        request(`/projects/${projectId}/import/${locale}${branchQuery(branch, { dryRun: dryRun ? 'true' : null })}`, { method: 'POST', body: { entries } }),
+        request(`/projects/${projectId}/import/${encodeURIComponent(locale)}${branchQuery(branch, { dryRun: dryRun ? 'true' : null })}`, { method: 'POST', body: { entries } }),
       /** Export a locale in any interchange format (json|csv|android|ios|po|pot|xliff|properties|arb|yaml|resx). */
       exportText: (projectId, locale, format, { branch } = {}) =>
-        request(`/projects/${projectId}/export/${locale}/${format}${branchQuery(branch)}`, { raw: true }).then(async (res) => {
-          if (!res.ok) throw new OpenLocaleError(res.status, (await res.json().catch(() => ({})))?.message ?? `HTTP ${res.status}`, `/export/${locale}/${format}`);
+        request(`/projects/${projectId}/export/${encodeURIComponent(locale)}/${encodeURIComponent(format)}${branchQuery(branch)}`, { raw: true }).then(async (res) => {
+          if (!res.ok) throw new OpenLocaleError(res.status, (await res.json().catch(() => ({})))?.message ?? `HTTP ${res.status}`, `/export/${encodeURIComponent(locale)}/${encodeURIComponent(format)}`);
           return res.text();
         }),
     },
