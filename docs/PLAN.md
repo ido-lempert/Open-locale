@@ -4072,3 +4072,9 @@ OTA117 pass. [Review0886](reviews/0886-sdk-export-error-context.md).
 Digest-matching invalid JSON returns scoped fixed OpenLocaleError instead of
 bare parser error. No bundle-schema validation claim. Error5/SDK73/URL81/
 redirect100/startup3/OTA117 pass. [Review0887](reviews/0887-sdk-ota-json-error.md).
+
+
+### SDK OTA minimum shape validation
+Digest-matching JSON must satisfy typed required bundle fields. Literal keys,
+empty values and additive metadata preserved. Error16/SDK73/URL81/redirect100/
+startup3/OTA117 pass. [Review0888](reviews/0888-sdk-ota-required-shape.md).

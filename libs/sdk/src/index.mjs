@@ -103,6 +103,13 @@ export function createClient({ url, token, fetchImpl } = {}) {
     try { bundle = JSON.parse(text); } catch {
       throw new OpenLocaleError(res.status, 'OTA bundle is not valid JSON', path);
     }
+    if (!bundle || typeof bundle !== 'object' || Array.isArray(bundle) ||
+        !Number.isSafeInteger(bundle.version) || bundle.version < 1 ||
+        typeof bundle.branch !== 'string' || !bundle.translations ||
+        typeof bundle.translations !== 'object' || Array.isArray(bundle.translations) ||
+        !Object.values(bundle.translations).every(value => typeof value === 'string')) {
+      throw new OpenLocaleError(res.status, 'OTA bundle has invalid required fields', path);
+    }
     return { notModified: false, etag: res.headers.get('etag'), sha256, bundle };
   }
 
