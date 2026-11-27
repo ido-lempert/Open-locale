@@ -4115,3 +4115,9 @@ OtaPull is a discriminated union: fresh response requires bundle/digest,304 has
 no bundle. Strict compile regression and SDK73/OTA117 contracts pass. Type
 alias replaces old interface, no runtime change.
 [Review0894](reviews/0894-sdk-ota-result-narrowing.md).
+
+
+### SDK package declaration export
+NodeNext package import resolves SDK declarations and OTA narrowing, not implicit
+any. Isolated package strict-types/runtime2 checks pass with existing contracts.
+Private package remains unpublished. [Review0895](reviews/0895-sdk-package-type-export.md).
