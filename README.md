@@ -3610,3 +3610,9 @@ compatibility. Error26/SDK73/URL81/redirect100/startup3/OTA117 pass.
 Digest rejection precedes JSON/shape/scope interpretation. Error35/SDK73/URL81/
 redirect100/startup3/OTA117 pass. No SDK implementation change.
 [Review0891](docs/reviews/0891-sdk-integrity-validation-order.md).
+
+
+### SDK HTTP error precedence proof
+Request/export/OTA retain HTTP error status/scope before integrity or parser
+errors. Error44/SDK73/URL81/redirect100/startup3/OTA117 pass, no SDK change.
+[Review0892](docs/reviews/0892-sdk-http-error-precedence.md).

@@ -98,4 +98,23 @@ for (const [label, text] of [['invalid JSON', '{'], ['invalid shape', 'null'], [
     console.log(`PASS OTA integrity precedes ${label} ${digestLabel}`); count++;
   }
 }
+for (const [endpoint, pull, path] of [
+  ['request', c => c.projects.get('project'), '/projects/project'],
+  ['export', c => c.io.exportText('project', 'en', 'po'), '/projects/project/export/en/po'],
+  ['OTA', c => c.ota.latest('project', 'en'), '/projects/project/ota/latest?locale=en'],
+]) {
+  for (const [label, body, status, expected] of [
+    ['nonJSON', '<html>synthetic-private-marker</html>', 503, 'HTTP 503'],
+    ['empty', '', 401, 'HTTP 401'],
+    ['array message', JSON.stringify({ message: ['First', 'Second'] }), 400, 'First; Second'],
+  ]) {
+    const client = createClient({ url: 'https://example.invalid', token: 'test-only', fetchImpl: async () => new Response(body, { status }) });
+    const error = await pull(client).catch(e => e);
+    assert(error instanceof OpenLocaleError);
+    assert.equal(error.status, status);
+    assert.equal(error.path, path);
+    assert.equal(error.message, expected);
+    console.log(`PASS HTTP error precedence ${endpoint} ${label}`); count++;
+  }
+}
 console.log(`SDK error contract ${count} checks passed`);
