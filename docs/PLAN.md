@@ -3912,3 +3912,10 @@ Repeated scalar scope/pin queries retain404 even with a valid validator, never
 selecting first value or false304. Actual OTA81 checks pass; comma-first
 mutation fails all5 new checks. Test-only, no changed API contract.
 [Review0862](reviews/0862-ota-duplicate-query-fail-closed.md).
+
+
+### Whole-web storage/preview checkpoint
+Fresh exact inventory315 web suites3864 tests passes in disjoint158/157-path
+partitions. Real formats269/OTA81 checks pass; builds/docs green. No whole-
+product, all-browser or external-provider acceptance claim.
+[Review0863](reviews/0863-web-storage-preview-checkpoint.md).
