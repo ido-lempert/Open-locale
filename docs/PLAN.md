@@ -4054,3 +4054,9 @@ startup3 pass. Scoped local integration, not provider/native/browser acceptance.
 Revoked token exact/list/wildcard latest/version requests reject401 rather than
 cached success. SDK73/URL74/redirect100/harness3/OTA117 pass, no SDK change.
 [Review0884](reviews/0884-sdk-revoked-cache-proof.md).
+
+
+### SDK explicit JSON body preservation
+Generic request preserves false/0/null/empty-string JSON bodies; only undefined
+omits payload. Endpoint schema acceptance unchanged. Contract81/SDK73/
+redirect100/startup3/OTA117 pass. [Review0885](reviews/0885-sdk-json-body-preservation.md).

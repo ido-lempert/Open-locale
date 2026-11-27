@@ -70,4 +70,11 @@ await client.request('/caller-controlled?literal=yes');
 assert.equal(request.url.pathname, '/api/caller-controlled');
 assert.equal(request.url.searchParams.get('literal'), 'yes');
 console.log('PASS explicit request path remains caller-controlled'); passed++;
+for (const [name, body] of [['false', false], ['zero', 0], ['null', null], ['empty text', ''], ['object', {}], ['array', []], ['undefined', undefined]]) {
+  await client.request('/body-contract', { method: 'POST', body });
+  assert.equal(request.options.body, body === undefined ? undefined : JSON.stringify(body));
+  assert.equal(request.options.method, 'POST');
+  assert.equal(request.options.headers['Content-Type'], 'application/json');
+  console.log(`PASS JSON body ${name}`); passed++;
+}
 console.log(`SDK URL contract ${passed} checks passed`);

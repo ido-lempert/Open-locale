@@ -54,7 +54,7 @@ export function createClient({ url, token, fetchImpl } = {}) {
       method,
       redirect: 'error',
       headers: { 'Content-Type': 'application/json', 'X-Api-Key': token },
-      body: body ? JSON.stringify(body) : undefined,
+      body: body === undefined ? undefined : JSON.stringify(body),
     });
     if (raw) return res;
     const json = await res.json().catch(() => null);
