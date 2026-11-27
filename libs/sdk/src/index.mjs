@@ -79,7 +79,7 @@ export function createClient({ url, token, fetchImpl } = {}) {
   // authenticity signature: an attacker able to replace both body and header
   // (or a compromised server) defeats it. Authenticity comes from TLS plus
   // the read-scope token, not from this digest.
-  async function otaPull(path, etag) {
+  async function otaPull(path, etag, scope) {
     const res = await doFetch(`${base}${path}`, {
       redirect: 'error',
       headers: { 'X-Api-Key': token, ...(etag ? { 'If-None-Match': etag } : {}) },
@@ -109,6 +109,9 @@ export function createClient({ url, token, fetchImpl } = {}) {
         typeof bundle.translations !== 'object' || Array.isArray(bundle.translations) ||
         !Object.values(bundle.translations).every(value => typeof value === 'string')) {
       throw new OpenLocaleError(res.status, 'OTA bundle has invalid required fields', path);
+    }
+    if (bundle.branch !== (scope.branch || 'main') || (scope.version !== undefined && bundle.version !== Number(scope.version))) {
+      throw new OpenLocaleError(res.status, 'OTA bundle does not match requested scope', path);
     }
     return { notModified: false, etag: res.headers.get('etag'), sha256, bundle };
   }
@@ -143,10 +146,10 @@ export function createClient({ url, token, fetchImpl } = {}) {
     ota: {
       /** Latest published bundle for a locale: { notModified, etag, sha256, bundle }. */
       latest: (projectId, locale, { branch, etag, publicationId } = {}) =>
-        otaPull(`/projects/${pathComponent(projectId)}/ota/latest${branchQuery(branch, { locale, publicationId })}`, etag),
+        otaPull(`/projects/${pathComponent(projectId)}/ota/latest${branchQuery(branch, { locale, publicationId })}`, etag, { branch }),
       /** A specific immutable version: { notModified, etag, sha256, bundle }. */
       version: (projectId, version, locale, { branch, etag, publicationId } = {}) =>
-        otaPull(`/projects/${pathComponent(projectId)}/ota/${pathComponent(version)}/${pathComponent(locale)}${branchQuery(branch, { publicationId })}`, etag),
+        otaPull(`/projects/${pathComponent(projectId)}/ota/${pathComponent(version)}/${pathComponent(locale)}${branchQuery(branch, { publicationId })}`, etag, { branch, version }),
     },
     io: {
       /** Import a flat entries map into a locale. Set dryRun to preview without writing. */

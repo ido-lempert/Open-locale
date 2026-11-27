@@ -3592,3 +3592,9 @@ redirect100/startup3/OTA117 pass. [Review0887](docs/reviews/0887-sdk-ota-json-er
 Digest-matching JSON must satisfy typed required bundle fields. Literal keys,
 empty values and additive metadata preserved. Error16/SDK73/URL81/redirect100/
 startup3/OTA117 pass. [Review0888](docs/reviews/0888-sdk-ota-required-shape.md).
+
+
+### SDK OTA requested scope validation
+Digest-valid bundles must match requested branch and specific version. Not full
+identity/authenticity validation. Error19/SDK73/URL81/redirect100/startup3/
+OTA117 pass. [Review0889](docs/reviews/0889-sdk-ota-requested-scope.md).

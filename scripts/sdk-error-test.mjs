@@ -61,4 +61,17 @@ assert.equal(special.bundle.translations.constructor, 'own');
 assert.equal(special.bundle.translations.empty, '');
 assert.equal(special.bundle.futureField, true);
 console.log('PASS OTA valid literal keys and additive fields preserved'); count++;
+for (const [label, bundle, pull] of [
+  ['default branch', { ...validBundle, branch: 'other' }, c => c.ota.latest('project', 'en')],
+  ['explicit branch', validBundle, c => c.ota.latest('project', 'en', { branch: 'feature' })],
+  ['version', { ...validBundle, version: 2 }, c => c.ota.version('project', 1, 'en')],
+]) {
+  const text = JSON.stringify(bundle), digest = createHash('sha256').update(text).digest('hex');
+  const client = createClient({ url: 'https://example.invalid', token: 'test-only', fetchImpl: async () => new Response(text, { headers: { 'x-openlocale-bundle-sha256': digest } }) });
+  const error = await pull(client).catch(e => e);
+  assert(error instanceof OpenLocaleError);
+  assert.equal(error.message, 'OTA bundle does not match requested scope');
+  assert.equal(error.status, 200);
+  console.log(`PASS OTA requested scope ${label}`); count++;
+}
 console.log(`SDK error contract ${count} checks passed`);
