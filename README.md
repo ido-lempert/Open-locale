@@ -3580,3 +3580,9 @@ redirect100/startup3/OTA117 pass. [Review0885](docs/reviews/0885-sdk-json-body-p
 Export errors retain full requested project/locale/format/branch path and
 consistent validation-list messages. Error3/URL81/SDK73/redirect100/startup3/
 OTA117 pass. [Review0886](docs/reviews/0886-sdk-export-error-context.md).
+
+
+### SDK OTA malformed JSON error context
+Digest-matching invalid JSON returns scoped fixed OpenLocaleError instead of
+bare parser error. No bundle-schema validation claim. Error5/SDK73/URL81/
+redirect100/startup3/OTA117 pass. [Review0887](docs/reviews/0887-sdk-ota-json-error.md).

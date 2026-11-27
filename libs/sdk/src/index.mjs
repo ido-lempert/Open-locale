@@ -99,7 +99,11 @@ export function createClient({ url, token, fetchImpl } = {}) {
     if ((await sha256Hex(text)) !== sha256) {
       throw new OpenLocaleError(res.status, 'OTA bundle integrity check failed: digest mismatch', path);
     }
-    return { notModified: false, etag: res.headers.get('etag'), sha256, bundle: JSON.parse(text) };
+    let bundle;
+    try { bundle = JSON.parse(text); } catch {
+      throw new OpenLocaleError(res.status, 'OTA bundle is not valid JSON', path);
+    }
+    return { notModified: false, etag: res.headers.get('etag'), sha256, bundle };
   }
 
   const branchQuery = (branch, extra = {}) => {
