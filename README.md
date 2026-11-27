@@ -3447,3 +3447,10 @@ OTA conditional GET now compares weak/strong-equivalent validators in quoted
 lists and handles standalone wildcard after authorization/scope selection.
 Malformed fields do not yield cache hits. Actual OTA96 checks and whole API
 34 suites318 tests pass. [Review0865](docs/reviews/0865-ota-conditional-validator-lists.md).
+
+
+### OTA HEAD and conditional authorization proof
+Actual HTTP HEAD preserves status/cache metadata with empty body for all
+conditional forms. Wildcard/list requests still reject revoked access and
+wrong publication pins. OTA108 checks pass; no application change.
+[Review0866](docs/reviews/0866-ota-head-auth-conditional-proof.md).

@@ -21,7 +21,7 @@ async function call(path, { jwt, token, method = 'GET', body, headers: extra } =
   if (jwt) headers.Authorization = `Bearer ${jwt}`;
   if (token) headers['X-Api-Key'] = token;
   const res = await fetch(`${API}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined });
-  return { status: res.status, etag: res.headers.get('etag'), json: await res.json().catch(() => null) };
+  return { status: res.status, etag: res.headers.get('etag'), sha256: res.headers.get('x-openlocale-bundle-sha256'), json: await res.json().catch(() => null) };
 }
 
 const dataDir = mkdtempSync(join(tmpdir(), 'ol-pg-ota-'));
@@ -105,6 +105,21 @@ try {
   const cache304 = await fetch(`${API}/projects/${pid}/ota/latest?locale=he`, { headers: { Authorization: `Bearer ${jwt}`, 'If-None-Match': l1.etag } });
   check('200 and304 retain private revalidation policy', cache200.status === 200 && cache304.status === 304 && [cache200, cache304].every(r => r.headers.get('cache-control') === 'private, no-cache'));
   check('304 preserves complete current validator', cache304.headers.get('etag') === l1.etag);
+  for (const [label, validator, status] of [
+    ['unconditional', undefined, 200], ['exact', l1.etag, 304],
+    ['strong equivalent', l1.etag.replace(/^W\//, ''), 304],
+    ['list', `"other", ${l1.etag}`, 304], ['wildcard', '*', 304],
+    ['nonmatching', '"other"', 200],
+  ]) {
+    const response = await fetch(`${API}/projects/${pid}/ota/latest?locale=he`, {
+      method: 'HEAD', headers: { Authorization: `Bearer ${jwt}`, ...(validator ? { 'If-None-Match': validator } : {}) },
+    });
+    check(`HEAD ${label} retains status metadata and no body`, response.status === status &&
+      response.headers.get('etag') === l1.etag && response.headers.get('cache-control') === 'private, no-cache' &&
+      response.headers.get('x-openlocale-bundle-sha256') === cache200.headers.get('x-openlocale-bundle-sha256') &&
+      await response.text() === '', `got ${response.status}`);
+  }
+
   check('wildcard does not bypass unauthenticated access', (await fetch(`${API}/projects/${pid}/ota/latest?locale=he`, { headers: { 'If-None-Match': '*' } })).status === 401);
   check('wildcard does not hide missing locale', (await call(`/projects/${pid}/ota/latest?locale=fr`, { jwt, headers: { 'If-None-Match': '*' } })).status === 404);
 
@@ -171,6 +186,9 @@ try {
   const pinned=await call(pinnedPath,{jwt});check('publication pin reads exact existing scoped bundle',pinned.status===200&&pinned.json.translations['app.title']==='ברנץ');
   check('matching pin preserves conditional304',(await call(pinnedPath,{jwt,headers:{'If-None-Match':pinned.etag}})).status===304);
   for(const identity of [p1.id,'invalid','',`${pf.id}x`])check(`mismatched publication pin rejects before304 (${identity===p1.id?'other branch':identity||'empty'})`,(await call(`/projects/${pid}/ota/1/he?branch=feat&publicationId=${identity}`,{jwt,headers:{'If-None-Match':pinned.etag}})).status===404);
+  for (const [label, validator] of [['wildcard', '*'], ['list', `"other", ${pinned.etag}`]]) {
+    check(`mismatched publication pin rejects ${label} before304`, (await call(`/projects/${pid}/ota/1/he?branch=feat&publicationId=${p1.id}`, { jwt, headers: { 'If-None-Match': validator } })).status === 404);
+  }
   const ephemeral=(await call(`/projects/${pid}/branches`,{jwt,method:'POST',body:{name:'pin-race'}})).json;
   await call(`/projects/${pid}/import/he?branch=pin-race`,{jwt,method:'POST',body:{entries:{identity:'Original'}}});const original=(await call(`/projects/${pid}/ota/publish`,{jwt,method:'POST',body:{branch:'pin-race'}})).json;
   await call(`/projects/${pid}/branches/${ephemeral.id}`,{jwt,method:'DELETE'});await call(`/projects/${pid}/branches`,{jwt,method:'POST',body:{name:'pin-race'}});await call(`/projects/${pid}/import/he?branch=pin-race`,{jwt,method:'POST',body:{entries:{identity:'Replacement'}}});const replacement=(await call(`/projects/${pid}/ota/publish`,{jwt,method:'POST',body:{branch:'pin-race'}})).json;
@@ -207,6 +225,14 @@ try {
   await call(`/auth/tokens/${sdkTokRow.id}`, { jwt, method: 'DELETE' });
   const afterRevoke = await call(`/projects/${pid}/ota/latest?locale=he`, { token: rtok, headers: { 'If-None-Match': lt.etag } });
   check('revoked token with valid ETag gets 401, not 304', afterRevoke.status === 401, `got ${afterRevoke.status}`);
+  for (const [label, validator] of [['wildcard', '*'], ['list', `"other", ${memberFirst.etag}`]]) {
+    const response = await call(`/projects/${pid}/ota/latest?locale=he`, { jwt: memberTok, headers: { 'If-None-Match': validator } });
+    check(`removed member ${label} cannot304 or receive bundle metadata`, [403, 404].includes(response.status) && response.etag !== memberFirst.etag && response.sha256 === null);
+  }
+  for (const [label, validator] of [['wildcard', '*'], ['list', `"other", ${lt.etag}`]]) {
+    const response = await call(`/projects/${pid}/ota/latest?locale=he`, { token: rtok, headers: { 'If-None-Match': validator } });
+    check(`revoked token ${label} cannot304 or receive bundle metadata`, response.status === 401 && response.etag !== lt.etag && response.sha256 === null);
+  }
   // Restore member access for subsequent checks.
   await call(`/projects/${pid}/members`, { jwt, method: 'POST', body: { email: member.user.email } });
 
