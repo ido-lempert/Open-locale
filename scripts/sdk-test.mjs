@@ -7,10 +7,13 @@ import { execFileSync, spawn } from 'node:child_process';
 import EmbeddedPostgres from 'embedded-postgres';
 import { createClient, OpenLocaleError } from '../libs/sdk/src/index.mjs';
 
-const PG_PORT = 55471, API_PORT = 3021;
+const PG_PORT = Number(process.env.SDK_TEST_PG_PORT ?? 55471), API_PORT = 3021;
 const API = `http://127.0.0.1:${API_PORT}/api`;
 const root = new URL('..', import.meta.url).pathname;
-let pass = 0, fail = 0;
+let pass = 0, fail = 0, completed = false;
+// Startup/cleanup awaits may end without reaching the final exit. Fail closed.
+process.exitCode = 1;
+process.on('exit', () => { if (!completed || fail) process.exitCode = 1; });
 const check = (name, cond, detail = '') => {
   if (cond) { pass++; console.log(`PASS ${name}`); }
   else { fail++; console.log(`FAIL ${name} ${detail}`); }
@@ -239,6 +242,7 @@ try {
   const badAuth = createClient({ url: `http://127.0.0.1:${API_PORT}`, token: 'wrong-token' });
   const authErr = await badAuth.projects.list().then(() => null).catch((e) => e);
   check('bad token surfaces 401', authErr instanceof OpenLocaleError && authErr.status === 401, String(authErr));
+  completed = true;
 } catch (err) {
   console.log('FAIL suite aborted', err);
   fail++;
@@ -248,4 +252,4 @@ try {
   rmSync(dataDir, { recursive: true, force: true });
 }
 console.log(`DONE pass=${pass} fail=${fail}`);
-process.exit(fail ? 1 : 0);
+process.exit(!completed || fail ? 1 : 0);
