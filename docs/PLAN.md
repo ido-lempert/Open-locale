@@ -3946,3 +3946,10 @@ wrong publication pins. OTA108 checks pass; no application change.
 SDK returns actual response ETag on304, not request list/wildcard/strong-form
 expression. Missing header stays null. Real SDK20 and OTA108 checks pass.
 [Review0867](reviews/0867-sdk-selected-304-validator.md).
+
+
+### SDK optional OTA publication pin
+SDK latest/version accepts publicationId alongside branch/etag. Invalid pins
+reject rather than falling back; old pins cannot select recreated branchv1.
+Real SDK33 and OTA108 checks pass. No registry publication.
+[Review0868](reviews/0868-sdk-publication-pin.md).

@@ -9,6 +9,8 @@ export interface ImportSummary {
   locale: string; keysCreated: number; translationsUpserted: number;
   unchangedSkipped: number; failed: number; failures?: string[]; dryRun?: boolean;
 }
+/** Optional immutable publication identity; empty pins are sent and rejected. */
+export interface OtaOptions extends BranchOpts { etag?: string; publicationId?: string; }
 export interface OtaPull {
   /** Selected response ETag, including on304; null when header is absent. */
   notModified: boolean; etag: string | null; sha256: string | null;
@@ -29,8 +31,8 @@ export interface OpenLocaleClient {
     put: (projectId: string, keyId: string, locale: string, value: string, opts?: BranchOpts) => Promise<any>;
   };
   ota: {
-    latest: (projectId: string, locale: string, opts?: BranchOpts & { etag?: string }) => Promise<OtaPull>;
-    version: (projectId: string, version: number, locale: string, opts?: BranchOpts & { etag?: string }) => Promise<OtaPull>;
+    latest: (projectId: string, locale: string, opts?: OtaOptions) => Promise<OtaPull>;
+    version: (projectId: string, version: number, locale: string, opts?: OtaOptions) => Promise<OtaPull>;
   };
   io: {
     importEntries: (projectId: string, locale: string, entries: Record<string, unknown>, opts?: BranchOpts & { dryRun?: boolean }) => Promise<ImportSummary>;
