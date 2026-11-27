@@ -3419,3 +3419,10 @@ Full API units33suites290tests, editor import units2/26, real formats269 and
 OTA76 checks pass after storage/preview corrections. No full-product or
 external-provider acceptance claim.
 [Review0861](docs/reviews/0861-api-storage-preview-checkpoint.md).
+
+
+### OTA duplicate query fail-closed proof
+Repeated scalar scope/pin queries retain404 even with a valid validator, never
+selecting first value or false304. Actual OTA81 checks pass; comma-first
+mutation fails all5 new checks. Test-only, no changed API contract.
+[Review0862](docs/reviews/0862-ota-duplicate-query-fail-closed.md).

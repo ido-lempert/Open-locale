@@ -80,6 +80,17 @@ try {
   const l1b = await call(`/projects/${pid}/ota/latest?locale=he`, { jwt, headers: { 'If-None-Match': l1.etag } });
   check('If-None-Match yields 304', l1b.status === 304, `got ${l1b.status}`);
 
+  for (const [label, path] of [
+    ['latest branch', 'latest?locale=he&branch=main&branch=main'],
+    ['version branch', '1/he?branch=main&branch=main'],
+    ['latest locale', 'latest?locale=he&locale=he'],
+    ['latest publication pin', `latest?locale=he&publicationId=${p1.id}&publicationId=${p1.id}`],
+    ['version publication pin', `1/he?publicationId=${p1.id}&publicationId=${p1.id}`],
+  ]) {
+    const response = await call(`/projects/${pid}/ota/${path}`, { jwt, headers: { 'If-None-Match': l1.etag } });
+    check(`duplicate scalar OTA ${label} cannot select bundle or false304`, response.status === 404, `got ${response.status}`);
+  }
+
   // Read-scope API token can pull (SDK path) but a token of another project cannot.
   const rtok = (await call('/auth/tokens', { jwt, method: 'POST', body: { name: 'sdk', scopes: ['read'] } })).json.token;
   const lt = await call(`/projects/${pid}/ota/latest?locale=en`, { token: rtok });
