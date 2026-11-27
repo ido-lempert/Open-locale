@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, ParseIntPipe, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, ParseIntPipe, ParseUUIDPipe, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
 import type { Response } from 'express';
 import { OtaService } from './ota.service';
@@ -22,21 +22,21 @@ export class OtaController {
   // Publish is a release action: admin + signed-in session (like branches).
   @Post('publish')
   @UseGuards(JwtAuthGuard, SessionOnlyGuard)
-  publish(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Body() dto: PublishDto) {
+  publish(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Body() dto: PublishDto) {
     return this.ota.publish(user.userId, projectId, dto.branch);
   }
 
   // Pull endpoints: any project member or read-scope API token. Never public.
   @Get()
   @UseGuards(JwtAuthGuard)
-  list(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string) {
+  list(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string) {
     return this.ota.list(user.userId, projectId);
   }
 
   @Get('latest')
   @UseGuards(JwtAuthGuard)
   async latest(
-    @CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string,
+    @CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string,
     @Query('locale') locale: string, @Query('branch') branch: string | undefined,
     @Query('publicationId') publicationId: string | undefined,
     @Req() req: { headers: Record<string, string | undefined> }, @Res({ passthrough: true }) res: Response,
@@ -47,7 +47,7 @@ export class OtaController {
   @Get(':version/:locale')
   @UseGuards(JwtAuthGuard)
   async version(
-    @CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string,
+    @CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string,
     @Param('version', ParseIntPipe) version: number, @Param('locale') locale: string,
     @Query('branch') branch: string | undefined,
     @Query('publicationId') publicationId: string | undefined,

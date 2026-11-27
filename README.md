@@ -3493,3 +3493,9 @@ OTA helpers encode project/version path components; runtime query-like inputs
 cannot select existing endpoints. SDK46/OTA108 pass. Malformed project UUID
 server responses remain generic500, not claimed fixed.
 [Review0872](docs/reviews/0872-sdk-ota-path-components.md).
+
+
+### OTA malformed project UUID validation
+All four OTA routes reject malformed project IDs400 after authentication,
+closing806 generic500 gap. OTA117/SDK46 and API34 suites318 tests pass.
+[Review0873](docs/reviews/0873-ota-project-uuid-validation.md).

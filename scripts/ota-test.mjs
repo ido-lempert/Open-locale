@@ -57,6 +57,14 @@ try {
   check('API token cannot publish (403 session-only)', (await call(`/projects/${pid}/ota/publish`, { token: wtok, method: 'POST', body: {} })).status === 403);
   check('unauthenticated pull rejected (401)', (await fetch(`${API}/projects/${pid}/ota/latest?locale=en`)).status === 401);
 
+  for (const badId of ['not-a-uuid', encodeURIComponent(`${pid}/ota/latest?locale=he#`)]) {
+    for (const [label, suffix, method] of [['list', '', 'GET'], ['latest', '/latest?locale=he', 'GET'], ['version', '/1/he', 'GET'], ['publish', '/publish', 'POST']]) {
+      const response = await call(`/projects/${badId}/ota${suffix}`, { jwt, method, ...(method === 'POST' ? { body: {} } : {}), headers: { 'If-None-Match': '*' } });
+      check(`malformed OTA project ${badId === 'not-a-uuid' ? 'plain' : 'encoded'} ${label} is400 before storage`, response.status === 400, `got ${response.status}`);
+    }
+  }
+  check('malformed OTA project remains401 without authentication', (await call('/projects/not-a-uuid/ota/latest?locale=he', { headers: { 'If-None-Match': '*' } })).status === 401);
+
   // Publish v1 for main.
   const p1 = (await call(`/projects/${pid}/ota/publish`, { jwt, method: 'POST', body: {} })).json;
   check('publish returns v1 with locales and counts', p1.version === 1 && p1.branch === 'main' && p1.locales.join(',') === 'en,he' && p1.translations === 2, JSON.stringify(p1));
