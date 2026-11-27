@@ -84,6 +84,25 @@ try {
   check('ota.latest returns the verified bundle', pull1.notModified === false && pull1.bundle.translations['sdk.greeting'] === 'שלום מה-SDK' && pull1.bundle.version === 1 && /^[0-9a-f]{64}$/.test(pull1.sha256) && !!pull1.etag, String(pull1.sha256).slice(0, 20));
   const pull304 = await ol.ota.latest(proj.id, 'he', { etag: pull1.etag });
   check('etag revalidation yields notModified and still carries the digest', pull304.notModified === true && pull304.sha256 === pull1.sha256 && pull304.bundle === undefined);
+  for (const [label, etag] of [
+    ['list', `"unrelated", ${pull1.etag}`],
+    ['strong equivalent', pull1.etag.replace(/^W\//, '')],
+    ['wildcard', '*'],
+  ]) {
+    const cached = await ol.ota.latest(proj.id, 'he', { etag });
+    check(`SDK304 ${label} returns selected response ETag not request expression`, cached.notModified === true && cached.etag === pull1.etag && cached.sha256 === pull1.sha256 && cached.bundle === undefined);
+  }
+
+  const noValidator = createClient({ url: `http://127.0.0.1:${API_PORT}`, token: tok.token,
+    fetchImpl: async (u, o) => {
+      const response = await fetch(u, o);
+      if (response.status !== 304) return response;
+      const headers = new Headers(response.headers); headers.delete('etag');
+      return new Response(null, { status: 304, headers });
+    },
+  });
+  const missingValidator = await noValidator.ota.latest(proj.id, 'he', { etag: '*' });
+  check('SDK304 missing response ETag stays null not wildcard', missingValidator.notModified === true && missingValidator.etag === null && missingValidator.sha256 === pull1.sha256 && missingValidator.bundle === undefined);
   const tampered = createClient({ url: `http://127.0.0.1:${API_PORT}`, token: tok.token, fetchImpl: async (u, opts) => {
     const res = await fetch(u, opts);
     if (!String(u).includes('/ota/')) return res;

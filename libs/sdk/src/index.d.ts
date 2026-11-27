@@ -10,6 +10,7 @@ export interface ImportSummary {
   unchangedSkipped: number; failed: number; failures?: string[]; dryRun?: boolean;
 }
 export interface OtaPull {
+  /** Selected response ETag, including on304; null when header is absent. */
   notModified: boolean; etag: string | null; sha256: string | null;
   bundle?: { version: number; branch: string; translations: Record<string, string> };
 }

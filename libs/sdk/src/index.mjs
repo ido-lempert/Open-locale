@@ -60,7 +60,8 @@ export function createClient({ url, token, fetchImpl } = {}) {
   // is NEVER returned as data. Pass the etag from a previous pull for
   // conditional revalidation; a 304 resolves to { notModified: true, sha256 }.
   // On a 304 the SDK verifies NOTHING itself - it never sees the caller's
-  // cached bytes; it returns the digest header so the CALLER can compare it
+  // cached bytes; it returns the selected response ETag (null if absent),
+  // never the request expression. It returns the digest header so the CALLER can compare it
   // against the digest of the copy it holds.
   // Scope of the check: the digest proves the body matches the header the
   // server sent. It detects corruption and body-only tampering. It is NOT an
@@ -72,7 +73,7 @@ export function createClient({ url, token, fetchImpl } = {}) {
       headers: { 'X-Api-Key': token, ...(etag ? { 'If-None-Match': etag } : {}) },
     });
     const sha256 = res.headers.get('x-openlocale-bundle-sha256');
-    if (res.status === 304) return { notModified: true, etag, sha256 };
+    if (res.status === 304) return { notModified: true, etag: res.headers.get('etag'), sha256 };
     const text = await res.text();
     if (!res.ok) {
       let json = null;

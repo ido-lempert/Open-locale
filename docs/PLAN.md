@@ -3940,3 +3940,9 @@ Actual HTTP HEAD preserves status/cache metadata with empty body for all
 conditional forms. Wildcard/list requests still reject revoked access and
 wrong publication pins. OTA108 checks pass; no application change.
 [Review0866](reviews/0866-ota-head-auth-conditional-proof.md).
+
+
+### SDK selected304 response validator
+SDK returns actual response ETag on304, not request list/wildcard/strong-form
+expression. Missing header stays null. Real SDK20 and OTA108 checks pass.
+[Review0867](reviews/0867-sdk-selected-304-validator.md).
