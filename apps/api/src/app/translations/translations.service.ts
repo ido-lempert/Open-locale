@@ -724,7 +724,7 @@ export class TranslationsService {
     if (rejected > 0) {
       throw new BadRequestException(`${rejected} PO ${rejected === 1 ? 'entry' : 'entries'} rejected: contexts (msgctxt), msgstr[n] without msgid_plural, duplicate or non-consecutive slots and malformed strings are not supported`);
     }
-    const entries: Record<string, unknown> = Object.fromEntries(rows);
+    const entries: Record<string, unknown> = Object.assign(Object.create(null), Object.fromEntries(rows));
     if (pluralEntries.length === 0) return { entries, untranslatedSkipped: 0 };
     if (!headerPluralForms) {
       throw new BadRequestException('PO plural entries require a Plural-Forms metadata header to map msgstr[n] slots to plural categories');
@@ -740,7 +740,7 @@ export class TranslationsService {
     if (!cats.includes('other')) {
       throw new BadRequestException(`PO plural slots for locale ${locale} have no 'other' category (used for fractional quantities); such files are not supported`);
     }
-    const plurals: Record<string, Record<string, string>> = {};
+    const plurals: Record<string, Record<string, string>> = Object.create(null);
     for (const [msgid, slots] of pluralEntries) {
       if (Object.keys(slots).length !== cats.length) {
         throw new BadRequestException(`PO plural entry "${msgid}" has ${Object.keys(slots).length} msgstr slots but the header declares nplurals=${cats.length}`);

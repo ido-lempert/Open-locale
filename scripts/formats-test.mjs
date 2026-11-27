@@ -75,6 +75,18 @@ try {
   const explicitProtoKeys = (await call(`${mixedProtoPath}/keys`, { token: at })).json;
   check('ARB explicitly owned prototype plural still imports and upgrades', explicitProtoPlural.status === 201 && explicitProtoPlural.json.translationsUpserted === 1 && explicitProtoPlural.json.failed === 0 && explicitProtoKeys.some(k => k.name === '__proto__' && k.isPlural && k.translations[0].pluralForms?.other === 'many prototypes'));
 
+  const protoPoProject = (await call('/projects', { token: at, method: 'POST', body: { name: 'Prototype PO data', slug: 'prototype-po-data', locales: ['en'] } })).json;
+  const protoPoPath = `/projects/${protoPoProject.id}`;
+  const protoPoText = 'msgid ""\nmsgstr ""\n"Plural-Forms: nplurals=2; plural=(n != 1);\\n"\n\nmsgid "__proto__"\nmsgid_plural "prototypes"\nmsgstr[0] "one prototype"\nmsgstr[1] "many prototypes"\n\nmsgid "constructor"\nmsgstr "plain constructor"\n';
+  const protoPoImport = await call(`${protoPoPath}/import/en`, { token: at, method: 'POST', body: { po: protoPoText } });
+  check('PO exact prototype plural and plain constructor import completely', protoPoImport.status === 201 && protoPoImport.json.translationsUpserted === 2 && protoPoImport.json.failed === 0);
+  const protoPoKeys = (await call(`${protoPoPath}/keys`, { token: at })).json;
+  check('PO exact prototype msgid stores plural metadata and both forms', protoPoKeys.some(k => k.name === '__proto__' && k.isPlural && k.translations[0].value === 'many prototypes' && k.translations[0].pluralForms?.one === 'one prototype' && k.translations[0].pluralForms?.other === 'many prototypes') && protoPoKeys.some(k => k.name === 'constructor' && !k.isPlural && k.translations[0].pluralForms === null));
+  const protoPoOut = await (await fetch(`${API}${protoPoPath}/export/en/po`, { headers: { Authorization: `Bearer ${at}` } })).text();
+  check('PO exact prototype export preserves plural slots instead of plain fallback', protoPoOut.includes('msgid "__proto__"\nmsgid_plural "__proto__"\nmsgstr[0] "one prototype"\nmsgstr[1] "many prototypes"'));
+  const protoPoAgain = await call(`${protoPoPath}/import/en`, { token: at, method: 'POST', body: { po: protoPoText } });
+  check('PO exact prototype reimport counts both unchanged without losing forms', protoPoAgain.status === 201 && protoPoAgain.json.unchangedSkipped === 2 && protoPoAgain.json.translationsUpserted === 0 && protoPoAgain.json.failed === 0);
+
   // Seed via CSV import (with header row and quoted specials)
   const csvIn = 'key,value\napp.title,"My App"\nmsg.quote,"He said ""hi"", loudly"\nmsg.multi,"line1\nline2"\n';
   const imp = await call(`${P}/import/en`, { token: at, method: 'POST', body: { csv: csvIn } });

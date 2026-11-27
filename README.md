@@ -3335,3 +3335,10 @@ Valid prototype-named plain entries no longer inherit missing plural forms.
 Mixed ARB import preserves all entries; explicit special-name plural upgrade
 still works. Actual formats222 checks pass.
 [Review0849](docs/reviews/0849-import-own-plural-metadata.md).
+
+
+### PO exact prototype-named plural keys
+Valid __proto__ msgid retains value and explicit plural forms on import,
+exports both slots and reimports unchanged. Real formats226 checks pass.
+Existing PO/CLDR subset unchanged.
+[Review0850](docs/reviews/0850-po-prototype-plural-preservation.md).
