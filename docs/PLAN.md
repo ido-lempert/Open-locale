@@ -3856,3 +3856,10 @@ ARB, Android XML and stringsdict real regressions prove read-only preview
 matches plural-only actual edits and unchanged repeats. Formats249 checks
 pass; removing forms comparison fails targeted checks.
 [Review0854](reviews/0854-plural-preview-cross-format.md).
+
+
+### Preview plural validation
+Dry-run shares actual import CLDR/required-other checks before counting writes.
+Mixed invalid/valid forms predict partial results without writes; actual
+formats257 checks pass.
+[Review0855](reviews/0855-preview-plural-validation.md).

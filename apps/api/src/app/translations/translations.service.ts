@@ -790,6 +790,19 @@ export class TranslationsService {
   // import, but strictly read-only - no snapshot, no ImportRun row, no key or
   // translation writes. Counts are a point-in-time snapshot: a concurrent
   // change between preview and import shifts them.
+  private importPluralError(locale: string, name: string, forms: Record<string, string>): string | null {
+    let allowed: string[];
+    try {
+      allowed = new Intl.PluralRules(locale).resolvedOptions().pluralCategories;
+    } catch {
+      return `No CLDR plural rules for locale ${locale}`;
+    }
+    const invalid = Object.keys(forms).filter((c) => !allowed.includes(c));
+    if (invalid.length) return `Locale ${locale} has no plural categories: ${invalid.join(', ')} (allowed: ${allowed.join(', ')})`;
+    if (!('other' in forms)) return `plurals import for ${name} requires an "other" item`;
+    return null;
+  }
+
   async importPreview(userId: string, projectId: string, locale: string, dto: ImportJsonDto, branch?: string) {
     const parsed = dto.yaml != null
       ? { entries: this.parseYamlEntries(dto, locale), untranslatedSkipped: 0 }
@@ -814,22 +827,28 @@ export class TranslationsService {
       const key = await this.prisma.key.findUnique({
         where: { branchId_name: { branchId: b.id, name } },
       });
-      if (!key) {
-        keysCreated++;
-        translationsUpserted++;
-        continue;
-      }
-      const lockTitle = await this.tasks.keyLockFor(this.prisma, userId, projectId, key.id);
+      const lockTitle = key ? await this.tasks.keyLockFor(this.prisma, userId, projectId, key.id) : null;
       if (lockTitle) {
         failed++;
         if (failures.length < 5) failures.push(`Key "${name}" is locked by task "${lockTitle}"`);
         continue;
       }
+      const forms = 'plurals' in parsed && parsed.plurals && Object.prototype.hasOwnProperty.call(parsed.plurals, name)
+        ? parsed.plurals[name] : undefined;
+      const pluralError = forms ? this.importPluralError(locale, name, forms) : null;
+      if (pluralError) {
+        failed++;
+        if (failures.length < 5) failures.push(`${name}: ${pluralError}`);
+        continue;
+      }
+      if (!key) {
+        keysCreated++;
+        translationsUpserted++;
+        continue;
+      }
       const existing = await this.prisma.translation.findUnique({
         where: { keyId_localeCode: { keyId: key.id, localeCode: locale } },
       });
-      const forms = 'plurals' in parsed && parsed.plurals && Object.prototype.hasOwnProperty.call(parsed.plurals, name)
-        ? parsed.plurals[name] : undefined;
       const preservedTemplateValue = dto.pot != null && value === '' && existing && existing.value !== '';
       if (preservedTemplateValue || (existing && existing.value === value && (!forms || canonPlural(existing.pluralForms) === canonPlural(forms)))) unchangedSkipped++;
       else translationsUpserted++;
@@ -903,18 +922,8 @@ export class TranslationsService {
           await this.tasks.assertKeysEditable(tx, userId, projectId, [key.id]);
           const forms = plurals && Object.prototype.hasOwnProperty.call(plurals, name) ? plurals[name] : undefined;
           if (forms) {
-            // Same validation as the single-translation write path.
-            let allowed: string[];
-            try {
-              allowed = new Intl.PluralRules(locale).resolvedOptions().pluralCategories;
-            } catch {
-              throw new BadRequestException(`No CLDR plural rules for locale ${locale}`);
-            }
-            const invalid = Object.keys(forms).filter((c) => !allowed.includes(c));
-            if (invalid.length) {
-              throw new BadRequestException(`Locale ${locale} has no plural categories: ${invalid.join(', ')} (allowed: ${allowed.join(', ')})`);
-            }
-            if (!('other' in forms)) throw new BadRequestException(`plurals import for ${name} requires an "other" item`);
+            const pluralError = this.importPluralError(locale, name, forms);
+            if (pluralError) throw new BadRequestException(pluralError);
             // Importing a <plurals> upgrades the key to plural metadata
             // (explicit, documented); it never downgrades: a <string> import
             // for a plural key leaves isPlural and stored forms untouched.

@@ -129,6 +129,18 @@ try {
     check(`${format} repeated plural preview is unchanged`, repeated.json.translationsUpserted === 0 && repeated.json.unchangedSkipped === 1 && repeated.json.failed === 0);
   }
 
+  for (const [label, items] of [['unsupported-category', '<item quantity="few">few</item><item quantity="other">many</item>'], ['missing-other', '<item quantity="one">one</item>']]) {
+    const name = `invalid.${label}`;
+    const body = { xml: `<resources><plurals name="${name}">${items}</plurals><string name="valid.${label}">valid</string></resources>` };
+    const before = JSON.stringify((await call(`${protoPoPath}/keys`, { token: at })).json);
+    const preview = await call(`${protoPoPath}/import/en?dryRun=true`, { token: at, method: 'POST', body });
+    check(`${label} preview predicts one plural failure and one valid write`, preview.status === 201 && preview.json.status === 'PARTIAL' && preview.json.failed === 1 && preview.json.keysCreated === 1 && preview.json.translationsUpserted === 1);
+    check(`${label} rejected plural preview leaves storage unchanged`, JSON.stringify((await call(`${protoPoPath}/keys`, { token: at })).json) === before);
+    const actual = await call(`${protoPoPath}/import/en`, { token: at, method: 'POST', body });
+    check(`${label} actual plural validation counters match preview`, actual.status === 201 && actual.json.failed === preview.json.failed && actual.json.keysCreated === preview.json.keysCreated && actual.json.translationsUpserted === preview.json.translationsUpserted);
+    check(`${label} failed plural key is never committed`, !(await call(`${protoPoPath}/keys`, { token: at })).json.some(k => k.name === name));
+  }
+
   // Seed via CSV import (with header row and quoted specials)
   const csvIn = 'key,value\napp.title,"My App"\nmsg.quote,"He said ""hi"", loudly"\nmsg.multi,"line1\nline2"\n';
   const imp = await call(`${P}/import/en`, { token: at, method: 'POST', body: { csv: csvIn } });
