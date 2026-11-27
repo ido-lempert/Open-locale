@@ -4108,3 +4108,10 @@ errors. Error44/SDK73/URL81/redirect100/startup3/OTA117 pass, no SDK change.
 Fresh API34/318, formats269, SDK73/OTA117, error44/URL81/redirect100/startup3
 pass. Scoped local integration, not browser/native/provider acceptance.
 [Review0893](reviews/0893-sdk-validation-checkpoint.md).
+
+
+### SDK OTA typed result narrowing
+OtaPull is a discriminated union: fresh response requires bundle/digest,304 has
+no bundle. Strict compile regression and SDK73/OTA117 contracts pass. Type
+alias replaces old interface, no runtime change.
+[Review0894](reviews/0894-sdk-ota-result-narrowing.md).

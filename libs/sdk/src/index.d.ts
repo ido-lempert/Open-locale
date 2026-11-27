@@ -11,11 +11,11 @@ export interface ImportSummary {
 }
 /** Optional immutable publication identity; empty pins are sent and rejected. */
 export interface OtaOptions extends BranchOpts { etag?: string; publicationId?: string; }
-export interface OtaPull {
-  /** Selected response ETag, including on304; null when header is absent. */
-  notModified: boolean; etag: string | null; sha256: string | null;
-  bundle?: { version: number; branch: string; translations: Record<string, string> };
-}
+export interface OtaBundle { version: number; branch: string; translations: Record<string, string>; }
+/** Selected response ETag is null when absent.304 has no bundle. */
+export type OtaPull =
+  | { notModified: true; etag: string | null; sha256: string | null; bundle?: never }
+  | { notModified: false; etag: string | null; sha256: string; bundle: OtaBundle };
 export interface OpenLocaleClient {
   request: (path: string, opts?: { method?: string; body?: unknown; raw?: boolean }) => Promise<any>;
   projects: {
