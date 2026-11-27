@@ -89,4 +89,13 @@ const matchingDigest = createHash('sha256').update(matchingText).digest('hex');
 const matchingClient = createClient({ url: 'https://example.invalid', token: 'test-only', fetchImpl: async () => new Response(matchingText, { headers: { 'x-openlocale-bundle-sha256': matchingDigest } }) });
 assert.equal((await matchingClient.ota.latest('project', 'en')).bundle.locale, 'en');
 console.log('PASS OTA matching locale retained'); count++;
+for (const [label, text] of [['invalid JSON', '{'], ['invalid shape', 'null'], ['wrong scope', JSON.stringify({ ...validBundle, branch: 'other' })]]) {
+  for (const [digestLabel, digest, message] of [['absent', null, 'OTA bundle missing its integrity digest'], ['malformed', 'invalid', 'OTA bundle missing its integrity digest'], ['mismatch', '0'.repeat(64), 'OTA bundle integrity check failed: digest mismatch']]) {
+    const client = createClient({ url: 'https://example.invalid', token: 'test-only', fetchImpl: async () => new Response(text, { headers: digest ? { 'x-openlocale-bundle-sha256': digest } : {} }) });
+    const error = await client.ota.latest('project', 'en').catch(e => e);
+    assert(error instanceof OpenLocaleError);
+    assert.equal(error.message, message);
+    console.log(`PASS OTA integrity precedes ${label} ${digestLabel}`); count++;
+  }
+}
 console.log(`SDK error contract ${count} checks passed`);

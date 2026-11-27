@@ -4090,3 +4090,9 @@ OTA117 pass. [Review0889](reviews/0889-sdk-ota-requested-scope.md).
 Supplied response locale must match request; absent locale retains minimum-type
 compatibility. Error26/SDK73/URL81/redirect100/startup3/OTA117 pass.
 [Review0890](reviews/0890-sdk-ota-optional-locale.md).
+
+
+### SDK integrity validation-order proof
+Digest rejection precedes JSON/shape/scope interpretation. Error35/SDK73/URL81/
+redirect100/startup3/OTA117 pass. No SDK implementation change.
+[Review0891](reviews/0891-sdk-integrity-validation-order.md).
