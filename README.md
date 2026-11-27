@@ -3398,3 +3398,10 @@ Format units11suites108tests, real formats269 checks and focused editor
 import-scope/drafts browsers10 assertions pass after preview corrections.
 No whole-product or full preview-parity claim.
 [Review0858](docs/reviews/0858-import-preview-integration.md).
+
+
+### Actual editor preview file proof
+Real POT/ARB file previews show corrected preserve-blank/plural-only counters
+and leave keys/forms/import runs unchanged. Import-scope browser9 assertions
+and formats269 checks pass; old POT comparison fails targeted browser check.
+[Review0859](docs/reviews/0859-editor-preview-plural-pot-browser.md).
