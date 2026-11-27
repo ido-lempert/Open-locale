@@ -3966,3 +3966,9 @@ Real SDK38 and OTA108 checks pass, no application change.
 Fresh six OTA browser flows85 assertions pass, plus whole API34/318,
 SDK38/OTA108, builds and preflight3. Scoped integration, not external delivery
 or whole-web acceptance. [Review0870](reviews/0870-ota-conditional-sdk-checkpoint.md).
+
+
+### SDK version locale path encoding
+Version locale is one encoded path component, so query/fragment-like text cannot
+silently select another scope. Real SDK42/OTA108 checks pass.
+[Review0871](reviews/0871-sdk-version-locale-path.md).

@@ -157,6 +157,11 @@ try {
   const branchPublication = (await call(`/projects/${proj.id}/ota/publish`, { token: a.accessToken, method: 'POST', body: { branch: 'sdk-branch' } })).json;
   const branchPinned = await ol.ota.version(proj.id, 1, 'he', { branch: 'sdk-branch', publicationId: branchPublication.id });
   check('SDK pin combines with branch and reads isolated values', branchPinned.bundle.translations['sdk.branchonly'] === 'ענף' && branchPinned.bundle.translations['sdk.greeting'] === undefined);
+  for (const [label, locale] of [['branch query', 'he?branch=sdk-branch'], ['fragment', 'he#ignored'], ['path slash', 'he/extra'], ['encoded query', 'he%3Fbranch%3Dsdk-branch']]) {
+    const response = await ol.ota.version(proj.id, 1, locale).then(value => value).catch(error => error);
+    check(`SDK version literal locale ${label} cannot select another scope`, response instanceof OpenLocaleError && response.status === 404);
+  }
+
   await call(`/projects/${proj.id}/branches/${branch.id}`, { token: a.accessToken, method: 'DELETE' });
   await call(`/projects/${proj.id}/branches`, { token: a.accessToken, method: 'POST', body: { name: 'sdk-branch' } });
   await ol.io.importEntries(proj.id, 'he', { 'replacement': 'new branch' }, { branch: 'sdk-branch' });

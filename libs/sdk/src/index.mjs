@@ -123,7 +123,7 @@ export function createClient({ url, token, fetchImpl } = {}) {
         otaPull(`/projects/${projectId}/ota/latest${branchQuery(branch, { locale, publicationId })}`, etag),
       /** A specific immutable version: { notModified, etag, sha256, bundle }. */
       version: (projectId, version, locale, { branch, etag, publicationId } = {}) =>
-        otaPull(`/projects/${projectId}/ota/${version}/${locale}${branchQuery(branch, { publicationId })}`, etag),
+        otaPull(`/projects/${projectId}/ota/${version}/${encodeURIComponent(locale)}${branchQuery(branch, { publicationId })}`, etag),
     },
     io: {
       /** Import a flat entries map into a locale. Set dryRun to preview without writing. */
