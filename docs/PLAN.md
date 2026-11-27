@@ -3828,3 +3828,10 @@ Valid __proto__ msgid retains value and explicit plural forms on import,
 exports both slots and reimports unchanged. Real formats226 checks pass.
 Existing PO/CLDR subset unchanged.
 [Review0850](reviews/0850-po-prototype-plural-preservation.md).
+
+
+### Format/import own-data checkpoint
+All11 format unit suites108 tests, real formats226 checks and focused editor
+bundle-import/export browsers13 assertions pass after prototype-key fixes.
+No extra format support or whole-product acceptance claim.
+[Review0851](reviews/0851-format-prototype-integration.md).
