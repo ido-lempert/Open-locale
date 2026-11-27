@@ -110,7 +110,8 @@ export function createClient({ url, token, fetchImpl } = {}) {
         !Object.values(bundle.translations).every(value => typeof value === 'string')) {
       throw new OpenLocaleError(res.status, 'OTA bundle has invalid required fields', path);
     }
-    if (bundle.branch !== (scope.branch || 'main') || (scope.version !== undefined && bundle.version !== Number(scope.version))) {
+    if (bundle.branch !== (scope.branch || 'main') ||
+        (Object.hasOwn(bundle, 'locale') && bundle.locale !== scope.locale) || (scope.version !== undefined && bundle.version !== Number(scope.version))) {
       throw new OpenLocaleError(res.status, 'OTA bundle does not match requested scope', path);
     }
     return { notModified: false, etag: res.headers.get('etag'), sha256, bundle };
@@ -146,10 +147,10 @@ export function createClient({ url, token, fetchImpl } = {}) {
     ota: {
       /** Latest published bundle for a locale: { notModified, etag, sha256, bundle }. */
       latest: (projectId, locale, { branch, etag, publicationId } = {}) =>
-        otaPull(`/projects/${pathComponent(projectId)}/ota/latest${branchQuery(branch, { locale, publicationId })}`, etag, { branch }),
+        otaPull(`/projects/${pathComponent(projectId)}/ota/latest${branchQuery(branch, { locale, publicationId })}`, etag, { branch, locale }),
       /** A specific immutable version: { notModified, etag, sha256, bundle }. */
       version: (projectId, version, locale, { branch, etag, publicationId } = {}) =>
-        otaPull(`/projects/${pathComponent(projectId)}/ota/${pathComponent(version)}/${pathComponent(locale)}${branchQuery(branch, { publicationId })}`, etag, { branch, version }),
+        otaPull(`/projects/${pathComponent(projectId)}/ota/${pathComponent(version)}/${pathComponent(locale)}${branchQuery(branch, { publicationId })}`, etag, { branch, version, locale }),
     },
     io: {
       /** Import a flat entries map into a locale. Set dryRun to preview without writing. */

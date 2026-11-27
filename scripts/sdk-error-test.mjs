@@ -74,4 +74,19 @@ for (const [label, bundle, pull] of [
   assert.equal(error.status, 200);
   console.log(`PASS OTA requested scope ${label}`); count++;
 }
+for (const [label, locale] of [['different', 'he'], ['null', null], ['number', 4]]) {
+  const text = JSON.stringify({ ...validBundle, locale }), digest = createHash('sha256').update(text).digest('hex');
+  const client = createClient({ url: 'https://example.invalid', token: 'test-only', fetchImpl: async () => new Response(text, { headers: { 'x-openlocale-bundle-sha256': digest } }) });
+  for (const [endpoint, pull] of [['latest', () => client.ota.latest('project', 'en')], ['version', () => client.ota.version('project', 1, 'en')]]) {
+    const error = await pull().catch(e => e);
+    assert(error instanceof OpenLocaleError);
+    assert.equal(error.message, 'OTA bundle does not match requested scope');
+    console.log(`PASS OTA locale ${label} ${endpoint}`); count++;
+  }
+}
+const matchingText = JSON.stringify({ ...validBundle, locale: 'en' });
+const matchingDigest = createHash('sha256').update(matchingText).digest('hex');
+const matchingClient = createClient({ url: 'https://example.invalid', token: 'test-only', fetchImpl: async () => new Response(matchingText, { headers: { 'x-openlocale-bundle-sha256': matchingDigest } }) });
+assert.equal((await matchingClient.ota.latest('project', 'en')).bundle.locale, 'en');
+console.log('PASS OTA matching locale retained'); count++;
 console.log(`SDK error contract ${count} checks passed`);
