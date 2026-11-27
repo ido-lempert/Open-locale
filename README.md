@@ -3562,3 +3562,9 @@ reads/writes. SDK67/URL74/harness3/OTA117 pass; no SDK implementation change.
 Fresh API34 suites318 tests, formats269, SDK67/OTA117, URL74/redirect100/
 startup3 pass. Scoped local integration, not provider/native/browser acceptance.
 [Review0883](docs/reviews/0883-sdk-scope-transport-checkpoint.md).
+
+
+### SDK revoked cached-OTA proof
+Revoked token exact/list/wildcard latest/version requests reject401 rather than
+cached success. SDK73/URL74/redirect100/harness3/OTA117 pass, no SDK change.
+[Review0884](docs/reviews/0884-sdk-revoked-cache-proof.md).

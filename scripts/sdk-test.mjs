@@ -246,6 +246,16 @@ try {
   const badAuth = createClient({ url: `http://127.0.0.1:${API_PORT}`, token: 'wrong-token' });
   const authErr = await badAuth.projects.list().then(() => null).catch((e) => e);
   check('bad token surfaces 401', authErr instanceof OpenLocaleError && authErr.status === 401, String(authErr));
+  await call(`/auth/tokens/${tok.id}`, { token: a.accessToken, method: 'DELETE' });
+  for (const [endpoint, pull] of [
+    ['latest', opts => ol.ota.latest(proj.id, 'he', opts)],
+    ['version', opts => ol.ota.version(proj.id, 1, 'he', opts)],
+  ]) {
+    for (const [label, etag] of [['exact', pull1.etag], ['list', `"other", ${pull1.etag}`], ['wildcard', '*']]) {
+      const denied = await pull({ etag }).then(() => null).catch(e => e);
+      check(`SDK revoked token ${endpoint} ${label} rejects instead of cached success`, denied instanceof OpenLocaleError && denied.status === 401 && denied.path.includes('/ota/'));
+    }
+  }
   completed = true;
 } catch (err) {
   console.log('FAIL suite aborted', err);
