@@ -29,6 +29,7 @@
     "test:sdk-path": "node scripts/sdk-path-test.mjs",
     "test:sdk-package-types": "node scripts/sdk-package-types-test.mjs",
     "test:sdk-types": "tsc --noEmit --strict --skipLibCheck --lib es2022,dom --module nodenext --moduleResolution nodenext scripts/sdk-types-test.mts",
+    "test:sdk-browser": "node scripts/sdk-browser-test.mjs",
     "test:sdk-crypto": "node scripts/sdk-crypto-test.mjs",
     "test:sdk-error": "node scripts/sdk-error-test.mjs",
     "test:sdk-redirect": "node scripts/sdk-redirect-test.mjs",

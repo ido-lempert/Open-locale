@@ -3666,3 +3666,9 @@ error66 and SDK73/OTA117 plus type/transport contracts pass.
 `npm run test:sdk-crypto` runs the full66-check error contract under isolated
 WebCrypto and Node fallback providers (132 checks). Provider-use/count/exit
 proofs and negative probes pass. [Review0900](docs/reviews/0900-sdk-crypto-providers.md).
+
+
+### Native browser SDK primitives
+`npm run test:sdk-browser` proves eight SDK ESM/WebCrypto/UTF-8/304 cases in
+local Chromium with synthetic responses and blocked unexpected requests.
+Not UI, CORS or cross-browser acceptance. [Review0901](docs/reviews/0901-sdk-native-browser.md).
