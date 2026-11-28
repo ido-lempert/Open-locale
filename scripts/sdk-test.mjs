@@ -54,6 +54,19 @@ try {
   const projects = await ol.projects.list();
   check('projects.list returns the project', projects.some((p) => p.slug === 'sdk-shop'), JSON.stringify(projects).slice(0, 120));
 
+  const validProject = await ol.projects.get(proj.id);
+  check('projects.get valid UUID unchanged', validProject.id === proj.id);
+  for (const id of ['not-a-uuid', 'project/with?punctuation#', '2147483648']) {
+    const error = await ol.projects.get(id).catch(e => e);
+    check('projects.get malformed UUID returns400 ' + id,
+      error instanceof OpenLocaleError && error.status === 400 && error.path === `/projects/${encodeURIComponent(id)}`,
+      error instanceof Error ? `${error.name}:${error.status}` : 'unexpected response');
+  }
+  const missingProject = await ol.projects.get('00000000-0000-4000-8000-000000000000').catch(e => e);
+  check('projects.get valid absent UUID retains404', missingProject instanceof OpenLocaleError && missingProject.status === 404);
+  const unauthenticatedMalformed = await fetch(`${API}/projects/not-a-uuid`);
+  check('projects.get malformed UUID still requires authentication', unauthenticatedMalformed.status === 401);
+
   const key = await ol.keys.create(proj.id, 'sdk.greeting', { description: 'from the sdk' });
   check('keys.create lands', key.name === 'sdk.greeting' && !!key.id, JSON.stringify(key).slice(0, 120));
   const keys = await ol.keys.list(proj.id, { search: 'greeting' });

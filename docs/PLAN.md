@@ -4185,3 +4185,10 @@ Uncached API build, API34/318, real HTTP/PostgreSQL formats269, SDK73/OTA117,
 native browser26 and digest providers2/132 pass with type/transport contracts.
 No new application-browser or external acceptance claim.
 [Review0905](reviews/0905-api-sdk-checkpoint.md).
+
+
+### Project read UUID validation
+GET project rejects malformed IDs with400 before database lookup; valid absent
+UUID remains404 and unauthenticated malformed stays401. Real SDK79/API34/318
+and OTA117 pass. Other project routes not covered by this change.
+[Review0906](reviews/0906-project-read-uuid.md).
