@@ -4277,3 +4277,10 @@ Group CRUD/membership routes reject malformed UUIDs400, preserving missing/auth
 statuses and group data. SDK305/API34/318/groups44/OTA117 pass. Projects controller
 UUID path IDs covered, not locale codes/body/query IDs or whole API.
 [Review0919](reviews/0919-group-path-uuids.md).
+
+
+### UUID rollout authorization checkpoint
+Fresh real HTTP/PostgreSQL auth29/permissions50/groups44/comments33/screenshots45/
+formats269/SDK305/OTA117 pass (892 checks), plus SDK browser/type/transport
+contracts. Not whole-API UUID coverage.
+[Review0920](reviews/0920-uuid-authorization-checkpoint.md).
