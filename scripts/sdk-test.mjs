@@ -376,6 +376,16 @@ try {
   }
   check('invalid glossary paths preserve glossary', JSON.stringify((await call(`/projects/${proj.id}/glossary`, { token: a.accessToken })).json) === JSON.stringify(glossaryBeforeInvalid));
 
+  for (const suffix of ['/qa', '/activity']) {
+    for (const id of ['not-a-uuid', 'project/with?punctuation#']) {
+      const res = await call(`/projects/${encodeURIComponent(id)}${suffix}`, { token: a.accessToken });
+      check(`${suffix} malformed project400 ${id}`, res.status === 400, String(res.status));
+    }
+    const missing = await call(`/projects/${absentUuid}${suffix}`, { token: a.accessToken });
+    check(`${suffix} absent valid project404`, missing.status === 404);
+    check(`${suffix} malformed auth401`, (await call(`/projects/not-a-uuid${suffix}`)).status === 401);
+  }
+
   const imp = await ol.io.importEntries(proj.id, 'he', { 'sdk.second': 'שני' });
   check('io.importEntries imports', imp.status === 'COMPLETED' && imp.translationsUpserted === 1, JSON.stringify(imp));
   const dry = await ol.io.importEntries(proj.id, 'he', { 'sdk.third': 'שלישי' }, { dryRun: true });

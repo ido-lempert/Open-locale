@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
 import { QaService } from './qa.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -10,7 +10,7 @@ export class QaController {
   constructor(private readonly qa: QaService) {}
 
   @Get()
-  run(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Query('locale') locale?: string, @Query('branch') branch?: string) {
+  run(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Query('locale') locale?: string, @Query('branch') branch?: string) {
     return this.qa.run(user.userId, projectId, locale, branch);
   }
 }

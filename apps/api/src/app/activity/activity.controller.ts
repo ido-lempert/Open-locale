@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
 import { ActivityService } from './activity.service';
 import { ProjectsService } from '../projects/projects.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -16,7 +16,7 @@ export class ActivityController {
   @Get()
   async list(
     @CurrentUser() user: AuthPrincipal,
-    @Param('projectId') projectId: string,
+    @Param('projectId', new ParseUUIDPipe()) projectId: string,
     @Query('action') action?: string,
     @Query('actorId') actorId?: string,
     @Query('key') key?: string,

@@ -4308,3 +4308,9 @@ auth401 and task list. SDK361/API34/318/tasks80/OTA117 pass. Body/query unchange
 Glossary CRUD rejects malformed project/term IDs400, retains absent404/auth401
 and glossary state. SDK378/API34/318/glossary29/OTA117 pass.
 [Review0924](reviews/0924-glossary-path-uuids.md).
+
+
+### QA/activity project UUID validation
+QA/activity reads reject malformed project IDs400, retaining absent404/auth401.
+SDK386/API34/318/QA23/activity32/OTA117 pass. Query filters unchanged.
+[Review0925](reviews/0925-qa-activity-project-uuid.md).
