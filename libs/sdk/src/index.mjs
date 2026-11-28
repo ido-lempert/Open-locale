@@ -17,14 +17,10 @@ export class OpenLocaleError extends Error {
   }
 }
 
-// sha256 over the exact response bytes, as a lowercase hex string. Uses
-// WebCrypto (node >=20 and browsers both have it); node:crypto is the
-// fallback for runtimes without subtle. The digest is computed over the
-// utf-8 encoding of the decoded body text - OTA bundles are JSON, so the
-// re-encoding reproduces the served bytes exactly (proven byte-for-byte
-// against the server digest in scripts/sdk-test.mjs).
-async function sha256Hex(text) {
-  const data = new TextEncoder().encode(text);
+// SHA-256 covers the response bytes before UTF-8 decoding can strip a BOM or
+// replace malformed sequences. WebCrypto works in browsers and Node >=20;
+// node:crypto is the fallback when subtle is unavailable.
+async function sha256Hex(data) {
   if (globalThis.crypto?.subtle) {
     const digest = await globalThis.crypto.subtle.digest('SHA-256', data);
     return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -86,8 +82,9 @@ export function createClient({ url, token, fetchImpl } = {}) {
     });
     const sha256 = res.headers.get('x-openlocale-bundle-sha256');
     if (res.status === 304) return { notModified: true, etag: res.headers.get('etag'), sha256 };
-    const text = await res.text();
+    const bytes = new Uint8Array(await res.arrayBuffer());
     if (!res.ok) {
+      const text = new TextDecoder().decode(bytes);
       let json = null;
       try { json = JSON.parse(text); } catch { /* non-JSON error body */ }
       const message = json?.message ?? `HTTP ${res.status}`;
@@ -96,9 +93,10 @@ export function createClient({ url, token, fetchImpl } = {}) {
     if (!sha256 || !/^[0-9a-f]{64}$/.test(sha256)) {
       throw new OpenLocaleError(res.status, 'OTA bundle missing its integrity digest', path);
     }
-    if ((await sha256Hex(text)) !== sha256) {
+    if ((await sha256Hex(bytes)) !== sha256) {
       throw new OpenLocaleError(res.status, 'OTA bundle integrity check failed: digest mismatch', path);
     }
+    const text = new TextDecoder().decode(bytes);
     let bundle;
     try { bundle = JSON.parse(text); } catch {
       throw new OpenLocaleError(res.status, 'OTA bundle is not valid JSON', path);

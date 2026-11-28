@@ -127,4 +127,22 @@ for (const [label, version, rejected] of [['above int32', 2147483648, true], ['m
   } else assert.equal(result.bundle.version, version);
   console.log(`PASS OTA version bound ${label}`); count++;
 }
+// Byte changes must not disappear through UTF-8 decoding before verification.
+const canonicalBytes = new TextEncoder().encode(JSON.stringify(validBundle));
+const bomBytes = new Uint8Array([0xef, 0xbb, 0xbf, ...canonicalBytes]);
+const invalidBytes = new Uint8Array([...new TextEncoder().encode(JSON.stringify({ ...validBundle, translations: { key: 'MARKER' } }).replace('MARKER', '')), 0xff]);
+for (const [label, bytes, digestBytes, rejected] of [
+  ['BOM added after digest', bomBytes, canonicalBytes, true],
+  ['BOM included in digest', bomBytes, bomBytes, false],
+  ['invalid trailing UTF8 decoded digest', invalidBytes, new TextEncoder().encode(new TextDecoder().decode(invalidBytes)), true],
+]) {
+  const digest = createHash('sha256').update(digestBytes).digest('hex');
+  const client = createClient({ url: 'https://example.invalid', token: 'test-only', fetchImpl: async () => new Response(bytes, { headers: { 'x-openlocale-bundle-sha256': digest } }) });
+  const result = await client.ota.latest('project', 'en').catch(e => e);
+  if (rejected) {
+    assert(result instanceof OpenLocaleError);
+    assert.equal(result.message, 'OTA bundle integrity check failed: digest mismatch');
+  } else assert.deepEqual(result.bundle, validBundle);
+  console.log(`PASS OTA exact bytes ${label}`); count++;
+}
 console.log(`SDK error contract ${count} checks passed`);

@@ -3647,3 +3647,9 @@ acceptance claim. [Review0896](docs/reviews/0896-web-sdk-type-checkpoint.md).
 Parsed OTA versions stay within positive int32 storage range. Error47 and
 SDK73/OTA117 plus type/transport contracts pass; valid maximum preserved.
 [Review0897](docs/reviews/0897-sdk-ota-int32-version.md).
+
+
+### SDK OTA exact-byte integrity
+OTA digest checks hash received bytes before UTF-8 decoding, including BOMs
+and malformed byte sequences. Error50 and SDK73/OTA117 plus type/transport
+contracts pass. [Review0898](docs/reviews/0898-sdk-ota-exact-bytes.md).
