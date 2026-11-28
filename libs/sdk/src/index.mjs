@@ -104,7 +104,7 @@ export function createClient({ url, token, fetchImpl } = {}) {
       throw new OpenLocaleError(res.status, 'OTA bundle is not valid JSON', path);
     }
     if (!bundle || typeof bundle !== 'object' || Array.isArray(bundle) ||
-        !Number.isSafeInteger(bundle.version) || bundle.version < 1 ||
+        !Number.isSafeInteger(bundle.version) || bundle.version < 1 || bundle.version > 2147483647 ||
         typeof bundle.branch !== 'string' || !bundle.translations ||
         typeof bundle.translations !== 'object' || Array.isArray(bundle.translations) ||
         !Object.values(bundle.translations).every(value => typeof value === 'string')) {

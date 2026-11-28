@@ -117,4 +117,14 @@ for (const [endpoint, pull, path] of [
     console.log(`PASS HTTP error precedence ${endpoint} ${label}`); count++;
   }
 }
+for (const [label, version, rejected] of [['above int32', 2147483648, true], ['max safe', Number.MAX_SAFE_INTEGER, true], ['int32 maximum', 2147483647, false]]) {
+  const text = JSON.stringify({ ...validBundle, version }), digest = createHash('sha256').update(text).digest('hex');
+  const client = createClient({ url: 'https://example.invalid', token: 'test-only', fetchImpl: async () => new Response(text, { headers: { 'x-openlocale-bundle-sha256': digest } }) });
+  const result = await client.ota.latest('project', 'en').catch(e => e);
+  if (rejected) {
+    assert(result instanceof OpenLocaleError);
+    assert.equal(result.message, 'OTA bundle has invalid required fields');
+  } else assert.equal(result.bundle.version, version);
+  console.log(`PASS OTA version bound ${label}`); count++;
+}
 console.log(`SDK error contract ${count} checks passed`);

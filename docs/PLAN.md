@@ -4127,3 +4127,9 @@ Private package remains unpublished. [Review0895](reviews/0895-sdk-package-type-
 Fresh whole-web315 suites3864 tests pass in disjoint158/157 groups with exact
 inventory union. SDK package/types/contracts/real HTTP checks green. No browser
 acceptance claim. [Review0896](reviews/0896-web-sdk-type-checkpoint.md).
+
+
+### SDK OTA stored version range
+Parsed OTA versions stay within positive int32 storage range. Error47 and
+SDK73/OTA117 plus type/transport contracts pass; valid maximum preserved.
+[Review0897](reviews/0897-sdk-ota-int32-version.md).
