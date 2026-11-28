@@ -41,32 +41,32 @@ export class ProjectsController {
   }
 
   @Get(':id/groups')
-  listGroups(@CurrentUser() user: AuthPrincipal, @Param('id') id: string) {
+  listGroups(@CurrentUser() user: AuthPrincipal, @Param('id', new ParseUUIDPipe()) id: string) {
     return this.projects.listGroups(user.userId, id);
   }
 
   @Post(':id/groups')
-  createGroup(@CurrentUser() user: AuthPrincipal, @Param('id') id: string, @Body() dto: CreateGroupDto) {
+  createGroup(@CurrentUser() user: AuthPrincipal, @Param('id', new ParseUUIDPipe()) id: string, @Body() dto: CreateGroupDto) {
     return this.projects.createGroup(user.userId, id, dto.name, dto.role, dto.allowedLocales ?? []);
   }
 
   @Patch(':id/groups/:groupId')
-  updateGroup(@CurrentUser() user: AuthPrincipal, @Param('id') id: string, @Param('groupId') groupId: string, @Body() dto: UpdateGroupDto) {
+  updateGroup(@CurrentUser() user: AuthPrincipal, @Param('id', new ParseUUIDPipe()) id: string, @Param('groupId', new ParseUUIDPipe()) groupId: string, @Body() dto: UpdateGroupDto) {
     return this.projects.updateGroup(user.userId, id, groupId, dto);
   }
 
   @Delete(':id/groups/:groupId')
-  deleteGroup(@CurrentUser() user: AuthPrincipal, @Param('id') id: string, @Param('groupId') groupId: string) {
+  deleteGroup(@CurrentUser() user: AuthPrincipal, @Param('id', new ParseUUIDPipe()) id: string, @Param('groupId', new ParseUUIDPipe()) groupId: string) {
     return this.projects.deleteGroup(user.userId, id, groupId);
   }
 
   @Put(':id/groups/:groupId/members/:userId')
-  addGroupMember(@CurrentUser() user: AuthPrincipal, @Param('id') id: string, @Param('groupId') groupId: string, @Param('userId') targetUserId: string) {
+  addGroupMember(@CurrentUser() user: AuthPrincipal, @Param('id', new ParseUUIDPipe()) id: string, @Param('groupId', new ParseUUIDPipe()) groupId: string, @Param('userId', new ParseUUIDPipe()) targetUserId: string) {
     return this.projects.addGroupMember(user.userId, id, groupId, targetUserId);
   }
 
   @Delete(':id/groups/:groupId/members/:userId')
-  removeGroupMember(@CurrentUser() user: AuthPrincipal, @Param('id') id: string, @Param('groupId') groupId: string, @Param('userId') targetUserId: string) {
+  removeGroupMember(@CurrentUser() user: AuthPrincipal, @Param('id', new ParseUUIDPipe()) id: string, @Param('groupId', new ParseUUIDPipe()) groupId: string, @Param('userId', new ParseUUIDPipe()) targetUserId: string) {
     return this.projects.removeGroupMember(user.userId, id, groupId, targetUserId);
   }
 

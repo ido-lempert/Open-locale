@@ -277,6 +277,30 @@ try {
   const membersAfterInvalid = await call(`/projects/${proj.id}/members`, { token: a.accessToken });
   check('invalid member paths preserve member roles', JSON.stringify(membersAfterInvalid.json) === JSON.stringify(membersBeforeInvalid.json));
 
+  const groupProbe = (await call(`/projects/${proj.id}/groups`, { token: a.accessToken, method: 'POST', body: { name: 'preserve-group', role: 'MEMBER' } })).json;
+  const groupsBeforeInvalid = (await call(`/projects/${proj.id}/groups`, { token: a.accessToken })).json;
+  const absentUuid = '00000000-0000-4000-8000-000000000000';
+  for (const [label, method, groupScoped, userScoped, body] of [
+    ['list', 'GET', false, false, undefined], ['create', 'POST', false, false, { name: 'must-not-create', role: 'MEMBER' }],
+    ['update', 'PATCH', true, false, { name: 'must-not-save' }], ['delete', 'DELETE', true, false, undefined],
+    ['member add', 'PUT', true, true, undefined], ['member remove', 'DELETE', true, true, undefined],
+  ]) {
+    const send = (projectId, groupId = groupProbe.id, userId = absentUuid, authenticated = true) => call(`/projects/${encodeURIComponent(projectId)}/groups${groupScoped ? '/' + encodeURIComponent(groupId) : ''}${userScoped ? '/members/' + encodeURIComponent(userId) : ''}`, { method, body, token: authenticated ? a.accessToken : undefined });
+    const parameters = ['project', ...(groupScoped ? ['group'] : []), ...(userScoped ? ['user'] : [])];
+    for (const field of parameters) {
+      const args = [proj.id, groupProbe.id, absentUuid];
+      args[parameters.indexOf(field)] = field + '/with?punctuation#';
+      const res = await send(...args);
+      check(`group ${label} malformed ${field}400`, res.status === 400, String(res.status));
+      args[parameters.indexOf(field)] = absentUuid;
+      const missing = await send(...args);
+      const expected = field === 'user' && label === 'member add' ? 400 : 404;
+      check(`group ${label} absent valid ${field} retains${expected}`, missing.status === expected, String(missing.status));
+    }
+    check(`group ${label} malformed auth401`, (await send('not-a-uuid', groupProbe.id, absentUuid, false)).status === 401);
+  }
+  check('invalid group paths preserve groups and memberships', JSON.stringify((await call(`/projects/${proj.id}/groups`, { token: a.accessToken })).json) === JSON.stringify(groupsBeforeInvalid));
+
   const imp = await ol.io.importEntries(proj.id, 'he', { 'sdk.second': 'שני' });
   check('io.importEntries imports', imp.status === 'COMPLETED' && imp.translationsUpserted === 1, JSON.stringify(imp));
   const dry = await ol.io.importEntries(proj.id, 'he', { 'sdk.third': 'שלישי' }, { dryRun: true });

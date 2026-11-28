@@ -3784,3 +3784,10 @@ routes unchanged. [Review0917](docs/reviews/0917-project-write-uuids.md).
 Member list/add/update/remove reject malformed project/user IDs400, retain
 absent404/auth401 and existing roles. SDK274/API34/318/permissions50/OTA117 pass.
 Group routes unchanged. [Review0918](docs/reviews/0918-member-path-uuids.md).
+
+
+### Group path UUID validation
+Group CRUD/membership routes reject malformed UUIDs400, preserving missing/auth
+statuses and group data. SDK305/API34/318/groups44/OTA117 pass. Projects controller
+UUID path IDs covered, not locale codes/body/query IDs or whole API.
+[Review0919](docs/reviews/0919-group-path-uuids.md).
