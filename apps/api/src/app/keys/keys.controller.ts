@@ -44,19 +44,19 @@ export class KeysController {
 
   @Post(':keyId/screenshots')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
-  uploadScreenshot(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('keyId') keyId: string,
+  uploadScreenshot(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('keyId', new ParseUUIDPipe()) keyId: string,
     @UploadedFile() file?: { originalname: string; mimetype: string; size: number; buffer: Buffer }) {
     return this.keys.uploadScreenshot(user.userId, projectId, keyId, file);
   }
 
   @Get(':keyId/screenshots')
-  listScreenshots(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('keyId') keyId: string) {
+  listScreenshots(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('keyId', new ParseUUIDPipe()) keyId: string) {
     return this.keys.listScreenshots(user.userId, projectId, keyId);
   }
 
   @Get(':keyId/screenshots/:screenshotId')
-  async getScreenshot(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string,
-    @Param('keyId') keyId: string, @Param('screenshotId') screenshotId: string,
+  async getScreenshot(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Param('keyId', new ParseUUIDPipe()) keyId: string, @Param('screenshotId', new ParseUUIDPipe()) screenshotId: string,
     @Res({ passthrough: true }) res: Response) {
     const shot = await this.keys.getScreenshot(user.userId, projectId, keyId, screenshotId);
     res.set({
@@ -70,8 +70,8 @@ export class KeysController {
   }
 
   @Delete(':keyId/screenshots/:screenshotId')
-  deleteScreenshot(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string,
-    @Param('keyId') keyId: string, @Param('screenshotId') screenshotId: string) {
+  deleteScreenshot(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Param('keyId', new ParseUUIDPipe()) keyId: string, @Param('screenshotId', new ParseUUIDPipe()) screenshotId: string) {
     return this.keys.deleteScreenshot(user.userId, projectId, keyId, screenshotId);
   }
 

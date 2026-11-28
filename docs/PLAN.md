@@ -4251,3 +4251,10 @@ Comment list/add/delete reject malformed project/key/comment path IDs400,
 retain absent404/auth401 and original comment. SDK234/API34/318/comments33/
 OTA117 pass. Screenshot routes unchanged.
 [Review0915](reviews/0915-comment-path-uuids.md).
+
+
+### Screenshot path UUID validation
+Upload/list/download/delete reject malformed project/key/screenshot IDs400,
+retain absent404/auth401 and original metadata/bytes. Screenshot45/API34/318/
+SDK234/OTA117 pass. Key-controller UUID path IDs covered, not body/query IDs.
+[Review0916](reviews/0916-screenshot-path-uuids.md).

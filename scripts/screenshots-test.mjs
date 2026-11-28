@@ -78,6 +78,33 @@ try {
   check('binary download matches upload', got.status === 200 && got.body.equals(PNG));
   check('download headers safe', got.headers.get('content-type') === 'image/png' && got.headers.get('x-content-type-options') === 'nosniff');
 
+  for (const [label, method, tail] of [['upload', 'POST', ''], ['list', 'GET', ''], ['download', 'GET', `/${ok.json.id}`], ['delete', 'DELETE', `/${ok.json.id}`]]) {
+    const send = async (projectId, keyId, shotTail = tail, authenticated = true) => {
+      const path = `/projects/${encodeURIComponent(projectId)}/keys/${encodeURIComponent(keyId)}/screenshots${shotTail}`;
+      if (method === 'POST') return upload(path, { token: authenticated ? at : undefined, bytes: PNG, filename: 'probe.png', mime: 'image/png' });
+      return fetch(`${API}${path}`, { method, headers: authenticated ? auth(at) : {} });
+    };
+    for (const [field, projectId, keyId] of [['project', 'not-a-uuid', key.id], ['key', proj.id, 'key/with?punctuation#']]) {
+      const res = await send(projectId, keyId);
+      check(`screenshot ${label} malformed ${field}400`, res.status === 400, String(res.status));
+    }
+    for (const [field, projectId, keyId] of [['project', '00000000-0000-4000-8000-000000000000', key.id], ['key', proj.id, '00000000-0000-4000-8000-000000000000']]) {
+      const res = await send(projectId, keyId);
+      check(`screenshot ${label} absent valid ${field}404`, res.status === 404, String(res.status));
+    }
+    check(`screenshot ${label} malformed auth401`, (await send('not-a-uuid', 'not-a-uuid', tail, false)).status === 401);
+    if (label === 'download' || label === 'delete') {
+      for (const id of ['not-a-uuid', 'shot/with?punctuation#']) {
+        const res = await send(proj.id, key.id, '/' + encodeURIComponent(id));
+        check(`screenshot ${label} malformed screenshotId400 ${id}`, res.status === 400, String(res.status));
+      }
+      check(`screenshot ${label} absent valid screenshotId404`, (await send(proj.id, key.id, '/00000000-0000-4000-8000-000000000000')).status === 404);
+    }
+  }
+  const preservedList = (await json(base, { token: at })).json;
+  const preservedBinary = await raw(`${base}/${ok.json.id}`, at);
+  check('invalid screenshot paths preserve original metadata and bytes', preservedList.length === 2 && preservedList.some(row => row.id === ok.json.id) && preservedBinary.body.equals(PNG));
+
   const svg = await upload(base, { token: at, bytes: SVG, filename: 'evil.svg', mime: 'image/svg+xml' });
   check('svg rejected (400)', svg.status === 400, `got ${svg.status}`);
   const fake = await upload(base, { token: at, bytes: Buffer.from('<script>alert(1)</script>'), filename: 'fake.png', mime: 'image/png' });
