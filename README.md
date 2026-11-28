@@ -3686,3 +3686,9 @@ Browser21 includes five redirect statuses on request/OTA GET with zero
 redirect-destination requests and exact source headers. Local fake-token
 fixtures only; not cross-origin/CORS proof.
 [Review0903](docs/reviews/0903-sdk-browser-redirects.md).
+
+
+### Native browser SDK POST redirects
+Browser26 includes POST rejection for five redirect statuses, exact15 source
+methods/bodies/headers and zero destination requests. Local fixture only.
+[Review0904](docs/reviews/0904-sdk-browser-post-redirects.md).

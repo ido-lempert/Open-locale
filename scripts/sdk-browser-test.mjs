@@ -11,12 +11,14 @@ const redirectReads = [];
 let redirectTargetReads = 0;
 const transportBody = JSON.stringify({ version: 1, branch: 'main', translations: { network: 'שלום 😀' } });
 const transportDigest = createHash('sha256').update(transportBody).digest('hex');
-const server = createServer((req, res) => {
+const server = createServer(async (req, res) => {
   if (req.url === '/redirect-target') {
     redirectTargetReads++; res.setHeader('Content-Type', 'application/json'); res.end(transportBody);
   }
   else if (req.url?.startsWith('/api/projects/redirect-')) {
-    redirectReads.push({ path: req.url, token: req.headers['x-api-key'] });
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    redirectReads.push({ path: req.url, token: req.headers['x-api-key'], method: req.method, body });
     res.statusCode = Number(req.url.split('redirect-')[1].split('/')[0]);
     res.setHeader('Location', '/redirect-target'); res.end();
   }
@@ -89,6 +91,7 @@ try {
     for (const status of [301, 302, 303, 307, 308]) {
       for (const [label, pull] of [
         ['request', () => live.projects.get(`redirect-${status}`)],
+        ['POST', () => live.request(`/projects/redirect-${status}`, { method: 'POST', body: { key: 'שלום 😀' } })],
         ['OTA', () => live.ota.latest(`redirect-${status}`, 'en')],
       ]) {
         const error = await pull().catch(e => e);
@@ -98,11 +101,12 @@ try {
     }
     return results;
   });
-  assert.equal(results.length, 21);
+  assert.equal(results.length, 26);
   assert.equal(redirectTargetReads, 0, 'Redirect destination must receive no request');
   assert.deepEqual(redirectReads, [301, 302, 303, 307, 308].flatMap(status => [
-    { path: `/api/projects/redirect-${status}`, token: 'test-only' },
-    { path: `/api/projects/redirect-${status}/ota/latest?locale=en`, token: 'test-only' },
+    { path: `/api/projects/redirect-${status}`, token: 'test-only', method: 'GET', body: '' },
+    { path: `/api/projects/redirect-${status}`, token: 'test-only', method: 'POST', body: JSON.stringify({ key: 'שלום 😀' }) },
+    { path: `/api/projects/redirect-${status}/ota/latest?locale=en`, token: 'test-only', method: 'GET', body: '' },
   ]));
   assert.deepEqual(transportReads, [
     { path: '/api/projects/transport/ota/latest?locale=en', method: 'GET', token: 'test-only', etag: undefined },
@@ -111,7 +115,7 @@ try {
   ]);
   assert.deepEqual(unexpected, []);
   for (const label of results) console.log(`PASS native browser SDK ${label}`);
-  console.log('SDK browser contract 21 checks passed');
+  console.log('SDK browser contract 26 checks passed');
 } finally {
   await browser?.close();
   await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
