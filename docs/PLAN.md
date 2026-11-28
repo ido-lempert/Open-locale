@@ -4192,3 +4192,9 @@ GET project rejects malformed IDs with400 before database lookup; valid absent
 UUID remains404 and unauthenticated malformed stays401. Real SDK79/API34/318
 and OTA117 pass. Other project routes not covered by this change.
 [Review0906](reviews/0906-project-read-uuid.md).
+
+
+### Key entry project UUID validation
+Key list/create reject malformed project IDs with400, retaining missing404 and
+unauthenticated401. Real SDK89/API34/318 and OTA117 pass. Other key routes
+unchanged. [Review0907](reviews/0907-key-entry-project-uuid.md).

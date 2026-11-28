@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { KeysService } from './keys.service';
@@ -13,12 +13,12 @@ export class KeysController {
   constructor(private readonly keys: KeysService) {}
 
   @Get()
-  list(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Query() query: ListKeysQueryDto) {
+  list(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Query() query: ListKeysQueryDto) {
     return this.keys.list(user.userId, projectId, query);
   }
 
   @Post()
-  create(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Body() dto: CreateKeyDto) {
+  create(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Body() dto: CreateKeyDto) {
     return this.keys.create(user.userId, projectId, dto);
   }
 

@@ -67,6 +67,21 @@ try {
   const unauthenticatedMalformed = await fetch(`${API}/projects/not-a-uuid`);
   check('projects.get malformed UUID still requires authentication', unauthenticatedMalformed.status === 401);
 
+  for (const [label, run, method] of [
+    ['list', id => ol.keys.list(id), 'GET'],
+    ['create', id => ol.keys.create(id, 'invalid-project-probe'), 'POST'],
+  ]) {
+    for (const id of ['not-a-uuid', 'project/with?punctuation#', '2147483648']) {
+      const error = await run(id).catch(e => e);
+      check(`keys.${label} malformed project returns400 ${id}`, error instanceof OpenLocaleError && error.status === 400,
+        error instanceof Error ? `${error.name}:${error.status}` : 'unexpected response');
+    }
+    const absent = await run('00000000-0000-4000-8000-000000000000').catch(e => e);
+    check(`keys.${label} absent valid project retains404`, absent instanceof OpenLocaleError && absent.status === 404);
+    const denied = await fetch(`${API}/projects/not-a-uuid/keys`, { method, headers: { 'Content-Type': 'application/json' }, ...(method === 'POST' ? { body: JSON.stringify({ name: 'probe' }) } : {}) });
+    check(`keys.${label} malformed project still requires authentication`, denied.status === 401);
+  }
+
   const key = await ol.keys.create(proj.id, 'sdk.greeting', { description: 'from the sdk' });
   check('keys.create lands', key.name === 'sdk.greeting' && !!key.id, JSON.stringify(key).slice(0, 120));
   const keys = await ol.keys.list(proj.id, { search: 'greeting' });
