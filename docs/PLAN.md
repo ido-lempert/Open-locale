@@ -4212,3 +4212,9 @@ JSON export/live import/preview reject malformed project IDs400, retaining
 absent404/auth401 and saved translations. SDK110/API34/318/formats269/OTA117
 pass. Format-specific routes unchanged.
 [Review0909](reviews/0909-json-entry-project-uuid.md).
+
+
+### Locale format export project UUID validation
+Eleven format-specific locale exports reject malformed project IDs400, retain
+absent404/auth401. SDK154/API34/318/formats269/OTA117 pass. ZIP/TMX unchanged.
+[Review0910](reviews/0910-format-export-project-uuid.md).

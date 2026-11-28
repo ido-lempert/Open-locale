@@ -128,6 +128,18 @@ try {
   }
   check('invalid JSON import projects preserve saved translation', (await ol.translations.get(proj.id, 'en'))['sdk.greeting'] === 'Hello from the SDK');
 
+  for (const format of ['csv', 'android', 'stringsdict', 'ios', 'po', 'pot', 'xliff', 'resx', 'properties', 'arb', 'yaml']) {
+    for (const id of ['not-a-uuid', 'project/with?punctuation#']) {
+      const error = await ol.io.exportText(id, 'en', format).catch(e => e);
+      check(`${format} export malformed project returns400 ${id}`, error instanceof OpenLocaleError && error.status === 400,
+        error instanceof Error ? `${error.name}:${error.status}` : 'unexpected response');
+    }
+    const absent = await ol.io.exportText('00000000-0000-4000-8000-000000000000', 'en', format).catch(e => e);
+    check(`${format} export absent valid project retains404`, absent instanceof OpenLocaleError && absent.status === 404);
+    const denied = await fetch(`${API}/projects/not-a-uuid/export/en/${format}`);
+    check(`${format} export malformed project still requires authentication`, denied.status === 401);
+  }
+
   const imp = await ol.io.importEntries(proj.id, 'he', { 'sdk.second': 'שני' });
   check('io.importEntries imports', imp.status === 'COMPLETED' && imp.translationsUpserted === 1, JSON.stringify(imp));
   const dry = await ol.io.importEntries(proj.id, 'he', { 'sdk.third': 'שלישי' }, { dryRun: true });

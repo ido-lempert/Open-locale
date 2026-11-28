@@ -39,67 +39,67 @@ export class TranslationsController {
 
   @Get('export/:locale/csv')
   @Header('Content-Type', 'text/csv; charset=utf-8')
-  exportCsv(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('mode') mode?: string, @Query('branch') branch?: string) {
+  exportCsv(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('locale') locale: string, @Query('mode') mode?: string, @Query('branch') branch?: string) {
     return this.translations.exportCsv(user.userId, projectId, locale, mode, branch);
   }
 
   @Get('export/:locale/android')
   @Header('Content-Type', 'text/xml; charset=utf-8')
-  exportAndroid(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
+  exportAndroid(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
     return this.translations.exportAndroid(user.userId, projectId, locale, branch);
   }
 
   @Get('export/:locale/stringsdict')
   @Header('Content-Type', 'text/xml; charset=utf-8')
-  exportStringsdict(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
+  exportStringsdict(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
     return this.translations.exportStringsdict(user.userId, projectId, locale, branch);
   }
 
   @Get('export/:locale/ios')
   @Header('Content-Type', 'text/plain; charset=utf-8')
-  exportIos(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
+  exportIos(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
     return this.translations.exportIos(user.userId, projectId, locale, branch);
   }
 
   @Get('export/:locale/po')
   @Header('Content-Type', 'text/plain; charset=utf-8')
-  exportPo(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
+  exportPo(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
     return this.translations.exportPo(user.userId, projectId, locale, branch);
   }
 
   @Get('export/:locale/pot')
   @Header('Content-Type', 'text/plain; charset=utf-8')
-  exportPot(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
+  exportPot(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
     return this.translations.exportPot(user.userId, projectId, locale, branch);
   }
 
   @Get('export/:locale/xliff')
   @Header('Content-Type', 'application/x-xliff+xml; charset=utf-8')
-  exportXliff(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
+  exportXliff(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
     return this.translations.exportXliff(user.userId, projectId, locale, branch);
   }
 
   @Get('export/:locale/resx')
   @Header('Content-Type', 'text/xml; charset=utf-8')
-  exportResx(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
+  exportResx(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
     return this.translations.exportResx(user.userId, projectId, locale, branch);
   }
 
   @Get('export/:locale/properties')
   @Header('Content-Type', 'text/x-java-properties; charset=utf-8')
-  exportProperties(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
+  exportProperties(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
     return this.translations.exportProperties(user.userId, projectId, locale, branch);
   }
 
   @Get('export/:locale/arb')
   @Header('Content-Type', 'application/arb+json; charset=utf-8')
-  exportArb(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
+  exportArb(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
     return this.translations.exportArb(user.userId, projectId, locale, branch);
   }
 
   @Get('export/:locale/yaml')
   @Header('Content-Type', 'text/yaml; charset=utf-8')
-  exportYaml(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
+  exportYaml(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('locale') locale: string, @Query('branch') branch?: string) {
     return this.translations.exportYaml(user.userId, projectId, locale, branch);
   }
 
