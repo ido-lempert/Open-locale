@@ -3810,3 +3810,9 @@ session-only token403 preserved. SDK332/API34/318/branches56/OTA117 pass.
 List/create/restore reject malformed project/snapshot IDs400, retain absent404/
 auth401 and saved data. SDK344/API34/318/snapshots61/OTA117 pass.
 [Review0922](docs/reviews/0922-snapshot-path-uuids.md).
+
+
+### Task path UUID validation
+List/create/update/delete reject malformed project/task IDs400, retain absent404/
+auth401 and task list. SDK361/API34/318/tasks80/OTA117 pass. Body/query unchanged.
+[Review0923](docs/reviews/0923-task-path-uuids.md).

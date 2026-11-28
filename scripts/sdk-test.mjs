@@ -340,6 +340,24 @@ try {
   }
   check('invalid snapshot paths preserve snapshots and translation', JSON.stringify((await call(`/projects/${proj.id}/snapshots`, { token: a.accessToken })).json) === JSON.stringify(snapshotsBeforeInvalid) && (await ol.translations.get(proj.id, 'en'))['sdk.greeting'] === 'Hello from the SDK');
 
+  const tasksBeforeInvalid = (await call(`/projects/${proj.id}/tasks`, { token: a.accessToken })).json;
+  for (const [label, method, taskScoped, body] of [
+    ['list', 'GET', false, undefined], ['create', 'POST', false, { title: 'must-not-create' }],
+    ['update', 'PATCH', true, { title: 'must-not-save' }], ['delete', 'DELETE', true, undefined],
+  ]) {
+    const path = (projectId, taskId = absentUuid) => `/projects/${encodeURIComponent(projectId)}/tasks${taskScoped ? '/' + encodeURIComponent(taskId) : ''}`;
+    for (const field of ['project', ...(taskScoped ? ['task'] : [])]) {
+      const args = [proj.id, absentUuid]; args[field === 'project' ? 0 : 1] = 'not-a-uuid';
+      const res = await call(path(...args), { token: a.accessToken, method, body });
+      check(`task ${label} malformed ${field}400`, res.status === 400, String(res.status));
+      args[field === 'project' ? 0 : 1] = absentUuid;
+      const missing = await call(path(...args), { token: a.accessToken, method, body });
+      check(`task ${label} absent valid ${field}404`, missing.status === 404, String(missing.status));
+    }
+    check(`task ${label} malformed auth401`, (await call(path('not-a-uuid', 'not-a-uuid'), { method, body })).status === 401);
+  }
+  check('invalid task paths preserve task list', JSON.stringify((await call(`/projects/${proj.id}/tasks`, { token: a.accessToken })).json) === JSON.stringify(tasksBeforeInvalid));
+
   const imp = await ol.io.importEntries(proj.id, 'he', { 'sdk.second': 'שני' });
   check('io.importEntries imports', imp.status === 'COMPLETED' && imp.translationsUpserted === 1, JSON.stringify(imp));
   const dry = await ol.io.importEntries(proj.id, 'he', { 'sdk.third': 'שלישי' }, { dryRun: true });
