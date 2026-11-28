@@ -22,12 +22,12 @@ export class TranslationsController {
   }
 
   @Patch('keys/:keyId/translations/:locale/status')
-  setStatus(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('keyId') keyId: string, @Param('locale') locale: string, @Body() dto: SetStatusDto) {
+  setStatus(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('keyId', new ParseUUIDPipe()) keyId: string, @Param('locale') locale: string, @Body() dto: SetStatusDto) {
     return this.translations.setStatus(user.userId, projectId, keyId, locale, dto.status, dto.expectedVersion, dto.expectedRowId);
   }
 
   @Get('keys/:keyId/translations/:locale/history')
-  history(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('keyId') keyId: string, @Param('locale') locale: string) {
+  history(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('keyId', new ParseUUIDPipe()) keyId: string, @Param('locale') locale: string) {
     return this.translations.history(user.userId, projectId, keyId, locale);
   }
 

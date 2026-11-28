@@ -140,6 +140,26 @@ try {
     check(`${format} export malformed project still requires authentication`, denied.status === 401);
   }
 
+  for (const [label, method, tail, body] of [
+    ['history', 'GET', 'history', undefined],
+    ['status', 'PATCH', 'status', { status: 'UNVERIFIED' }],
+  ]) {
+    for (const [field, projectId, keyId] of [
+      ['project plain', 'not-a-uuid', key.id], ['project punctuation', 'project/with?punctuation#', key.id],
+      ['key plain', proj.id, 'not-a-uuid'], ['key punctuation', proj.id, 'key/with?punctuation#'],
+    ]) {
+      const error = await ol.request(`/projects/${encodeURIComponent(projectId)}/keys/${encodeURIComponent(keyId)}/translations/en/${tail}`, { method, body }).catch(e => e);
+      check(`translation ${label} malformed ${field} returns400`, error instanceof OpenLocaleError && error.status === 400,
+        error instanceof Error ? `${error.name}:${error.status}` : 'unexpected response');
+    }
+    for (const [field, projectId, keyId] of [['project', '00000000-0000-4000-8000-000000000000', key.id], ['key', proj.id, '00000000-0000-4000-8000-000000000000']]) {
+      const error = await ol.request(`/projects/${projectId}/keys/${keyId}/translations/en/${tail}`, { method, body }).catch(e => e);
+      check(`translation ${label} absent valid ${field} retains404`, error instanceof OpenLocaleError && error.status === 404);
+    }
+    const denied = await fetch(`${API}/projects/not-a-uuid/keys/not-a-uuid/translations/en/${tail}`, { method, headers: { 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
+    check(`translation ${label} malformed still requires authentication`, denied.status === 401);
+  }
+
   const imp = await ol.io.importEntries(proj.id, 'he', { 'sdk.second': 'שני' });
   check('io.importEntries imports', imp.status === 'COMPLETED' && imp.translationsUpserted === 1, JSON.stringify(imp));
   const dry = await ol.io.importEntries(proj.id, 'he', { 'sdk.third': 'שלישי' }, { dryRun: true });

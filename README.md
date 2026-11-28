@@ -3732,3 +3732,9 @@ pass. Format-specific routes unchanged.
 Eleven format-specific locale exports reject malformed project IDs400, retain
 absent404/auth401. SDK154/API34/318/formats269/OTA117 pass. ZIP/TMX unchanged.
 [Review0910](docs/reviews/0910-format-export-project-uuid.md).
+
+
+### Translation history/status UUID validation
+Per-key history/status reject malformed project/key IDs400, retain absent404/
+auth401. SDK168/API34/318/status-history14/OTA117 pass. Bulk status unchanged.
+[Review0911](docs/reviews/0911-history-status-uuid.md).
