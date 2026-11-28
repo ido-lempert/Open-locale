@@ -17,7 +17,7 @@ export class TranslationsController {
   }
 
   @Post('review/bulk-status')
-  bulkSetStatus(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Body() dto: BulkStatusDto) {
+  bulkSetStatus(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Body() dto: BulkStatusDto) {
     return this.translations.bulkSetStatus(user.userId, projectId, dto);
   }
 
@@ -124,7 +124,7 @@ export class TranslationsController {
   }
 
   @Post('import-bundle/:format')
-  importBundle(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('format') format: string, @Query('branch') branch: string | undefined, @Body() zip: Buffer) {
+  importBundle(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('format') format: string, @Query('branch') branch: string | undefined, @Body() zip: Buffer) {
     if (!Buffer.isBuffer(zip) || zip.length === 0) throw new BadRequestException('Send the zip archive as an application/zip request body');
     return this.translations.importBundle(user.userId, projectId, format, zip, branch);
   }

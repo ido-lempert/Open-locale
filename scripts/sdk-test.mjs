@@ -172,6 +172,23 @@ try {
     check(`translation read ${suffix} malformed auth401`, denied.status === 401);
   }
 
+  const zipFixture = new Uint8Array(await (await ol.request(`/projects/${proj.id}/export-bundle/json`, { raw: true })).arrayBuffer());
+  for (const [label, suffix, payload, contentType] of [
+    ['bulk status', '/review/bulk-status', JSON.stringify({ locale: 'en', status: 'UNVERIFIED' }), 'application/json'],
+    ['ZIP import', '/import-bundle/json', zipFixture, 'application/zip'],
+  ]) {
+    const send = (id, authenticated = true) => fetch(`${API}/projects/${encodeURIComponent(id)}${suffix}`, { method: 'POST', headers: { 'Content-Type': contentType, ...(authenticated ? { 'X-Api-Key': tok.token } : {}) }, body: payload });
+    for (const id of ['not-a-uuid', 'project/with?punctuation#']) {
+      const res = await send(id);
+      check(`${label} malformed project400 ${id}`, res.status === 400, String(res.status));
+    }
+    const absent = await send('00000000-0000-4000-8000-000000000000');
+    check(`${label} absent valid project404`, absent.status === 404, String(absent.status));
+    const denied = await send('not-a-uuid', false);
+    check(`${label} malformed auth401`, denied.status === 401);
+  }
+  check('invalid bulk and ZIP project IDs preserve saved translation', (await ol.translations.get(proj.id, 'en'))['sdk.greeting'] === 'Hello from the SDK');
+
   const imp = await ol.io.importEntries(proj.id, 'he', { 'sdk.second': 'שני' });
   check('io.importEntries imports', imp.status === 'COMPLETED' && imp.translationsUpserted === 1, JSON.stringify(imp));
   const dry = await ol.io.importEntries(proj.id, 'he', { 'sdk.third': 'שלישי' }, { dryRun: true });

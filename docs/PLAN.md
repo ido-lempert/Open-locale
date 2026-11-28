@@ -4231,3 +4231,10 @@ ZIP/TMX export, TM suggestions and import-run list reject malformed project
 IDs400 with absent404/auth401 retained. SDK184/API34/318/formats269/TM18/OTA117
 pass. Bulk status/ZIP import unchanged.
 [Review0912](reviews/0912-translation-read-project-uuid.md).
+
+
+### Bulk status and ZIP import project UUID validation
+Both routes reject malformed project IDs400, retaining absent404/auth401 and
+saved translations. SDK193/API34/318/formats269/review34/OTA117 pass. Translation
+controller project/key path IDs now validated; not body/query IDs or whole API.
+[Review0913](reviews/0913-bulk-zip-project-uuid.md).
