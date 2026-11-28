@@ -76,7 +76,7 @@ export class ProjectsController {
   }
 
   @Patch(':id')
-  update(@CurrentUser() user: AuthPrincipal, @Param('id') id: string, @Body() dto: UpdateProjectDto) {
+  update(@CurrentUser() user: AuthPrincipal, @Param('id', new ParseUUIDPipe()) id: string, @Body() dto: UpdateProjectDto) {
     // Embed origins grant a host page a postMessage channel into the embedded
     // editor. Like OTA publish and branch management, a leaked CI/SDK token
     // must not be able to widen that trust boundary - session principals only.
@@ -87,17 +87,17 @@ export class ProjectsController {
   }
 
   @Delete(':id')
-  remove(@CurrentUser() user: AuthPrincipal, @Param('id') id: string) {
+  remove(@CurrentUser() user: AuthPrincipal, @Param('id', new ParseUUIDPipe()) id: string) {
     return this.projects.removeFor(user.userId, id);
   }
 
   @Post(':id/locales')
-  addLocale(@CurrentUser() user: AuthPrincipal, @Param('id') id: string, @Body() dto: AddLocaleDto) {
+  addLocale(@CurrentUser() user: AuthPrincipal, @Param('id', new ParseUUIDPipe()) id: string, @Body() dto: AddLocaleDto) {
     return this.projects.addLocale(user.userId, id, dto.code);
   }
 
   @Delete(':id/locales/:code')
-  removeLocale(@CurrentUser() user: AuthPrincipal, @Param('id') id: string, @Param('code') code: string) {
+  removeLocale(@CurrentUser() user: AuthPrincipal, @Param('id', new ParseUUIDPipe()) id: string, @Param('code') code: string) {
     return this.projects.removeLocale(user.userId, id, code);
   }
 }

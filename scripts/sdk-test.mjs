@@ -236,6 +236,22 @@ try {
   const commentsAfterInvalid = await ol.request(commentPath);
   check('invalid comment writes preserve original only', commentsAfterInvalid.length === 1 && commentsAfterInvalid[0].id === commentProbe.id && commentsAfterInvalid[0].body === 'preserve-comment');
 
+  for (const [label, method, suffix, body] of [
+    ['update', 'PATCH', '', { name: 'must-not-save' }], ['delete', 'DELETE', '', undefined],
+    ['locale add', 'POST', '/locales', { code: 'fr' }], ['locale remove', 'DELETE', '/locales/en', undefined],
+  ]) {
+    for (const id of ['not-a-uuid', 'project/with?punctuation#']) {
+      const error = await ol.request(`/projects/${encodeURIComponent(id)}${suffix}`, { method, body }).catch(e => e);
+      check(`project ${label} malformed ID400 ${id}`, error instanceof OpenLocaleError && error.status === 400, `${error.status}`);
+    }
+    const absent = await ol.request(`/projects/00000000-0000-4000-8000-000000000000${suffix}`, { method, body }).catch(e => e);
+    check(`project ${label} absent valid ID404`, absent instanceof OpenLocaleError && absent.status === 404);
+    const denied = await fetch(`${API}/projects/not-a-uuid${suffix}`, { method, headers: { 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
+    check(`project ${label} malformed auth401`, denied.status === 401);
+  }
+  const preservedProject = await ol.projects.get(proj.id);
+  check('invalid project writes preserve name and locales', preservedProject.name === 'SDK Shop' && preservedProject.locales.map(row => row.code).sort().join(',') === 'en,he');
+
   const imp = await ol.io.importEntries(proj.id, 'he', { 'sdk.second': 'שני' });
   check('io.importEntries imports', imp.status === 'COMPLETED' && imp.translationsUpserted === 1, JSON.stringify(imp));
   const dry = await ol.io.importEntries(proj.id, 'he', { 'sdk.third': 'שלישי' }, { dryRun: true });

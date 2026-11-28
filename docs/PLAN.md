@@ -4258,3 +4258,9 @@ Upload/list/download/delete reject malformed project/key/screenshot IDs400,
 retain absent404/auth401 and original metadata/bytes. Screenshot45/API34/318/
 SDK234/OTA117 pass. Key-controller UUID path IDs covered, not body/query IDs.
 [Review0916](reviews/0916-screenshot-path-uuids.md).
+
+
+### Project and locale write UUID validation
+Update/delete/locale add/remove reject malformed project IDs400, retain absent
+404/auth401 and original name/locales. SDK251/API34/318/OTA117 pass. Member/group
+routes unchanged. [Review0917](reviews/0917-project-write-uuids.md).
