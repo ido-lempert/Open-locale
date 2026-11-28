@@ -92,6 +92,25 @@ try {
   const en = await ol.translations.get(proj.id, 'en');
   check('translations.get returns the flat map', en['sdk.greeting'] === 'Hello from the SDK', JSON.stringify(en).slice(0, 120));
 
+  for (const [label, projectId, keyId] of [
+    ['project plain', 'not-a-uuid', key.id], ['project punctuation', 'project/with?punctuation#', key.id],
+    ['key plain', proj.id, 'not-a-uuid'], ['key punctuation', proj.id, 'key/with?punctuation#'],
+  ]) {
+    const error = await ol.translations.put(projectId, keyId, 'en', 'must-not-save').catch(e => e);
+    check(`translation PUT malformed ${label} returns400`, error instanceof OpenLocaleError && error.status === 400,
+      error instanceof Error ? `${error.name}:${error.status}` : 'unexpected response');
+  }
+  for (const [label, projectId, keyId] of [
+    ['project', '00000000-0000-4000-8000-000000000000', key.id],
+    ['key', proj.id, '00000000-0000-4000-8000-000000000000'],
+  ]) {
+    const error = await ol.translations.put(projectId, keyId, 'en', 'must-not-save').catch(e => e);
+    check(`translation PUT absent valid ${label} retains404`, error instanceof OpenLocaleError && error.status === 404);
+  }
+  const deniedPut = await fetch(`${API}/projects/not-a-uuid/keys/not-a-uuid/translations`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ locale: 'en', value: 'must-not-save' }) });
+  check('translation PUT malformed still requires authentication', deniedPut.status === 401);
+  check('translation PUT invalid identifiers preserve saved translation', (await ol.translations.get(proj.id, 'en'))['sdk.greeting'] === 'Hello from the SDK');
+
   const imp = await ol.io.importEntries(proj.id, 'he', { 'sdk.second': 'שני' });
   check('io.importEntries imports', imp.status === 'COMPLETED' && imp.translationsUpserted === 1, JSON.stringify(imp));
   const dry = await ol.io.importEntries(proj.id, 'he', { 'sdk.third': 'שלישי' }, { dryRun: true });

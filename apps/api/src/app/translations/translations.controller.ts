@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Header, Param, Patch, Post, Put, Query, Res, StreamableFile, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Header, Param, ParseUUIDPipe, Patch, Post, Put, Query, Res, StreamableFile, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { TranslationsService } from './translations.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -12,7 +12,7 @@ export class TranslationsController {
   constructor(private readonly translations: TranslationsService) {}
 
   @Put('keys/:keyId/translations')
-  upsert(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('keyId') keyId: string, @Body() dto: UpsertTranslationDto) {
+  upsert(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('keyId', new ParseUUIDPipe()) keyId: string, @Body() dto: UpsertTranslationDto) {
     return this.translations.upsert(user.userId, projectId, keyId, dto.locale, dto.value, dto.expectedVersion, dto.expectedRowId, dto.pluralForms);
   }
 
