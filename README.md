@@ -3660,3 +3660,9 @@ Digest-valid malformed encoding rejects instead of silently replacing bytes
 in translations. Six malformed classes and four valid Unicode cases tested;
 error66 and SDK73/OTA117 plus type/transport contracts pass.
 [Review0899](docs/reviews/0899-sdk-ota-strict-utf8.md).
+
+
+### SDK crypto provider checkpoint
+`npm run test:sdk-crypto` runs the full66-check error contract under isolated
+WebCrypto and Node fallback providers (132 checks). Provider-use/count/exit
+proofs and negative probes pass. [Review0900](docs/reviews/0900-sdk-crypto-providers.md).
