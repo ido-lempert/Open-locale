@@ -4290,3 +4290,9 @@ contracts. Not whole-API UUID coverage.
 Branch routes reject malformed project/branch IDs400 with absent404/auth401/
 session-only token403 preserved. SDK332/API34/318/branches56/OTA117 pass.
 [Review0921](reviews/0921-branch-path-uuids.md).
+
+
+### Snapshot path UUID validation
+List/create/restore reject malformed project/snapshot IDs400, retain absent404/
+auth401 and saved data. SDK344/API34/318/snapshots61/OTA117 pass.
+[Review0922](reviews/0922-snapshot-path-uuids.md).
