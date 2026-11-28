@@ -105,7 +105,7 @@ export class TranslationsController {
 
   @Get('export-bundle/:format')
   @Header('Content-Type', 'application/zip')
-  async exportBundle(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('format') format: string, @Query('branch') branch: string | undefined, @Query('mode') mode: string | undefined, @Res({ passthrough: true }) res: Response) {
+  async exportBundle(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('format') format: string, @Query('branch') branch: string | undefined, @Query('mode') mode: string | undefined, @Res({ passthrough: true }) res: Response) {
     const { zip, filename } = await this.translations.exportBundle(user.userId, projectId, format, branch, mode);
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     return new StreamableFile(zip);
@@ -113,12 +113,12 @@ export class TranslationsController {
 
   @Get('tm/:locale/tmx')
   @Header('Content-Type', 'application/x-tmx+xml; charset=utf-8')
-  exportTmx(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string) {
+  exportTmx(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('locale') locale: string) {
     return this.translations.exportTmx(user.userId, projectId, locale);
   }
 
   @Get('tm/suggest')
-  suggest(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string,
+  suggest(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string,
     @Query('locale') locale?: string, @Query('source') source?: string) {
     return this.translations.suggest(user.userId, projectId, locale ?? '', source ?? '');
   }
@@ -130,7 +130,7 @@ export class TranslationsController {
   }
 
   @Get('imports')
-  listImportRuns(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string) {
+  listImportRuns(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string) {
     return this.translations.listImportRuns(user.userId, projectId);
   }
 

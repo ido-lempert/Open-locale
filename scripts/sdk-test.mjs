@@ -160,6 +160,18 @@ try {
     check(`translation ${label} malformed still requires authentication`, denied.status === 401);
   }
 
+  for (const suffix of ['/export-bundle/json', '/tm/en/tmx', '/tm/suggest?locale=en&source=Hello', '/imports']) {
+    for (const id of ['not-a-uuid', 'project/with?punctuation#']) {
+      const error = await ol.request(`/projects/${encodeURIComponent(id)}${suffix}`).catch(e => e);
+      check(`translation read ${suffix} malformed project400 ${id}`, error instanceof OpenLocaleError && error.status === 400,
+        error instanceof Error ? `${error.name}:${error.status}` : 'unexpected response');
+    }
+    const absent = await ol.request(`/projects/00000000-0000-4000-8000-000000000000${suffix}`).catch(e => e);
+    check(`translation read ${suffix} absent valid project404`, absent instanceof OpenLocaleError && absent.status === 404);
+    const denied = await fetch(`${API}/projects/not-a-uuid${suffix}`);
+    check(`translation read ${suffix} malformed auth401`, denied.status === 401);
+  }
+
   const imp = await ol.io.importEntries(proj.id, 'he', { 'sdk.second': 'שני' });
   check('io.importEntries imports', imp.status === 'COMPLETED' && imp.translationsUpserted === 1, JSON.stringify(imp));
   const dry = await ol.io.importEntries(proj.id, 'he', { 'sdk.third': 'שלישי' }, { dryRun: true });

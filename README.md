@@ -3738,3 +3738,10 @@ absent404/auth401. SDK154/API34/318/formats269/OTA117 pass. ZIP/TMX unchanged.
 Per-key history/status reject malformed project/key IDs400, retain absent404/
 auth401. SDK168/API34/318/status-history14/OTA117 pass. Bulk status unchanged.
 [Review0911](docs/reviews/0911-history-status-uuid.md).
+
+
+### Translation read helper UUID validation
+ZIP/TMX export, TM suggestions and import-run list reject malformed project
+IDs400 with absent404/auth401 retained. SDK184/API34/318/formats269/TM18/OTA117
+pass. Bulk status/ZIP import unchanged.
+[Review0912](docs/reviews/0912-translation-read-project-uuid.md).
