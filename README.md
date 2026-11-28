@@ -3692,3 +3692,10 @@ fixtures only; not cross-origin/CORS proof.
 Browser26 includes POST rejection for five redirect statuses, exact15 source
 methods/bodies/headers and zero destination requests. Local fixture only.
 [Review0904](docs/reviews/0904-sdk-browser-post-redirects.md).
+
+
+### Fresh API and SDK checkpoint
+Uncached API build, API34/318, real HTTP/PostgreSQL formats269, SDK73/OTA117,
+native browser26 and digest providers2/132 pass with type/transport contracts.
+No new application-browser or external acceptance claim.
+[Review0905](docs/reviews/0905-api-sdk-checkpoint.md).
