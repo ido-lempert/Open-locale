@@ -96,7 +96,10 @@ export function createClient({ url, token, fetchImpl } = {}) {
     if ((await sha256Hex(bytes)) !== sha256) {
       throw new OpenLocaleError(res.status, 'OTA bundle integrity check failed: digest mismatch', path);
     }
-    const text = new TextDecoder().decode(bytes);
+    let text;
+    try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch {
+      throw new OpenLocaleError(res.status, 'OTA bundle is not valid UTF-8', path);
+    }
     let bundle;
     try { bundle = JSON.parse(text); } catch {
       throw new OpenLocaleError(res.status, 'OTA bundle is not valid JSON', path);

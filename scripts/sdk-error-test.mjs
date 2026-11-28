@@ -145,4 +145,32 @@ for (const [label, bytes, digestBytes, rejected] of [
   } else assert.deepEqual(result.bundle, validBundle);
   console.log(`PASS OTA exact bytes ${label}`); count++;
 }
+const utf8Prefix = new TextEncoder().encode('{"version":1,"branch":"main","translations":{"key":"');
+const utf8Suffix = new TextEncoder().encode('"}}');
+for (const [label, sequence] of [
+  ['isolated continuation', [0x80]], ['invalid lead', [0xff]],
+  ['overlong', [0xc0, 0xaf]], ['truncated', [0xe2, 0x82]],
+  ['surrogate', [0xed, 0xa0, 0x80]], ['above Unicode maximum', [0xf4, 0x90, 0x80, 0x80]],
+]) {
+  const bytes = new Uint8Array([...utf8Prefix, ...sequence, ...utf8Suffix]);
+  for (const [digestLabel, digest, expected] of [
+    ['correct', createHash('sha256').update(bytes).digest('hex'), 'OTA bundle is not valid UTF-8'],
+    ['mismatch', '0'.repeat(64), 'OTA bundle integrity check failed: digest mismatch'],
+  ]) {
+    const client = createClient({ url: 'https://example.invalid', token: 'test-only', fetchImpl: async () => new Response(bytes, { headers: { 'x-openlocale-bundle-sha256': digest } }) });
+    const error = await client.ota.latest('project', 'en').catch(e => e);
+    assert(error instanceof OpenLocaleError);
+    assert.equal(error.message, expected);
+    assert.equal(error.status, 200);
+    assert.equal(error.path, '/projects/project/ota/latest?locale=en');
+    console.log(`PASS OTA UTF8 ${label} ${digestLabel}`); count++;
+  }
+}
+for (const value of ['שלום 😀', '\ufffd', '\u0000', '\u{10ffff}']) {
+  const bytes = new TextEncoder().encode(JSON.stringify({ ...validBundle, translations: { key: value } }));
+  const digest = createHash('sha256').update(bytes).digest('hex');
+  const client = createClient({ url: 'https://example.invalid', token: 'test-only', fetchImpl: async () => new Response(bytes, { headers: { 'x-openlocale-bundle-sha256': digest } }) });
+  assert.equal((await client.ota.latest('project', 'en')).bundle.translations.key, value);
+  console.log('PASS OTA valid Unicode preserved'); count++;
+}
 console.log(`SDK error contract ${count} checks passed`);

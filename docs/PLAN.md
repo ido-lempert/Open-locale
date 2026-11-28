@@ -4139,3 +4139,10 @@ SDK73/OTA117 plus type/transport contracts pass; valid maximum preserved.
 OTA digest checks hash received bytes before UTF-8 decoding, including BOMs
 and malformed byte sequences. Error50 and SDK73/OTA117 plus type/transport
 contracts pass. [Review0898](reviews/0898-sdk-ota-exact-bytes.md).
+
+
+### SDK OTA strict UTF-8
+Digest-valid malformed encoding rejects instead of silently replacing bytes
+in translations. Six malformed classes and four valid Unicode cases tested;
+error66 and SDK73/OTA117 plus type/transport contracts pass.
+[Review0899](reviews/0899-sdk-ota-strict-utf8.md).
