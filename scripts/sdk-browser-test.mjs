@@ -1,12 +1,25 @@
 // Local Chromium SDK primitives, not application UI acceptance or real API access.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import puppeteer from 'puppeteer-core';
 const source = readFileSync('libs/sdk/src/index.mjs');
 let browser;
+const transportReads = [];
+const transportBody = JSON.stringify({ version: 1, branch: 'main', translations: { network: 'שלום 😀' } });
+const transportDigest = createHash('sha256').update(transportBody).digest('hex');
 const server = createServer((req, res) => {
-  if (req.url === '/sdk.mjs') { res.setHeader('Content-Type', 'text/javascript'); res.end(source); }
+  if (req.url?.startsWith('/api/projects/')) {
+    transportReads.push({ path: req.url, method: req.method, token: req.headers['x-api-key'], etag: req.headers['if-none-match'] });
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('X-OpenLocale-Bundle-SHA256', transportDigest);
+    res.setHeader('ETag', '"transport-v1"');
+    if (req.headers['if-none-match'] === '"transport-v1"') { res.statusCode = 304; res.end(); }
+    else res.end(req.url.includes('/tampered/') ? transportBody + ' ' : transportBody);
+  }
+  else if (req.url === '/sdk.mjs') { res.setHeader('Content-Type', 'text/javascript'); res.end(source); }
   else if (req.url === '/') { res.setHeader('Content-Type', 'text/html'); res.end('<!doctype html><title>Local SDK contract</title>'); }
   else { res.statusCode = 404; res.end(); }
 });
@@ -18,7 +31,7 @@ try {
   await page.setRequestInterception(true);
   const unexpected = [];
   page.on('request', req => {
-    if ([origin + '/', origin + '/sdk.mjs', origin + '/favicon.ico'].includes(req.url())) req.continue();
+    if ([origin + '/', origin + '/sdk.mjs', origin + '/favicon.ico', origin + '/api/projects/transport/ota/latest?locale=en', origin + '/api/projects/tampered/ota/latest?locale=en'].includes(req.url())) req.continue();
     else { unexpected.push(req.url()); req.abort(); }
   });
   await page.goto(origin, { waitUntil: 'networkidle0' });
@@ -51,12 +64,27 @@ try {
     const cached = await createClient({ url: 'https://example.invalid', token: 'test-only', fetchImpl: async () => new Response(null, { status: 304, headers: { etag: 'selected' } }) }).ota.latest('project', 'en', { etag: 'request' });
     if (!cached.notModified || cached.etag !== 'selected' || cached.sha256 !== null || 'bundle' in cached) throw new Error('Failed304');
     results.push('304 selected validator');
+    const live = createClient({ url: location.origin, token: 'test-only' });
+    const fresh = await live.ota.latest('transport', 'en');
+    if (fresh.notModified || fresh.bundle.translations.network !== 'שלום 😀' || fresh.etag !== '"transport-v1"' || !/^[a-f0-9]{64}$/.test(fresh.sha256)) throw new Error('Failed native HTTP fresh');
+    results.push('HTTP fresh bytes');
+    const revalidated = await live.ota.latest('transport', 'en', { etag: fresh.etag });
+    if (!revalidated.notModified || revalidated.etag !== fresh.etag || revalidated.sha256 !== fresh.sha256 || 'bundle' in revalidated) throw new Error('Failed native HTTP304');
+    results.push('HTTP conditional304');
+    const tampered = await live.ota.latest('tampered', 'en').catch(e => e);
+    if (!(tampered instanceof OpenLocaleError) || tampered.message !== 'OTA bundle integrity check failed: digest mismatch') throw new Error('Failed native HTTP tamper');
+    results.push('HTTP changed bytes rejected');
     return results;
   });
-  assert.equal(results.length, 8);
+  assert.equal(results.length, 11);
+  assert.deepEqual(transportReads, [
+    { path: '/api/projects/transport/ota/latest?locale=en', method: 'GET', token: 'test-only', etag: undefined },
+    { path: '/api/projects/transport/ota/latest?locale=en', method: 'GET', token: 'test-only', etag: '"transport-v1"' },
+    { path: '/api/projects/tampered/ota/latest?locale=en', method: 'GET', token: 'test-only', etag: undefined },
+  ]);
   assert.deepEqual(unexpected, []);
   for (const label of results) console.log(`PASS native browser SDK ${label}`);
-  console.log('SDK browser contract 8 checks passed');
+  console.log('SDK browser contract 11 checks passed');
 } finally {
   await browser?.close();
   await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

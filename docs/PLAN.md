@@ -4158,3 +4158,10 @@ proofs and negative probes pass. [Review0900](reviews/0900-sdk-crypto-providers.
 `npm run test:sdk-browser` proves eight SDK ESM/WebCrypto/UTF-8/304 cases in
 local Chromium with synthetic responses and blocked unexpected requests.
 Not UI, CORS or cross-browser acceptance. [Review0901](reviews/0901-sdk-native-browser.md).
+
+
+### SDK native browser HTTP
+Browser11 now includes actual default fetch against a local fixture server:
+fresh Unicode bundle, conditional304 and tampered-byte rejection, with exact
+request headers checked. Not built-API/CORS acceptance.
+[Review0902](reviews/0902-sdk-browser-http.md).
