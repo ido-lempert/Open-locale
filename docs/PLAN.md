@@ -4314,3 +4314,9 @@ and glossary state. SDK378/API34/318/glossary29/OTA117 pass.
 QA/activity reads reject malformed project IDs400, retaining absent404/auth401.
 SDK386/API34/318/QA23/activity32/OTA117 pass. Query filters unchanged.
 [Review0925](reviews/0925-qa-activity-project-uuid.md).
+
+
+### Webhook path UUID validation
+Webhook CRUD/delivery list reject malformed project/hook IDs400, retain absent
+404/auth401 and configuration. SDK408/API34/318/webhooks45/OTA117 pass. No worker
+or delivery behavior change. [Review0926](reviews/0926-webhook-path-uuids.md).

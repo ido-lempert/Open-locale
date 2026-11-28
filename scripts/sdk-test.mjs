@@ -386,6 +386,25 @@ try {
     check(`${suffix} malformed auth401`, (await call(`/projects/not-a-uuid${suffix}`)).status === 401);
   }
 
+  const hooksBeforeInvalid = (await call(`/projects/${proj.id}/webhooks`, { token: a.accessToken })).json;
+  for (const [label, method, hookScoped, tail, body] of [
+    ['list', 'GET', false, '', undefined], ['create', 'POST', false, '', { url: 'https://example.invalid/hook', events: ['translation.updated'] }],
+    ['update', 'PATCH', true, '', { active: false }], ['delete', 'DELETE', true, '', undefined],
+    ['deliveries', 'GET', true, '/deliveries', undefined],
+  ]) {
+    const path = (projectId, hookId = absentUuid) => `/projects/${encodeURIComponent(projectId)}/webhooks${hookScoped ? '/' + encodeURIComponent(hookId) + tail : ''}`;
+    for (const field of ['project', ...(hookScoped ? ['hook'] : [])]) {
+      const args = [proj.id, absentUuid]; args[field === 'project' ? 0 : 1] = 'not-a-uuid';
+      const res = await call(path(...args), { token: a.accessToken, method, body });
+      check(`webhook ${label} malformed ${field}400`, res.status === 400, String(res.status));
+      args[field === 'project' ? 0 : 1] = absentUuid;
+      const missing = await call(path(...args), { token: a.accessToken, method, body });
+      check(`webhook ${label} absent valid ${field}404`, missing.status === 404, String(missing.status));
+    }
+    check(`webhook ${label} malformed auth401`, (await call(path('not-a-uuid', 'not-a-uuid'), { method, body })).status === 401);
+  }
+  check('invalid webhook paths preserve configuration', JSON.stringify((await call(`/projects/${proj.id}/webhooks`, { token: a.accessToken })).json) === JSON.stringify(hooksBeforeInvalid));
+
   const imp = await ol.io.importEntries(proj.id, 'he', { 'sdk.second': 'שני' });
   check('io.importEntries imports', imp.status === 'COMPLETED' && imp.translationsUpserted === 1, JSON.stringify(imp));
   const dry = await ol.io.importEntries(proj.id, 'he', { 'sdk.third': 'שלישי' }, { dryRun: true });

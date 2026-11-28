@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } from '@nestjs/common';
 import { WebhooksService } from './webhooks.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -11,29 +11,29 @@ export class WebhooksController {
   constructor(private readonly webhooks: WebhooksService) {}
 
   @Get()
-  list(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string) {
+  list(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string) {
     return this.webhooks.list(user.userId, projectId);
   }
 
   @Post()
-  create(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Body() dto: CreateWebhookDto) {
+  create(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Body() dto: CreateWebhookDto) {
     return this.webhooks.create(user.userId, projectId, dto);
   }
 
   @Patch(':hookId')
-  update(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string,
-    @Param('hookId') hookId: string, @Body() dto: UpdateWebhookDto) {
+  update(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Param('hookId', new ParseUUIDPipe()) hookId: string, @Body() dto: UpdateWebhookDto) {
     return this.webhooks.update(user.userId, projectId, hookId, dto);
   }
 
   @Get(':hookId/deliveries')
-  deliveries(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string,
-    @Param('hookId') hookId: string) {
+  deliveries(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string,
+    @Param('hookId', new ParseUUIDPipe()) hookId: string) {
     return this.webhooks.listDeliveries(user.userId, projectId, hookId);
   }
 
   @Delete(':hookId')
-  remove(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('hookId') hookId: string) {
+  remove(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('hookId', new ParseUUIDPipe()) hookId: string) {
     return this.webhooks.remove(user.userId, projectId, hookId);
   }
 }
