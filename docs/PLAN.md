@@ -4264,3 +4264,9 @@ SDK234/OTA117 pass. Key-controller UUID path IDs covered, not body/query IDs.
 Update/delete/locale add/remove reject malformed project IDs400, retain absent
 404/auth401 and original name/locales. SDK251/API34/318/OTA117 pass. Member/group
 routes unchanged. [Review0917](reviews/0917-project-write-uuids.md).
+
+
+### Project member path UUID validation
+Member list/add/update/remove reject malformed project/user IDs400, retain
+absent404/auth401 and existing roles. SDK274/API34/318/permissions50/OTA117 pass.
+Group routes unchanged. [Review0918](reviews/0918-member-path-uuids.md).

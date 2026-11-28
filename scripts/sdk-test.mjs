@@ -252,6 +252,31 @@ try {
   const preservedProject = await ol.projects.get(proj.id);
   check('invalid project writes preserve name and locales', preservedProject.name === 'SDK Shop' && preservedProject.locales.map(row => row.code).sort().join(',') === 'en,he');
 
+  const membersBeforeInvalid = await call(`/projects/${proj.id}/members`, { token: a.accessToken });
+  for (const [label, method, memberSuffix, body] of [
+    ['list', 'GET', '', undefined], ['add', 'POST', '', { email: 'a@sdk.io' }],
+    ['update', 'PATCH', '/00000000-0000-4000-8000-000000000000', { role: 'MEMBER' }],
+    ['remove', 'DELETE', '/00000000-0000-4000-8000-000000000000', undefined],
+  ]) {
+    const send = (projectId, suffix = memberSuffix, authenticated = true) => call(`/projects/${encodeURIComponent(projectId)}/members${suffix}`, { method, body, token: authenticated ? a.accessToken : undefined });
+    for (const id of ['not-a-uuid', 'project/with?punctuation#']) {
+      const res = await send(id);
+      check(`member ${label} malformed project400 ${id}`, res.status === 400, String(res.status));
+    }
+    const absent = await send('00000000-0000-4000-8000-000000000000');
+    check(`member ${label} absent valid project404`, absent.status === 404);
+    check(`member ${label} malformed auth401`, (await send('not-a-uuid', memberSuffix, false)).status === 401);
+    if (memberSuffix) {
+      for (const id of ['not-a-uuid', 'user/with?punctuation#']) {
+        const res = await send(proj.id, '/' + encodeURIComponent(id));
+        check(`member ${label} malformed user400 ${id}`, res.status === 400, String(res.status));
+      }
+      check(`member ${label} absent valid user404`, (await send(proj.id)).status === 404);
+    }
+  }
+  const membersAfterInvalid = await call(`/projects/${proj.id}/members`, { token: a.accessToken });
+  check('invalid member paths preserve member roles', JSON.stringify(membersAfterInvalid.json) === JSON.stringify(membersBeforeInvalid.json));
+
   const imp = await ol.io.importEntries(proj.id, 'he', { 'sdk.second': 'שני' });
   check('io.importEntries imports', imp.status === 'COMPLETED' && imp.translationsUpserted === 1, JSON.stringify(imp));
   const dry = await ol.io.importEntries(proj.id, 'he', { 'sdk.third': 'שלישי' }, { dryRun: true });

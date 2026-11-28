@@ -21,22 +21,22 @@ export class ProjectsController {
   }
 
   @Get(':id/members')
-  listMembers(@CurrentUser() user: AuthPrincipal, @Param('id') id: string) {
+  listMembers(@CurrentUser() user: AuthPrincipal, @Param('id', new ParseUUIDPipe()) id: string) {
     return this.projects.listMembers(user.userId, id);
   }
 
   @Post(':id/members')
-  addMember(@CurrentUser() user: AuthPrincipal, @Param('id') id: string, @Body() dto: AddMemberDto) {
+  addMember(@CurrentUser() user: AuthPrincipal, @Param('id', new ParseUUIDPipe()) id: string, @Body() dto: AddMemberDto) {
     return this.projects.addMember(user.userId, id, dto.email, dto.role ?? 'MEMBER', dto.allowedLocales ?? []);
   }
 
   @Patch(':id/members/:userId')
-  updateMember(@CurrentUser() user: AuthPrincipal, @Param('id') id: string, @Param('userId') userId: string, @Body() dto: UpdateMemberDto) {
+  updateMember(@CurrentUser() user: AuthPrincipal, @Param('id', new ParseUUIDPipe()) id: string, @Param('userId', new ParseUUIDPipe()) userId: string, @Body() dto: UpdateMemberDto) {
     return this.projects.updateMember(user.userId, id, userId, dto);
   }
 
   @Delete(':id/members/:userId')
-  removeMember(@CurrentUser() user: AuthPrincipal, @Param('id') id: string, @Param('userId') userId: string) {
+  removeMember(@CurrentUser() user: AuthPrincipal, @Param('id', new ParseUUIDPipe()) id: string, @Param('userId', new ParseUUIDPipe()) userId: string) {
     return this.projects.removeMember(user.userId, id, userId);
   }
 
