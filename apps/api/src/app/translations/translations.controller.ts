@@ -33,7 +33,7 @@ export class TranslationsController {
 
   @Get('export/:locale')
   @Header('Cache-Control', 'no-store')
-  exportJson(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('flat') flat?: string, @Query('format') format?: string, @Query('branch') branch?: string) {
+  exportJson(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('locale') locale: string, @Query('flat') flat?: string, @Query('format') format?: string, @Query('branch') branch?: string) {
     return this.translations.exportJson(user.userId, projectId, locale, flat === 'true' || format === 'flat', branch);
   }
 
@@ -135,7 +135,7 @@ export class TranslationsController {
   }
 
   @Post('import/:locale')
-  importJson(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('locale') locale: string, @Query('branch') branch: string | undefined, @Query('dryRun') dryRun: string | undefined, @Body() dto: ImportJsonDto) {
+  importJson(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('locale') locale: string, @Query('branch') branch: string | undefined, @Query('dryRun') dryRun: string | undefined, @Body() dto: ImportJsonDto) {
     if (dryRun === 'true') return this.translations.importPreview(user.userId, projectId, locale, dto, branch);
     if (dto.po != null) return this.translations.importPo(user.userId, projectId, locale, dto.po, branch);
     if (dto.pot != null) return this.translations.importPot(user.userId, projectId, locale, dto.pot, branch);

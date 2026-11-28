@@ -3719,3 +3719,10 @@ Translation upsert rejects malformed project/key IDs400, retains absent404 and
 auth401, and preserves saved translation after invalid requests. SDK97 and
 API34/318/OTA117 pass. Other translation routes unchanged.
 [Review0908](docs/reviews/0908-translation-put-uuid.md).
+
+
+### JSON entry project UUID validation
+JSON export/live import/preview reject malformed project IDs400, retaining
+absent404/auth401 and saved translations. SDK110/API34/318/formats269/OTA117
+pass. Format-specific routes unchanged.
+[Review0909](docs/reviews/0909-json-entry-project-uuid.md).
