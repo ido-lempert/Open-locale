@@ -33,12 +33,12 @@ export class KeysController {
   }
 
   @Get(':keyId/comments')
-  listComments(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('keyId') keyId: string, @Query('locale') locale?: string) {
+  listComments(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('keyId', new ParseUUIDPipe()) keyId: string, @Query('locale') locale?: string) {
     return this.keys.listComments(user.userId, projectId, keyId, locale);
   }
 
   @Post(':keyId/comments')
-  addComment(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('keyId') keyId: string, @Body() dto: CreateCommentDto) {
+  addComment(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('keyId', new ParseUUIDPipe()) keyId: string, @Body() dto: CreateCommentDto) {
     return this.keys.addComment(user.userId, projectId, keyId, dto.body, dto.locale, dto.parentId);
   }
 
@@ -76,7 +76,7 @@ export class KeysController {
   }
 
   @Delete(':keyId/comments/:commentId')
-  deleteComment(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('keyId') keyId: string, @Param('commentId') commentId: string) {
+  deleteComment(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('keyId', new ParseUUIDPipe()) keyId: string, @Param('commentId', new ParseUUIDPipe()) commentId: string) {
     return this.keys.deleteComment(user.userId, projectId, keyId, commentId);
   }
 

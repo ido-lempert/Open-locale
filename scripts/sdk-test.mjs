@@ -212,6 +212,30 @@ try {
   const preservedKey = (await ol.keys.list(proj.id)).find(row => row.id === key.id);
   check('invalid key writes preserve original key', preservedKey?.description === 'from the sdk' && !preservedKey.tags.includes('must-not-save'));
 
+  const commentPath = `/projects/${proj.id}/keys/${key.id}/comments`;
+  const commentProbe = await ol.request(commentPath, { method: 'POST', body: { body: 'preserve-comment' } });
+  for (const [label, method, body] of [['list', 'GET', undefined], ['add', 'POST', { body: 'must-not-add' }], ['delete', 'DELETE', undefined]]) {
+    const suffix = method === 'DELETE' ? `/${commentProbe.id}` : '';
+    for (const [field, projectId, keyId] of [['project', 'not-a-uuid', key.id], ['key', proj.id, 'key/with?punctuation#']]) {
+      const error = await ol.request(`/projects/${encodeURIComponent(projectId)}/keys/${encodeURIComponent(keyId)}/comments${suffix}`, { method, body }).catch(e => e);
+      check(`comment ${label} malformed ${field}400`, error instanceof OpenLocaleError && error.status === 400, `${error.status}`);
+    }
+    for (const [field, projectId, keyId] of [['project', '00000000-0000-4000-8000-000000000000', key.id], ['key', proj.id, '00000000-0000-4000-8000-000000000000']]) {
+      const error = await ol.request(`/projects/${projectId}/keys/${keyId}/comments${suffix}`, { method, body }).catch(e => e);
+      check(`comment ${label} absent valid ${field}404`, error instanceof OpenLocaleError && error.status === 404);
+    }
+    const denied = await fetch(`${API}/projects/not-a-uuid/keys/not-a-uuid/comments${suffix}`, { method, headers: { 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
+    check(`comment ${label} malformed auth401`, denied.status === 401);
+  }
+  for (const id of ['not-a-uuid', 'comment/with?punctuation#']) {
+    const error = await ol.request(`${commentPath}/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(e => e);
+    check('comment delete malformed commentId400 ' + id, error instanceof OpenLocaleError && error.status === 400, `${error.status}`);
+  }
+  const absentComment = await ol.request(`${commentPath}/00000000-0000-4000-8000-000000000000`, { method: 'DELETE' }).catch(e => e);
+  check('comment delete absent valid commentId404', absentComment instanceof OpenLocaleError && absentComment.status === 404);
+  const commentsAfterInvalid = await ol.request(commentPath);
+  check('invalid comment writes preserve original only', commentsAfterInvalid.length === 1 && commentsAfterInvalid[0].id === commentProbe.id && commentsAfterInvalid[0].body === 'preserve-comment');
+
   const imp = await ol.io.importEntries(proj.id, 'he', { 'sdk.second': 'שני' });
   check('io.importEntries imports', imp.status === 'COMPLETED' && imp.translationsUpserted === 1, JSON.stringify(imp));
   const dry = await ol.io.importEntries(proj.id, 'he', { 'sdk.third': 'שלישי' }, { dryRun: true });

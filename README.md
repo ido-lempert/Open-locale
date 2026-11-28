@@ -3758,3 +3758,10 @@ controller project/key path IDs now validated; not body/query IDs or whole API.
 Three key writes reject malformed project/key IDs400, retain absent404/auth401
 and original key data. SDK215/API34/318/tags9/OTA117 pass. Comments/screenshots
 unchanged. [Review0914](docs/reviews/0914-key-write-uuids.md).
+
+
+### Comment path UUID validation
+Comment list/add/delete reject malformed project/key/comment path IDs400,
+retain absent404/auth401 and original comment. SDK234/API34/318/comments33/
+OTA117 pass. Screenshot routes unchanged.
+[Review0915](docs/reviews/0915-comment-path-uuids.md).
