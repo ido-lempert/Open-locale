@@ -3679,3 +3679,10 @@ Browser11 now includes actual default fetch against a local fixture server:
 fresh Unicode bundle, conditional304 and tampered-byte rejection, with exact
 request headers checked. Not built-API/CORS acceptance.
 [Review0902](docs/reviews/0902-sdk-browser-http.md).
+
+
+### Native browser SDK redirect rejection
+Browser21 includes five redirect statuses on request/OTA GET with zero
+redirect-destination requests and exact source headers. Local fake-token
+fixtures only; not cross-origin/CORS proof.
+[Review0903](docs/reviews/0903-sdk-browser-redirects.md).

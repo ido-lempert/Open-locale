@@ -7,10 +7,20 @@ import puppeteer from 'puppeteer-core';
 const source = readFileSync('libs/sdk/src/index.mjs');
 let browser;
 const transportReads = [];
+const redirectReads = [];
+let redirectTargetReads = 0;
 const transportBody = JSON.stringify({ version: 1, branch: 'main', translations: { network: 'שלום 😀' } });
 const transportDigest = createHash('sha256').update(transportBody).digest('hex');
 const server = createServer((req, res) => {
-  if (req.url?.startsWith('/api/projects/')) {
+  if (req.url === '/redirect-target') {
+    redirectTargetReads++; res.setHeader('Content-Type', 'application/json'); res.end(transportBody);
+  }
+  else if (req.url?.startsWith('/api/projects/redirect-')) {
+    redirectReads.push({ path: req.url, token: req.headers['x-api-key'] });
+    res.statusCode = Number(req.url.split('redirect-')[1].split('/')[0]);
+    res.setHeader('Location', '/redirect-target'); res.end();
+  }
+  else if (req.url?.startsWith('/api/projects/')) {
     transportReads.push({ path: req.url, method: req.method, token: req.headers['x-api-key'], etag: req.headers['if-none-match'] });
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Content-Type', 'application/json');
@@ -31,7 +41,9 @@ try {
   await page.setRequestInterception(true);
   const unexpected = [];
   page.on('request', req => {
-    if ([origin + '/', origin + '/sdk.mjs', origin + '/favicon.ico', origin + '/api/projects/transport/ota/latest?locale=en', origin + '/api/projects/tampered/ota/latest?locale=en'].includes(req.url())) req.continue();
+    const allowed = ['/', '/sdk.mjs', '/favicon.ico', '/api/projects/transport/ota/latest?locale=en', '/api/projects/tampered/ota/latest?locale=en', '/redirect-target',
+      ...[301, 302, 303, 307, 308].flatMap(status => [`/api/projects/redirect-${status}`, `/api/projects/redirect-${status}/ota/latest?locale=en`])];
+    if (allowed.some(path => req.url() === origin + path)) req.continue();
     else { unexpected.push(req.url()); req.abort(); }
   });
   await page.goto(origin, { waitUntil: 'networkidle0' });
@@ -74,9 +86,24 @@ try {
     const tampered = await live.ota.latest('tampered', 'en').catch(e => e);
     if (!(tampered instanceof OpenLocaleError) || tampered.message !== 'OTA bundle integrity check failed: digest mismatch') throw new Error('Failed native HTTP tamper');
     results.push('HTTP changed bytes rejected');
+    for (const status of [301, 302, 303, 307, 308]) {
+      for (const [label, pull] of [
+        ['request', () => live.projects.get(`redirect-${status}`)],
+        ['OTA', () => live.ota.latest(`redirect-${status}`, 'en')],
+      ]) {
+        const error = await pull().catch(e => e);
+        if (!(error instanceof TypeError)) throw new Error(`Failed redirect ${status} ${label}`);
+        results.push(`HTTP redirect ${status} ${label} rejected`);
+      }
+    }
     return results;
   });
-  assert.equal(results.length, 11);
+  assert.equal(results.length, 21);
+  assert.equal(redirectTargetReads, 0, 'Redirect destination must receive no request');
+  assert.deepEqual(redirectReads, [301, 302, 303, 307, 308].flatMap(status => [
+    { path: `/api/projects/redirect-${status}`, token: 'test-only' },
+    { path: `/api/projects/redirect-${status}/ota/latest?locale=en`, token: 'test-only' },
+  ]));
   assert.deepEqual(transportReads, [
     { path: '/api/projects/transport/ota/latest?locale=en', method: 'GET', token: 'test-only', etag: undefined },
     { path: '/api/projects/transport/ota/latest?locale=en', method: 'GET', token: 'test-only', etag: '"transport-v1"' },
@@ -84,7 +111,7 @@ try {
   ]);
   assert.deepEqual(unexpected, []);
   for (const label of results) console.log(`PASS native browser SDK ${label}`);
-  console.log('SDK browser contract 11 checks passed');
+  console.log('SDK browser contract 21 checks passed');
 } finally {
   await browser?.close();
   await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
