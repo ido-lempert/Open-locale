@@ -358,6 +358,24 @@ try {
   }
   check('invalid task paths preserve task list', JSON.stringify((await call(`/projects/${proj.id}/tasks`, { token: a.accessToken })).json) === JSON.stringify(tasksBeforeInvalid));
 
+  const glossaryBeforeInvalid = (await call(`/projects/${proj.id}/glossary`, { token: a.accessToken })).json;
+  for (const [label, method, termScoped, body] of [
+    ['list', 'GET', false, undefined], ['create', 'POST', false, { term: 'must-not-create' }],
+    ['update', 'PATCH', true, { notes: 'must-not-save' }], ['delete', 'DELETE', true, undefined],
+  ]) {
+    const path = (projectId, termId = absentUuid) => `/projects/${encodeURIComponent(projectId)}/glossary${termScoped ? '/' + encodeURIComponent(termId) : ''}`;
+    for (const field of ['project', ...(termScoped ? ['term'] : [])]) {
+      const args = [proj.id, absentUuid]; args[field === 'project' ? 0 : 1] = 'not-a-uuid';
+      const res = await call(path(...args), { token: a.accessToken, method, body });
+      check(`glossary ${label} malformed ${field}400`, res.status === 400, String(res.status));
+      args[field === 'project' ? 0 : 1] = absentUuid;
+      const missing = await call(path(...args), { token: a.accessToken, method, body });
+      check(`glossary ${label} absent valid ${field}404`, missing.status === 404, String(missing.status));
+    }
+    check(`glossary ${label} malformed auth401`, (await call(path('not-a-uuid', 'not-a-uuid'), { method, body })).status === 401);
+  }
+  check('invalid glossary paths preserve glossary', JSON.stringify((await call(`/projects/${proj.id}/glossary`, { token: a.accessToken })).json) === JSON.stringify(glossaryBeforeInvalid));
+
   const imp = await ol.io.importEntries(proj.id, 'he', { 'sdk.second': 'שני' });
   check('io.importEntries imports', imp.status === 'COMPLETED' && imp.translationsUpserted === 1, JSON.stringify(imp));
   const dry = await ol.io.importEntries(proj.id, 'he', { 'sdk.third': 'שלישי' }, { dryRun: true });
