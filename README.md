@@ -3798,3 +3798,9 @@ Fresh real HTTP/PostgreSQL auth29/permissions50/groups44/comments33/screenshots4
 formats269/SDK305/OTA117 pass (892 checks), plus SDK browser/type/transport
 contracts. Not whole-API UUID coverage.
 [Review0920](docs/reviews/0920-uuid-authorization-checkpoint.md).
+
+
+### Branch path UUID validation
+Branch routes reject malformed project/branch IDs400 with absent404/auth401/
+session-only token403 preserved. SDK332/API34/318/branches56/OTA117 pass.
+[Review0921](docs/reviews/0921-branch-path-uuids.md).

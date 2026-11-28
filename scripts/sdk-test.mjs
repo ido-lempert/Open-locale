@@ -301,6 +301,27 @@ try {
   }
   check('invalid group paths preserve groups and memberships', JSON.stringify((await call(`/projects/${proj.id}/groups`, { token: a.accessToken })).json) === JSON.stringify(groupsBeforeInvalid));
 
+  const branchesBeforeInvalid = (await call(`/projects/${proj.id}/branches`, { token: a.accessToken })).json;
+  for (const [label, method, branchScoped, tail, body] of [
+    ['list', 'GET', false, '', undefined], ['create', 'POST', false, '', { name: 'must-not-create' }],
+    ['delete', 'DELETE', true, '', undefined], ['preview', 'POST', true, '/merge/preview', { into: 'main' }],
+    ['merge', 'POST', true, '/merge', { into: 'main' }],
+  ]) {
+    const path = (projectId, branchId) => `/projects/${encodeURIComponent(projectId)}/branches${branchScoped ? '/' + encodeURIComponent(branchId) + tail : ''}`;
+    for (const field of ['project', ...(branchScoped ? ['branch'] : [])]) {
+      const args = [proj.id, absentUuid]; args[field === 'project' ? 0 : 1] = 'not-a-uuid';
+      const res = await call(path(...args), { token: a.accessToken, method, body });
+      check(`branch ${label} malformed ${field}400`, res.status === 400, String(res.status));
+      args[field === 'project' ? 0 : 1] = absentUuid;
+      const missing = await call(path(...args), { token: a.accessToken, method, body });
+      check(`branch ${label} absent valid ${field}404`, missing.status === 404, String(missing.status));
+    }
+    check(`branch ${label} malformed auth401`, (await call(path('not-a-uuid', 'not-a-uuid'), { method, body })).status === 401);
+    const deniedToken = await ol.request(path('not-a-uuid', 'not-a-uuid'), { method, body }).catch(e => e);
+    check(`branch ${label} malformed API token retains403`, deniedToken instanceof OpenLocaleError && deniedToken.status === 403);
+  }
+  check('invalid branch paths preserve branches', JSON.stringify((await call(`/projects/${proj.id}/branches`, { token: a.accessToken })).json) === JSON.stringify(branchesBeforeInvalid));
+
   const imp = await ol.io.importEntries(proj.id, 'he', { 'sdk.second': 'שני' });
   check('io.importEntries imports', imp.status === 'COMPLETED' && imp.translationsUpserted === 1, JSON.stringify(imp));
   const dry = await ol.io.importEntries(proj.id, 'he', { 'sdk.third': 'שלישי' }, { dryRun: true });
