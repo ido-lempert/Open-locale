@@ -23,12 +23,12 @@ export class KeysController {
   }
 
   @Patch(':keyId')
-  update(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('keyId') keyId: string, @Body() dto: UpdateKeyDto) {
+  update(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('keyId', new ParseUUIDPipe()) keyId: string, @Body() dto: UpdateKeyDto) {
     return this.keys.update(user.userId, projectId, keyId, dto);
   }
 
   @Patch(':keyId/tags')
-  setTags(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('keyId') keyId: string, @Body() dto: SetTagsDto) {
+  setTags(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('keyId', new ParseUUIDPipe()) keyId: string, @Body() dto: SetTagsDto) {
     return this.keys.setTags(user.userId, projectId, keyId, dto.tags);
   }
 
@@ -81,7 +81,7 @@ export class KeysController {
   }
 
   @Delete(':keyId')
-  remove(@CurrentUser() user: AuthPrincipal, @Param('projectId') projectId: string, @Param('keyId') keyId: string) {
+  remove(@CurrentUser() user: AuthPrincipal, @Param('projectId', new ParseUUIDPipe()) projectId: string, @Param('keyId', new ParseUUIDPipe()) keyId: string) {
     return this.keys.remove(user.userId, projectId, keyId);
   }
 }

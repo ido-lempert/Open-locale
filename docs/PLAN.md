@@ -4238,3 +4238,9 @@ Both routes reject malformed project IDs400, retaining absent404/auth401 and
 saved translations. SDK193/API34/318/formats269/review34/OTA117 pass. Translation
 controller project/key path IDs now validated; not body/query IDs or whole API.
 [Review0913](reviews/0913-bulk-zip-project-uuid.md).
+
+
+### Key update/tags/delete UUID validation
+Three key writes reject malformed project/key IDs400, retain absent404/auth401
+and original key data. SDK215/API34/318/tags9/OTA117 pass. Comments/screenshots
+unchanged. [Review0914](reviews/0914-key-write-uuids.md).

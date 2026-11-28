@@ -189,6 +189,29 @@ try {
   }
   check('invalid bulk and ZIP project IDs preserve saved translation', (await ol.translations.get(proj.id, 'en'))['sdk.greeting'] === 'Hello from the SDK');
 
+  for (const [label, method, tail, body] of [
+    ['update', 'PATCH', '', { description: 'must-not-save' }],
+    ['tags', 'PATCH', '/tags', { tags: ['must-not-save'] }],
+    ['delete', 'DELETE', '', undefined],
+  ]) {
+    for (const [field, projectId, keyId] of [
+      ['project plain', 'not-a-uuid', key.id], ['project punctuation', 'project/with?punctuation#', key.id],
+      ['key plain', proj.id, 'not-a-uuid'], ['key punctuation', proj.id, 'key/with?punctuation#'],
+    ]) {
+      const error = await ol.request(`/projects/${encodeURIComponent(projectId)}/keys/${encodeURIComponent(keyId)}${tail}`, { method, body }).catch(e => e);
+      check(`key ${label} malformed ${field}400`, error instanceof OpenLocaleError && error.status === 400,
+        error instanceof Error ? `${error.name}:${error.status}` : 'unexpected response');
+    }
+    for (const [field, projectId, keyId] of [['project', '00000000-0000-4000-8000-000000000000', key.id], ['key', proj.id, '00000000-0000-4000-8000-000000000000']]) {
+      const error = await ol.request(`/projects/${projectId}/keys/${keyId}${tail}`, { method, body }).catch(e => e);
+      check(`key ${label} absent valid ${field}404`, error instanceof OpenLocaleError && error.status === 404);
+    }
+    const denied = await fetch(`${API}/projects/not-a-uuid/keys/not-a-uuid${tail}`, { method, headers: { 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
+    check(`key ${label} malformed auth401`, denied.status === 401);
+  }
+  const preservedKey = (await ol.keys.list(proj.id)).find(row => row.id === key.id);
+  check('invalid key writes preserve original key', preservedKey?.description === 'from the sdk' && !preservedKey.tags.includes('must-not-save'));
+
   const imp = await ol.io.importEntries(proj.id, 'he', { 'sdk.second': 'שני' });
   check('io.importEntries imports', imp.status === 'COMPLETED' && imp.translationsUpserted === 1, JSON.stringify(imp));
   const dry = await ol.io.importEntries(proj.id, 'he', { 'sdk.third': 'שלישי' }, { dryRun: true });
